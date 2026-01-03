@@ -1,0 +1,652 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+**Storyline AI** is a self-hosted Instagram Story scheduling and automation system with Telegram-based team collaboration.
+
+**Core Philosophy**: Phased deployment - Start with 100% manual posting (Phase 1), optionally enable Instagram API automation (Phase 2), then add web UI (Phase 3).
+
+**Tech Stack**:
+- **Backend**: Python 3.10+, FastAPI (for API layer)
+- **Database**: PostgreSQL (with migration path from Raspberry Pi → Neon)
+- **Primary UI**: Telegram Bot (team workflow)
+- **Future UI**: Next.js web frontend
+- **Deployment**: Raspberry Pi (local) → Railway/Render (cloud)
+
+## Architecture at a Glance
+
+### Three-Layer Architecture
+
+```
+┌─────────────────────────────────────────┐
+│  Interface Layer (Multiple UIs)          │
+│  • cli/       - Command-line interface  │
+│  • Telegram   - Bot workflow (Phase 1)  │
+│  • ui/        - Next.js frontend (Future)│
+└─────────────────┬───────────────────────┘
+                  │
+┌─────────────────▼───────────────────────┐
+│  API Layer (Phase 2.5)                  │
+│  • src/api/   - FastAPI REST endpoints  │
+│  • Exposes all services via HTTP        │
+│  • JWT authentication                   │
+└─────────────────┬───────────────────────┘
+                  │
+┌─────────────────▼───────────────────────┐
+│  Service Layer (Business Logic)         │
+│  • src/services/core/       - Phase 1   │
+│  • src/services/integrations/ - Phase 2+│
+│  • src/services/domain/     - Future    │
+└─────────────────┬───────────────────────┘
+                  │
+┌─────────────────▼───────────────────────┐
+│  Data Layer                             │
+│  • src/repositories/ - Database access  │
+│  • src/models/      - SQLAlchemy models │
+│  • PostgreSQL       - Single source of truth│
+└─────────────────────────────────────────┘
+```
+
+### Key Design Principle: STRICT SEPARATION OF CONCERNS
+
+**CRITICAL**: Each layer is strictly isolated:
+- **CLI** → calls Services (never touches Repositories or Models directly)
+- **API** → calls Services (never touches Repositories or Models directly)
+- **UI** → calls API (never calls Services directly)
+- **Services** → orchestrate business logic, call Repositories
+- **Repositories** → CRUD operations, return Models
+- **Models** → database schema definitions only (no business logic)
+
+**NEVER violate layer boundaries**. If you find yourself importing across layers incorrectly, refactor.
+
+## Essential Commands
+
+### Development Setup
+
+```bash
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Install CLI tool (editable mode)
+pip install -e .
+
+# Set up database
+psql -U postgres -c "CREATE DATABASE storyline_ai;"
+psql -U storyline_ai -d storyline_ai -f scripts/setup_database.sql
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your credentials
+```
+
+### Common Development Tasks
+
+```bash
+# Index media files
+storyline-cli index-media /path/to/media/stories
+
+# Create posting schedule
+storyline-cli create-schedule --days 7 --posts-per-day 3
+
+# Process queue (manual trigger)
+storyline-cli process-queue
+
+# Check system health
+storyline-cli check-health
+
+# View posting history
+storyline-cli list-history --limit 20
+
+# Manage users
+storyline-cli list-users
+storyline-cli promote-user <telegram_user_id> --role admin
+
+# Run main application (scheduler + Telegram bot)
+python -m src.main
+
+# Run API server (development)
+uvicorn src.api.app:app --reload --port 8000
+
+# Run tests
+pytest                          # All tests
+pytest tests/src/services/      # Service tests only
+pytest -m unit                  # Unit tests only
+pytest -m integration           # Integration tests only
+pytest --cov=src --cov-report=html  # With coverage
+
+# Database operations
+storyline-cli backup --full
+storyline-cli migrate           # Run migrations
+```
+
+## Core Services Reference
+
+### Phase 1 Services (Always Available)
+
+| Service | Responsibility | Key Methods |
+|---------|---------------|-------------|
+| **MediaIngestionService** | Scan filesystem, index media | `scan_directory()`, `index_file()`, `detect_duplicates()` |
+| **SchedulerService** | Create posting schedule | `create_schedule()`, `select_media()`, `add_to_queue()` |
+| **PostingService** | Orchestrate posting workflow | `process_pending_posts()`, `post_automated()`, `post_via_telegram()` |
+| **TelegramService** | Telegram bot operations | `send_notification()`, `handle_callback()`, `handle_commands()` |
+| **MediaLockService** | TTL lock management | `create_lock()`, `is_locked()`, `cleanup_expired_locks()` |
+| **HealthCheckService** | System health monitoring | `check_all()`, `check_database()`, `check_instagram_api()` |
+| **AlertService** | Admin alerts via Telegram | `alert_admin()`, send severity-based notifications |
+| **BackupService** | Automated backups | `backup_database()`, `backup_media()`, `full_backup()` |
+
+### Phase 2 Services (When ENABLE_INSTAGRAM_API=true)
+
+| Service | Responsibility |
+|---------|---------------|
+| **CloudStorageService** | Upload to Cloudinary/S3 |
+| **InstagramAPIService** | Post to Instagram Graph API |
+| **TokenRefreshService** | Manage access token lifecycle |
+
+### Future Services (Phase 3+)
+
+| Service | Responsibility |
+|---------|---------------|
+| **ShopifyService** | Sync products from Shopify |
+| **ProductLinkService** | Link media to products |
+| **InstagramMetricsService** | Fetch performance data |
+| **AnalyticsService** | Generate insights |
+
+## Database Architecture
+
+### Key Tables
+
+**Core Tables** (Phase 1):
+- `media_items` - All indexed media (source of truth)
+- `posting_queue` - Active work items (ephemeral)
+- `posting_history` - Permanent audit log (never deleted)
+- `media_posting_locks` - TTL-based repost prevention
+- `users` - Auto-populated from Telegram interactions
+- `service_runs` - Service execution tracking (observability)
+
+**Integration Tables** (Phase 2+):
+- `shopify_products` - Type 2 SCD for product history
+- `media_product_links` - Many-to-many media ↔ products
+- `instagram_post_metrics` - Performance data from Meta API
+
+### Critical Design Patterns
+
+1. **Queue vs History Pattern**:
+   - Queue is ephemeral (work to do)
+   - History is permanent (audit log)
+   - Enables reposting same media multiple times
+
+2. **TTL Locks** (`media_posting_locks`):
+   - Prevents premature reposts
+   - Automatic expiration (no manual cleanup)
+   - Lock types: `recent_post`, `manual_hold`, `seasonal`
+
+3. **User Auto-Discovery**:
+   - Users created automatically from Telegram interactions
+   - No separate registration system
+   - Telegram is single source of truth
+
+4. **Type 2 SCD for Shopify Products**:
+   - Tracks historical changes (price, title, description)
+   - Enables queries like "What was the price when we posted this story?"
+   - Critical for accurate performance analysis
+
+## Scheduler Algorithm
+
+**Selection Logic** (in order of priority):
+
+1. Filter eligible media:
+   ```sql
+   WHERE is_active = TRUE
+     AND NOT locked (no active locks in media_posting_locks)
+     AND NOT queued (not already in posting_queue)
+   ```
+
+2. Sort by:
+   - **Primary**: `last_posted_at ASC NULLS FIRST` (never-posted first)
+   - **Secondary**: `times_posted ASC` (least-posted preferred)
+   - **Tertiary**: `RANDOM()` (tie-breaker for variety)
+
+3. Time slot allocation:
+   ```python
+   # Evenly distributed slots within posting window
+   interval_hours = (POSTING_HOURS_END - POSTING_HOURS_START) / POSTS_PER_DAY
+
+   # Add ±30min jitter for unpredictability
+   scheduled_time = base_time + random_jitter(-30min, +30min)
+   ```
+
+4. After posting:
+   - Create 30-day TTL lock automatically
+   - Increment `times_posted` counter
+   - Update `last_posted_at` timestamp
+
+## Feature Flags
+
+### Phase Control
+
+```bash
+# Phase 1: Telegram-only (default)
+ENABLE_INSTAGRAM_API=false
+
+# Phase 2: Hybrid mode (auto + manual)
+ENABLE_INSTAGRAM_API=true
+```
+
+### Routing Logic
+
+```
+If ENABLE_INSTAGRAM_API = false:
+  → ALL posts go to Telegram (manual)
+
+If ENABLE_INSTAGRAM_API = true:
+  If media.requires_interaction = false:
+    → Instagram API (automated)
+  If media.requires_interaction = true:
+    → Telegram (manual)
+```
+
+## Image Processing Requirements
+
+Instagram Story specifications:
+- **Aspect Ratio**: 9:16 (ideal), 1.91:1 to 9:16 (acceptable)
+- **Resolution**: 1080x1920 (ideal), min 720x1280
+- **File Size**: Max 100MB (images)
+- **Formats**: JPG, PNG, GIF
+
+**Validation**: `ImageProcessor.validate_image()` checks all requirements
+**Optimization**: `ImageProcessor.optimize_for_instagram()` resizes/converts automatically
+
+## Testing Guidelines
+
+### CRITICAL: Write Tests for ALL New Functionality
+
+Every new feature must include:
+
+1. **Unit Tests** (`tests/src/`)
+   - Test each service method in isolation
+   - Mock all dependencies (repositories, external APIs)
+   - Focus on business logic correctness
+   - Fast execution (< 1 second per test)
+
+2. **Integration Tests** (`tests/integration/`)
+   - Test service interactions
+   - Use real database (test environment)
+   - Test end-to-end workflows
+   - Acceptable to be slower
+
+3. **Test Structure** (mirrors `src/`):
+   ```
+   tests/
+   ├── src/
+   │   ├── services/
+   │   │   ├── test_media_ingestion.py
+   │   │   ├── test_scheduler.py
+   │   │   ├── test_posting.py
+   │   │   └── test_telegram_service.py
+   │   ├── repositories/
+   │   │   ├── test_media_repository.py
+   │   │   └── test_queue_repository.py
+   │   └── utils/
+   │       ├── test_file_hash.py
+   │       └── test_image_processing.py
+   └── integration/
+       ├── test_end_to_end.py
+       └── test_telegram_workflow.py
+   ```
+
+### Test Template
+
+```python
+# tests/src/services/test_example_service.py
+import pytest
+from unittest.mock import Mock, patch
+from src.services.core.example_service import ExampleService
+
+@pytest.fixture
+def example_service():
+    """Fixture for ExampleService with mocked dependencies."""
+    service = ExampleService()
+    service.repo = Mock()  # Mock repository
+    return service
+
+class TestExampleService:
+    """Test suite for ExampleService."""
+
+    def test_method_name_success_case(self, example_service):
+        """Test description of what this test validates."""
+        # Arrange
+        example_service.repo.get_by_id.return_value = Mock(id=1, name="test")
+
+        # Act
+        result = example_service.some_method(1)
+
+        # Assert
+        assert result.name == "test"
+        example_service.repo.get_by_id.assert_called_once_with(1)
+
+    def test_method_name_error_case(self, example_service):
+        """Test error handling when repository raises exception."""
+        # Arrange
+        example_service.repo.get_by_id.side_effect = ValueError("Not found")
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="Not found"):
+            example_service.some_method(1)
+```
+
+### Test Markers
+
+```python
+@pytest.mark.unit  # Fast, isolated
+@pytest.mark.integration  # Slower, multiple components
+@pytest.mark.slow  # Very slow tests (skip in CI with -m "not slow")
+```
+
+### Running Tests
+
+```bash
+# All tests with coverage
+pytest --cov=src --cov-report=term-missing
+
+# Only fast unit tests
+pytest -m unit
+
+# Exclude slow tests
+pytest -m "not slow"
+
+# Specific test file
+pytest tests/src/services/test_scheduler.py
+
+# Specific test method
+pytest tests/src/services/test_scheduler.py::TestSchedulerService::test_create_schedule
+```
+
+## Development Guidelines
+
+### 1. Separation of Concerns (CRITICAL)
+
+**Service Layer** (`src/services/`):
+```python
+class MediaIngestionService(BaseService):
+    """
+    CORRECT: Service orchestrates business logic
+    ✅ Calls repositories
+    ✅ Contains workflow logic
+    ✅ Handles errors and retries
+    ❌ Does NOT contain SQL queries
+    ❌ Does NOT import models directly (except for type hints)
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.media_repo = MediaRepository()  # ✅ Dependency injection
+
+    def scan_directory(self, path: str):
+        """Business logic for scanning media."""
+        for file_path in Path(path).glob("**/*.jpg"):
+            # ✅ Use repository for database operations
+            existing = self.media_repo.get_by_path(str(file_path))
+
+            if not existing:
+                # ✅ Business logic here
+                file_hash = calculate_file_hash(file_path)
+                self.media_repo.create(
+                    file_path=str(file_path),
+                    file_hash=file_hash
+                )
+```
+
+**Repository Layer** (`src/repositories/`):
+```python
+class MediaRepository:
+    """
+    CORRECT: Repository handles database access only
+    ✅ CRUD operations
+    ✅ Query builders
+    ❌ Does NOT contain business logic
+    ❌ Does NOT make external API calls
+    """
+
+    def get_by_path(self, file_path: str) -> Optional[MediaItem]:
+        """Simple database query."""
+        return self.db.query(MediaItem).filter(
+            MediaItem.file_path == file_path
+        ).first()
+
+    def create(self, **kwargs) -> MediaItem:
+        """Create database record."""
+        item = MediaItem(**kwargs)
+        self.db.add(item)
+        self.db.commit()
+        return item
+```
+
+### 2. Error Handling Pattern
+
+```python
+# ✅ CORRECT: Let BaseService handle logging, just raise exceptions
+class ExampleService(BaseService):
+    def process_item(self, item_id: str):
+        with self.track_execution("process_item", input_params={"item_id": item_id}):
+            item = self.repo.get_by_id(item_id)
+
+            if not item:
+                raise ValueError(f"Item {item_id} not found")
+
+            # Process...
+            result = self._do_work(item)
+
+            # Set result summary for observability
+            self.set_result_summary(run_id, {"processed": 1, "status": "success"})
+
+            return result
+```
+
+### 3. Configuration Validation
+
+**Always validate config on startup**:
+```python
+# src/main.py
+def main():
+    # ✅ Validate before doing anything else
+    is_valid, errors = ConfigValidator.validate_all()
+
+    if not is_valid:
+        for error in errors:
+            logger.error(f"Config error: {error}")
+        sys.exit(1)
+
+    # Continue with application...
+```
+
+### 4. Database Migrations
+
+When changing schema:
+
+```bash
+# Create migration file in scripts/migrations/
+scripts/migrations/002_add_column.sql
+
+# Apply migration
+psql -U storyline_user -d storyline_ai -f scripts/migrations/002_add_column.sql
+
+# Update schema_version table
+INSERT INTO schema_version (version, description)
+VALUES (2, 'Add new column to media_items');
+```
+
+### 5. Logging Standards
+
+```python
+from src.utils.logger import logger
+
+# ✅ Structured logging with context
+logger.info(f"Indexing media file: {file_path}")
+logger.warning(f"Image {file_path} has validation warnings: {warnings}")
+logger.error(f"Failed to upload to Cloudinary: {error}", exc_info=True)
+
+# ✅ Use appropriate levels
+# DEBUG: Detailed diagnostic info
+# INFO: General informational messages
+# WARNING: Something unexpected but handled
+# ERROR: Error occurred but app continues
+# CRITICAL: Severe error, app might crash
+```
+
+### 6. Async/Await Usage
+
+```python
+# Telegram and HTTP operations are async
+async def send_notification(self, media_item):
+    await self.telegram_service.send_photo(
+        chat_id=settings.TELEGRAM_CHANNEL_ID,
+        photo=open(media_item.file_path, 'rb'),
+        caption=self._build_caption(media_item)
+    )
+
+# Database operations are synchronous (SQLAlchemy)
+def get_media_by_id(self, media_id: str):
+    return self.db.query(MediaItem).filter(MediaItem.id == media_id).first()
+```
+
+## Common Patterns
+
+### Service Execution Tracking
+
+```python
+class MyService(BaseService):
+    def my_method(self, param: str):
+        # ✅ All service methods should use track_execution
+        with self.track_execution(
+            method_name="my_method",
+            user_id=user_id,  # Optional
+            triggered_by="system",  # or "user", "cli", "scheduler"
+            input_params={"param": param}
+        ) as run_id:
+
+            # Your logic here
+            result = self._do_work(param)
+
+            # Record results for observability
+            self.set_result_summary(run_id, {
+                "items_processed": result.count,
+                "success": True
+            })
+
+            return result
+```
+
+### User Auto-Discovery (Telegram)
+
+```python
+def get_or_create_user(telegram_user_data: dict) -> User:
+    """Auto-create users from Telegram interactions."""
+    user = user_repo.get_by_telegram_id(telegram_user_data['id'])
+
+    if not user:
+        user = user_repo.create(
+            telegram_user_id=telegram_user_data['id'],
+            telegram_username=telegram_user_data.get('username'),
+            telegram_first_name=telegram_user_data.get('first_name'),
+            role='member'
+        )
+        logger.info(f"New user discovered: @{telegram_user_data.get('username')}")
+
+    return user
+```
+
+## File Organization
+
+### Module Naming Conventions
+
+```
+src/
+├── services/
+│   ├── core/
+│   │   └── example_service.py     # Class: ExampleService
+│   ├── integrations/
+│   │   └── instagram_api.py       # Class: InstagramAPIService
+│   └── domain/
+│       └── analytics.py           # Class: AnalyticsService
+├── repositories/
+│   └── example_repository.py      # Class: ExampleRepository
+├── models/
+│   └── example_model.py           # Class: ExampleModel (SQLAlchemy)
+├── api/
+│   └── routes/
+│       └── example.py             # router = APIRouter()
+└── utils/
+    └── example_utility.py         # Stateless utility functions
+```
+
+### Import Order
+
+```python
+# Standard library
+import os
+from datetime import datetime
+from typing import Optional, List
+
+# Third-party
+from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends
+import httpx
+
+# Local application
+from src.config.settings import settings
+from src.models.media_item import MediaItem
+from src.repositories.media_repository import MediaRepository
+from src.utils.logger import logger
+```
+
+## Troubleshooting Guide
+
+### Common Issues
+
+**Import errors**:
+- Ensure virtual environment is activated
+- Run `pip install -e .` to install CLI in editable mode
+
+**Database connection errors**:
+- Check PostgreSQL is running: `sudo systemctl status postgresql`
+- Verify credentials in `.env`
+- Test connection: `psql -U storyline_user -d storyline_ai -c "SELECT 1;"`
+
+**Telegram bot not responding**:
+- Check bot token is valid: `curl https://api.telegram.org/bot<TOKEN>/getMe`
+- Verify channel ID is correct (negative for channels)
+- Check bot has admin permissions in channel
+
+**Image validation failing**:
+- Check image meets Instagram specs (9:16 aspect ratio, max 100MB)
+- Try `storyline-cli validate-image /path/to/image.jpg`
+
+**Tests failing**:
+- Ensure test database exists: `createdb storyline_ai_test`
+- Check `.env.test` has correct test database credentials
+- Run `pytest -v` for verbose output
+
+## Summary
+
+**Key Principles**:
+1. ✅ Strict separation of concerns (CLI → API → Services → Repositories → Models)
+2. ✅ Write tests for ALL new functionality
+3. ✅ Use BaseService for automatic logging and error tracking
+4. ✅ Validate configuration on startup
+5. ✅ Keep services focused (single responsibility)
+6. ✅ Use repositories for all database access (no raw SQL in services)
+7. ✅ Handle errors gracefully with informative messages
+8. ✅ Log important events with appropriate severity levels
+
+**Quick Reference**:
+- Main application: `python -m src.main`
+- API server: `uvicorn src.api.app:app --reload`
+- Run tests: `pytest --cov=src`
+- Check health: `storyline-cli check-health`
+- Full documentation: See `/documentation/instagram_automation_plan.md`
