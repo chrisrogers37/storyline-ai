@@ -9,6 +9,7 @@ from src.repositories.user_repository import UserRepository
 from src.repositories.queue_repository import QueueRepository
 from src.repositories.history_repository import HistoryRepository
 from src.repositories.media_repository import MediaRepository
+from src.services.core.media_lock import MediaLockService
 from src.config.settings import settings
 from src.utils.logger import logger
 from datetime import datetime
@@ -25,6 +26,7 @@ class TelegramService(BaseService):
         self.queue_repo = QueueRepository()
         self.history_repo = HistoryRepository()
         self.media_repo = MediaRepository()
+        self.lock_service = MediaLockService()
         self.bot = None
         self.application = None
 
@@ -50,6 +52,11 @@ class TelegramService(BaseService):
         Returns:
             True if sent successfully
         """
+        # Initialize bot if not already done (for CLI usage)
+        if self.bot is None:
+            self.bot = Bot(token=self.bot_token)
+            logger.debug("Telegram bot initialized for one-time use")
+
         queue_item = self.queue_repo.get_by_id(queue_item_id)
         if not queue_item:
             logger.error(f"Queue item not found: {queue_item_id}")
@@ -169,6 +176,9 @@ class TelegramService(BaseService):
 
         # Update media item
         self.media_repo.increment_times_posted(str(queue_item.media_item_id))
+
+        # Create 30-day lock to prevent reposting
+        self.lock_service.create_lock(str(queue_item.media_item_id))
 
         # Delete from queue
         self.queue_repo.delete(queue_id)

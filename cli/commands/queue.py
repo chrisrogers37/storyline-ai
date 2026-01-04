@@ -36,14 +36,21 @@ def create_schedule(days):
 
 
 @click.command(name="process-queue")
-def process_queue():
+@click.option("--force", is_flag=True, help="Process next item immediately (ignore schedule)")
+def process_queue(force):
     """Process pending queue items."""
-    console.print("[bold blue]Processing pending queue items...[/bold blue]")
+    if force:
+        console.print("[bold blue]Force-processing next scheduled item...[/bold blue]")
+    else:
+        console.print("[bold blue]Processing pending queue items...[/bold blue]")
 
     service = PostingService()
 
     try:
-        result = asyncio.run(service.process_pending_posts())
+        if force:
+            result = asyncio.run(service.process_next_immediate())
+        else:
+            result = asyncio.run(service.process_pending_posts())
 
         console.print(f"\n[bold green]✓ Processing complete![/bold green]")
         console.print(f"  Processed: {result['processed']}")

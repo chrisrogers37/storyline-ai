@@ -58,9 +58,6 @@ class ConfigValidator:
         if not settings.DB_NAME:
             errors.append("DB_NAME is required")
 
-        if not settings.DB_PASSWORD:
-            errors.append("DB_PASSWORD is required")
-
         # Validate paths
         media_dir = Path(settings.MEDIA_DIR)
         if not media_dir.exists():

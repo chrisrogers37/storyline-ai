@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     DB_PORT: int = 5432
     DB_NAME: str = "storyline_ai"
     DB_USER: str = "storyline_user"
-    DB_PASSWORD: str
+    DB_PASSWORD: Optional[str] = ""
     TEST_DB_NAME: str = "storyline_ai_test"
 
     # Telegram Configuration (REQUIRED)
@@ -60,12 +60,16 @@ class Settings(BaseSettings):
     @property
     def database_url(self) -> str:
         """Get database URL for SQLAlchemy."""
-        return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        if self.DB_PASSWORD:
+            return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        return f"postgresql://{self.DB_USER}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
     @property
     def test_database_url(self) -> str:
         """Get test database URL."""
-        return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.TEST_DB_NAME}"
+        if self.DB_PASSWORD:
+            return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.TEST_DB_NAME}"
+        return f"postgresql://{self.DB_USER}@{self.DB_HOST}:{self.DB_PORT}/{self.TEST_DB_NAME}"
 
 
 # Global settings instance

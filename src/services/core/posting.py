@@ -23,6 +23,77 @@ class PostingService(BaseService):
         self.telegram_service = TelegramService()
         self.lock_service = MediaLockService()
 
+    async def process_next_immediate(self, user_id: Optional[str] = None) -> dict:
+        """
+        Force-process the next scheduled item immediately (development/testing).
+
+        Ignores scheduled_for time and processes the next pending item.
+
+        Returns:
+            Dict with results: {processed: 1, telegram: 1, automated: 0, failed: 0}
+        """
+        with self.track_execution(
+            method_name="process_next_immediate",
+            user_id=user_id,
+            triggered_by="cli",
+        ) as run_id:
+            # Get next pending item (ignore scheduled_for time)
+            next_item = self.queue_repo.get_all(status="pending")
+
+            if not next_item:
+                logger.info("No pending items to process")
+                result = {"processed": 0, "telegram": 0, "automated": 0, "failed": 0}
+                self.set_result_summary(run_id, result)
+                return result
+
+            # Take the first one (earliest scheduled)
+            queue_item = next_item[0]
+            processed_count = 0
+            telegram_count = 0
+            automated_count = 0
+            failed_count = 0
+
+            logger.info(f"Force-processing queue item {queue_item.id} scheduled for {queue_item.scheduled_for}")
+
+            try:
+                # Get media item
+                media_item = self.media_repo.get_by_id(str(queue_item.media_item_id))
+
+                if not media_item:
+                    logger.error(f"Media item not found: {queue_item.media_item_id}")
+                    failed_count += 1
+                else:
+                    # Route based on settings
+                    if settings.ENABLE_INSTAGRAM_API and not media_item.requires_interaction:
+                        # Phase 2: Automated posting via Instagram API
+                        logger.info(f"Would auto-post {media_item.file_name} (API not implemented)")
+                        automated_count += 1
+                    else:
+                        # Phase 1: Send to Telegram for manual posting
+                        success = await self._post_via_telegram(queue_item)
+
+                        if success:
+                            telegram_count += 1
+                        else:
+                            failed_count += 1
+
+                    processed_count += 1
+
+            except Exception as e:
+                logger.error(f"Error processing queue item {queue_item.id}: {e}")
+                failed_count += 1
+
+            result = {
+                "processed": processed_count,
+                "telegram": telegram_count,
+                "automated": automated_count,
+                "failed": failed_count,
+            }
+
+            self.set_result_summary(run_id, result)
+
+            return result
+
     async def process_pending_posts(self, user_id: Optional[str] = None) -> dict:
         """
         Process all pending posts ready to be posted.
