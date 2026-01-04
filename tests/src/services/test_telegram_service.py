@@ -148,9 +148,12 @@ class TestTelegramService:
     @pytest.mark.asyncio
     async def test_handle_posted_callback(self, test_db):
         """Test handling 'posted' callback."""
+        from src.repositories.lock_repository import LockRepository
+
         media_repo = MediaRepository(test_db)
         queue_repo = QueueRepository(test_db)
         user_repo = UserRepository(test_db)
+        lock_repo = LockRepository(test_db)
 
         service = TelegramService(db=test_db)
 
@@ -188,13 +191,16 @@ class TestTelegramService:
         # Handle callback
         await service._handle_callback(mock_update, mock_context)
 
-        # Verify queue item was marked as posted
-        updated_item = queue_repo.get_by_id(queue_item.id)
-        assert updated_item.status == "posted"
+        # Verify queue item was deleted (moved to history)
+        deleted_item = queue_repo.get_by_id(queue_item.id)
+        assert deleted_item is None
 
         # Verify media post count incremented
         updated_media = media_repo.get_by_id(media.id)
         assert updated_media.times_posted == 1
+
+        # Verify 30-day lock was created
+        assert lock_repo.is_locked(media.id) is True
 
     @pytest.mark.asyncio
     async def test_handle_skip_callback(self, test_db):

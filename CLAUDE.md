@@ -614,26 +614,36 @@ documentation/
 ├── README.md                           # Index of all documentation
 ├── planning/                           # Planning and design docs
 │   ├── instagram_automation_plan.md   # Master implementation plan
+│   ├── IMPLEMENTATION_COMPLETE.md     # Phase completion status
+│   ├── TEST_COVERAGE.md               # Test coverage report
 │   └── architecture_decisions.md      # ADRs (Architecture Decision Records)
 ├── guides/                             # How-to guides and tutorials
-│   ├── deployment_guide.md
-│   ├── testing_guide.md
+│   ├── quickstart.md                  # 10-minute setup guide
+│   ├── deployment.md                  # Production deployment
+│   ├── testing-guide.md               # How to run and write tests
 │   └── contributing.md
-├── api/                                # API documentation
-│   ├── endpoints.md
-│   └── authentication.md
-└── operations/                         # Operational runbooks
-    ├── monitoring.md
-    ├── backups.md
-    └── troubleshooting.md
+├── updates/                            # Project updates, patches, bugfixes
+│   ├── YYYY-MM-DD-bugfixes.md         # Dated bug fix reports
+│   ├── YYYY-MM-DD-patch.md            # Dated patch notes
+│   └── YYYY-MM-DD-hotfix.md           # Dated hotfix documentation
+├── operations/                         # Operational runbooks
+│   ├── monitoring.md
+│   ├── backups.md
+│   └── troubleshooting.md
+└── api/                                # API documentation (Phase 5)
+    ├── endpoints.md
+    └── authentication.md
 ```
 
 **Rules**:
 - ✅ **DO** create subdirectories in `documentation/` based on document purpose
 - ✅ **DO** keep root-level docs for critical project info only (README.md, CHANGELOG.md, etc.)
 - ✅ **DO** update `documentation/README.md` when adding new docs
+- ✅ **DO** use dated filenames for updates: `YYYY-MM-DD-description.md`
+- ✅ **DO** place bug fix reports, patches, and hotfixes in `documentation/updates/`
 - ❌ **DON'T** create markdown files scattered throughout the codebase
 - ❌ **DON'T** put documentation in source directories (`src/`, `cli/`, etc.)
+- ❌ **DON'T** create temporary documentation files in the project root
 
 **Root-level documentation exceptions** (only these should be in project root):
 - `README.md` - Project overview and quick start
@@ -642,17 +652,31 @@ documentation/
 - `LICENSE` - Project license
 - `CONTRIBUTING.md` - Contribution guidelines (if public)
 
+**Subdirectory Purpose Guide**:
+
+| Folder | Purpose | Examples |
+|--------|---------|----------|
+| `planning/` | Design docs, specs, completion reports | `instagram_automation_plan.md`, `TEST_COVERAGE.md` |
+| `guides/` | How-to guides, tutorials | `quickstart.md`, `deployment.md`, `testing-guide.md` |
+| `updates/` | **Dated bug fixes, patches, hotfixes** | `2026-01-04-bugfixes.md`, `2026-02-15-security-patch.md` |
+| `operations/` | Production runbooks, procedures | `monitoring.md`, `incident-response.md` |
+| `api/` | API reference documentation | `endpoints.md`, `authentication.md` |
+
 **Examples**:
 ```bash
 # ✅ CORRECT
 documentation/guides/telegram_setup.md
 documentation/operations/backup_restore.md
+documentation/updates/2026-01-04-bugfixes.md        # Dated bugfix report
+documentation/updates/2026-01-15-hotfix-locks.md    # Dated hotfix
 documentation/api/rate_limiting.md
 
 # ❌ INCORRECT
-src/services/README.md
-cli/commands/GUIDE.md
-TelegramSetup.md (in root)
+src/services/README.md                              # Don't put docs in src/
+cli/commands/GUIDE.md                               # Don't put docs in cli/
+TelegramSetup.md                                    # Don't put guides in root
+BUGFIXES.md                                         # Don't put updates in root (use dated file in updates/)
+HotfixDec2025.md                                    # Use ISO date format: YYYY-MM-DD
 ```
 
 ## Troubleshooting Guide

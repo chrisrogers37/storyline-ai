@@ -58,7 +58,7 @@ class BaseService(ABC):
             user_id=str(user_id) if user_id else None,
             triggered_by=triggered_by,
             input_params=input_params,
-            metadata=metadata,
+            context_metadata=metadata,
         )
 
         started_at = datetime.utcnow()

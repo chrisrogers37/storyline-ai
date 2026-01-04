@@ -24,7 +24,7 @@ class ServiceRunRepository:
         user_id: Optional[str] = None,
         triggered_by: str = "system",
         input_params: Optional[dict] = None,
-        metadata: Optional[dict] = None,
+        context_metadata: Optional[dict] = None,
     ) -> str:
         """Create a new service run record. Returns run_id."""
         run = ServiceRun(
@@ -33,7 +33,7 @@ class ServiceRunRepository:
             user_id=user_id,
             triggered_by=triggered_by,
             input_params=input_params,
-            metadata=metadata,
+            context_metadata=context_metadata,
         )
         self.db.add(run)
         self.db.commit()

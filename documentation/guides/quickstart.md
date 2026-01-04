@@ -58,8 +58,10 @@ TELEGRAM_BOT_TOKEN=your_bot_token_here
 TELEGRAM_CHANNEL_ID=-1001234567890
 ADMIN_TELEGRAM_CHAT_ID=your_user_id
 
-# Database
-DB_PASSWORD=your_db_password
+# Database (DB_PASSWORD is optional for local PostgreSQL without password auth)
+DB_USER=your_username
+DB_PASSWORD=your_db_password  # Leave empty if not needed
+MEDIA_DIR=/absolute/path/to/media/stories  # Must be absolute path
 
 # Posting Schedule (adjust to your timezone)
 POSTS_PER_DAY=3

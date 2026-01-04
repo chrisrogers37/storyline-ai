@@ -106,15 +106,16 @@ class SchedulerService(BaseService):
                 # Calculate base time
                 hour_offset = start_hour + (post_num * interval_hours)
 
-                # Handle wrap-around
+                # Handle wrap-around (use local variable to avoid mutation)
+                post_date = base_date
                 if hour_offset >= 24:
                     hour_offset -= 24
-                    base_date = base_date + timedelta(days=1)
+                    post_date = base_date + timedelta(days=1)
 
                 # Add ±30min jitter for unpredictability
                 jitter_minutes = random.randint(-30, 30)
 
-                scheduled_time = datetime.combine(base_date, datetime.min.time()) + timedelta(
+                scheduled_time = datetime.combine(post_date, datetime.min.time()) + timedelta(
                     hours=hour_offset, minutes=jitter_minutes
                 )
 

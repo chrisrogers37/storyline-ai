@@ -45,7 +45,7 @@ Required configuration:
 - `TELEGRAM_BOT_TOKEN`: Get from @BotFather on Telegram
 - `TELEGRAM_CHANNEL_ID`: Your Telegram channel ID
 - `ADMIN_TELEGRAM_CHAT_ID`: Your personal chat ID for alerts
-- `DB_PASSWORD`: PostgreSQL password
+- `DB_PASSWORD`: PostgreSQL password (optional for local development)
 
 ### 3. Database Setup
 
@@ -136,29 +136,37 @@ storyline-cli check-health
 
 ## Architecture
 
-**Phase 1** (Telegram-Only Mode):
-- Smart scheduling + Telegram notifications
-- Team posts manually to Instagram
-- No Instagram API needed
+**Phase 1** (Telegram-Only Mode) - ✅ COMPLETE:
+- ✅ Smart scheduling + Telegram notifications
+- ✅ Team posts manually to Instagram
+- ✅ No Instagram API needed
+- ✅ 147 comprehensive tests
+- ✅ Production-tested and deployed
 
-**Phase 2** (Hybrid Mode - Future):
-- Enable Instagram API for simple stories
-- Telegram workflow for interactive stories
-- Requires Meta Developer setup + Cloudinary
+**Phase 2** (Hybrid Mode - Optional):
+- 🔄 Enable Instagram API for simple stories
+- 🔄 Telegram workflow for interactive stories
+- 🔄 Requires Meta Developer setup + Cloudinary
+- 🔄 Activate with `ENABLE_INSTAGRAM_API=true`
 
 ## Development
 
 ### Running Tests
 
+Phase 1 includes 147 comprehensive tests with automatic test database setup:
+
 ```bash
 # Run all tests with coverage
-pytest --cov=src
+pytest --cov=src --cov-report=html
 
 # Run only unit tests
 pytest -m unit
 
 # Run only integration tests
 pytest -m integration
+
+# Force process next post (development testing)
+storyline-cli process-queue --force
 ```
 
 ### Project Structure

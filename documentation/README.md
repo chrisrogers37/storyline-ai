@@ -10,6 +10,7 @@ documentation/
 ├── planning/                       # Planning and design documents
 ├── guides/                         # How-to guides and tutorials
 ├── operations/                     # Operational runbooks
+├── updates/                        # Project updates, bugfixes, patches
 └── api/                            # API documentation (Phase 5)
 ```
 
@@ -74,6 +75,18 @@ Coming soon:
 - Troubleshooting runbooks
 - Performance tuning
 - Security hardening
+
+---
+
+## 🔄 Project Updates
+
+### Bug Fixes & Patches
+**[2026-01-04-bugfixes.md](updates/2026-01-04-bugfixes.md)**
+- 4 critical bugs fixed (service run metadata, scheduler date mutation, health check, lock creation)
+- All bugs identified during code review and deployment testing
+- Production verified and tested
+
+*Note: Updates folder contains dated documents for bug fixes, patches, and significant changes.*
 
 ---
 

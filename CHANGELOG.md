@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-01-04
+
 ### Added
 - Comprehensive test suite with 147 tests covering all Phase 1 functionality
 - Automatic test database creation and cleanup (pytest fixtures)
@@ -18,8 +20,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Test documentation (tests/README.md, TESTING_SETUP.md)
 - Makefile targets for test execution (test, test-unit, test-quick, test-failed)
 - Enhanced logger utility with setup_logger() and get_logger() functions for testability
+- Development command: `storyline-cli process-queue --force` for immediate testing
+- Lock creation verification in telegram service tests
 
-### Fixed
+### Fixed (Code Review - 2026-01-04)
+- **Critical**: Service run metadata silently discarded (wrong column name in repository)
+- **Critical**: Scheduler date mutation bug causing incorrect scheduling for midnight-crossing windows
+
+### Fixed (Deployment - 2026-01-04)
+- **Critical**: 30-day lock creation missing in TelegramService button handlers
+- **Database**: Made DB_PASSWORD optional for local PostgreSQL development
+- **Database**: Database URL now handles empty password correctly
+- **Telegram**: Auto-initialization of bot for CLI commands (one-time use)
+- **Validation**: Removed DB_PASSWORD requirement from config validator
+- **SQLAlchemy**: Added text() wrapper for raw SQL in health check (SQLAlchemy 2.0+ compatibility)
+
+### Fixed (Testing)
 - SQLAlchemy reserved keyword issue (renamed ServiceRun.metadata to context_metadata)
 - Test environment configuration loading in conftest.py
 - CLI command function names in test imports
@@ -29,14 +45,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Function-scoped test_db fixture with transaction rollback for test isolation
 - Zero-manual-setup testing (database auto-created from .env.test)
 - CI/CD ready test infrastructure
+- TelegramService now creates locks when "Posted" button is clicked
+- PostingService.process_next_immediate() method for development testing
 
-### Planned
-- Phase 2: Instagram API automation integration
-- Phase 2: Cloudinary integration for automated posts
-- Phase 2: Token refresh service for Instagram API
-- Phase 3: Shopify product integration
-- Phase 4: Instagram analytics and metrics
-- Phase 5: REST API and web frontend
+### Next Steps
+- **Phase 2 (Optional)**: Instagram API automation integration
+  - CloudStorageService (Cloudinary/S3)
+  - InstagramAPIService (Graph API)
+  - Token refresh service
+  - Hybrid workflow (automated simple stories, manual interactive stories)
+- **Phase 3**: Shopify product integration (schema ready)
+- **Phase 4**: Instagram analytics and metrics (schema ready)
+- **Phase 5**: REST API and web frontend
 
 ## [1.0.0] - 2026-01-03
 
@@ -227,5 +247,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Posting Mode**: 100% manual via Telegram
 - **Instagram API**: Not required for Phase 1
 
-[Unreleased]: https://github.com/yourusername/storyline-ai/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/yourusername/storyline-ai/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/yourusername/storyline-ai/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/yourusername/storyline-ai/releases/tag/v1.0.0
