@@ -605,6 +605,56 @@ from src.repositories.media_repository import MediaRepository
 from src.utils.logger import logger
 ```
 
+### Documentation Organization
+
+**IMPORTANT**: All helpful markdown documentation should be placed in the `documentation/` directory.
+
+```
+documentation/
+├── README.md                           # Index of all documentation
+├── planning/                           # Planning and design docs
+│   ├── instagram_automation_plan.md   # Master implementation plan
+│   └── architecture_decisions.md      # ADRs (Architecture Decision Records)
+├── guides/                             # How-to guides and tutorials
+│   ├── deployment_guide.md
+│   ├── testing_guide.md
+│   └── contributing.md
+├── api/                                # API documentation
+│   ├── endpoints.md
+│   └── authentication.md
+└── operations/                         # Operational runbooks
+    ├── monitoring.md
+    ├── backups.md
+    └── troubleshooting.md
+```
+
+**Rules**:
+- ✅ **DO** create subdirectories in `documentation/` based on document purpose
+- ✅ **DO** keep root-level docs for critical project info only (README.md, CHANGELOG.md, etc.)
+- ✅ **DO** update `documentation/README.md` when adding new docs
+- ❌ **DON'T** create markdown files scattered throughout the codebase
+- ❌ **DON'T** put documentation in source directories (`src/`, `cli/`, etc.)
+
+**Root-level documentation exceptions** (only these should be in project root):
+- `README.md` - Project overview and quick start
+- `CHANGELOG.md` - Version history
+- `CLAUDE.md` - This file (developer guide for AI assistants)
+- `LICENSE` - Project license
+- `CONTRIBUTING.md` - Contribution guidelines (if public)
+
+**Examples**:
+```bash
+# ✅ CORRECT
+documentation/guides/telegram_setup.md
+documentation/operations/backup_restore.md
+documentation/api/rate_limiting.md
+
+# ❌ INCORRECT
+src/services/README.md
+cli/commands/GUIDE.md
+TelegramSetup.md (in root)
+```
+
 ## Troubleshooting Guide
 
 ### Common Issues
@@ -649,4 +699,7 @@ from src.utils.logger import logger
 - API server: `uvicorn src.api.app:app --reload`
 - Run tests: `pytest --cov=src`
 - Check health: `storyline-cli check-health`
-- Full documentation: See `/documentation/instagram_automation_plan.md`
+- **All documentation**: See `documentation/README.md` for complete index
+- Full technical spec: `documentation/planning/instagram_automation_plan.md`
+- Deployment guide: `documentation/guides/deployment.md`
+- Testing guide: `documentation/guides/testing-guide.md`
