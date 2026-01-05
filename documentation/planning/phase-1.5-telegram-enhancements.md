@@ -17,6 +17,10 @@ Phase 1.5 focuses on making the **manual Telegram workflow as smooth as possible
 
 ## Features Overview
 
+### 🚨 Critical (Blocker for Production Use)
+
+**0. Permanent Reject** - Never show unwanted media again (infinite lock)
+
 ### 🎯 Core Enhancements (Must Have)
 
 1. **Bot Lifecycle Notifications** - Know when the system is up/down
@@ -35,6 +39,150 @@ Phase 1.5 focuses on making the **manual Telegram workflow as smooth as possible
 ---
 
 ## Detailed Feature Specs
+
+### 0. Permanent Reject (Critical) 🚫
+
+**Problem**: Some media files should NEVER be posted (personal photos, test images, inappropriate content). Currently "Skip" just removes from queue temporarily - the media can be scheduled again later.
+
+**Solution**: Add "🚫 Reject" button that permanently blocks media from ever being queued again.
+
+#### Current Behavior
+
+**✅ Posted**:
+- Creates history record (`status="posted"`)
+- Creates 30-day TTL lock
+- Media can be reposted after 30 days
+
+**⏭️ Skipped**:
+- Creates history record (`status="skipped"`)
+- **No lock created**
+- Media **can be queued again** immediately
+
+**Problem**: No way to permanently block media from appearing in queue.
+
+#### Proposed Solution
+
+**🚫 Reject Button**:
+```
+[✅ Posted] [⏭️ Skip] [🚫 Reject]
+```
+
+When user clicks "🚫 Reject":
+1. Creates history record with `status="rejected"`
+2. Creates **infinite TTL lock** (`expires_at = NULL`)
+3. Removes from queue
+4. Media **never appears in queue again**
+
+#### Implementation Details
+
+**Button Layout** (3 buttons instead of 2):
+```python
+keyboard = [
+    [
+        InlineKeyboardButton("✅ Posted", callback_data=f"posted:{queue_item_id}"),
+        InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{queue_item_id}"),
+    ],
+    [
+        InlineKeyboardButton("🚫 Reject", callback_data=f"reject:{queue_item_id}"),
+    ],
+    [
+        InlineKeyboardButton("📱 Open Instagram", url="https://www.instagram.com/"),
+    ]
+]
+```
+
+**New Handler Method**:
+```python
+async def _handle_rejected(self, queue_id: str, user, query):
+    """Handle 'Reject' button click."""
+    queue_item = self.queue_repo.get_by_id(queue_id)
+
+    # Create history record
+    self.history_repo.create(
+        media_item_id=str(queue_item.media_item_id),
+        queue_item_id=queue_id,
+        status="rejected",
+        success=False,
+        posted_by_user_id=str(user.id),
+        posted_by_telegram_username=user.telegram_username,
+    )
+
+    # Create INFINITE lock (expires_at = NULL)
+    self.lock_service.create_permanent_lock(str(queue_item.media_item_id))
+
+    # Delete from queue
+    self.queue_repo.delete(queue_id)
+
+    # Update message
+    await query.edit_message_caption(
+        caption=f"🚫 Permanently rejected by @{user.telegram_username}\n\n"
+                f"This media will never be queued again."
+    )
+```
+
+**New Lock Service Method**:
+```python
+def create_permanent_lock(self, media_item_id: str):
+    """Create infinite TTL lock for permanently rejected media."""
+    return self.create_lock(media_item_id, ttl_days=None)  # None = infinite
+```
+
+**Database Changes**:
+- `media_locks.expires_at` already allows NULL (infinite lock)
+- `history.status` already supports any string value
+- **No schema changes needed!**
+
+#### CLI Command for Rejected Media
+
+**List rejected media**:
+```bash
+storyline-cli media rejected
+
+# Output:
+Permanently Rejected Media (5 items):
+
+📁 test_image_1.jpg
+   Rejected: 2026-01-05 by @chris
+   Reason: Test file
+
+📁 personal_photo.jpg
+   Rejected: 2026-01-04 by @teamuser
+   Reason: Personal content
+
+...
+
+Delete from source? (y/N):
+```
+
+**Delete rejected media from source**:
+```bash
+storyline-cli media cleanup-rejected --confirm
+
+# Deletes files from MEDIA_DIR
+# Removes from database
+# Shows confirmation for each file
+```
+
+#### Success Criteria
+
+- ✅ "🚫 Reject" button appears on all notifications
+- ✅ Rejected media never appears in queue again
+- ✅ History records show who rejected and when
+- ✅ Can query rejected media via CLI
+- ✅ Optional: Delete rejected files from source
+
+#### Why This is Critical
+
+**Before permanent reject**: You can't safely run the system because unwanted media keeps coming back.
+
+**After permanent reject**: You can confidently use the system knowing unwanted media is permanently blocked.
+
+**Enables**:
+- Safe production use with mixed media folders
+- Team collaboration (anyone can reject inappropriate content)
+- Future Phase 2 automation (API mode can respect permanent rejections)
+
+---
 
 ### 1. Bot Lifecycle Notifications ⚡
 
@@ -809,6 +957,15 @@ class SchedulingAnalytics(BaseService):
 
 ## Implementation Priority
 
+### Priority 0: Critical Blocker (Do First!)
+
+**🚨 BLOCKER FOR PRODUCTION USE**:
+0. ⏸️ **Permanent Reject Button** - 2-3 hours
+   - Add "🚫 Reject" button to notifications
+   - Create infinite TTL lock functionality
+   - Add CLI command to list/cleanup rejected media
+   - **Required before running system with real media!**
+
 ### Week 1: Core Improvements
 
 **Priority 1** (Must Have):
@@ -820,7 +977,7 @@ class SchedulingAnalytics(BaseService):
 4. ⏸️ Instagram Deep Link Redirect Service - 0.5 hours (just update URL after setup)
 5. ⏸️ Instagram Username Configuration - 6 hours (with database)
 
-**Total Week 1**: ~15.5 hours
+**Total Week 1**: ~18.5 hours (including Priority 0)
 
 ### Week 2: Quality of Life
 
