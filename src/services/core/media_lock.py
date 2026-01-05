@@ -26,14 +26,15 @@ class MediaLockService(BaseService):
 
         Args:
             media_item_id: ID of media item to lock
-            ttl_days: Days to lock (default: from settings)
-            lock_reason: Reason for lock ('recent_post', 'manual_hold', 'seasonal')
+            ttl_days: Days to lock (default: from settings, None for permanent)
+            lock_reason: Reason for lock ('recent_post', 'manual_hold', 'seasonal', 'permanent_reject')
             created_by_user_id: User who created the lock (optional)
 
         Returns:
             True if lock created successfully
         """
-        if ttl_days is None:
+        # Default to settings if not specified (but allow explicit None for permanent locks)
+        if ttl_days is None and lock_reason != "permanent_reject":
             ttl_days = settings.REPOST_TTL_DAYS
 
         # Check if already locked
@@ -48,8 +49,33 @@ class MediaLockService(BaseService):
             created_by_user_id=created_by_user_id,
         )
 
-        logger.info(f"Created {ttl_days}-day lock for media {media_item_id} (reason: {lock_reason})")
+        if ttl_days is None:
+            logger.info(f"Created permanent lock for media {media_item_id} (reason: {lock_reason})")
+        else:
+            logger.info(f"Created {ttl_days}-day lock for media {media_item_id} (reason: {lock_reason})")
         return True
+
+    def create_permanent_lock(
+        self,
+        media_item_id: str,
+        created_by_user_id: Optional[str] = None,
+    ) -> bool:
+        """
+        Create a permanent lock for a media item (infinite TTL).
+
+        Args:
+            media_item_id: ID of media item to permanently lock
+            created_by_user_id: User who created the lock (optional)
+
+        Returns:
+            True if lock created successfully
+        """
+        return self.create_lock(
+            media_item_id=media_item_id,
+            ttl_days=None,
+            lock_reason="permanent_reject",
+            created_by_user_id=created_by_user_id,
+        )
 
     def is_locked(self, media_item_id: str) -> bool:
         """Check if media item is currently locked."""
