@@ -157,17 +157,16 @@ class TelegramService(BaseService):
         # Separator
         lines.append(f"\n{'━' * 20}")
 
-        # Footer metadata
-        lines.append(f"📁 {media_item.file_name}")
+        # Workflow instructions
+        lines.append(f"📋 *Quick Workflow:*")
+        lines.append(f"1️⃣ Click & hold image → Save")
+        lines.append(f"2️⃣ Tap \"Open Instagram\" below")
+        lines.append(f"3️⃣ Post your story!")
 
         # Scheduled time if available
         if queue_item and queue_item.scheduled_for:
             time_str = queue_item.scheduled_for.strftime("%I:%M %p")
-            lines.append(f"🕐 Scheduled: {time_str}")
-
-        # Post count
-        times = media_item.times_posted or 0
-        lines.append(f"📊 Posted: {times} time{'s' if times != 1 else ''}")
+            lines.append(f"\n🕐 Scheduled: {time_str}")
 
         return "\n".join(lines)
 
