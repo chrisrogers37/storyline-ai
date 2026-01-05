@@ -15,6 +15,7 @@ from src.services.core.media_lock import MediaLockService
 # Track session statistics
 session_start_time = None
 session_posts_sent = 0
+shutdown_in_progress = False
 
 
 async def run_scheduler_loop(posting_service: PostingService):
@@ -28,7 +29,8 @@ async def run_scheduler_loop(posting_service: PostingService):
             result = await posting_service.process_pending_posts()
 
             if result["processed"] > 0:
-                session_posts_sent += result["processed"]
+                # Only count successful Telegram posts (not failed ones)
+                session_posts_sent += result["telegram"]
                 logger.info(
                     f"Processed {result['processed']} posts: "
                     f"{result['telegram']} to Telegram, "
@@ -109,19 +111,33 @@ async def main_async():
     # Setup signal handlers for graceful shutdown
     async def shutdown_handler(sig):
         """Handle shutdown signals gracefully."""
+        global shutdown_in_progress
+
+        # Guard against duplicate signals
+        if shutdown_in_progress:
+            logger.info(f"Shutdown already in progress, ignoring {sig.name} signal")
+            return
+        shutdown_in_progress = True
+
         logger.info(f"Received {sig.name} signal...")
 
         # Calculate uptime
         uptime = int(time() - session_start_time) if session_start_time else 0
 
         # Send shutdown notification
-        await telegram_service.send_shutdown_notification(
-            uptime_seconds=uptime,
-            posts_sent=session_posts_sent
-        )
+        try:
+            await telegram_service.send_shutdown_notification(
+                uptime_seconds=uptime,
+                posts_sent=session_posts_sent
+            )
+        except Exception as e:
+            logger.warning(f"Failed to send shutdown notification: {e}")
 
         # Cleanup
-        await telegram_service.stop_polling()
+        try:
+            await telegram_service.stop_polling()
+        except Exception as e:
+            logger.warning(f"Error stopping Telegram polling: {e}")
 
         # Cancel all tasks
         for task in tasks:
