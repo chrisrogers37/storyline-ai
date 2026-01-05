@@ -77,6 +77,9 @@ class TelegramService(BaseService):
                 InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{queue_item_id}"),
             ],
             [
+                InlineKeyboardButton("🚫 Reject", callback_data=f"reject:{queue_item_id}"),
+            ],
+            [
                 InlineKeyboardButton("📱 Open Instagram", url="https://www.instagram.com/"),
             ]
         ]
@@ -211,6 +214,8 @@ class TelegramService(BaseService):
             await self._handle_posted(queue_id, user, query)
         elif action == "skip":
             await self._handle_skipped(queue_id, user, query)
+        elif action == "reject":
+            await self._handle_rejected(queue_id, user, query)
 
     async def _handle_posted(self, queue_id: str, user, query):
         """Handle 'Posted' button click."""
@@ -283,6 +288,51 @@ class TelegramService(BaseService):
         await query.edit_message_caption(caption=f"⏭️ Skipped by @{user.telegram_username}")
 
         logger.info(f"Post skipped by {user.telegram_username}")
+
+    async def _handle_rejected(self, queue_id: str, user, query):
+        """Handle 'Reject' button click - permanently blocks media."""
+        queue_item = self.queue_repo.get_by_id(queue_id)
+
+        if not queue_item:
+            await query.edit_message_caption(caption="⚠️ Queue item not found")
+            return
+
+        # Get media item for filename
+        media_item = self.media_repo.get_by_id(str(queue_item.media_item_id))
+
+        # Create history record
+        self.history_repo.create(
+            media_item_id=str(queue_item.media_item_id),
+            queue_item_id=queue_id,
+            queue_created_at=queue_item.created_at,
+            queue_deleted_at=datetime.utcnow(),
+            scheduled_for=queue_item.scheduled_for,
+            posted_at=datetime.utcnow(),
+            status="rejected",
+            success=False,
+            posted_by_user_id=str(user.id),
+            posted_by_telegram_username=user.telegram_username,
+        )
+
+        # Create PERMANENT lock (infinite TTL)
+        self.lock_service.create_permanent_lock(
+            str(queue_item.media_item_id),
+            created_by_user_id=str(user.id)
+        )
+
+        # Delete from queue
+        self.queue_repo.delete(queue_id)
+
+        # Update message with clear feedback
+        caption = (
+            f"🚫 *Permanently Rejected*\n\n"
+            f"By: @{user.telegram_username}\n"
+            f"File: {media_item.file_name if media_item else 'Unknown'}\n\n"
+            f"This media will never be queued again."
+        )
+        await query.edit_message_caption(caption=caption, parse_mode="Markdown")
+
+        logger.info(f"Post permanently rejected by {user.telegram_username}: {media_item.file_name if media_item else queue_item.media_item_id}")
 
     def _get_or_create_user(self, telegram_user):
         """Get or create user from Telegram data."""
