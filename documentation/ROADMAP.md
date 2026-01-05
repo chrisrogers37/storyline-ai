@@ -47,6 +47,15 @@ Build a delightful Instagram Story automation system that:
 **Duration**: January 2026 (1-2 weeks)
 **Goal**: Make manual Telegram workflow as smooth as possible
 
+### Priority 0: Critical Blocker 🚨
+
+**REQUIRED FOR PRODUCTION USE**:
+0. ⏸️ **Permanent Reject Button** - Infinite lock for unwanted media
+   - Add "🚫 Reject" button to permanently block media
+   - Prevents unwanted files from being queued again
+   - CLI command to list/cleanup rejected items
+   - **Must implement before running with real media folders**
+
 ### Week 1: Core Improvements
 
 **Priority 1** (Must Have) - ✅ COMPLETE:
@@ -184,6 +193,16 @@ Build a delightful Instagram Story automation system that:
 ---
 
 ## Decision Log
+
+### 2026-01-04: Permanent Reject Feature is Critical
+**Decision**: Add "Permanent Reject" as Priority 0 blocker before other Phase 1.5 work
+**Rationale**:
+- User has mixed media folders (some files should NEVER be posted)
+- Current "Skip" button doesn't prevent media from being queued again
+- Can't safely run system in production without way to permanently block files
+- Blocks actual usage and testing of the system
+- Simple implementation (2-3 hours), high value
+**Status**: Must implement before continuing Phase 1.5
 
 ### 2026-01-04: Instagram Deep Link Strategy
 **Decision**: Keep simple `https://www.instagram.com/` link for now
