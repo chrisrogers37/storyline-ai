@@ -77,7 +77,7 @@ class TelegramService(BaseService):
                 InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{queue_item_id}"),
             ],
             [
-                InlineKeyboardButton("📱 Open Instagram", url="instagram://story-camera"),
+                InlineKeyboardButton("📱 Open Instagram", url="https://www.instagram.com/"),
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
