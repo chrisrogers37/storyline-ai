@@ -5,11 +5,14 @@ A self-hosted Instagram Story scheduling system with Telegram-based team collabo
 ## Features
 
 - 📅 **Smart Scheduling**: Intelligent posting schedule based on your preferences
-- 📱 **Telegram Integration**: Team collaboration via Telegram bot
+- 📱 **Telegram Integration**: Team collaboration via Telegram bot with lifecycle notifications
 - 🔄 **Phased Approach**: Start with manual posting, optionally enable automation
-- 🔒 **TTL Locks**: Prevent premature reposts
+- 🔒 **TTL Locks**: Prevent premature reposts with 30-day locks
+- 🚫 **Permanent Reject**: Permanently block unwanted media from ever being queued
 - 📊 **Full Audit Trail**: Track who posted what and when
 - 🎨 **Image Validation**: Automatic validation against Instagram requirements
+- 📱 **Instagram Deep Links**: One-tap button to open Instagram app/web
+- ✨ **Enhanced Captions**: Clean workflow instructions with actionable steps
 
 ## Quick Start
 
@@ -136,12 +139,19 @@ storyline-cli check-health
 
 ## Architecture
 
-**Phase 1** (Telegram-Only Mode) - ✅ COMPLETE:
+**Phase 1** (Telegram-Only Mode) - ✅ COMPLETE (v1.0.1):
 - ✅ Smart scheduling + Telegram notifications
 - ✅ Team posts manually to Instagram
 - ✅ No Instagram API needed
 - ✅ 147 comprehensive tests
 - ✅ Production-tested and deployed
+
+**Phase 1.5** (Telegram Enhancements) - ✅ COMPLETE (v1.2.0):
+- ✅ Permanent Reject button for unwanted media (infinite locks)
+- ✅ Bot lifecycle notifications (startup/shutdown with system status)
+- ✅ Instagram deep links (one-tap Instagram app opening)
+- ✅ Enhanced captions with workflow instructions
+- ✅ 3-button layout: Posted, Skip, Reject
 
 **Phase 2** (Hybrid Mode - Optional):
 - 🔄 Enable Instagram API for simple stories

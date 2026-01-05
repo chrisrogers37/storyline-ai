@@ -28,8 +28,8 @@ class MediaPostingLock(Base):
 
     # Lock details
     locked_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    locked_until = Column(DateTime, nullable=False, index=True)  # TTL: locked_at + X days
-    lock_reason = Column(String(100), default="recent_post")  # 'recent_post', 'manual_hold', 'seasonal'
+    locked_until = Column(DateTime, nullable=True, index=True)  # TTL: locked_at + X days, NULL = permanent
+    lock_reason = Column(String(100), default="recent_post")  # 'recent_post', 'manual_hold', 'seasonal', 'permanent_reject'
 
     # Who created the lock
     created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))

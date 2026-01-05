@@ -1,7 +1,9 @@
 """Main application entry point - runs scheduler + Telegram bot."""
 import asyncio
+import signal
 import sys
 from datetime import datetime
+from time import time
 
 from src.config.settings import settings
 from src.utils.logger import logger
@@ -10,9 +12,15 @@ from src.services.core.posting import PostingService
 from src.services.core.telegram_service import TelegramService
 from src.services.core.media_lock import MediaLockService
 
+# Track session statistics
+session_start_time = None
+session_posts_sent = 0
+shutdown_in_progress = False
+
 
 async def run_scheduler_loop(posting_service: PostingService):
     """Run scheduler loop - check for pending posts every minute."""
+    global session_posts_sent
     logger.info("Starting scheduler loop...")
 
     while True:
@@ -21,6 +29,8 @@ async def run_scheduler_loop(posting_service: PostingService):
             result = await posting_service.process_pending_posts()
 
             if result["processed"] > 0:
+                # Only count successful Telegram posts (not failed ones)
+                session_posts_sent += result["telegram"]
                 logger.info(
                     f"Processed {result['processed']} posts: "
                     f"{result['telegram']} to Telegram, "
@@ -55,6 +65,8 @@ async def cleanup_locks_loop(lock_service: MediaLockService):
 
 async def main_async():
     """Main async application entry point."""
+    global session_start_time
+
     logger.info("=" * 60)
     logger.info("Storyline AI - Instagram Story Automation System")
     logger.info("=" * 60)
@@ -78,6 +90,10 @@ async def main_async():
     # Initialize Telegram bot
     await telegram_service.initialize()
 
+    # Send startup notification
+    session_start_time = time()
+    await telegram_service.send_startup_notification()
+
     # Create tasks
     tasks = [
         asyncio.create_task(run_scheduler_loop(posting_service)),
@@ -92,16 +108,60 @@ async def main_async():
     logger.info(f"✓ Posting hours: {settings.POSTING_HOURS_START}-{settings.POSTING_HOURS_END} UTC")
     logger.info("=" * 60)
 
+    # Setup signal handlers for graceful shutdown
+    async def shutdown_handler(sig):
+        """Handle shutdown signals gracefully."""
+        global shutdown_in_progress
+
+        # Guard against duplicate signals
+        if shutdown_in_progress:
+            logger.info(f"Shutdown already in progress, ignoring {sig.name} signal")
+            return
+        shutdown_in_progress = True
+
+        logger.info(f"Received {sig.name} signal...")
+
+        # Calculate uptime
+        uptime = int(time() - session_start_time) if session_start_time else 0
+
+        # Send shutdown notification
+        try:
+            await telegram_service.send_shutdown_notification(
+                uptime_seconds=uptime,
+                posts_sent=session_posts_sent
+            )
+        except Exception as e:
+            logger.warning(f"Failed to send shutdown notification: {e}")
+
+        # Cleanup
+        try:
+            await telegram_service.stop_polling()
+        except Exception as e:
+            logger.warning(f"Error stopping Telegram polling: {e}")
+
+        # Cancel all tasks
+        for task in tasks:
+            task.cancel()
+
+        logger.info("✓ Shutdown complete")
+
+    # Register signal handlers
+    loop = asyncio.get_event_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(
+            sig,
+            lambda s=sig: asyncio.create_task(shutdown_handler(s))
+        )
+
     # Wait for all tasks
     try:
         await asyncio.gather(*tasks)
+    except asyncio.CancelledError:
+        # Tasks were cancelled during shutdown
+        pass
     except KeyboardInterrupt:
-        logger.info("Received shutdown signal...")
-
-        # Cleanup
-        await telegram_service.stop_polling()
-
-        logger.info("✓ Shutdown complete")
+        logger.info("Received keyboard interrupt...")
+        await shutdown_handler(signal.SIGINT)
 
 
 def main():

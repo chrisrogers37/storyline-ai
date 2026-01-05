@@ -24,7 +24,8 @@ class LockRepository:
             self.db.query(MediaPostingLock)
             .filter(
                 MediaPostingLock.media_item_id == media_id,
-                MediaPostingLock.locked_until > now
+                # Lock is active if: locked_until is NULL (permanent) OR locked_until > now
+                (MediaPostingLock.locked_until.is_(None)) | (MediaPostingLock.locked_until > now)
             )
             .first()
         )
@@ -38,20 +39,25 @@ class LockRepository:
         now = datetime.utcnow()
         return (
             self.db.query(MediaPostingLock)
-            .filter(MediaPostingLock.locked_until > now)
-            .order_by(MediaPostingLock.locked_until.asc())
+            .filter(
+                (MediaPostingLock.locked_until.is_(None)) | (MediaPostingLock.locked_until > now)
+            )
+            .order_by(MediaPostingLock.locked_until.asc().nulls_last())
             .all()
         )
 
     def create(
         self,
         media_item_id: str,
-        ttl_days: int,
+        ttl_days: Optional[int],
         lock_reason: str = "recent_post",
         created_by_user_id: Optional[str] = None,
     ) -> MediaPostingLock:
-        """Create a new TTL lock."""
-        locked_until = datetime.utcnow() + timedelta(days=ttl_days)
+        """Create a new TTL lock. If ttl_days is None, creates permanent lock."""
+        if ttl_days is None:
+            locked_until = None  # Permanent lock
+        else:
+            locked_until = datetime.utcnow() + timedelta(days=ttl_days)
 
         lock = MediaPostingLock(
             media_item_id=media_item_id,
@@ -73,12 +79,24 @@ class LockRepository:
             return True
         return False
 
+    def get_permanent_locks(self) -> List[MediaPostingLock]:
+        """Get all permanent locks (locked_until IS NULL)."""
+        return (
+            self.db.query(MediaPostingLock)
+            .filter(MediaPostingLock.locked_until.is_(None))
+            .order_by(MediaPostingLock.created_at.desc())
+            .all()
+        )
+
     def cleanup_expired(self) -> int:
         """Delete all expired locks. Returns count of deleted locks."""
         now = datetime.utcnow()
         count = (
             self.db.query(MediaPostingLock)
-            .filter(MediaPostingLock.locked_until <= now)
+            .filter(
+                MediaPostingLock.locked_until.isnot(None),  # Don't delete permanent locks
+                MediaPostingLock.locked_until <= now
+            )
             .delete()
         )
         self.db.commit()
