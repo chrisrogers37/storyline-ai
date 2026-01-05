@@ -149,11 +149,15 @@ class SchedulerService(BaseService):
         queued_subquery = exists(select(PostingQueue.id).where(PostingQueue.media_item_id == MediaItem.id))
         query = query.filter(~queued_subquery)
 
-        # Exclude locked items
+        # Exclude locked items (both permanent and TTL locks)
         now = datetime.utcnow()
         locked_subquery = exists(
             select(MediaPostingLock.id).where(
-                and_(MediaPostingLock.media_item_id == MediaItem.id, MediaPostingLock.locked_until > now)
+                and_(
+                    MediaPostingLock.media_item_id == MediaItem.id,
+                    # Lock is active if: locked_until is NULL (permanent) OR locked_until > now (TTL not expired)
+                    (MediaPostingLock.locked_until.is_(None)) | (MediaPostingLock.locked_until > now)
+                )
             )
         )
         query = query.filter(~locked_subquery)
