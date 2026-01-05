@@ -1,0 +1,138 @@
+"""Posting history repository - CRUD operations for posting history."""
+from typing import Optional, List
+from datetime import datetime, timedelta
+from sqlalchemy.orm import Session
+from sqlalchemy import func, and_
+
+from src.config.database import get_db
+from src.models.posting_history import PostingHistory
+
+
+class HistoryRepository:
+    """Repository for PostingHistory CRUD operations."""
+
+    def __init__(self):
+        self.db: Session = next(get_db())
+
+    def get_by_id(self, history_id: str) -> Optional[PostingHistory]:
+        """Get history record by ID."""
+        return self.db.query(PostingHistory).filter(PostingHistory.id == history_id).first()
+
+    def get_all(
+        self,
+        status: Optional[str] = None,
+        days: Optional[int] = None,
+        limit: Optional[int] = None
+    ) -> List[PostingHistory]:
+        """Get all history records with optional filters."""
+        query = self.db.query(PostingHistory)
+
+        if status:
+            query = query.filter(PostingHistory.status == status)
+
+        if days:
+            since = datetime.utcnow() - timedelta(days=days)
+            query = query.filter(PostingHistory.posted_at >= since)
+
+        query = query.order_by(PostingHistory.posted_at.desc())
+
+        if limit:
+            query = query.limit(limit)
+
+        return query.all()
+
+    def get_by_media_id(self, media_id: str, limit: Optional[int] = None) -> List[PostingHistory]:
+        """Get all history records for a specific media item."""
+        query = self.db.query(PostingHistory).filter(
+            PostingHistory.media_item_id == media_id
+        ).order_by(PostingHistory.posted_at.desc())
+
+        if limit:
+            query = query.limit(limit)
+
+        return query.all()
+
+    def get_by_user_id(self, user_id: str, limit: Optional[int] = None) -> List[PostingHistory]:
+        """Get all history records for a specific user."""
+        query = self.db.query(PostingHistory).filter(
+            PostingHistory.posted_by_user_id == user_id
+        ).order_by(PostingHistory.posted_at.desc())
+
+        if limit:
+            query = query.limit(limit)
+
+        return query.all()
+
+    def create(
+        self,
+        media_item_id: str,
+        queue_item_id: str,
+        queue_created_at: datetime,
+        queue_deleted_at: datetime,
+        scheduled_for: datetime,
+        posted_at: datetime,
+        status: str,
+        success: bool,
+        media_metadata: Optional[dict] = None,
+        instagram_media_id: Optional[str] = None,
+        instagram_permalink: Optional[str] = None,
+        posted_by_user_id: Optional[str] = None,
+        posted_by_telegram_username: Optional[str] = None,
+        error_message: Optional[str] = None,
+        retry_count: int = 0,
+    ) -> PostingHistory:
+        """Create a new history record."""
+        history = PostingHistory(
+            media_item_id=media_item_id,
+            queue_item_id=queue_item_id,
+            queue_created_at=queue_created_at,
+            queue_deleted_at=queue_deleted_at,
+            scheduled_for=scheduled_for,
+            posted_at=posted_at,
+            status=status,
+            success=success,
+            media_metadata=media_metadata,
+            instagram_media_id=instagram_media_id,
+            instagram_permalink=instagram_permalink,
+            posted_by_user_id=posted_by_user_id,
+            posted_by_telegram_username=posted_by_telegram_username,
+            error_message=error_message,
+            retry_count=retry_count,
+        )
+        self.db.add(history)
+        self.db.commit()
+        self.db.refresh(history)
+        return history
+
+    def get_stats(self, days: Optional[int] = 30) -> dict:
+        """Get posting statistics."""
+        since = datetime.utcnow() - timedelta(days=days) if days else datetime.min
+
+        total = self.db.query(func.count(PostingHistory.id)).filter(
+            PostingHistory.posted_at >= since
+        ).scalar()
+
+        successful = self.db.query(func.count(PostingHistory.id)).filter(
+            and_(PostingHistory.posted_at >= since, PostingHistory.success == True)
+        ).scalar()
+
+        failed = self.db.query(func.count(PostingHistory.id)).filter(
+            and_(PostingHistory.posted_at >= since, PostingHistory.success == False)
+        ).scalar()
+
+        return {
+            "total": total or 0,
+            "successful": successful or 0,
+            "failed": failed or 0,
+            "success_rate": (successful / total * 100) if total > 0 else 0,
+        }
+
+    def get_recent_posts(self, hours: int = 24) -> List[PostingHistory]:
+        """Get posts from the last N hours."""
+        since = datetime.utcnow() - timedelta(hours=hours)
+        return (
+            self.db.query(PostingHistory)
+            .filter(PostingHistory.posted_at >= since)
+            .order_by(PostingHistory.posted_at.desc())
+            .all()
+        )
