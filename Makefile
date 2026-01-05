@@ -13,11 +13,11 @@ ENV_FILE ?= .env
 DB_HOST ?= localhost
 DB_PORT ?= 5432
 DB_NAME ?= storyline_ai
-DB_USER ?= postgres
+DB_USER ?= $(USER)
 DB_PASSWORD ?=
 
-# PostgreSQL connection string for admin operations (connects to postgres database)
-ADMIN_DB_URL = postgresql://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/postgres
+# PostgreSQL connection base (without database)
+PG_BASE_URL = postgresql://$(DB_HOST):$(DB_PORT)
 
 # PostgreSQL connection string for application database
 APP_DB_URL = postgresql://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)
@@ -92,7 +92,7 @@ clean: ## Clean up temporary files and caches
 
 create-db: ## Create the database
 	@echo "$(GREEN)Creating database: $(DB_NAME)...$(NC)"
-	@psql "$(ADMIN_DB_URL)" -c "CREATE DATABASE $(DB_NAME);" 2>/dev/null || \
+	@createdb $(DB_NAME) 2>/dev/null || \
 		(echo "$(YELLOW)⚠ Database $(DB_NAME) may already exist$(NC)" && exit 0)
 	@echo "$(GREEN)✓ Database created$(NC)"
 
@@ -100,23 +100,29 @@ drop-db: ## Drop the database (WARNING: destructive)
 	@echo "$(RED)WARNING: This will permanently delete database: $(DB_NAME)$(NC)"
 	@echo "Press Ctrl+C to cancel, or Enter to continue..." && read confirm
 	@echo "$(RED)Dropping database: $(DB_NAME)...$(NC)"
-	@psql "$(ADMIN_DB_URL)" -c "DROP DATABASE IF EXISTS $(DB_NAME);"
+	@dropdb --if-exists $(DB_NAME) 2>/dev/null || true
 	@echo "$(GREEN)✓ Database dropped$(NC)"
 
 init-db: ## Initialize database schema (requires database to exist)
 	@echo "$(GREEN)Initializing database schema...$(NC)"
-	@psql "$(APP_DB_URL)" -f scripts/setup_database.sql
+	@psql -d $(DB_NAME) -f scripts/setup_database.sql >/dev/null 2>&1 || \
+		(echo "$(RED)✗ Database $(DB_NAME) does not exist. Run 'make create-db' first.$(NC)" && exit 1)
 	@echo "$(GREEN)✓ Schema initialized$(NC)"
 
 setup-db: create-db init-db ## Create database and initialize schema
 	@echo "$(GREEN)✓ Database setup complete$(NC)"
 
-reset-db: drop-db setup-db ## Drop and recreate database (WARNING: destructive)
+reset-db: ## Drop and recreate database (WARNING: destructive)
+	@echo "$(RED)WARNING: This will permanently delete database: $(DB_NAME)$(NC)"
+	@echo "Press Ctrl+C to cancel, or Enter to continue..." && read confirm
+	@dropdb --if-exists $(DB_NAME) 2>/dev/null || true
+	@createdb $(DB_NAME)
+	@$(MAKE) init-db
 	@echo "$(GREEN)✓ Database reset complete$(NC)"
 
 check-db: ## Check if database exists and is accessible
 	@echo "$(GREEN)Checking database connection...$(NC)"
-	@psql "$(APP_DB_URL)" -c "SELECT version();" >/dev/null 2>&1 && \
+	@psql -d $(DB_NAME) -c "SELECT version();" >/dev/null 2>&1 && \
 		echo "$(GREEN)✓ Database is accessible$(NC)" || \
 		echo "$(RED)✗ Cannot connect to database$(NC)"
 
@@ -165,13 +171,13 @@ logs: ## View application logs (tail -f)
 
 db-shell: ## Open PostgreSQL shell for application database
 	@echo "$(GREEN)Opening database shell...$(NC)"
-	psql "$(APP_DB_URL)"
+	psql -d $(DB_NAME)
 
 db-backup: ## Backup database to file
 	@echo "$(GREEN)Backing up database...$(NC)"
 	@mkdir -p backups
 	@BACKUP_FILE="backups/$(DB_NAME)_$$(date +%Y%m%d_%H%M%S).sql"; \
-	pg_dump "$(APP_DB_URL)" > $$BACKUP_FILE && \
+	pg_dump $(DB_NAME) > $$BACKUP_FILE && \
 	echo "$(GREEN)✓ Backup saved to: $$BACKUP_FILE$(NC)"
 
 db-restore: ## Restore database from backup (Usage: make db-restore FILE=path/to/backup.sql)
@@ -182,7 +188,7 @@ db-restore: ## Restore database from backup (Usage: make db-restore FILE=path/to
 	@echo "$(YELLOW)WARNING: This will restore database from: $(FILE)$(NC)"
 	@echo "Press Ctrl+C to cancel, or Enter to continue..." && read confirm
 	@echo "$(GREEN)Restoring database...$(NC)"
-	@psql "$(APP_DB_URL)" < $(FILE)
+	@psql -d $(DB_NAME) < $(FILE)
 	@echo "$(GREEN)✓ Database restored$(NC)"
 
 env-example: ## Copy .env.example to .env
