@@ -7,6 +7,160 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-01-05
+
+### Added - Phase 1.5 Priority 0: Permanent Reject Feature
+
+#### Critical Feature (Production Blocker Resolved)
+- **🚫 Permanent Reject Button** - Third button added to Telegram notifications
+  - Allows users to permanently block unwanted media (personal photos, test files, etc.)
+  - Creates infinite TTL lock (locked_until = NULL) to prevent media from ever being queued again
+  - Logs rejection to history with user attribution
+  - Essential for safe production use with mixed media folders
+
+#### Button Layout Enhancement
+- Updated from 2-button to 3-button layout:
+  ```
+  [✅ Posted] [⏭️ Skip]
+       [🚫 Reject]
+   [📱 Open Instagram]
+  ```
+- Clear visual separation between posting actions and permanent rejection
+
+#### Infrastructure Updates
+- **Infinite Lock System** - Permanent locks with NULL `locked_until` value
+- **Database Schema Changes**:
+  - `media_posting_locks.locked_until` now nullable (NULL = permanent lock)
+  - `posting_history.status` accepts 'rejected' value
+  - Updated CHECK constraints to include 'rejected' status
+- **New Service Methods**:
+  - `MediaLockService.create_permanent_lock()` - Convenience method for permanent locks
+  - `TelegramService._handle_rejected()` - Handles permanent rejection workflow
+  - `LockRepository.get_permanent_locks()` - Query permanently locked media
+
+#### Phase 1.5 Week 1 Priority 1 Features
+- **Bot Lifecycle Notifications** - Startup/shutdown messages to admin
+  - System status on startup (queue count, media count, last posted time, uptime)
+  - Session summary on shutdown (uptime, posts sent, graceful shutdown confirmation)
+  - Signal handling for graceful shutdown (SIGTERM/SIGINT)
+  - Configurable via `SEND_LIFECYCLE_NOTIFICATIONS` setting
+- **Instagram Deep Links** - One-tap Instagram app opening
+  - "📱 Open Instagram" button opens Instagram app/web
+  - Uses HTTPS URL (Telegram Bot API requirement)
+  - Works on desktop (opens web) and mobile (redirects to app)
+- **Enhanced Media Captions** - Workflow-focused formatting
+  - Clean, actionable 3-step workflow instructions
+  - Removed technical metadata clutter (file names, post counts)
+  - Kept essential context (scheduled time when relevant)
+  - Two modes: "enhanced" (with formatting) and "simple" (plain text)
+  - Configurable via `CAPTION_STYLE` setting
+
+### Fixed
+
+#### Critical Bugs
+- **Scheduler Permanent Lock Bug** (CRITICAL) - Scheduler was ignoring permanent locks
+  - Problem: Lock check only evaluated `locked_until > now`, missing NULL values
+  - Solution: Updated to `(locked_until IS NULL) OR (locked_until > now)`
+  - Impact: Permanently rejected media was still being scheduled
+  - Status: ✅ FIXED - Rejected media now correctly excluded from all schedules
+
+#### Service Bugs
+- **Startup Notification Parameter Mismatch** - Failed to send lifecycle notification
+  - Problem: Called `MediaRepository.get_all(active_only=True)` but parameter is `is_active`
+  - Solution: Changed to `MediaRepository.get_all(is_active=True)`
+  - Impact: Startup notification failed silently
+  - Status: ✅ FIXED
+
+#### Lock Repository Enhancement
+- Updated `get_active_lock()` to detect permanent locks (NULL `locked_until`)
+- Updated `get_all_active()` to include permanent locks with proper ordering
+- Updated `cleanup_expired()` to never delete permanent locks
+- Updated `create()` to support NULL TTL for permanent locks
+
+### Changed
+
+#### Database Operations (Makefile)
+- **Mac PostgreSQL Compatibility** - Simplified database commands
+  - Changed from psql connection URLs to direct `createdb`/`dropdb` commands
+  - Removed dependency on 'postgres' admin database
+  - Default `DB_USER` now uses `$(USER)` (current shell user)
+  - All commands work without manual postgres database creation
+- **Updated Commands**:
+  - `make create-db` - Uses `createdb` command
+  - `make drop-db` - Uses `dropdb --if-exists`
+  - `make init-db` - Connects directly with `psql -d $(DB_NAME)`
+  - `make reset-db` - Streamlined drop → create → init flow
+  - `make db-shell`, `make db-backup`, `make db-restore` - Simplified
+- Inspired by foxxed project's cleaner Makefile approach
+
+#### Configuration
+- Added Phase 1.5 settings to `.env.example`:
+  - `SEND_LIFECYCLE_NOTIFICATIONS` (default: true)
+  - `INSTAGRAM_USERNAME` (optional, for future features)
+  - `CAPTION_STYLE` (enhanced|simple, default: enhanced)
+
+### Technical Details
+
+#### Database Schema
+- `media_posting_locks.locked_until` - Changed from NOT NULL to nullable
+- `media_posting_locks.lock_reason` - Added 'permanent_reject' option
+- `posting_history.status` - CHECK constraint includes 'rejected'
+- `scripts/setup_database.sql` - Updated for fresh installations
+
+#### Lock Behavior
+- **Posted**: Creates 30-day TTL lock (existing behavior)
+- **Skipped**: No lock, can be queued again (existing behavior)
+- **Rejected**: **Permanent lock**, never queued again (**NEW**)
+
+#### Testing & Validation
+- ✅ Tested with 996 media files indexed
+- ✅ Verified permanent lock creation in database
+- ✅ Confirmed rejected media excluded from scheduling
+- ✅ Validated button interactions and message updates
+- ✅ Tested on Mac development environment
+- ✅ Ready for Raspberry Pi deployment
+
+### Documentation
+
+- Updated `documentation/ROADMAP.md` with Phase 1.5 status
+- Updated `documentation/planning/phase-1.5-telegram-enhancements.md` with implementation details
+- Added decision log entry for Permanent Reject priority
+- Created `scripts/setup_database.sql` (was gitignored, now tracked)
+
+### Deployment Notes
+
+#### Breaking Changes
+- **Database schema change required** - Run `make reset-db` or manual migration
+- Existing locks remain valid (30-day TTL locks unaffected)
+- No data migration needed for existing media or history
+
+#### Upgrade Path
+1. Pull latest code from `feature/phase-1-5-enhancements` branch
+2. Reset database: `make reset-db` (or manual: drop DB → create DB → init schema)
+3. Re-index media: `storyline-cli index-media <path> --recursive`
+4. Create schedule: `storyline-cli create-schedule --days 7`
+5. Test: `storyline-cli process-queue --force`
+6. Deploy to Raspberry Pi and restart service
+
+#### Configuration Required
+- No new required settings (all Phase 1.5 settings have defaults)
+- Optional: Set `CAPTION_STYLE=simple` if you prefer plain captions
+- Optional: Set `SEND_LIFECYCLE_NOTIFICATIONS=false` to disable startup/shutdown messages
+
+### Next Steps - Phase 1.5 Remaining Features
+
+**Week 1 - Priority 2** (Should Have):
+- Instagram Deep Link Redirect Service (URLgenius or self-hosted)
+- Instagram Username Configuration (bot commands + database storage)
+
+**Week 2 - Priority 3** (Nice to Have):
+- Inline Media Editing (edit title/caption/tags from Telegram)
+- Quick Actions Menu (/menu command)
+- Posting Stats Dashboard (enhanced /stats with charts)
+
+**Week 2 - Priority 4** (Future):
+- Smart Scheduling Hints (optimal posting times based on history)
+
 ## [1.0.1] - 2026-01-04
 
 ### Added
