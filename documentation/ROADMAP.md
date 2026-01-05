@@ -1,8 +1,8 @@
 # Storyline AI - Product Roadmap
 
-**Last Updated**: 2026-01-04
-**Current Version**: v1.0.1
-**Current Phase**: Phase 1.5 (Telegram Enhancements)
+**Last Updated**: 2026-01-05
+**Current Version**: v1.2.0
+**Current Phase**: Phase 1.5 (Telegram Enhancements) - ✅ COMPLETE
 
 ---
 
@@ -40,44 +40,49 @@ Build a delightful Instagram Story automation system that:
 
 ---
 
-## Phase 1.5: Telegram Workflow Enhancements 🚧 IN PROGRESS
+## Phase 1.5: Telegram Workflow Enhancements ✅ COMPLETE
 
-**Status**: 🚧 Week 1 Priority 1 Complete
+**Status**: ✅ Released v1.2.0
 **Branch**: `feature/phase-1-5-enhancements`
-**Duration**: January 2026 (1-2 weeks)
+**Duration**: January 2026 (1 week)
 **Goal**: Make manual Telegram workflow as smooth as possible
 
-### Priority 0: Critical Blocker 🚨
+### Priority 0: Critical Blocker ✅ COMPLETE
 
 **REQUIRED FOR PRODUCTION USE**:
-0. ⏸️ **Permanent Reject Button** - Infinite lock for unwanted media
-   - Add "🚫 Reject" button to permanently block media
+0. ✅ **Permanent Reject Button** - Infinite lock for unwanted media
+   - Added "🚫 Reject" button to permanently block media
    - Prevents unwanted files from being queued again
-   - CLI command to list/cleanup rejected items
-   - **Must implement before running with real media folders**
+   - Creates infinite TTL lock (NULL `locked_until`)
+   - Logs rejection to history with user attribution
+   - Fixed critical scheduler bug (was ignoring permanent locks)
+   - **Production-ready - safe to run with real media folders**
 
-### Week 1: Core Improvements
+### Week 1: Core Improvements ✅ COMPLETE
 
 **Priority 1** (Must Have) - ✅ COMPLETE:
 1. ✅ **Bot Lifecycle Notifications** - Startup/shutdown messages with system status
 2. ✅ **Instagram Deep Links** - One-tap button to open Instagram app
 3. ✅ **Enhanced Media Captions** - Clean workflow instructions (removed clutter)
 
-**Priority 2** (Should Have) - ⏸️ PENDING:
-4. ⏸️ **Instagram Deep Link Redirect Service** - Direct link to story camera (optional)
-5. ⏸️ **Instagram Username Configuration** - Bot commands to set/view account
+**Priority 2** (Should Have) - 📋 BACKLOG:
+4. 📋 **Instagram Deep Link Redirect Service** - Direct link to story camera (optional)
+   - Moved to backlog due to security concerns with URLgenius
+   - Self-hosted solution documented as future enhancement
+5. 📋 **Instagram Username Configuration** - Bot commands to set/view account
+   - Moved to backlog - not critical for current workflow
 
-### Week 2: Quality of Life
+### Week 2: Quality of Life - 📋 BACKLOG
 
 **Priority 3** (Nice to Have):
-6. ⏸️ **Inline Media Editing** - Edit title/caption/tags from Telegram
-7. ⏸️ **Quick Actions Menu** - `/menu` command with common operations
-8. ⏸️ **Posting Stats Dashboard** - Enhanced `/stats` with charts
+6. 📋 **Inline Media Editing** - Edit title/caption/tags from Telegram
+7. 📋 **Quick Actions Menu** - `/menu` command with common operations
+8. 📋 **Posting Stats Dashboard** - Enhanced `/stats` with charts
 
 **Priority 4** (Future):
-9. ⏸️ **Smart Scheduling Hints** - Optimal posting times based on history
+9. 📋 **Smart Scheduling Hints** - Optimal posting times based on history
 
-**Target Completion**: Mid-January 2026
+**Completed**: 2026-01-05
 
 ---
 
@@ -185,16 +190,16 @@ Build a delightful Instagram Story automation system that:
 
 | Version | Date | Phase | Description |
 |---------|------|-------|-------------|
+| v1.2.0 | 2026-01-05 | Phase 1.5 | Telegram workflow enhancements + Permanent Reject |
 | v1.0.1 | 2026-01-04 | Phase 1 | Production release with bug fixes |
 | v1.0.0 | 2025-12-XX | Phase 1 | Initial Telegram-only implementation |
-| v1.1.0 | TBD | Phase 1.5 | Telegram workflow enhancements |
 | v2.0.0 | TBD | Phase 2 | Instagram API automation |
 
 ---
 
 ## Decision Log
 
-### 2026-01-04: Permanent Reject Feature is Critical
+### 2026-01-05: Permanent Reject Feature Implemented
 **Decision**: Add "Permanent Reject" as Priority 0 blocker before other Phase 1.5 work
 **Rationale**:
 - User has mixed media folders (some files should NEVER be posted)
@@ -202,7 +207,7 @@ Build a delightful Instagram Story automation system that:
 - Can't safely run system in production without way to permanently block files
 - Blocks actual usage and testing of the system
 - Simple implementation (2-3 hours), high value
-**Status**: Must implement before continuing Phase 1.5
+**Status**: ✅ COMPLETE - Implemented with infinite TTL locks (NULL locked_until)
 
 ### 2026-01-04: Instagram Deep Link Strategy
 **Decision**: Keep simple `https://www.instagram.com/` link for now
