@@ -21,15 +21,16 @@ Phase 1.5 focuses on making the **manual Telegram workflow as smooth as possible
 
 1. **Bot Lifecycle Notifications** - Know when the system is up/down
 2. **Instagram Deep Links** - One-tap to Instagram story posting
-3. **Instagram Username Configuration** - Store and use the right account
-4. **Enhanced Media Captions** - Better formatting and metadata display
+3. **Enhanced Media Captions** - Better formatting and workflow instructions
+4. **Instagram Deep Link Redirect Service** - True deep link to story camera (optional)
+5. **Instagram Username Configuration** - Store and use the right account
 
 ### 🚀 Quality of Life (Nice to Have)
 
-5. **Inline Media Editing** - Edit title/caption/tags from Telegram
-6. **Quick Actions Menu** - Common operations in one place
-7. **Posting Stats Dashboard** - Quick insights via bot command
-8. **Smart Scheduling Hints** - Optimal posting times based on history
+6. **Inline Media Editing** - Edit title/caption/tags from Telegram
+7. **Quick Actions Menu** - Common operations in one place
+8. **Posting Stats Dashboard** - Quick insights via bot command
+9. **Smart Scheduling Hints** - Optimal posting times based on history
 
 ---
 
@@ -175,6 +176,85 @@ PLATFORM=ios
 - ✅ Tapping button opens Instagram app (if installed)
 - ✅ Falls back to web if app not installed
 - ✅ Works on both iOS and Android
+
+---
+
+### 2.5. Instagram Deep Link Redirect Service 🚀
+
+**Problem**: Telegram Bot API doesn't support custom URL schemes like `instagram://story-camera`, only HTTPS URLs. Current solution (`https://www.instagram.com/`) opens the feed, not the story camera.
+
+**Solution**: Use a URL redirect service to convert HTTPS → `instagram://` deep link.
+
+#### Options
+
+**Option A: URLgenius** (Easiest)
+- Free tier: Unlimited clicks, basic analytics
+- Setup: 15-30 minutes
+- Steps:
+  1. Sign up at https://urlgeni.us/
+  2. Create "Instagram Story" link: `instagram://story-camera`
+  3. Configure fallback: `https://www.instagram.com/`
+  4. Copy generated HTTPS URL (e.g., `https://ig.urlgenius.com/abc123`)
+  5. Update `telegram_service.py` button URL
+
+**Option B: Branch.io** (More Features)
+- Free tier: 10k monthly clicks, full analytics
+- Setup: 45-60 minutes
+- Steps:
+  1. Sign up at https://branch.io/
+  2. Create app project
+  3. Configure deep link with fallback
+  4. Test on mobile
+  5. Update code with Branch link
+
+**Option C: Self-Hosted Redirect** (Full Control)
+- Cost: Free (requires web hosting)
+- Setup: 1-2 hours
+- Simple HTML redirect page:
+  ```html
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta http-equiv="refresh" content="0;url=instagram://story-camera">
+  </head>
+  <body>
+    <p>Opening Instagram...</p>
+    <script>
+      window.location.href = "instagram://story-camera";
+      setTimeout(() => {
+        window.location.href = "https://www.instagram.com/";
+      }, 1000);
+    </script>
+  </body>
+  </html>
+  ```
+- Host at: `https://yourdomain.com/ig-story`
+
+#### Recommendation
+
+**For now**: Keep current `https://www.instagram.com/` (works, saves time)
+
+**When ready**: Use **URLgenius** (easiest setup, no hosting required)
+
+**Future**: Self-host if you want full control
+
+#### Implementation
+
+Update button URL in `src/services/core/telegram_service.py`:
+```python
+# Current (opens Instagram feed)
+InlineKeyboardButton("📱 Open Instagram", url="https://www.instagram.com/")
+
+# After URLgenius setup (opens story camera)
+InlineKeyboardButton("📱 Open Instagram", url="https://ig.urlgenius.com/YOUR_LINK_ID")
+```
+
+#### Success Criteria
+
+- ✅ Tapping button opens Instagram story camera directly
+- ✅ Falls back to Instagram web if app not installed
+- ✅ Works on both iOS and Android
+- ✅ No Telegram API errors
 
 ---
 
@@ -737,19 +817,20 @@ class SchedulingAnalytics(BaseService):
 3. ✅ Enhanced Media Captions - 3 hours
 
 **Priority 2** (Should Have):
-4. ✅ Instagram Username Configuration - 6 hours (with database)
+4. ⏸️ Instagram Deep Link Redirect Service - 0.5 hours (just update URL after setup)
+5. ⏸️ Instagram Username Configuration - 6 hours (with database)
 
-**Total Week 1**: ~15 hours
+**Total Week 1**: ~15.5 hours
 
 ### Week 2: Quality of Life
 
 **Priority 3** (Nice to Have):
-5. ✅ Inline Media Editing - 8 hours
-6. ✅ Quick Actions Menu - 4 hours
-7. ✅ Posting Stats Dashboard - 6 hours
+6. ⏸️ Inline Media Editing - 8 hours
+7. ⏸️ Quick Actions Menu - 4 hours
+8. ⏸️ Posting Stats Dashboard - 6 hours
 
 **Priority 4** (Future):
-8. ⏳ Smart Scheduling Hints - 8 hours (requires historical data)
+9. ⏸️ Smart Scheduling Hints - 8 hours (requires historical data)
 
 **Total Week 2**: ~18 hours
 
