@@ -133,10 +133,6 @@ class TelegramService(BaseService):
         """Build enhanced caption with better formatting."""
         lines = []
 
-        # Header with emoji based on tags
-        header_emoji = self._get_header_emoji(media_item.tags)
-        lines.append(f"{header_emoji} *READY TO POST*\n")
-
         # Title and metadata
         if media_item.title:
             lines.append(f"📸 {media_item.title}")
@@ -158,15 +154,9 @@ class TelegramService(BaseService):
         lines.append(f"\n{'━' * 20}")
 
         # Workflow instructions
-        lines.append(f"📋 *Quick Workflow:*")
         lines.append(f"1️⃣ Click & hold image → Save")
         lines.append(f"2️⃣ Tap \"Open Instagram\" below")
         lines.append(f"3️⃣ Post your story!")
-
-        # Scheduled time if available
-        if queue_item and queue_item.scheduled_for:
-            time_str = queue_item.scheduled_for.strftime("%I:%M %p")
-            lines.append(f"\n🕐 Scheduled: {time_str}")
 
         return "\n".join(lines)
 
