@@ -1,0 +1,4 @@
+- have the bot send a channel message when it spins up / spins down (thin and clean)
+- add a button or link that opens instagram, switches to the right profile, and opens the story posting page natively
+- add bot commands to set Instagram username
+- add bot commands to add image metadata on a proposed post (name meme, etc.?. This may not be that useful...)
