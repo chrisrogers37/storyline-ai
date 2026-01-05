@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     DRY_RUN_MODE: bool = False
     LOG_LEVEL: str = "INFO"
 
+    # Phase 1.5 Settings - Telegram Enhancements
+    SEND_LIFECYCLE_NOTIFICATIONS: bool = True
+    INSTAGRAM_USERNAME: Optional[str] = None
+    CAPTION_STYLE: str = "enhanced"  # or 'simple'
+
     @property
     def database_url(self) -> str:
         """Get database URL for SQLAlchemy."""

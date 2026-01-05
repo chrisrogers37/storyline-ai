@@ -67,14 +67,17 @@ class TelegramService(BaseService):
             logger.error(f"Media item not found: {queue_item.media_item_id}")
             return False
 
-        # Build caption
-        caption = self._build_caption(media_item)
+        # Build caption (pass queue_item for enhanced mode)
+        caption = self._build_caption(media_item, queue_item)
 
         # Build inline keyboard
         keyboard = [
             [
                 InlineKeyboardButton("✅ Posted", callback_data=f"posted:{queue_item_id}"),
                 InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{queue_item_id}"),
+            ],
+            [
+                InlineKeyboardButton("📱 Open Instagram", url="instagram://story-camera"),
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -96,8 +99,16 @@ class TelegramService(BaseService):
             logger.error(f"Failed to send Telegram notification: {e}")
             return False
 
-    def _build_caption(self, media_item) -> str:
-        """Build caption for Telegram message."""
+    def _build_caption(self, media_item, queue_item=None) -> str:
+        """Build caption for Telegram message with enhanced or simple formatting."""
+
+        if settings.CAPTION_STYLE == "enhanced":
+            return self._build_enhanced_caption(media_item, queue_item)
+        else:
+            return self._build_simple_caption(media_item)
+
+    def _build_simple_caption(self, media_item) -> str:
+        """Build simple caption (original format)."""
         caption_parts = []
 
         if media_item.title:
@@ -117,6 +128,69 @@ class TelegramService(BaseService):
         caption_parts.append(f"🆔 ID: {str(media_item.id)[:8]}")
 
         return "\n\n".join(caption_parts)
+
+    def _build_enhanced_caption(self, media_item, queue_item=None) -> str:
+        """Build enhanced caption with better formatting."""
+        lines = []
+
+        # Header with emoji based on tags
+        header_emoji = self._get_header_emoji(media_item.tags)
+        lines.append(f"{header_emoji} *READY TO POST*\n")
+
+        # Title and metadata
+        if media_item.title:
+            lines.append(f"📸 {media_item.title}")
+
+        # Caption
+        if media_item.caption:
+            lines.append(f"\n{media_item.caption}")
+
+        # Link
+        if media_item.link_url:
+            lines.append(f"\n🔗 {media_item.link_url}")
+
+        # Tags
+        if media_item.tags:
+            tags_str = " ".join([f"#{tag}" for tag in media_item.tags])
+            lines.append(f"\n{tags_str}")
+
+        # Separator
+        lines.append(f"\n{'━' * 20}")
+
+        # Footer metadata
+        lines.append(f"📁 {media_item.file_name}")
+
+        # Scheduled time if available
+        if queue_item and queue_item.scheduled_for:
+            time_str = queue_item.scheduled_for.strftime("%I:%M %p")
+            lines.append(f"🕐 Scheduled: {time_str}")
+
+        # Post count
+        times = media_item.times_posted or 0
+        lines.append(f"📊 Posted: {times} time{'s' if times != 1 else ''}")
+
+        return "\n".join(lines)
+
+    def _get_header_emoji(self, tags) -> str:
+        """Get header emoji based on tags."""
+        if not tags:
+            return "📸"
+
+        tags_lower = [tag.lower() for tag in tags]
+
+        # Map tags to emojis
+        if any(tag in tags_lower for tag in ['meme', 'funny', 'humor']):
+            return "😂"
+        elif any(tag in tags_lower for tag in ['product', 'shop', 'store', 'sale']):
+            return "🛍️"
+        elif any(tag in tags_lower for tag in ['quote', 'inspiration', 'motivational']):
+            return "✨"
+        elif any(tag in tags_lower for tag in ['announcement', 'news', 'update']):
+            return "📢"
+        elif any(tag in tags_lower for tag in ['question', 'poll', 'interactive']):
+            return "💬"
+        else:
+            return "📸"
 
     async def _handle_start(self, update, context):
         """Handle /start command."""
@@ -237,6 +311,86 @@ class TelegramService(BaseService):
             self.user_repo.update_last_seen(str(user.id))
 
         return user
+
+    async def send_startup_notification(self):
+        """Send startup notification to admin with system status."""
+        if not settings.SEND_LIFECYCLE_NOTIFICATIONS:
+            return
+
+        try:
+            # Gather system status
+            pending_count = self.queue_repo.count_pending()
+            media_count = len(self.media_repo.get_all(active_only=True))
+            recent_posts = self.history_repo.get_recent_posts(hours=24)
+            last_post_time = recent_posts[0].posted_at if recent_posts else None
+
+            # Format last posted time
+            if last_post_time:
+                time_diff = datetime.utcnow() - last_post_time
+                hours = int(time_diff.total_seconds() / 3600)
+                last_posted = f"{hours}h ago" if hours > 0 else "< 1h ago"
+            else:
+                last_posted = "Never"
+
+            # Build message
+            message = (
+                f"🟢 *Storyline AI Started*\n\n"
+                f"📊 *System Status:*\n"
+                f"├─ Database: ✅ Connected\n"
+                f"├─ Telegram: ✅ Bot online\n"
+                f"├─ Queue: {pending_count} pending posts\n"
+                f"└─ Last posted: {last_posted}\n\n"
+                f"⚙️ *Configuration:*\n"
+                f"├─ Posts/day: {settings.POSTS_PER_DAY}\n"
+                f"├─ Window: {settings.POSTING_HOURS_START:02d}:00-{settings.POSTING_HOURS_END:02d}:00 UTC\n"
+                f"└─ Media indexed: {media_count} items\n\n"
+                f"🤖 v1.0.1"
+            )
+
+            # Send to admin
+            await self.bot.send_message(
+                chat_id=settings.ADMIN_TELEGRAM_CHAT_ID,
+                text=message,
+                parse_mode="Markdown"
+            )
+
+            logger.info("Startup notification sent to admin")
+
+        except Exception as e:
+            logger.error(f"Failed to send startup notification: {e}")
+
+    async def send_shutdown_notification(self, uptime_seconds: int = 0, posts_sent: int = 0):
+        """Send shutdown notification to admin with session summary."""
+        if not settings.SEND_LIFECYCLE_NOTIFICATIONS:
+            return
+
+        try:
+            # Format uptime
+            hours = int(uptime_seconds / 3600)
+            minutes = int((uptime_seconds % 3600) / 60)
+            uptime_str = f"{hours}h {minutes}m"
+
+            # Build message
+            message = (
+                f"🔴 *Storyline AI Stopped*\n\n"
+                f"📊 *Session Summary:*\n"
+                f"├─ Uptime: {uptime_str}\n"
+                f"├─ Posts sent: {posts_sent}\n"
+                f"└─ Shutdown: Graceful\n\n"
+                f"See you next time! 👋"
+            )
+
+            # Send to admin
+            await self.bot.send_message(
+                chat_id=settings.ADMIN_TELEGRAM_CHAT_ID,
+                text=message,
+                parse_mode="Markdown"
+            )
+
+            logger.info("Shutdown notification sent to admin")
+
+        except Exception as e:
+            logger.error(f"Failed to send shutdown notification: {e}")
 
     async def start_polling(self):
         """Start bot polling."""
