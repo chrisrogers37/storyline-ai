@@ -359,7 +359,7 @@ class TelegramService(BaseService):
         try:
             # Gather system status
             pending_count = self.queue_repo.count_pending()
-            media_count = len(self.media_repo.get_all(active_only=True))
+            media_count = len(self.media_repo.get_all(is_active=True))
             recent_posts = self.history_repo.get_recent_posts(hours=24)
             last_post_time = recent_posts[0].posted_at if recent_posts else None
 
