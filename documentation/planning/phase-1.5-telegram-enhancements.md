@@ -955,6 +955,248 @@ class SchedulingAnalytics(BaseService):
 
 ---
 
+### 10. Button Layout Reorder 🔀
+
+**Problem**: When user clicks "Save Image" on a Telegram notification, a popup appears at the bottom of the screen that blocks the "Open Instagram" button for ~5 seconds. The Instagram button is the immediate next action after saving.
+
+**Current Layout**:
+```
+[✅ Posted] [⏭️ Skip]
+[🚫 Reject]
+[📱 Open Instagram]  ← Blocked by popup!
+```
+
+**Solution**: Move Instagram button above Reject button.
+
+**New Layout**:
+```
+[✅ Posted] [⏭️ Skip]
+[📱 Open Instagram]  ← Now accessible immediately
+[🚫 Reject]
+```
+
+#### Implementation
+
+```python
+# src/services/core/telegram_service.py
+keyboard = [
+    [
+        InlineKeyboardButton("✅ Posted", callback_data=f"posted:{queue_item_id}"),
+        InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{queue_item_id}"),
+    ],
+    [
+        InlineKeyboardButton("📱 Open Instagram", url="https://www.instagram.com/"),
+    ],
+    [
+        InlineKeyboardButton("🚫 Reject", callback_data=f"reject:{queue_item_id}"),
+    ]
+]
+```
+
+#### Success Criteria
+
+- ✅ Instagram button is accessible immediately after Save Image
+- ✅ Natural workflow: Save Image → Open Instagram → Post → Mark Posted
+
+---
+
+### 11. Reject Confirmation 🛡️
+
+**Problem**: The Reject button permanently blocks media from ever being queued again. Accidental clicks cannot be undone easily (requires database manipulation).
+
+**Current Behavior**: Single click → immediate permanent rejection
+
+**Solution Options**:
+
+#### Option A: Rename Button (Simplest)
+Change "🚫 Reject" to "🚫 Permanently Reject" to make the action clearer.
+
+**Pros**:
+- Zero additional code complexity
+- No conversation state needed
+- Immediate implementation
+
+**Cons**:
+- Doesn't prevent accidental clicks
+- Button text is longer
+
+#### Option B: Confirmation Dialog (Recommended)
+Add a two-step confirmation: First click shows warning, second click confirms.
+
+**Flow**:
+```
+User clicks [🚫 Reject]
+↓
+Bot updates message with:
+"⚠️ Are you sure? This permanently removes this image from the system.
+
+[✅ Yes, Reject Forever] [❌ Cancel]"
+↓
+User clicks [✅ Yes, Reject Forever]
+↓
+Media is permanently rejected
+```
+
+**Implementation**:
+```python
+async def _handle_reject_click(self, queue_id: str, user, query):
+    """First click - show confirmation."""
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Yes, Reject Forever", callback_data=f"confirm_reject:{queue_id}"),
+            InlineKeyboardButton("❌ Cancel", callback_data=f"cancel_reject:{queue_id}"),
+        ]
+    ]
+
+    await query.edit_message_caption(
+        caption="⚠️ *Are you sure?*\n\n"
+                "This permanently removes this image from the system.\n"
+                "It will never be queued again.",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="Markdown"
+    )
+
+async def _handle_confirm_reject(self, queue_id: str, user, query):
+    """Second click - actually reject."""
+    # ... existing rejection logic ...
+
+async def _handle_cancel_reject(self, queue_id: str, user, query):
+    """Cancel - restore original buttons."""
+    # Rebuild original message with normal buttons
+```
+
+**Pros**:
+- Prevents accidental rejections
+- Clear warning about permanence
+- User can cancel
+
+**Cons**:
+- Two clicks instead of one
+- Slightly more complex code
+
+#### Recommendation
+
+**Option B (Confirmation Dialog)** - The extra click is worth the protection since rejection is permanent and irreversible.
+
+#### Success Criteria
+
+- ✅ Accidental single-click doesn't permanently reject
+- ✅ User sees clear warning about permanence
+- ✅ Can cancel and return to normal view
+- ✅ Second confirmation actually rejects
+
+---
+
+### 12. Fix @None Username Bug 🐛
+
+**Problem**: When team members interact with the bot, their actions are attributed to "@None" instead of their actual name.
+
+**Screenshot Evidence**: "✅ Marked as posted by @None"
+
+**Root Cause Analysis**:
+
+1. **Not all Telegram users have usernames**: Telegram allows users without setting a username. They only have first/last names.
+
+2. **No username sync**: When an existing user is found, the code only updates `last_seen_at` but doesn't sync their username if they later added one.
+
+**Current Code** (`telegram_service.py:337-352`):
+```python
+def _get_or_create_user(self, telegram_user):
+    user = self.user_repo.get_by_telegram_id(telegram_user.id)
+
+    if not user:
+        user = self.user_repo.create(...)
+    else:
+        self.user_repo.update_last_seen(str(user.id))  # Only updates timestamp!
+
+    return user
+```
+
+**Display Code** (`telegram_service.py:258`):
+```python
+await query.edit_message_caption(caption=f"✅ Marked as posted by @{user.telegram_username}")
+# If telegram_username is None, shows "@None"
+```
+
+#### Solution
+
+**Part 1: Display Fallback**
+Show first_name if username is None:
+
+```python
+def _get_display_name(self, user) -> str:
+    """Get best available display name for user."""
+    if user.telegram_username:
+        return f"@{user.telegram_username}"
+    elif user.telegram_first_name:
+        return user.telegram_first_name
+    else:
+        return f"User {user.telegram_user_id}"
+
+# Usage:
+await query.edit_message_caption(
+    caption=f"✅ Marked as posted by {self._get_display_name(user)}"
+)
+```
+
+**Part 2: Sync Username on Interaction**
+Update user profile when they interact:
+
+```python
+def _get_or_create_user(self, telegram_user):
+    user = self.user_repo.get_by_telegram_id(telegram_user.id)
+
+    if not user:
+        user = self.user_repo.create(
+            telegram_user_id=telegram_user.id,
+            telegram_username=telegram_user.username,
+            telegram_first_name=telegram_user.first_name,
+            telegram_last_name=telegram_user.last_name,
+        )
+        logger.info(f"New user discovered: {self._get_display_name(user)}")
+    else:
+        # Sync profile data in case it changed
+        user = self.user_repo.update_profile(
+            str(user.id),
+            telegram_username=telegram_user.username,
+            telegram_first_name=telegram_user.first_name,
+            telegram_last_name=telegram_user.last_name,
+        )
+
+    return user
+```
+
+**Part 3: Add Repository Method**
+```python
+# user_repository.py
+def update_profile(
+    self,
+    user_id: str,
+    telegram_username: Optional[str] = None,
+    telegram_first_name: Optional[str] = None,
+    telegram_last_name: Optional[str] = None,
+) -> User:
+    """Update user's Telegram profile data and last seen."""
+    user = self.get_by_id(user_id)
+    if user:
+        user.telegram_username = telegram_username
+        user.telegram_first_name = telegram_first_name
+        user.telegram_last_name = telegram_last_name
+        user.last_seen_at = datetime.utcnow()
+        self.db.commit()
+        self.db.refresh(user)
+    return user
+```
+
+#### Success Criteria
+
+- ✅ Users without usernames show their first name (e.g., "Marked as posted by Chris")
+- ✅ Users with usernames show @username (e.g., "Marked as posted by @chris")
+- ✅ Usernames sync when users interact (if they add one later)
+- ✅ No more "@None" displays
+
+---
+
 ## Implementation Priority
 
 ### Priority 0: Critical Blocker (Do First!)
@@ -972,6 +1214,11 @@ class SchedulingAnalytics(BaseService):
 1. ✅ Bot Lifecycle Notifications - 4 hours
 2. ✅ Instagram Deep Links - 2 hours
 3. ✅ Enhanced Media Captions - 3 hours
+
+**Priority 1.5** (Production Polish - January 2026):
+10. ✅ **Button Layout Reorder** - Move Instagram button above Reject - 0.5 hours
+11. ✅ **Reject Confirmation** - Prevent accidental permanent rejections - 1-2 hours
+12. ✅ **Fix @None Username Bug** - Display name fallback + sync usernames - 1 hour
 
 **Priority 2** (Should Have):
 4. ⏸️ Instagram Deep Link Redirect Service - 0.5 hours (just update URL after setup)

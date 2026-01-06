@@ -71,16 +71,17 @@ class TelegramService(BaseService):
         caption = self._build_caption(media_item, queue_item)
 
         # Build inline keyboard
+        # Note: Instagram button is above Reject so it's not blocked by "Save Image" popup
         keyboard = [
             [
                 InlineKeyboardButton("✅ Posted", callback_data=f"posted:{queue_item_id}"),
                 InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{queue_item_id}"),
             ],
             [
-                InlineKeyboardButton("🚫 Reject", callback_data=f"reject:{queue_item_id}"),
+                InlineKeyboardButton("📱 Open Instagram", url="https://www.instagram.com/"),
             ],
             [
-                InlineKeyboardButton("📱 Open Instagram", url="https://www.instagram.com/"),
+                InlineKeyboardButton("🚫 Reject", callback_data=f"reject:{queue_item_id}"),
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -215,7 +216,11 @@ class TelegramService(BaseService):
         elif action == "skip":
             await self._handle_skipped(queue_id, user, query)
         elif action == "reject":
+            await self._handle_reject_confirmation(queue_id, user, query)
+        elif action == "confirm_reject":
             await self._handle_rejected(queue_id, user, query)
+        elif action == "cancel_reject":
+            await self._handle_cancel_reject(queue_id, user, query)
 
     async def _handle_posted(self, queue_id: str, user, query):
         """Handle 'Posted' button click."""
@@ -255,9 +260,9 @@ class TelegramService(BaseService):
         self.user_repo.increment_posts(str(user.id))
 
         # Update message
-        await query.edit_message_caption(caption=f"✅ Marked as posted by @{user.telegram_username}")
+        await query.edit_message_caption(caption=f"✅ Marked as posted by {self._get_display_name(user)}")
 
-        logger.info(f"Post marked as completed by {user.telegram_username}")
+        logger.info(f"Post marked as completed by {self._get_display_name(user)}")
 
     async def _handle_skipped(self, queue_id: str, user, query):
         """Handle 'Skip' button click."""
@@ -285,12 +290,85 @@ class TelegramService(BaseService):
         self.queue_repo.delete(queue_id)
 
         # Update message
-        await query.edit_message_caption(caption=f"⏭️ Skipped by @{user.telegram_username}")
+        await query.edit_message_caption(caption=f"⏭️ Skipped by {self._get_display_name(user)}")
 
-        logger.info(f"Post skipped by {user.telegram_username}")
+        logger.info(f"Post skipped by {self._get_display_name(user)}")
+
+    async def _handle_reject_confirmation(self, queue_id: str, user, query):
+        """Show confirmation dialog before permanently rejecting media."""
+        queue_item = self.queue_repo.get_by_id(queue_id)
+
+        if not queue_item:
+            await query.edit_message_caption(caption="⚠️ Queue item not found")
+            return
+
+        # Get media item for filename
+        media_item = self.media_repo.get_by_id(str(queue_item.media_item_id))
+        file_name = media_item.file_name if media_item else "Unknown"
+
+        # Build confirmation keyboard
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ Yes, Reject Forever", callback_data=f"confirm_reject:{queue_id}"),
+                InlineKeyboardButton("❌ Cancel", callback_data=f"cancel_reject:{queue_id}"),
+            ]
+        ]
+
+        caption = (
+            f"⚠️ *Are you sure?*\n\n"
+            f"This will permanently reject:\n"
+            f"📁 {file_name}\n\n"
+            f"The image will never be queued again.\n"
+            f"This action cannot be undone."
+        )
+
+        await query.edit_message_caption(
+            caption=caption,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown"
+        )
+
+    async def _handle_cancel_reject(self, queue_id: str, user, query):
+        """Cancel rejection and restore original buttons."""
+        queue_item = self.queue_repo.get_by_id(queue_id)
+
+        if not queue_item:
+            await query.edit_message_caption(caption="⚠️ Queue item not found")
+            return
+
+        # Get media item for caption rebuild
+        media_item = self.media_repo.get_by_id(str(queue_item.media_item_id))
+
+        if not media_item:
+            await query.edit_message_caption(caption="⚠️ Media item not found")
+            return
+
+        # Rebuild original caption
+        caption = self._build_caption(media_item, queue_item)
+
+        # Rebuild original keyboard
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ Posted", callback_data=f"posted:{queue_id}"),
+                InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{queue_id}"),
+            ],
+            [
+                InlineKeyboardButton("📱 Open Instagram", url="https://www.instagram.com/"),
+            ],
+            [
+                InlineKeyboardButton("🚫 Reject", callback_data=f"reject:{queue_id}"),
+            ]
+        ]
+
+        await query.edit_message_caption(
+            caption=caption,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+        logger.info(f"Reject cancelled by {self._get_display_name(user)}")
 
     async def _handle_rejected(self, queue_id: str, user, query):
-        """Handle 'Reject' button click - permanently blocks media."""
+        """Handle confirmed rejection - permanently blocks media."""
         queue_item = self.queue_repo.get_by_id(queue_id)
 
         if not queue_item:
@@ -326,16 +404,16 @@ class TelegramService(BaseService):
         # Update message with clear feedback
         caption = (
             f"🚫 *Permanently Rejected*\n\n"
-            f"By: @{user.telegram_username}\n"
+            f"By: {self._get_display_name(user)}\n"
             f"File: {media_item.file_name if media_item else 'Unknown'}\n\n"
             f"This media will never be queued again."
         )
         await query.edit_message_caption(caption=caption, parse_mode="Markdown")
 
-        logger.info(f"Post permanently rejected by {user.telegram_username}: {media_item.file_name if media_item else queue_item.media_item_id}")
+        logger.info(f"Post permanently rejected by {self._get_display_name(user)}: {media_item.file_name if media_item else queue_item.media_item_id}")
 
     def _get_or_create_user(self, telegram_user):
-        """Get or create user from Telegram data."""
+        """Get or create user from Telegram data, syncing profile on each interaction."""
         user = self.user_repo.get_by_telegram_id(telegram_user.id)
 
         if not user:
@@ -345,11 +423,26 @@ class TelegramService(BaseService):
                 telegram_first_name=telegram_user.first_name,
                 telegram_last_name=telegram_user.last_name,
             )
-            logger.info(f"New user discovered: @{telegram_user.username}")
+            logger.info(f"New user discovered: {self._get_display_name(user)}")
         else:
-            self.user_repo.update_last_seen(str(user.id))
+            # Sync profile data on each interaction (username may have changed/been added)
+            user = self.user_repo.update_profile(
+                str(user.id),
+                telegram_username=telegram_user.username,
+                telegram_first_name=telegram_user.first_name,
+                telegram_last_name=telegram_user.last_name,
+            )
 
         return user
+
+    def _get_display_name(self, user) -> str:
+        """Get best available display name for user (username > first_name > user_id)."""
+        if user.telegram_username:
+            return f"@{user.telegram_username}"
+        elif user.telegram_first_name:
+            return user.telegram_first_name
+        else:
+            return f"User {user.telegram_user_id}"
 
     async def send_startup_notification(self):
         """Send startup notification to admin with system status."""
