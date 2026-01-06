@@ -134,3 +134,117 @@ class TestUserRepository:
 
         assert found_user is not None
         assert found_user.id == user.id
+
+    def test_update_profile(self, test_db):
+        """Test updating user profile data."""
+        repo = UserRepository(test_db)
+
+        # Create user with initial profile
+        user = repo.create(
+            telegram_user_id=300001,
+            telegram_username="oldname",
+            telegram_first_name="Old",
+            telegram_last_name="Name"
+        )
+
+        assert user.telegram_username == "oldname"
+        assert user.telegram_first_name == "Old"
+
+        # Update profile
+        updated_user = repo.update_profile(
+            str(user.id),
+            telegram_username="newname",
+            telegram_first_name="New",
+            telegram_last_name="Person"
+        )
+
+        assert updated_user.telegram_username == "newname"
+        assert updated_user.telegram_first_name == "New"
+        assert updated_user.telegram_last_name == "Person"
+        assert updated_user.last_seen_at is not None
+
+    def test_update_profile_adds_username(self, test_db):
+        """Test adding username to user who didn't have one."""
+        repo = UserRepository(test_db)
+
+        # Create user without username (like many Telegram users)
+        user = repo.create(
+            telegram_user_id=300002,
+            telegram_username=None,
+            telegram_first_name="NoUsername"
+        )
+
+        assert user.telegram_username is None
+
+        # User later adds a username in Telegram
+        updated_user = repo.update_profile(
+            str(user.id),
+            telegram_username="newlyaddedusername",
+            telegram_first_name="NoUsername",
+            telegram_last_name=None
+        )
+
+        assert updated_user.telegram_username == "newlyaddedusername"
+
+    def test_update_profile_removes_username(self, test_db):
+        """Test removing username from user profile."""
+        repo = UserRepository(test_db)
+
+        # Create user with username
+        user = repo.create(
+            telegram_user_id=300003,
+            telegram_username="hasusername",
+            telegram_first_name="Has"
+        )
+
+        assert user.telegram_username == "hasusername"
+
+        # User removes their username in Telegram
+        updated_user = repo.update_profile(
+            str(user.id),
+            telegram_username=None,
+            telegram_first_name="Has",
+            telegram_last_name=None
+        )
+
+        assert updated_user.telegram_username is None
+
+    def test_update_profile_nonexistent_user(self, test_db):
+        """Test updating profile of non-existent user returns None."""
+        repo = UserRepository(test_db)
+
+        result = repo.update_profile(
+            "00000000-0000-0000-0000-000000000000",
+            telegram_username="nobody",
+            telegram_first_name="Nobody",
+            telegram_last_name=None
+        )
+
+        assert result is None
+
+    def test_update_profile_updates_last_seen(self, test_db):
+        """Test that update_profile also updates last_seen_at timestamp."""
+        repo = UserRepository(test_db)
+        from datetime import datetime, timedelta
+
+        user = repo.create(telegram_user_id=300004)
+
+        # Get initial last_seen
+        initial_last_seen = user.last_seen_at
+
+        # Small delay to ensure timestamp difference
+        import time
+        time.sleep(0.1)
+
+        # Update profile
+        updated_user = repo.update_profile(
+            str(user.id),
+            telegram_username="updated",
+            telegram_first_name="Updated",
+            telegram_last_name=None
+        )
+
+        # last_seen should be updated
+        assert updated_user.last_seen_at is not None
+        if initial_last_seen:
+            assert updated_user.last_seen_at >= initial_last_seen

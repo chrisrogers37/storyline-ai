@@ -62,6 +62,28 @@ class UserRepository:
             self.db.refresh(user)
         return user
 
+    def update_profile(
+        self,
+        user_id: str,
+        telegram_username: Optional[str] = None,
+        telegram_first_name: Optional[str] = None,
+        telegram_last_name: Optional[str] = None,
+    ) -> User:
+        """Update user's Telegram profile data and last seen timestamp.
+
+        Syncs profile data on each interaction in case user changed their
+        Telegram username or added one after initial account creation.
+        """
+        user = self.get_by_id(user_id)
+        if user:
+            user.telegram_username = telegram_username
+            user.telegram_first_name = telegram_first_name
+            user.telegram_last_name = telegram_last_name
+            user.last_seen_at = datetime.utcnow()
+            self.db.commit()
+            self.db.refresh(user)
+        return user
+
     def increment_posts(self, user_id: str) -> User:
         """Increment user's total posts count."""
         user = self.get_by_id(user_id)

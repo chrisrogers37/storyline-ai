@@ -13,6 +13,10 @@ load_dotenv(".env.test", override=True)
 from src.config.database import Base
 from src.config.settings import settings
 
+# Global flag to track if database is available
+_database_available = None
+_test_engine = None
+
 
 def create_test_database():
     """Create test database if it doesn't exist."""
@@ -79,25 +83,40 @@ def setup_test_database():
     Session-scoped fixture to create test database before tests run.
 
     This fixture:
-    1. Creates the test database if it doesn't exist
+    1. Tries to create the test database if it doesn't exist
     2. Creates all tables using SQLAlchemy models
     3. Yields control to tests
     4. Drops the test database after all tests complete
+
+    If database connection fails, yields None and allows pure unit tests to run.
     """
-    # Create test database
-    create_test_database()
+    global _database_available, _test_engine
 
-    # Create engine and tables
-    engine = create_engine(settings.test_database_url)
-    Base.metadata.create_all(engine)
-    print(f"✓ Created all tables in test database")
+    try:
+        # Create test database
+        create_test_database()
 
-    yield engine
+        # Create engine and tables
+        engine = create_engine(settings.test_database_url)
+        Base.metadata.create_all(engine)
+        print(f"✓ Created all tables in test database")
 
-    # Cleanup: drop all tables and database
-    Base.metadata.drop_all(engine)
-    engine.dispose()
-    drop_test_database()
+        _database_available = True
+        _test_engine = engine
+
+        yield engine
+
+        # Cleanup: drop all tables and database
+        Base.metadata.drop_all(engine)
+        engine.dispose()
+        drop_test_database()
+
+    except Exception as e:
+        print(f"\n⚠️ Database setup skipped: {e}")
+        print("   Pure unit tests will still run. Integration tests will be skipped.")
+        _database_available = False
+        _test_engine = None
+        yield None
 
 
 @pytest.fixture(scope="function")
@@ -107,7 +126,12 @@ def test_db(setup_test_database):
 
     Each test gets a fresh transaction that is rolled back after the test completes,
     ensuring test isolation without recreating tables.
+
+    If database is not available, skips the test.
     """
+    if setup_test_database is None:
+        pytest.skip("Database not available - skipping integration test")
+
     TestSessionLocal = sessionmaker(bind=setup_test_database)
     session = TestSessionLocal()
 
