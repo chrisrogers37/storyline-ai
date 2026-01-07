@@ -268,9 +268,10 @@ class TelegramService(BaseService):
         """Handle /queue command - show upcoming scheduled posts."""
         user = self._get_or_create_user(update.effective_user)
 
-        # Get upcoming queue items
-        queue_items = self.queue_repo.get_pending(limit=10)
-        total_count = self.queue_repo.count_pending()
+        # Get ALL pending queue items (not just due ones)
+        all_pending = self.queue_repo.get_all(status="pending")
+        total_count = len(all_pending)
+        queue_items = all_pending[:10]  # Show first 10
 
         if not queue_items:
             await update.message.reply_text(
