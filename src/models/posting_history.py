@@ -38,7 +38,7 @@ class PostingHistory(Base):
 
     # Posting outcome
     posted_at = Column(DateTime, nullable=False, index=True)
-    status = Column(String(50), nullable=False)  # 'posted', 'failed', 'skipped'
+    status = Column(String(50), nullable=False)  # 'posted', 'failed', 'skipped', 'rejected'
     success = Column(Boolean, nullable=False)
 
     # Instagram result (if successful)
@@ -58,7 +58,7 @@ class PostingHistory(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('posted', 'failed', 'skipped')",
+            "status IN ('posted', 'failed', 'skipped', 'rejected')",
             name="check_history_status"
         ),
     )

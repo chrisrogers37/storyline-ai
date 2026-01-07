@@ -306,11 +306,11 @@ class TelegramService(BaseService):
         media_item = self.media_repo.get_by_id(str(queue_item.media_item_id))
         file_name = media_item.file_name if media_item else "Unknown"
 
-        # Build confirmation keyboard
+        # Build confirmation keyboard (short labels - details in message above)
         keyboard = [
             [
-                InlineKeyboardButton("✅ Yes, Reject Forever", callback_data=f"confirm_reject:{queue_id}"),
-                InlineKeyboardButton("❌ Cancel", callback_data=f"cancel_reject:{queue_id}"),
+                InlineKeyboardButton("✅ Yes", callback_data=f"confirm_reject:{queue_id}"),
+                InlineKeyboardButton("❌ No", callback_data=f"cancel_reject:{queue_id}"),
             ]
         ]
 
