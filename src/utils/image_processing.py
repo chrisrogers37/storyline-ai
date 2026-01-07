@@ -42,33 +42,34 @@ class ImageProcessor:
         warnings = []
 
         try:
-            img = Image.open(file_path)
-            width, height = img.size
-            aspect_ratio = width / height
-            file_size_mb = file_path.stat().st_size / (1024 * 1024)
+            with Image.open(file_path) as img:
+                width, height = img.size
+                aspect_ratio = width / height
+                file_size_mb = file_path.stat().st_size / (1024 * 1024)
+                img_format = img.format
 
-            # Check format
-            if img.format not in self.SUPPORTED_FORMATS:
-                errors.append(f"Unsupported format: {img.format}. Must be JPG, PNG, or GIF")
+                # Check format
+                if img_format not in self.SUPPORTED_FORMATS:
+                    errors.append(f"Unsupported format: {img_format}. Must be JPG, PNG, or GIF")
 
-            # Check file size
-            if file_size_mb > self.MAX_FILE_SIZE_MB:
-                errors.append(f"File too large: {file_size_mb:.1f}MB (max {self.MAX_FILE_SIZE_MB}MB)")
+                # Check file size
+                if file_size_mb > self.MAX_FILE_SIZE_MB:
+                    errors.append(f"File too large: {file_size_mb:.1f}MB (max {self.MAX_FILE_SIZE_MB}MB)")
 
-            # Check aspect ratio
-            if aspect_ratio < self.MAX_ASPECT_RATIO or aspect_ratio > self.MIN_ASPECT_RATIO:
-                warnings.append(
-                    f"Non-ideal aspect ratio: {aspect_ratio:.2f}. "
-                    f"Instagram prefers 9:16 ({self.IDEAL_ASPECT_RATIO:.2f})"
-                )
+                # Check aspect ratio
+                if aspect_ratio < self.MAX_ASPECT_RATIO or aspect_ratio > self.MIN_ASPECT_RATIO:
+                    warnings.append(
+                        f"Non-ideal aspect ratio: {aspect_ratio:.2f}. "
+                        f"Instagram prefers 9:16 ({self.IDEAL_ASPECT_RATIO:.2f})"
+                    )
 
-            # Check resolution
-            if width < 720 or height < 1280:
-                warnings.append(f"Low resolution: {width}x{height}. Minimum recommended: 720x1280")
-            elif width != self.IDEAL_WIDTH or height != self.IDEAL_HEIGHT:
-                warnings.append(
-                    f"Non-optimal resolution: {width}x{height}. Instagram ideal: {self.IDEAL_WIDTH}x{self.IDEAL_HEIGHT}"
-                )
+                # Check resolution
+                if width < 720 or height < 1280:
+                    warnings.append(f"Low resolution: {width}x{height}. Minimum recommended: 720x1280")
+                elif width != self.IDEAL_WIDTH or height != self.IDEAL_HEIGHT:
+                    warnings.append(
+                        f"Non-optimal resolution: {width}x{height}. Instagram ideal: {self.IDEAL_WIDTH}x{self.IDEAL_HEIGHT}"
+                    )
 
             is_valid = len(errors) == 0
 
@@ -80,7 +81,7 @@ class ImageProcessor:
                 height=height,
                 aspect_ratio=aspect_ratio,
                 file_size_mb=file_size_mb,
-                format=img.format,
+                format=img_format,
             )
 
         except Exception as e:
@@ -106,33 +107,33 @@ class ImageProcessor:
         Returns:
             Path to optimized image
         """
-        img = Image.open(file_path)
-        width, height = img.size
-        aspect_ratio = width / height
+        with Image.open(file_path) as img:
+            width, height = img.size
+            aspect_ratio = width / height
 
-        # Calculate target dimensions maintaining aspect ratio
-        if aspect_ratio > self.IDEAL_ASPECT_RATIO:
-            # Image is too wide, crop to 9:16
-            target_width = int(height * self.IDEAL_ASPECT_RATIO)
-            target_height = height
-            left = (width - target_width) // 2
-            img = img.crop((left, 0, left + target_width, height))
-        else:
-            # Image is correct or too tall, resize to 1080x1920
-            target_width = self.IDEAL_WIDTH
-            target_height = self.IDEAL_HEIGHT
-            img = img.resize((target_width, target_height), Image.Resampling.LANCZOS)
+            # Calculate target dimensions maintaining aspect ratio
+            if aspect_ratio > self.IDEAL_ASPECT_RATIO:
+                # Image is too wide, crop to 9:16
+                target_width = int(height * self.IDEAL_ASPECT_RATIO)
+                target_height = height
+                left = (width - target_width) // 2
+                processed_img = img.crop((left, 0, left + target_width, height))
+            else:
+                # Image is correct or too tall, resize to 1080x1920
+                target_width = self.IDEAL_WIDTH
+                target_height = self.IDEAL_HEIGHT
+                processed_img = img.resize((target_width, target_height), Image.Resampling.LANCZOS)
 
-        # Convert RGBA to RGB if needed (PNG with transparency)
-        if img.mode == "RGBA":
-            rgb_img = Image.new("RGB", img.size, (255, 255, 255))
-            rgb_img.paste(img, mask=img.split()[3])
-            img = rgb_img
+            # Convert RGBA to RGB if needed (PNG with transparency)
+            if processed_img.mode == "RGBA":
+                rgb_img = Image.new("RGB", processed_img.size, (255, 255, 255))
+                rgb_img.paste(processed_img, mask=processed_img.split()[3])
+                processed_img = rgb_img
 
-        # Save optimized image
-        if output_path is None:
-            output_path = file_path
+            # Save optimized image
+            if output_path is None:
+                output_path = file_path
 
-        img.save(output_path, "JPEG", quality=95, optimize=True)
+            processed_img.save(output_path, "JPEG", quality=95, optimize=True)
 
         return output_path

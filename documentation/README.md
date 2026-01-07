@@ -34,6 +34,19 @@ documentation/
 - Testing summary
 - Next steps for Phase 2
 
+### Feature Designs
+**[user-interactions-design.md](planning/user-interactions-design.md)**
+- User interaction tracking system
+- InteractionService architecture
+- Analytics capabilities
+- `/queue` and `/status` command design
+
+**[phase-1.5-telegram-enhancements.md](planning/phase-1.5-telegram-enhancements.md)**
+- Telegram UX improvements
+- Bot lifecycle notifications
+- Instagram deep links
+- Enhanced captions
+
 ---
 
 ## 🚀 Getting Started Guides
@@ -190,4 +203,4 @@ Current documentation status:
 
 ---
 
-*Last updated: 2026-01-03*
+*Last updated: 2026-01-06*
