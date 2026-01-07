@@ -43,6 +43,7 @@ class TelegramService(BaseService):
         self.application.add_handler(CommandHandler("start", self._handle_start))
         self.application.add_handler(CommandHandler("status", self._handle_status))
         self.application.add_handler(CommandHandler("queue", self._handle_queue))
+        self.application.add_handler(CommandHandler("next", self._handle_next))
         self.application.add_handler(CommandHandler("help", self._handle_help))
         self.application.add_handler(CallbackQueryHandler(self._handle_callback))
 
@@ -199,8 +200,9 @@ class TelegramService(BaseService):
             "👋 *Storyline AI Bot*\n\n"
             "Commands:\n"
             "/queue - View upcoming posts\n"
+            "/next - Force send next post\n"
             "/status - Check system status\n"
-            "/help - Show this help",
+            "/help - Show all commands",
             parse_mode="Markdown"
         )
 
@@ -268,9 +270,10 @@ class TelegramService(BaseService):
         """Handle /queue command - show upcoming scheduled posts."""
         user = self._get_or_create_user(update.effective_user)
 
-        # Get upcoming queue items
-        queue_items = self.queue_repo.get_pending(limit=10)
-        total_count = self.queue_repo.count_pending()
+        # Get ALL pending queue items (not just due ones)
+        all_pending = self.queue_repo.get_all(status="pending")
+        total_count = len(all_pending)
+        queue_items = all_pending[:10]  # Show first 10
 
         if not queue_items:
             await update.message.reply_text(
@@ -305,6 +308,72 @@ class TelegramService(BaseService):
             telegram_message_id=update.message.message_id,
         )
 
+    async def _handle_next(self, update, context):
+        """Handle /next command - force send next scheduled post immediately."""
+        user = self._get_or_create_user(update.effective_user)
+
+        # Get next pending item (earliest scheduled, regardless of time)
+        all_pending = self.queue_repo.get_all(status="pending")
+
+        if not all_pending:
+            await update.message.reply_text(
+                "📭 *Queue Empty*\n\nNo posts to send.",
+                parse_mode="Markdown"
+            )
+            return
+
+        # Take the first one (earliest scheduled)
+        queue_item = all_pending[0]
+        media_item = self.media_repo.get_by_id(str(queue_item.media_item_id))
+
+        if not media_item:
+            await update.message.reply_text(
+                "⚠️ *Error*\n\nMedia item not found.",
+                parse_mode="Markdown"
+            )
+            return
+
+        # Send confirmation that we're processing
+        await update.message.reply_text(
+            f"⏳ *Sending next post...*\n\n"
+            f"📁 {media_item.file_name}\n"
+            f"🕐 Was scheduled for: {queue_item.scheduled_for.strftime('%b %d %H:%M UTC')}",
+            parse_mode="Markdown"
+        )
+
+        # Send the notification to channel (reuses existing flow)
+        success = await self.send_notification(str(queue_item.id))
+
+        if success:
+            # Update status to processing
+            self.queue_repo.update_status(str(queue_item.id), "processing")
+
+            await update.message.reply_text(
+                f"✅ *Sent!*\n\nCheck the channel for the post.",
+                parse_mode="Markdown"
+            )
+        else:
+            await update.message.reply_text(
+                f"❌ *Failed to send*\n\nCheck logs for details.",
+                parse_mode="Markdown"
+            )
+
+        # Log interaction
+        self.interaction_service.log_command(
+            user_id=str(user.id),
+            command="/next",
+            context={
+                "queue_item_id": str(queue_item.id),
+                "media_id": str(queue_item.media_item_id),
+                "media_filename": media_item.file_name,
+                "success": success,
+            },
+            telegram_chat_id=update.effective_chat.id,
+            telegram_message_id=update.message.message_id,
+        )
+
+        logger.info(f"Force-sent next post by {self._get_display_name(user)}: {media_item.file_name}")
+
     async def _handle_help(self, update, context):
         """Handle /help command."""
         user = self._get_or_create_user(update.effective_user)
@@ -313,6 +382,7 @@ class TelegramService(BaseService):
             "📖 *Storyline AI Help*\n\n"
             "*Commands:*\n"
             "/queue - View upcoming scheduled posts\n"
+            "/next - Force send next post now\n"
             "/status - Check system status\n"
             "/help - Show this help message\n\n"
             "*Button Actions:*\n"
