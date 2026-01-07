@@ -60,6 +60,10 @@ backup/
 *.sql.gz
 *.tar.gz
 
+# But allow SQL scripts in scripts/ directory
+!scripts/*.sql
+!scripts/**/*.sql
+
 # Media files (don't commit user media)
 media/stories/*
 !media/stories/.gitkeep
