@@ -9,7 +9,9 @@ from src.repositories.user_repository import UserRepository
 from src.repositories.queue_repository import QueueRepository
 from src.repositories.history_repository import HistoryRepository
 from src.repositories.media_repository import MediaRepository
+from src.repositories.lock_repository import LockRepository
 from src.services.core.media_lock import MediaLockService
+from src.services.core.interaction_service import InteractionService
 from src.config.settings import settings
 from src.utils.logger import logger
 from datetime import datetime
@@ -26,7 +28,9 @@ class TelegramService(BaseService):
         self.queue_repo = QueueRepository()
         self.history_repo = HistoryRepository()
         self.media_repo = MediaRepository()
+        self.lock_repo = LockRepository()
         self.lock_service = MediaLockService()
+        self.interaction_service = InteractionService()
         self.bot = None
         self.application = None
 
@@ -38,6 +42,8 @@ class TelegramService(BaseService):
         # Add handlers
         self.application.add_handler(CommandHandler("start", self._handle_start))
         self.application.add_handler(CommandHandler("status", self._handle_status))
+        self.application.add_handler(CommandHandler("queue", self._handle_queue))
+        self.application.add_handler(CommandHandler("help", self._handle_help))
         self.application.add_handler(CallbackQueryHandler(self._handle_callback))
 
         logger.info("Telegram bot initialized")
@@ -187,18 +193,148 @@ class TelegramService(BaseService):
 
     async def _handle_start(self, update, context):
         """Handle /start command."""
-        await update.message.reply_text("👋 Storyline AI Bot\n\nUse /status to check queue status.")
+        user = self._get_or_create_user(update.effective_user)
+
+        await update.message.reply_text(
+            "👋 *Storyline AI Bot*\n\n"
+            "Commands:\n"
+            "/queue - View upcoming posts\n"
+            "/status - Check system status\n"
+            "/help - Show this help",
+            parse_mode="Markdown"
+        )
+
+        # Log interaction
+        self.interaction_service.log_command(
+            user_id=str(user.id),
+            command="/start",
+            telegram_chat_id=update.effective_chat.id,
+            telegram_message_id=update.message.message_id,
+        )
 
     async def _handle_status(self, update, context):
         """Handle /status command."""
+        user = self._get_or_create_user(update.effective_user)
+
+        # Gather stats
         pending_count = self.queue_repo.count_pending()
         recent_posts = self.history_repo.get_recent_posts(hours=24)
+        media_count = len(self.media_repo.get_all(is_active=True))
+        locked_count = len(self.lock_repo.get_permanent_locks())
 
-        status_msg = f"📊 Queue Status\n\n"
-        status_msg += f"Pending: {pending_count}\n"
-        status_msg += f"Posted (24h): {len(recent_posts)}"
+        # Get next scheduled post
+        next_items = self.queue_repo.get_pending(limit=1)
+        if next_items:
+            next_time = next_items[0].scheduled_for
+            next_post_str = next_time.strftime("%H:%M UTC")
+        else:
+            next_post_str = "None scheduled"
 
-        await update.message.reply_text(status_msg)
+        # Last post time
+        if recent_posts:
+            time_diff = datetime.utcnow() - recent_posts[0].posted_at
+            hours = int(time_diff.total_seconds() / 3600)
+            last_posted = f"{hours}h ago" if hours > 0 else "< 1h ago"
+        else:
+            last_posted = "Never"
+
+        status_msg = (
+            f"✅ *Storyline AI Status*\n\n"
+            f"🤖 Bot: Online\n"
+            f"📊 Queue: {pending_count} pending\n"
+            f"📁 Media Library: {media_count} active\n"
+            f"🔒 Locked Items: {locked_count}\n"
+            f"⏰ Next Post: {next_post_str}\n"
+            f"📤 Last Posted: {last_posted}\n"
+            f"📈 Posted (24h): {len(recent_posts)}"
+        )
+
+        await update.message.reply_text(status_msg, parse_mode="Markdown")
+
+        # Log interaction
+        self.interaction_service.log_command(
+            user_id=str(user.id),
+            command="/status",
+            context={
+                "queue_size": pending_count,
+                "media_count": media_count,
+                "posts_24h": len(recent_posts),
+            },
+            telegram_chat_id=update.effective_chat.id,
+            telegram_message_id=update.message.message_id,
+        )
+
+    async def _handle_queue(self, update, context):
+        """Handle /queue command - show upcoming scheduled posts."""
+        user = self._get_or_create_user(update.effective_user)
+
+        # Get upcoming queue items
+        queue_items = self.queue_repo.get_pending(limit=10)
+        total_count = self.queue_repo.count_pending()
+
+        if not queue_items:
+            await update.message.reply_text(
+                "📭 *Queue Empty*\n\nNo posts scheduled.",
+                parse_mode="Markdown"
+            )
+        else:
+            lines = [f"📅 *Upcoming Queue* ({len(queue_items)} of {total_count})\n"]
+
+            for i, item in enumerate(queue_items, 1):
+                # Get media info
+                media_item = self.media_repo.get_by_id(str(item.media_item_id))
+                filename = media_item.file_name if media_item else "Unknown"
+
+                # Format scheduled time
+                scheduled = item.scheduled_for.strftime("%b %d %H:%M UTC")
+
+                lines.append(f"{i}. 🕐 {scheduled}")
+                lines.append(f"    📁 {filename}\n")
+
+            await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+        # Log interaction
+        self.interaction_service.log_command(
+            user_id=str(user.id),
+            command="/queue",
+            context={
+                "items_shown": len(queue_items),
+                "total_queue": total_count,
+            },
+            telegram_chat_id=update.effective_chat.id,
+            telegram_message_id=update.message.message_id,
+        )
+
+    async def _handle_help(self, update, context):
+        """Handle /help command."""
+        user = self._get_or_create_user(update.effective_user)
+
+        help_text = (
+            "📖 *Storyline AI Help*\n\n"
+            "*Commands:*\n"
+            "/queue - View upcoming scheduled posts\n"
+            "/status - Check system status\n"
+            "/help - Show this help message\n\n"
+            "*Button Actions:*\n"
+            "✅ Posted - Mark as posted to Instagram\n"
+            "⏭️ Skip - Skip this post (can be requeued later)\n"
+            "🚫 Reject - Permanently remove from rotation\n\n"
+            "*Workflow:*\n"
+            "1. Save the image from notification\n"
+            "2. Tap 'Open Instagram' button\n"
+            "3. Post to your story\n"
+            "4. Come back and tap 'Posted'"
+        )
+
+        await update.message.reply_text(help_text, parse_mode="Markdown")
+
+        # Log interaction
+        self.interaction_service.log_command(
+            user_id=str(user.id),
+            command="/help",
+            telegram_chat_id=update.effective_chat.id,
+            telegram_message_id=update.message.message_id,
+        )
 
     async def _handle_callback(self, update, context):
         """Handle inline button callbacks."""
@@ -262,6 +398,19 @@ class TelegramService(BaseService):
         # Update message
         await query.edit_message_caption(caption=f"✅ Marked as posted by {self._get_display_name(user)}")
 
+        # Log interaction
+        self.interaction_service.log_callback(
+            user_id=str(user.id),
+            callback_name="posted",
+            context={
+                "queue_item_id": queue_id,
+                "media_id": str(queue_item.media_item_id),
+                "media_filename": media_item.file_name if media_item else None,
+            },
+            telegram_chat_id=query.message.chat_id,
+            telegram_message_id=query.message.message_id,
+        )
+
         logger.info(f"Post marked as completed by {self._get_display_name(user)}")
 
     async def _handle_skipped(self, queue_id: str, user, query):
@@ -271,6 +420,9 @@ class TelegramService(BaseService):
         if not queue_item:
             await query.edit_message_caption(caption="⚠️ Queue item not found")
             return
+
+        # Get media item for context
+        media_item = self.media_repo.get_by_id(str(queue_item.media_item_id))
 
         # Create history record
         self.history_repo.create(
@@ -291,6 +443,19 @@ class TelegramService(BaseService):
 
         # Update message
         await query.edit_message_caption(caption=f"⏭️ Skipped by {self._get_display_name(user)}")
+
+        # Log interaction
+        self.interaction_service.log_callback(
+            user_id=str(user.id),
+            callback_name="skip",
+            context={
+                "queue_item_id": queue_id,
+                "media_id": str(queue_item.media_item_id),
+                "media_filename": media_item.file_name if media_item else None,
+            },
+            telegram_chat_id=query.message.chat_id,
+            telegram_message_id=query.message.message_id,
+        )
 
         logger.info(f"Post skipped by {self._get_display_name(user)}")
 
@@ -328,6 +493,19 @@ class TelegramService(BaseService):
             parse_mode="Markdown"
         )
 
+        # Log interaction (showing confirmation dialog)
+        self.interaction_service.log_callback(
+            user_id=str(user.id),
+            callback_name="reject",
+            context={
+                "queue_item_id": queue_id,
+                "media_id": str(queue_item.media_item_id),
+                "media_filename": file_name,
+            },
+            telegram_chat_id=query.message.chat_id,
+            telegram_message_id=query.message.message_id,
+        )
+
     async def _handle_cancel_reject(self, queue_id: str, user, query):
         """Cancel rejection and restore original buttons."""
         queue_item = self.queue_repo.get_by_id(queue_id)
@@ -363,6 +541,18 @@ class TelegramService(BaseService):
         await query.edit_message_caption(
             caption=caption,
             reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+        # Log interaction
+        self.interaction_service.log_callback(
+            user_id=str(user.id),
+            callback_name="cancel_reject",
+            context={
+                "queue_item_id": queue_id,
+                "media_id": str(queue_item.media_item_id),
+            },
+            telegram_chat_id=query.message.chat_id,
+            telegram_message_id=query.message.message_id,
         )
 
         logger.info(f"Reject cancelled by {self._get_display_name(user)}")
@@ -409,6 +599,19 @@ class TelegramService(BaseService):
             f"This media will never be queued again."
         )
         await query.edit_message_caption(caption=caption, parse_mode="Markdown")
+
+        # Log interaction
+        self.interaction_service.log_callback(
+            user_id=str(user.id),
+            callback_name="confirm_reject",
+            context={
+                "queue_item_id": queue_id,
+                "media_id": str(queue_item.media_item_id),
+                "media_filename": media_item.file_name if media_item else None,
+            },
+            telegram_chat_id=query.message.chat_id,
+            telegram_message_id=query.message.message_id,
+        )
 
         logger.info(f"Post permanently rejected by {self._get_display_name(user)}: {media_item.file_name if media_item else queue_item.media_item_id}")
 
