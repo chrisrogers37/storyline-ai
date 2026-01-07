@@ -18,7 +18,9 @@ def mock_telegram_service():
          patch("src.services.core.telegram_service.QueueRepository") as mock_queue_repo_class, \
          patch("src.services.core.telegram_service.MediaRepository") as mock_media_repo_class, \
          patch("src.services.core.telegram_service.HistoryRepository") as mock_history_repo_class, \
-         patch("src.services.core.telegram_service.MediaLockService") as mock_lock_service_class:
+         patch("src.services.core.telegram_service.LockRepository") as mock_lock_repo_class, \
+         patch("src.services.core.telegram_service.MediaLockService") as mock_lock_service_class, \
+         patch("src.services.core.telegram_service.InteractionService") as mock_interaction_service_class:
 
         mock_settings.TELEGRAM_BOT_TOKEN = "123456:ABC-DEF1234ghIkl"
         mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
@@ -32,7 +34,9 @@ def mock_telegram_service():
         service.queue_repo = mock_queue_repo_class.return_value
         service.media_repo = mock_media_repo_class.return_value
         service.history_repo = mock_history_repo_class.return_value
+        service.lock_repo = mock_lock_repo_class.return_value
         service.lock_service = mock_lock_service_class.return_value
+        service.interaction_service = mock_interaction_service_class.return_value
 
         yield service
 
@@ -664,3 +668,307 @@ class TestTelegramService:
         # Verify media post count NOT incremented
         updated_media = media_repo.get_by_id(media.id)
         assert updated_media.times_posted == 0
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestQueueCommand:
+    """Tests for /queue command."""
+
+    async def test_queue_shows_all_pending_not_just_due(self, mock_telegram_service):
+        """Test /queue shows ALL pending items, not just ones due now."""
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "testuser"
+        mock_telegram_service.user_repo.get_by_telegram_id.return_value = None
+        mock_telegram_service.user_repo.create.return_value = mock_user
+
+        # Create mock queue items scheduled for the future
+        mock_queue_item1 = Mock()
+        mock_queue_item1.id = uuid4()
+        mock_queue_item1.media_item_id = uuid4()
+        mock_queue_item1.scheduled_for = datetime(2030, 1, 1, 12, 0)  # Future date
+
+        mock_queue_item2 = Mock()
+        mock_queue_item2.id = uuid4()
+        mock_queue_item2.media_item_id = uuid4()
+        mock_queue_item2.scheduled_for = datetime(2030, 1, 2, 14, 0)  # Future date
+
+        # get_all returns future items, get_pending would return empty
+        mock_telegram_service.queue_repo.get_all.return_value = [mock_queue_item1, mock_queue_item2]
+
+        mock_media = Mock()
+        mock_media.file_name = "test.jpg"
+        mock_telegram_service.media_repo.get_by_id.return_value = mock_media
+
+        mock_update = Mock()
+        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_chat = Mock(id=-100123)
+        mock_update.message = AsyncMock()
+        mock_update.message.message_id = 1
+
+        mock_context = Mock()
+
+        await mock_telegram_service._handle_queue(mock_update, mock_context)
+
+        # Should call get_all with status="pending", NOT get_pending
+        mock_telegram_service.queue_repo.get_all.assert_called_once_with(status="pending")
+
+        # Should show items in message
+        mock_update.message.reply_text.assert_called_once()
+        call_args = mock_update.message.reply_text.call_args
+        message_text = call_args.args[0]
+        assert "Upcoming Queue" in message_text
+        assert "2 of 2" in message_text
+
+    async def test_queue_empty_message(self, mock_telegram_service):
+        """Test /queue shows empty message when no posts scheduled."""
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_telegram_service.user_repo.get_by_telegram_id.return_value = None
+        mock_telegram_service.user_repo.create.return_value = mock_user
+
+        mock_telegram_service.queue_repo.get_all.return_value = []
+
+        mock_update = Mock()
+        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_chat = Mock(id=-100123)
+        mock_update.message = AsyncMock()
+        mock_update.message.message_id = 1
+
+        mock_context = Mock()
+
+        await mock_telegram_service._handle_queue(mock_update, mock_context)
+
+        call_args = mock_update.message.reply_text.call_args
+        message_text = call_args.args[0]
+        assert "Queue Empty" in message_text
+        assert "No posts scheduled" in message_text
+
+    async def test_queue_limits_to_ten_items(self, mock_telegram_service):
+        """Test /queue only shows first 10 items."""
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_telegram_service.user_repo.get_by_telegram_id.return_value = None
+        mock_telegram_service.user_repo.create.return_value = mock_user
+
+        # Create 15 mock queue items
+        mock_items = []
+        for i in range(15):
+            item = Mock()
+            item.id = uuid4()
+            item.media_item_id = uuid4()
+            item.scheduled_for = datetime(2030, 1, i + 1, 12, 0)
+            mock_items.append(item)
+
+        mock_telegram_service.queue_repo.get_all.return_value = mock_items
+
+        mock_media = Mock()
+        mock_media.file_name = "test.jpg"
+        mock_telegram_service.media_repo.get_by_id.return_value = mock_media
+
+        mock_update = Mock()
+        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_chat = Mock(id=-100123)
+        mock_update.message = AsyncMock()
+        mock_update.message.message_id = 1
+
+        mock_context = Mock()
+
+        await mock_telegram_service._handle_queue(mock_update, mock_context)
+
+        call_args = mock_update.message.reply_text.call_args
+        message_text = call_args.args[0]
+        # Should show "10 of 15"
+        assert "10 of 15" in message_text
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestNextCommand:
+    """Tests for /next command - force send next post."""
+
+    async def test_next_sends_earliest_scheduled_post(self, mock_telegram_service):
+        """Test /next sends the earliest scheduled post."""
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "testuser"
+        mock_telegram_service.user_repo.get_by_telegram_id.return_value = None
+        mock_telegram_service.user_repo.create.return_value = mock_user
+
+        queue_item_id = uuid4()
+        media_id = uuid4()
+
+        mock_queue_item = Mock()
+        mock_queue_item.id = queue_item_id
+        mock_queue_item.media_item_id = media_id
+        mock_queue_item.scheduled_for = datetime(2030, 6, 15, 14, 0)
+
+        mock_telegram_service.queue_repo.get_all.return_value = [mock_queue_item]
+
+        mock_media = Mock()
+        mock_media.file_name = "next_post.jpg"
+        mock_telegram_service.media_repo.get_by_id.return_value = mock_media
+
+        # Mock send_notification
+        mock_telegram_service.send_notification = AsyncMock(return_value=True)
+
+        mock_update = Mock()
+        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_chat = Mock(id=-100123)
+        mock_update.message = AsyncMock()
+        mock_update.message.message_id = 1
+
+        mock_context = Mock()
+
+        await mock_telegram_service._handle_next(mock_update, mock_context)
+
+        # Should get all pending items
+        mock_telegram_service.queue_repo.get_all.assert_called_with(status="pending")
+
+        # Should send notification for the queue item
+        mock_telegram_service.send_notification.assert_called_once_with(str(queue_item_id))
+
+        # Should update status to processing
+        mock_telegram_service.queue_repo.update_status.assert_called_once_with(str(queue_item_id), "processing")
+
+        # Should send confirmation messages
+        assert mock_update.message.reply_text.call_count == 2
+        first_call = mock_update.message.reply_text.call_args_list[0]
+        assert "Sending next post" in first_call.args[0]
+        assert "next_post.jpg" in first_call.args[0]
+
+    async def test_next_empty_queue(self, mock_telegram_service):
+        """Test /next shows error when queue is empty."""
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_telegram_service.user_repo.get_by_telegram_id.return_value = None
+        mock_telegram_service.user_repo.create.return_value = mock_user
+
+        mock_telegram_service.queue_repo.get_all.return_value = []
+
+        mock_update = Mock()
+        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_chat = Mock(id=-100123)
+        mock_update.message = AsyncMock()
+        mock_update.message.message_id = 1
+
+        mock_context = Mock()
+
+        await mock_telegram_service._handle_next(mock_update, mock_context)
+
+        # Should show empty queue message
+        call_args = mock_update.message.reply_text.call_args
+        message_text = call_args.args[0]
+        assert "Queue Empty" in message_text
+        assert "No posts to send" in message_text
+
+    async def test_next_media_not_found(self, mock_telegram_service):
+        """Test /next handles missing media gracefully."""
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_telegram_service.user_repo.get_by_telegram_id.return_value = None
+        mock_telegram_service.user_repo.create.return_value = mock_user
+
+        mock_queue_item = Mock()
+        mock_queue_item.id = uuid4()
+        mock_queue_item.media_item_id = uuid4()
+        mock_queue_item.scheduled_for = datetime(2030, 6, 15, 14, 0)
+
+        mock_telegram_service.queue_repo.get_all.return_value = [mock_queue_item]
+        mock_telegram_service.media_repo.get_by_id.return_value = None  # Media not found
+
+        mock_update = Mock()
+        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_chat = Mock(id=-100123)
+        mock_update.message = AsyncMock()
+        mock_update.message.message_id = 1
+
+        mock_context = Mock()
+
+        await mock_telegram_service._handle_next(mock_update, mock_context)
+
+        call_args = mock_update.message.reply_text.call_args
+        message_text = call_args.args[0]
+        assert "Error" in message_text
+        assert "Media item not found" in message_text
+
+    async def test_next_notification_failure(self, mock_telegram_service):
+        """Test /next handles notification failure gracefully."""
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "testuser"
+        mock_telegram_service.user_repo.get_by_telegram_id.return_value = None
+        mock_telegram_service.user_repo.create.return_value = mock_user
+
+        mock_queue_item = Mock()
+        mock_queue_item.id = uuid4()
+        mock_queue_item.media_item_id = uuid4()
+        mock_queue_item.scheduled_for = datetime(2030, 6, 15, 14, 0)
+
+        mock_telegram_service.queue_repo.get_all.return_value = [mock_queue_item]
+
+        mock_media = Mock()
+        mock_media.file_name = "fail_post.jpg"
+        mock_telegram_service.media_repo.get_by_id.return_value = mock_media
+
+        # Mock send_notification to fail
+        mock_telegram_service.send_notification = AsyncMock(return_value=False)
+
+        mock_update = Mock()
+        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_chat = Mock(id=-100123)
+        mock_update.message = AsyncMock()
+        mock_update.message.message_id = 1
+
+        mock_context = Mock()
+
+        await mock_telegram_service._handle_next(mock_update, mock_context)
+
+        # Should NOT update status (since send failed)
+        mock_telegram_service.queue_repo.update_status.assert_not_called()
+
+        # Should show failure message
+        last_call = mock_update.message.reply_text.call_args_list[-1]
+        assert "Failed to send" in last_call.args[0]
+
+    async def test_next_logs_interaction(self, mock_telegram_service):
+        """Test /next logs the interaction."""
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "testuser"
+        mock_telegram_service.user_repo.get_by_telegram_id.return_value = None
+        mock_telegram_service.user_repo.create.return_value = mock_user
+
+        queue_item_id = uuid4()
+        media_id = uuid4()
+
+        mock_queue_item = Mock()
+        mock_queue_item.id = queue_item_id
+        mock_queue_item.media_item_id = media_id
+        mock_queue_item.scheduled_for = datetime(2030, 6, 15, 14, 0)
+
+        mock_telegram_service.queue_repo.get_all.return_value = [mock_queue_item]
+
+        mock_media = Mock()
+        mock_media.file_name = "logged_post.jpg"
+        mock_telegram_service.media_repo.get_by_id.return_value = mock_media
+
+        mock_telegram_service.send_notification = AsyncMock(return_value=True)
+
+        mock_update = Mock()
+        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_chat = Mock(id=-100123)
+        mock_update.message = AsyncMock()
+        mock_update.message.message_id = 1
+
+        mock_context = Mock()
+
+        await mock_telegram_service._handle_next(mock_update, mock_context)
+
+        # Should log the command
+        mock_telegram_service.interaction_service.log_command.assert_called_once()
+        call_kwargs = mock_telegram_service.interaction_service.log_command.call_args.kwargs
+        assert call_kwargs["command"] == "/next"
+        assert call_kwargs["context"]["media_filename"] == "logged_post.jpg"
+        assert call_kwargs["context"]["success"] is True
