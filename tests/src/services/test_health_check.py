@@ -1,193 +1,218 @@
 """Tests for HealthCheckService."""
 import pytest
-from unittest.mock import Mock, patch, AsyncMock
+from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime, timedelta
 
 from src.services.core.health_check import HealthCheckService
-from src.repositories.media_repository import MediaRepository
-from src.repositories.user_repository import UserRepository
-from src.repositories.queue_repository import QueueRepository
-from src.repositories.history_repository import HistoryRepository
 
 
 @pytest.mark.unit
 class TestHealthCheckService:
     """Test suite for HealthCheckService."""
 
-    def test_check_database_connection_healthy(self, test_db):
-        """Test database health check when connection is healthy."""
-        service = HealthCheckService(db=test_db)
+    @pytest.fixture
+    def health_service(self):
+        """Create HealthCheckService with mocked dependencies."""
+        service = HealthCheckService()
+        service.queue_repo = Mock()
+        service.history_repo = Mock()
+        return service
 
-        result = service.check_database_connection()
+    @patch("src.services.core.health_check.get_db")
+    def test_check_database_healthy(self, mock_get_db, health_service):
+        """Test database check returns healthy when DB is accessible."""
+        mock_db = Mock()
+        mock_get_db.return_value = iter([mock_db])
+
+        result = health_service._check_database()
 
         assert result["healthy"] is True
-        assert "error" not in result
+        assert "Database connection OK" in result["message"]
 
-    @patch("src.services.core.health_check.HealthCheckService.check_database_connection")
-    def test_check_database_connection_unhealthy(self, mock_check):
-        """Test database health check when connection fails."""
-        mock_check.return_value = {
-            "healthy": False,
-            "error": "Connection refused"
-        }
+    @patch("src.services.core.health_check.get_db")
+    def test_check_database_unhealthy(self, mock_get_db, health_service):
+        """Test database check returns unhealthy when DB fails."""
+        mock_get_db.side_effect = Exception("Connection refused")
 
-        service = HealthCheckService()
-        result = service.check_database_connection()
+        result = health_service._check_database()
 
         assert result["healthy"] is False
-        assert "error" in result
+        assert "Database error" in result["message"]
 
     @patch("src.services.core.health_check.settings")
-    def test_check_telegram_config_valid(self, mock_settings):
-        """Test Telegram configuration check with valid config."""
+    def test_check_telegram_config_valid(self, mock_settings, health_service):
+        """Test Telegram config check with valid configuration."""
         mock_settings.TELEGRAM_BOT_TOKEN = "123456:ABC-DEF1234ghIkl"
         mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
 
-        service = HealthCheckService()
-
-        result = service.check_telegram_config()
+        result = health_service._check_telegram_config()
 
         assert result["healthy"] is True
+        assert "Telegram configuration OK" in result["message"]
 
     @patch("src.services.core.health_check.settings")
-    def test_check_telegram_config_invalid(self, mock_settings):
-        """Test Telegram configuration check with invalid config."""
+    def test_check_telegram_config_missing_token(self, mock_settings, health_service):
+        """Test Telegram config check with missing token."""
         mock_settings.TELEGRAM_BOT_TOKEN = ""
         mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
 
-        service = HealthCheckService()
-
-        result = service.check_telegram_config()
+        result = health_service._check_telegram_config()
 
         assert result["healthy"] is False
+        assert "token" in result["message"].lower()
 
-    def test_check_queue_status_healthy(self, test_db):
-        """Test queue status check when healthy."""
-        media_repo = MediaRepository(test_db)
-        user_repo = UserRepository(test_db)
-        queue_repo = QueueRepository(test_db)
+    @patch("src.services.core.health_check.settings")
+    def test_check_telegram_config_missing_channel(self, mock_settings, health_service):
+        """Test Telegram config check with missing channel ID."""
+        mock_settings.TELEGRAM_BOT_TOKEN = "123456:ABC"
+        mock_settings.TELEGRAM_CHANNEL_ID = None
 
-        # Create a few queue items (not excessive)
-        media = media_repo.create(
-            file_path="/test/queue_health.jpg",
-            file_name="queue_health.jpg",
-            file_hash="queue_h890",
-            file_size_bytes=100000,
-            mime_type="image/jpeg"
-        )
+        result = health_service._check_telegram_config()
 
-        user = user_repo.create(telegram_user_id=800001)
+        assert result["healthy"] is False
+        assert "channel" in result["message"].lower()
 
-        # Create 5 pending items (below threshold)
-        for i in range(5):
-            queue_repo.create(
-                media_id=media.id,
-                scheduled_user_id=user.id,
-                scheduled_time=datetime.utcnow() - timedelta(minutes=i)
-            )
+    def test_check_queue_healthy(self, health_service):
+        """Test queue check returns healthy with normal queue."""
+        health_service.queue_repo.count_pending.return_value = 5
+        health_service.queue_repo.get_oldest_pending.return_value = None
 
-        service = HealthCheckService(db=test_db)
-
-        result = service.check_queue_status()
+        result = health_service._check_queue()
 
         assert result["healthy"] is True
         assert result["pending_count"] == 5
 
-    def test_check_queue_status_backlog(self, test_db):
-        """Test queue status check when backlog exists."""
-        media_repo = MediaRepository(test_db)
-        user_repo = UserRepository(test_db)
-        queue_repo = QueueRepository(test_db)
+    def test_check_queue_backlog(self, health_service):
+        """Test queue check detects backlog when too many pending."""
+        health_service.queue_repo.count_pending.return_value = 60
+        health_service.queue_repo.get_oldest_pending.return_value = None
 
-        media = media_repo.create(
-            file_path="/test/backlog.jpg",
-            file_name="backlog.jpg",
-            file_hash="backlog890",
-            file_size_bytes=95000,
-            mime_type="image/jpeg"
-        )
+        result = health_service._check_queue()
 
-        user = user_repo.create(telegram_user_id=800002)
+        assert result["healthy"] is False
+        assert "backlog" in result["message"].lower()
+        assert result["pending_count"] == 60
 
-        # Create many old pending items (backlog)
-        for i in range(15):
-            queue_repo.create(
-                media_id=media.id,
-                scheduled_user_id=user.id,
-                scheduled_time=datetime.utcnow() - timedelta(hours=i + 1)
-            )
+    def test_check_queue_stale_items(self, health_service):
+        """Test queue check detects stale items."""
+        health_service.queue_repo.count_pending.return_value = 5
 
-        service = HealthCheckService(db=test_db)
+        # Create mock old queue item
+        old_item = Mock()
+        old_item.created_at = datetime.utcnow() - timedelta(hours=48)
+        health_service.queue_repo.get_oldest_pending.return_value = old_item
 
-        result = service.check_queue_status()
+        result = health_service._check_queue()
 
-        # Should detect backlog
-        assert result["pending_count"] >= 15
+        assert result["healthy"] is False
+        assert "hours" in result["message"].lower()
 
-    def test_check_recent_posts_healthy(self, test_db):
-        """Test recent posts check when posts are recent."""
-        media_repo = MediaRepository(test_db)
-        user_repo = UserRepository(test_db)
-        history_repo = HistoryRepository(test_db)
+    def test_check_queue_error(self, health_service):
+        """Test queue check handles errors gracefully."""
+        health_service.queue_repo.count_pending.side_effect = Exception("DB error")
 
-        media = media_repo.create(
-            file_path="/test/recent_post.jpg",
-            file_name="recent_post.jpg",
-            file_hash="recent890",
-            file_size_bytes=90000,
-            mime_type="image/jpeg"
-        )
+        result = health_service._check_queue()
 
-        user = user_repo.create(telegram_user_id=800003)
+        assert result["healthy"] is False
+        assert "error" in result["message"].lower()
 
-        # Create recent post (within last 7 days)
-        history_repo.create(
-            media_id=media.id,
-            posted_by_user_id=user.id,
-            status="posted"
-        )
+    def test_check_recent_posts_healthy(self, health_service):
+        """Test recent posts check with healthy post history."""
+        mock_post1 = Mock(success=True)
+        mock_post2 = Mock(success=True)
+        mock_post3 = Mock(success=False)
+        health_service.history_repo.get_recent_posts.return_value = [mock_post1, mock_post2, mock_post3]
 
-        service = HealthCheckService(db=test_db)
+        result = health_service._check_recent_posts()
 
-        result = service.check_recent_posts(days=7)
+        assert result["healthy"] is True
+        assert result["recent_count"] == 3
+        assert result["successful_count"] == 2
+        assert "2/3" in result["message"]
 
-        assert result["posts_count"] >= 1
+    def test_check_recent_posts_no_activity(self, health_service):
+        """Test recent posts check with no posts."""
+        health_service.history_repo.get_recent_posts.return_value = []
 
-    def test_check_recent_posts_no_activity(self, test_db):
-        """Test recent posts check when no recent posts."""
-        service = HealthCheckService(db=test_db)
+        result = health_service._check_recent_posts()
 
-        result = service.check_recent_posts(days=7)
+        assert result["healthy"] is False
+        assert "no posts" in result["message"].lower()
+        assert result["recent_count"] == 0
 
-        # May have no posts in test database
-        assert "posts_count" in result
+    def test_check_recent_posts_error(self, health_service):
+        """Test recent posts check handles errors gracefully."""
+        health_service.history_repo.get_recent_posts.side_effect = Exception("DB error")
 
-    def test_run_all_checks(self, test_db):
-        """Test running all health checks."""
-        service = HealthCheckService(db=test_db)
+        result = health_service._check_recent_posts()
 
-        results = service.run_all_checks()
+        assert result["healthy"] is False
+        assert "error" in result["message"].lower()
 
-        assert "database" in results
-        assert "telegram" in results
-        assert "queue" in results
-        assert "recent_posts" in results
+    @patch("src.services.core.health_check.get_db")
+    @patch("src.services.core.health_check.settings")
+    def test_check_all_all_healthy(self, mock_settings, mock_get_db, health_service):
+        """Test check_all returns healthy when all checks pass."""
+        # Setup mocks
+        mock_db = Mock()
+        mock_get_db.return_value = iter([mock_db])
+        mock_settings.TELEGRAM_BOT_TOKEN = "123456:ABC"
+        mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
+        health_service.queue_repo.count_pending.return_value = 5
+        health_service.queue_repo.get_oldest_pending.return_value = None
+        mock_post = Mock(success=True)
+        health_service.history_repo.get_recent_posts.return_value = [mock_post]
 
-        # Calculate overall health
-        all_healthy = all(
-            check.get("healthy", False)
-            for check in results.values()
-        )
+        result = health_service.check_all()
 
-        assert isinstance(all_healthy, bool)
+        assert result["status"] == "healthy"
+        assert "database" in result["checks"]
+        assert "telegram" in result["checks"]
+        assert "queue" in result["checks"]
+        assert "recent_posts" in result["checks"]
+        assert "timestamp" in result
 
-    def test_get_system_info(self, test_db):
-        """Test getting system information."""
-        service = HealthCheckService(db=test_db)
+    @patch("src.services.core.health_check.get_db")
+    @patch("src.services.core.health_check.settings")
+    def test_check_all_some_unhealthy(self, mock_settings, mock_get_db, health_service):
+        """Test check_all returns unhealthy when any check fails."""
+        # Database healthy
+        mock_db = Mock()
+        mock_get_db.return_value = iter([mock_db])
 
-        info = service.get_system_info()
+        # Telegram unhealthy
+        mock_settings.TELEGRAM_BOT_TOKEN = ""
+        mock_settings.TELEGRAM_CHANNEL_ID = None
 
-        assert "total_media" in info
-        assert "total_users" in info
-        assert "total_queue_items" in info
-        assert "total_history_records" in info
+        # Queue healthy
+        health_service.queue_repo.count_pending.return_value = 5
+        health_service.queue_repo.get_oldest_pending.return_value = None
+
+        # Recent posts healthy
+        mock_post = Mock(success=True)
+        health_service.history_repo.get_recent_posts.return_value = [mock_post]
+
+        result = health_service.check_all()
+
+        assert result["status"] == "unhealthy"
+        assert result["checks"]["database"]["healthy"] is True
+        assert result["checks"]["telegram"]["healthy"] is False
+
+    def test_check_all_returns_timestamp(self, health_service):
+        """Test check_all includes ISO timestamp."""
+        # Mock all dependencies to avoid real checks
+        with patch("src.services.core.health_check.get_db") as mock_get_db, \
+             patch("src.services.core.health_check.settings") as mock_settings:
+            mock_db = Mock()
+            mock_get_db.return_value = iter([mock_db])
+            mock_settings.TELEGRAM_BOT_TOKEN = "token"
+            mock_settings.TELEGRAM_CHANNEL_ID = -123
+            health_service.queue_repo.count_pending.return_value = 0
+            health_service.queue_repo.get_oldest_pending.return_value = None
+            health_service.history_repo.get_recent_posts.return_value = []
+
+            result = health_service.check_all()
+
+            assert "timestamp" in result
+            # Verify it's a valid ISO timestamp
+            datetime.fromisoformat(result["timestamp"])
