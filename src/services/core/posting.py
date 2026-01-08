@@ -99,13 +99,20 @@ class PostingService(BaseService):
         Process all pending posts ready to be posted.
 
         Returns:
-            Dict with results: {processed: 5, telegram: 5, automated: 0, failed: 0}
+            Dict with results: {processed: 5, telegram: 5, automated: 0, failed: 0, paused: bool}
         """
         with self.track_execution(
             method_name="process_pending_posts",
             user_id=user_id,
             triggered_by="scheduler" if not user_id else "cli",
         ) as run_id:
+            # Check if posting is paused
+            if self.telegram_service.is_paused:
+                logger.info("Posting is paused - skipping scheduled posts")
+                result = {"processed": 0, "telegram": 0, "automated": 0, "failed": 0, "paused": True}
+                self.set_result_summary(run_id, result)
+                return result
+
             processed_count = 0
             telegram_count = 0
             automated_count = 0

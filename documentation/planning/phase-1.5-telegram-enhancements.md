@@ -1,8 +1,8 @@
 # Phase 1.5: Telegram Workflow Enhancements
 
-**Status**: 📋 Planning
+**Status**: ✅ COMPLETE (v1.3.0)
 **Goal**: Improve Telegram posting workflow quality-of-life before tackling Instagram API automation
-**Timeline**: 1-2 weeks
+**Timeline**: 2 weeks (January 2026)
 **Prerequisite**: Phase 1 Complete ✅
 
 ---
@@ -17,24 +17,34 @@ Phase 1.5 focuses on making the **manual Telegram workflow as smooth as possible
 
 ## Features Overview
 
-### 🚨 Critical (Blocker for Production Use)
+### 🚨 Critical (Blocker for Production Use) - ✅ COMPLETE
 
-**0. Permanent Reject** - Never show unwanted media again (infinite lock)
+**0. Permanent Reject** - Never show unwanted media again (infinite lock) ✅
 
-### 🎯 Core Enhancements (Must Have)
+### 🎯 Core Enhancements (Must Have) - ✅ COMPLETE
 
-1. **Bot Lifecycle Notifications** - Know when the system is up/down
-2. **Instagram Deep Links** - One-tap to Instagram story posting
-3. **Enhanced Media Captions** - Better formatting and workflow instructions
-4. **Instagram Deep Link Redirect Service** - True deep link to story camera (optional)
-5. **Instagram Username Configuration** - Store and use the right account
+1. ✅ **Bot Lifecycle Notifications** - Know when the system is up/down
+2. ✅ **Instagram Deep Links** - One-tap to Instagram story posting
+3. ✅ **Enhanced Media Captions** - Better formatting and workflow instructions
+4. 📋 **Instagram Deep Link Redirect Service** - True deep link to story camera (backlog)
+5. 📋 **Instagram Username Configuration** - Store and use the right account (backlog)
 
-### 🚀 Quality of Life (Nice to Have)
+### 🎮 Bot Management Commands - ✅ COMPLETE (v1.3.0)
 
-6. **Inline Media Editing** - Edit title/caption/tags from Telegram
-7. **Quick Actions Menu** - Common operations in one place
-8. **Posting Stats Dashboard** - Quick insights via bot command
-9. **Smart Scheduling Hints** - Optimal posting times based on history
+- ✅ **`/pause`** - Pause automatic posting
+- ✅ **`/resume`** - Resume with smart overdue handling
+- ✅ **`/schedule [N]`** - Create N days of schedule from Telegram
+- ✅ **`/stats`** - Media library statistics
+- ✅ **`/history [N]`** - Recent post history
+- ✅ **`/locks`** - View permanently rejected items
+- ✅ **`/clear`** - Clear queue with confirmation
+
+### 🚀 Quality of Life (Nice to Have) - 📋 BACKLOG
+
+6. 📋 **Inline Media Editing** - Edit title/caption/tags from Telegram
+7. 📋 **Quick Actions Menu** - Common operations in one place
+8. 📋 **Enhanced Stats Dashboard** - Quick insights with charts
+9. 📋 **Smart Scheduling Hints** - Optimal posting times based on history
 
 ---
 
@@ -1199,44 +1209,51 @@ def update_profile(
 
 ## Implementation Priority
 
-### Priority 0: Critical Blocker (Do First!)
+### Priority 0: Critical Blocker ✅ COMPLETE
 
 **🚨 BLOCKER FOR PRODUCTION USE**:
-0. ⏸️ **Permanent Reject Button** - 2-3 hours
+0. ✅ **Permanent Reject Button** - 2-3 hours
    - Add "🚫 Reject" button to notifications
    - Create infinite TTL lock functionality
    - Add CLI command to list/cleanup rejected media
-   - **Required before running system with real media!**
+   - **Production-ready - safe to run with real media folders**
 
-### Week 1: Core Improvements
+### Week 1: Core Improvements ✅ COMPLETE
 
-**Priority 1** (Must Have):
+**Priority 1** (Must Have) - ✅ COMPLETE:
 1. ✅ Bot Lifecycle Notifications - 4 hours
 2. ✅ Instagram Deep Links - 2 hours
 3. ✅ Enhanced Media Captions - 3 hours
 
-**Priority 1.5** (Production Polish - January 2026):
+**Priority 1.5** (Production Polish) - ✅ COMPLETE:
 10. ✅ **Button Layout Reorder** - Move Instagram button above Reject - 0.5 hours
 11. ✅ **Reject Confirmation** - Prevent accidental permanent rejections - 1-2 hours
 12. ✅ **Fix @None Username Bug** - Display name fallback + sync usernames - 1 hour
+13. ✅ **`/queue` Fix** - Show all pending posts, not just due items
+14. ✅ **`/next` Command** - Force-send next scheduled post
 
-**Priority 2** (Should Have):
-4. ⏸️ Instagram Deep Link Redirect Service - 0.5 hours (just update URL after setup)
-5. ⏸️ Instagram Username Configuration - 6 hours (with database)
+### Week 2: Bot Management Commands ✅ COMPLETE (v1.3.0)
 
-**Total Week 1**: ~18.5 hours (including Priority 0)
+**Priority 2** (Operational Control) - ✅ COMPLETE:
+- ✅ **`/pause`** - Pause automatic posting
+- ✅ **`/resume`** - Resume with smart overdue handling (reschedule/clear/force)
+- ✅ **`/schedule [N]`** - Create N days of schedule from Telegram
+- ✅ **`/clear`** - Clear queue with confirmation dialog
 
-### Week 2: Quality of Life
+**Priority 3** (Information Commands) - ✅ COMPLETE:
+- ✅ **`/stats`** - Media library statistics
+- ✅ **`/history [N]`** - Recent post history
+- ✅ **`/locks`** - View permanently rejected items
 
-**Priority 3** (Nice to Have):
-6. ⏸️ Inline Media Editing - 8 hours
-7. ⏸️ Quick Actions Menu - 4 hours
-8. ⏸️ Posting Stats Dashboard - 6 hours
+### Backlog - 📋 FUTURE
 
-**Priority 4** (Future):
-9. ⏸️ Smart Scheduling Hints - 8 hours (requires historical data)
-
-**Total Week 2**: ~18 hours
+**Priority 4** (Nice to Have):
+4. 📋 Instagram Deep Link Redirect Service - 0.5 hours (just update URL after setup)
+5. 📋 Instagram Username Configuration - 6 hours (with database)
+6. 📋 Inline Media Editing - 8 hours
+7. 📋 Quick Actions Menu - 4 hours
+8. 📋 Enhanced Stats Dashboard - 6 hours
+9. 📋 Smart Scheduling Hints - 8 hours (requires historical data)
 
 ---
 
@@ -1344,16 +1361,23 @@ Phase 1.5 improvements will **enhance Phase 2**:
 
 ---
 
-## Next Steps
+## Completion Summary
 
-1. ✅ Review and approve this plan
-2. 📝 Create GitHub issues for each feature
-3. 🏗️ Start with Week 1 priorities
-4. 🧪 Test each feature thoroughly
-5. 🚀 Deploy to Pi incrementally
-6. 📊 Gather feedback after 1 week of use
-7. 🔄 Iterate based on real-world usage
+### Phase 1.5 - ✅ COMPLETE (v1.3.0)
+
+**All core features implemented**:
+1. ✅ Permanent Reject Button (Critical blocker resolved)
+2. ✅ Bot Lifecycle Notifications
+3. ✅ Instagram Deep Links
+4. ✅ Enhanced Media Captions
+5. ✅ Production polish (button layout, confirmations, bug fixes)
+6. ✅ 7 new bot management commands
+7. ✅ 173 comprehensive tests
+
+**Deployed to production**: January 2026
+
+**Next phase**: Phase 2 (Instagram API Automation) - optional
 
 ---
 
-**Questions? Feedback? Let's discuss! 💬**
+**Questions? Feedback? Open a GitHub issue! 💬**
