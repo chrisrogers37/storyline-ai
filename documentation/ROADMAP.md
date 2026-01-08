@@ -1,7 +1,7 @@
 # Storyline AI - Product Roadmap
 
-**Last Updated**: 2026-01-05
-**Current Version**: v1.2.0
+**Last Updated**: 2026-01-08
+**Current Version**: v1.3.0
 **Current Phase**: Phase 1.5 (Telegram Enhancements) - ✅ COMPLETE
 
 ---
@@ -42,9 +42,9 @@ Build a delightful Instagram Story automation system that:
 
 ## Phase 1.5: Telegram Workflow Enhancements ✅ COMPLETE
 
-**Status**: ✅ Released v1.2.0
-**Branch**: `feature/phase-1-5-enhancements`
-**Duration**: January 2026 (1 week)
+**Status**: ✅ Released v1.3.0
+**Branch**: `main`
+**Duration**: January 2026 (2 weeks)
 **Goal**: Make manual Telegram workflow as smooth as possible
 
 ### Priority 0: Critical Blocker ✅ COMPLETE
@@ -65,24 +65,37 @@ Build a delightful Instagram Story automation system that:
 2. ✅ **Instagram Deep Links** - One-tap button to open Instagram app
 3. ✅ **Enhanced Media Captions** - Clean workflow instructions (removed clutter)
 
-**Priority 2** (Should Have) - 📋 BACKLOG:
-4. 📋 **Instagram Deep Link Redirect Service** - Direct link to story camera (optional)
-   - Moved to backlog due to security concerns with URLgenius
-   - Self-hosted solution documented as future enhancement
-5. 📋 **Instagram Username Configuration** - Bot commands to set/view account
-   - Moved to backlog - not critical for current workflow
+**Priority 1.5** (Production Polish) - ✅ COMPLETE:
+- ✅ **Button Layout Reorder** - Instagram button moved above Reject
+- ✅ **Reject Confirmation** - Two-step confirmation prevents accidents
+- ✅ **@None Username Bug Fix** - Display name fallback + username sync
+- ✅ **`/queue` Fix** - Now shows all pending, not just due items
+- ✅ **`/next` Command** - Force-send next scheduled post
 
-### Week 2: Quality of Life - 📋 BACKLOG
+### Week 2: Bot Management Commands ✅ COMPLETE (v1.3.0)
 
-**Priority 3** (Nice to Have):
-6. 📋 **Inline Media Editing** - Edit title/caption/tags from Telegram
-7. 📋 **Quick Actions Menu** - `/menu` command with common operations
-8. 📋 **Posting Stats Dashboard** - Enhanced `/stats` with charts
+**Priority 2** (Operational Control) - ✅ COMPLETE:
+- ✅ **`/pause`** - Pause automatic posting
+- ✅ **`/resume`** - Resume with smart overdue handling (reschedule/clear/force)
+- ✅ **`/schedule [N]`** - Create N days of posting schedule from Telegram
+- ✅ **`/clear`** - Clear queue with confirmation dialog
 
-**Priority 4** (Future):
-9. 📋 **Smart Scheduling Hints** - Optimal posting times based on history
+**Priority 3** (Information Commands) - ✅ COMPLETE:
+- ✅ **`/stats`** - Media library statistics (active, posted, locked counts)
+- ✅ **`/history [N]`** - Recent post history with user attribution
+- ✅ **`/locks`** - View permanently rejected items
 
-**Completed**: 2026-01-05
+### Remaining Backlog - 📋 FUTURE
+
+**Nice to Have** (Phase 1.5+):
+- 📋 **Instagram Deep Link Redirect Service** - Direct link to story camera
+- 📋 **Instagram Username Configuration** - Bot commands to set/view account
+- 📋 **Inline Media Editing** - Edit title/caption/tags from Telegram
+- 📋 **Quick Actions Menu** - `/menu` command with common operations
+- 📋 **Enhanced `/stats` Dashboard** - Charts and visualizations
+- 📋 **Smart Scheduling Hints** - Optimal posting times based on history
+
+**Completed**: 2026-01-08
 
 ---
 
@@ -190,6 +203,7 @@ Build a delightful Instagram Story automation system that:
 
 | Version | Date | Phase | Description |
 |---------|------|-------|-------------|
+| v1.3.0 | 2026-01-08 | Phase 1.5 | Bot management commands (/pause, /resume, /stats, etc.) |
 | v1.2.0 | 2026-01-05 | Phase 1.5 | Telegram workflow enhancements + Permanent Reject |
 | v1.0.1 | 2026-01-04 | Phase 1 | Production release with bug fixes |
 | v1.0.0 | 2025-12-XX | Phase 1 | Initial Telegram-only implementation |
@@ -198,6 +212,19 @@ Build a delightful Instagram Story automation system that:
 ---
 
 ## Decision Log
+
+### 2026-01-08: Bot Management Commands Added
+**Decision**: Implement comprehensive Telegram bot commands for queue/system management
+**Features Added**:
+- `/pause` and `/resume` for operational control
+- `/schedule`, `/clear` for queue management
+- `/stats`, `/history`, `/locks` for visibility
+**Rationale**:
+- Reduces need for SSH access to Raspberry Pi
+- Enables team members to manage posting schedule
+- Smart overdue handling prevents post flooding after pause
+- All operations logged for audit trail
+**Status**: ✅ COMPLETE - All 7 commands implemented with 26 new tests
 
 ### 2026-01-05: Permanent Reject Feature Implemented
 **Decision**: Add "Permanent Reject" as Priority 0 blocker before other Phase 1.5 work

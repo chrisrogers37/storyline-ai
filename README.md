@@ -116,6 +116,9 @@ storyline-cli create-schedule --days 7
 # Process pending posts
 storyline-cli process-queue
 
+# Force process next post (development testing)
+storyline-cli process-queue --force
+
 # View queue
 storyline-cli list-queue
 ```
@@ -137,6 +140,30 @@ storyline-cli promote-user <telegram_user_id> --role admin
 storyline-cli check-health
 ```
 
+## Telegram Bot Commands
+
+The bot responds to these commands in Telegram:
+
+### Core Commands
+- `/start` - Initialize bot and show welcome message
+- `/status` - Show system health and queue status
+- `/help` - Show all available commands
+
+### Queue Management
+- `/queue` - View pending scheduled posts
+- `/next` - Force-send next scheduled post immediately
+- `/schedule [N]` - Create N days of posting schedule (default: 7)
+- `/clear` - Clear all pending posts (with confirmation)
+
+### Operational Control
+- `/pause` - Pause automatic posting
+- `/resume` - Resume posting (with smart overdue handling)
+
+### Information
+- `/stats` - Show media library statistics
+- `/history [N]` - Show last N posts (default: 5)
+- `/locks` - View permanently rejected items
+
 ## Architecture
 
 **Phase 1** (Telegram-Only Mode) - ✅ COMPLETE (v1.0.1):
@@ -146,12 +173,15 @@ storyline-cli check-health
 - ✅ 147 comprehensive tests
 - ✅ Production-tested and deployed
 
-**Phase 1.5** (Telegram Enhancements) - ✅ COMPLETE (v1.2.0):
+**Phase 1.5** (Telegram Enhancements) - ✅ COMPLETE (v1.3.0):
 - ✅ Permanent Reject button for unwanted media (infinite locks)
 - ✅ Bot lifecycle notifications (startup/shutdown with system status)
 - ✅ Instagram deep links (one-tap Instagram app opening)
 - ✅ Enhanced captions with workflow instructions
 - ✅ 3-button layout: Posted, Skip, Reject
+- ✅ 7 new bot commands: `/pause`, `/resume`, `/schedule`, `/stats`, `/history`, `/locks`, `/clear`
+- ✅ Smart overdue handling when resuming after pause
+- ✅ 173 comprehensive tests
 
 **Phase 2** (Hybrid Mode - Optional):
 - 🔄 Enable Instagram API for simple stories
@@ -163,7 +193,7 @@ storyline-cli check-health
 
 ### Running Tests
 
-Phase 1 includes 147 comprehensive tests with automatic test database setup:
+The project includes 173 comprehensive tests with automatic test database setup:
 
 ```bash
 # Run all tests with coverage
