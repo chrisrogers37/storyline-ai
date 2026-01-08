@@ -49,12 +49,13 @@ class TelegramService(BaseService):
 
         logger.info("Telegram bot initialized")
 
-    async def send_notification(self, queue_item_id: str) -> bool:
+    async def send_notification(self, queue_item_id: str, force_sent: bool = False) -> bool:
         """
         Send posting notification to Telegram channel.
 
         Args:
             queue_item_id: Queue item ID
+            force_sent: Whether this was triggered by /next command
 
         Returns:
             True if sent successfully
@@ -75,7 +76,7 @@ class TelegramService(BaseService):
             return False
 
         # Build caption (pass queue_item for enhanced mode)
-        caption = self._build_caption(media_item, queue_item)
+        caption = self._build_caption(media_item, queue_item, force_sent=force_sent)
 
         # Build inline keyboard
         # Note: Instagram button is above Reject so it's not blocked by "Save Image" popup
@@ -110,17 +111,21 @@ class TelegramService(BaseService):
             logger.error(f"Failed to send Telegram notification: {e}")
             return False
 
-    def _build_caption(self, media_item, queue_item=None) -> str:
+    def _build_caption(self, media_item, queue_item=None, force_sent: bool = False) -> str:
         """Build caption for Telegram message with enhanced or simple formatting."""
 
         if settings.CAPTION_STYLE == "enhanced":
-            return self._build_enhanced_caption(media_item, queue_item)
+            return self._build_enhanced_caption(media_item, queue_item, force_sent=force_sent)
         else:
-            return self._build_simple_caption(media_item)
+            return self._build_simple_caption(media_item, force_sent=force_sent)
 
-    def _build_simple_caption(self, media_item) -> str:
+    def _build_simple_caption(self, media_item, force_sent: bool = False) -> str:
         """Build simple caption (original format)."""
         caption_parts = []
+
+        # Subtle indicator for force-sent posts
+        if force_sent:
+            caption_parts.append("⚡")
 
         if media_item.title:
             caption_parts.append(f"📸 {media_item.title}")
@@ -140,9 +145,13 @@ class TelegramService(BaseService):
 
         return "\n\n".join(caption_parts)
 
-    def _build_enhanced_caption(self, media_item, queue_item=None) -> str:
+    def _build_enhanced_caption(self, media_item, queue_item=None, force_sent: bool = False) -> str:
         """Build enhanced caption with better formatting."""
         lines = []
+
+        # Subtle indicator for force-sent posts (just a lightning bolt at the start)
+        if force_sent:
+            lines.append("⚡")
 
         # Title and metadata
         if media_item.title:
@@ -333,26 +342,14 @@ class TelegramService(BaseService):
             )
             return
 
-        # Send confirmation that we're processing
-        await update.message.reply_text(
-            f"⏳ *Sending next post...*\n\n"
-            f"📁 {media_item.file_name}\n"
-            f"🕐 Was scheduled for: {queue_item.scheduled_for.strftime('%b %d %H:%M UTC')}",
-            parse_mode="Markdown"
-        )
-
-        # Send the notification to channel (reuses existing flow)
-        success = await self.send_notification(str(queue_item.id))
+        # Send the notification to channel (with force_sent flag for caption)
+        success = await self.send_notification(str(queue_item.id), force_sent=True)
 
         if success:
             # Update status to processing
             self.queue_repo.update_status(str(queue_item.id), "processing")
-
-            await update.message.reply_text(
-                f"✅ *Sent!*\n\nCheck the channel for the post.",
-                parse_mode="Markdown"
-            )
         else:
+            # Only send message on failure
             await update.message.reply_text(
                 f"❌ *Failed to send*\n\nCheck logs for details.",
                 parse_mode="Markdown"
