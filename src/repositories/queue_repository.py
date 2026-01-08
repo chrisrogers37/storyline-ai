@@ -73,6 +73,15 @@ class QueueRepository:
             self.db.refresh(queue_item)
         return queue_item
 
+    def update_scheduled_time(self, queue_id: str, scheduled_for: datetime) -> PostingQueue:
+        """Update queue item scheduled time."""
+        queue_item = self.get_by_id(queue_id)
+        if queue_item:
+            queue_item.scheduled_for = scheduled_for
+            self.db.commit()
+            self.db.refresh(queue_item)
+        return queue_item
+
     def set_telegram_message(self, queue_id: str, message_id: int, chat_id: int) -> PostingQueue:
         """Set Telegram message ID for tracking."""
         queue_item = self.get_by_id(queue_id)

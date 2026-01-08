@@ -7,6 +7,102 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-01-08
+
+### Added - Phase 1.5 Week 2: Telegram Bot Commands
+
+#### New Slash Commands
+- **`/pause`** - Pause automatic posting while keeping bot responsive
+  - Prevents scheduled posts from being processed
+  - Manual posting via `/next` still works
+  - Shows count of pending posts that will be held
+
+- **`/resume`** - Resume posting with smart overdue handling
+  - If no overdue posts: Resumes immediately
+  - If overdue posts exist: Shows options to:
+    - 🔄 Reschedule (spread overdue posts over next few hours)
+    - 🗑️ Clear (remove overdue posts, keep future scheduled)
+    - ⚡ Force (process all overdue posts immediately)
+
+- **`/schedule [N]`** - Create N days of posting schedule (1-30 days)
+  - Default: 7 days if no argument provided
+  - Shows: scheduled count, skipped count, total slots
+  - Uses existing scheduler algorithm with smart media selection
+
+- **`/stats`** - Show media library statistics
+  - Total active media items
+  - Never posted vs posted once vs posted 2+ times
+  - Permanently locked (rejected) count
+  - Temporarily locked count
+  - Items available for posting
+
+- **`/history [N]`** - Show last N posts (default 5, max 20)
+  - Status indicator (✅ posted, ⏭️ skipped, 🚫 rejected)
+  - Timestamp and user attribution
+  - Handles empty history gracefully
+
+- **`/locks`** - View permanently locked (rejected) items
+  - Lists all permanently rejected media files
+  - Shows file names for identification
+  - Useful for reviewing what's been blocked
+
+- **`/clear`** - Clear pending queue with confirmation
+  - Shows confirmation dialog with pending count
+  - Two-step process prevents accidental clearing
+  - Media items remain in library (only queue cleared)
+
+#### Pause Integration
+- **PostingService** now checks pause state before processing
+  - Scheduled posts are skipped when paused
+  - Returns `paused: True` in result dict for visibility
+  - Logs when posts are skipped due to pause
+
+#### Repository Enhancement
+- **QueueRepository** - Added `update_scheduled_time()` method
+  - Supports rescheduling queue items
+  - Used by resume:reschedule callback
+
+#### Updated Help Text
+- `/help` command now includes all new commands with descriptions
+- Commands grouped by function (operational vs informational)
+
+### Changed
+
+#### Test Suite Expansion
+- **26 new tests** for all new commands and callbacks
+- Test coverage for:
+  - Pause command (2 tests)
+  - Resume command with overdue handling (3 tests)
+  - Schedule command (2 tests)
+  - Stats command (1 test)
+  - History command (2 tests)
+  - Locks command (2 tests)
+  - Clear command (2 tests)
+  - Resume callbacks: reschedule, clear, force (3 tests)
+  - Clear callbacks: confirm, cancel (2 tests)
+  - Pause integration with PostingService (1 test)
+- **Total tests: 147 → 173** (26 new)
+
+### Technical Details
+
+#### Pause State Management
+- Uses class-level variable `TelegramService._paused`
+- Property `is_paused` for read access
+- Method `set_paused(bool)` for write access
+- Persists across scheduler cycles within same process
+
+#### Callback Handler Routing
+- New callback prefixes: `resume:*`, `clear:*`
+- Extends existing callback router pattern
+- Full interaction logging for audit trail
+
+### Documentation
+- Updated CHANGELOG.md (this file)
+- Updated README.md with new commands
+- Updated ROADMAP.md with Week 2 status
+- Updated phase-1.5-telegram-enhancements.md
+- Updated TEST_COVERAGE.md with new test count
+
 ## [1.2.0] - 2026-01-05
 
 ### Added - Phase 1.5 Priority 0: Permanent Reject Feature
