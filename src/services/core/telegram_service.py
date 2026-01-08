@@ -14,11 +14,14 @@ from src.services.core.media_lock import MediaLockService
 from src.services.core.interaction_service import InteractionService
 from src.config.settings import settings
 from src.utils.logger import logger
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 class TelegramService(BaseService):
     """All Telegram bot operations."""
+
+    # Class-level pause state (persists during runtime)
+    _paused = False
 
     def __init__(self):
         super().__init__()
@@ -34,6 +37,15 @@ class TelegramService(BaseService):
         self.bot = None
         self.application = None
 
+    @property
+    def is_paused(self) -> bool:
+        """Check if bot posting is paused."""
+        return TelegramService._paused
+
+    def set_paused(self, paused: bool):
+        """Set pause state."""
+        TelegramService._paused = paused
+
     async def initialize(self):
         """Initialize Telegram bot."""
         self.bot = Bot(token=self.bot_token)
@@ -44,6 +56,13 @@ class TelegramService(BaseService):
         self.application.add_handler(CommandHandler("status", self._handle_status))
         self.application.add_handler(CommandHandler("queue", self._handle_queue))
         self.application.add_handler(CommandHandler("next", self._handle_next))
+        self.application.add_handler(CommandHandler("pause", self._handle_pause))
+        self.application.add_handler(CommandHandler("resume", self._handle_resume))
+        self.application.add_handler(CommandHandler("schedule", self._handle_schedule))
+        self.application.add_handler(CommandHandler("stats", self._handle_stats))
+        self.application.add_handler(CommandHandler("history", self._handle_history))
+        self.application.add_handler(CommandHandler("locks", self._handle_locks))
+        self.application.add_handler(CommandHandler("clear", self._handle_clear))
         self.application.add_handler(CommandHandler("help", self._handle_help))
         self.application.add_handler(CallbackQueryHandler(self._handle_callback))
 
@@ -377,20 +396,24 @@ class TelegramService(BaseService):
 
         help_text = (
             "📖 *Storyline AI Help*\n\n"
-            "*Commands:*\n"
-            "/queue - View upcoming scheduled posts\n"
-            "/next - Force send next post now\n"
-            "/status - Check system status\n"
-            "/help - Show this help message\n\n"
+            "*Queue Commands:*\n"
+            "/queue - View upcoming posts\n"
+            "/next - Force send next post\n"
+            "/schedule N - Add N days to queue\n"
+            "/clear - Clear all pending posts\n\n"
+            "*Control Commands:*\n"
+            "/pause - Pause automatic posting\n"
+            "/resume - Resume posting\n"
+            "/status - System health check\n\n"
+            "*Info Commands:*\n"
+            "/stats - Media library statistics\n"
+            "/history N - Show last N posts\n"
+            "/locks - View locked items\n"
+            "/help - Show this help\n\n"
             "*Button Actions:*\n"
-            "✅ Posted - Mark as posted to Instagram\n"
-            "⏭️ Skip - Skip this post (can be requeued later)\n"
-            "🚫 Reject - Permanently remove from rotation\n\n"
-            "*Workflow:*\n"
-            "1. Save the image from notification\n"
-            "2. Tap 'Open Instagram' button\n"
-            "3. Post to your story\n"
-            "4. Come back and tap 'Posted'"
+            "✅ Posted - Mark as posted\n"
+            "⏭️ Skip - Skip (requeue later)\n"
+            "🚫 Reject - Permanently remove"
         )
 
         await update.message.reply_text(help_text, parse_mode="Markdown")
@@ -403,27 +426,313 @@ class TelegramService(BaseService):
             telegram_message_id=update.message.message_id,
         )
 
+    async def _handle_pause(self, update, context):
+        """Handle /pause command - pause automatic posting."""
+        user = self._get_or_create_user(update.effective_user)
+
+        if self.is_paused:
+            await update.message.reply_text(
+                "⏸️ *Already Paused*\n\nAutomatic posting is already paused.\nUse /resume to restart.",
+                parse_mode="Markdown"
+            )
+        else:
+            self.set_paused(True)
+            pending_count = self.queue_repo.count_pending()
+            await update.message.reply_text(
+                f"⏸️ *Posting Paused*\n\n"
+                f"Automatic posting has been paused.\n"
+                f"📊 {pending_count} posts still in queue.\n\n"
+                f"Use /resume to restart posting.\n"
+                f"Use /next to manually send posts.",
+                parse_mode="Markdown"
+            )
+            logger.info(f"Posting paused by {self._get_display_name(user)}")
+
+        self.interaction_service.log_command(
+            user_id=str(user.id),
+            command="/pause",
+            context={"was_paused": self.is_paused},
+            telegram_chat_id=update.effective_chat.id,
+            telegram_message_id=update.message.message_id,
+        )
+
+    async def _handle_resume(self, update, context):
+        """Handle /resume command - resume automatic posting."""
+        user = self._get_or_create_user(update.effective_user)
+
+        if not self.is_paused:
+            await update.message.reply_text(
+                "▶️ *Already Running*\n\nAutomatic posting is already active.",
+                parse_mode="Markdown"
+            )
+        else:
+            # Check for overdue posts
+            now = datetime.utcnow()
+            all_pending = self.queue_repo.get_all(status="pending")
+            overdue = [p for p in all_pending if p.scheduled_for < now]
+            future = [p for p in all_pending if p.scheduled_for >= now]
+
+            if overdue:
+                # Show options for handling overdue posts
+                keyboard = [
+                    [
+                        InlineKeyboardButton("🔄 Reschedule", callback_data="resume:reschedule"),
+                        InlineKeyboardButton("🗑️ Clear Overdue", callback_data="resume:clear"),
+                    ],
+                    [
+                        InlineKeyboardButton("▶️ Resume Anyway", callback_data="resume:force"),
+                    ]
+                ]
+                await update.message.reply_text(
+                    f"⚠️ *{len(overdue)} Overdue Posts Found*\n\n"
+                    f"These posts were scheduled while paused:\n"
+                    f"• {len(overdue)} overdue\n"
+                    f"• {len(future)} still scheduled\n\n"
+                    f"What would you like to do?",
+                    parse_mode="Markdown",
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+            else:
+                self.set_paused(False)
+                await update.message.reply_text(
+                    f"▶️ *Posting Resumed*\n\n"
+                    f"Automatic posting is now active.\n"
+                    f"📊 {len(future)} posts scheduled.",
+                    parse_mode="Markdown"
+                )
+                logger.info(f"Posting resumed by {self._get_display_name(user)}")
+
+        self.interaction_service.log_command(
+            user_id=str(user.id),
+            command="/resume",
+            telegram_chat_id=update.effective_chat.id,
+            telegram_message_id=update.message.message_id,
+        )
+
+    async def _handle_schedule(self, update, context):
+        """Handle /schedule command - add more days to queue."""
+        user = self._get_or_create_user(update.effective_user)
+
+        # Parse days argument
+        try:
+            days = int(context.args[0]) if context.args else 7
+            if days < 1 or days > 30:
+                raise ValueError("Days must be between 1 and 30")
+        except (ValueError, IndexError):
+            await update.message.reply_text(
+                "⚠️ *Usage:* /schedule N\n\n"
+                "Where N is number of days (1-30).\n"
+                "Example: /schedule 7",
+                parse_mode="Markdown"
+            )
+            return
+
+        # Import scheduler service here to avoid circular imports
+        from src.services.core.scheduler import SchedulerService
+        scheduler = SchedulerService()
+
+        try:
+            result = scheduler.create_schedule(days=days)
+            await update.message.reply_text(
+                f"📅 *Schedule Created*\n\n"
+                f"✅ Scheduled: {result['scheduled']} posts\n"
+                f"⏭️ Skipped: {result['skipped']} (locked/queued)\n"
+                f"📊 Total slots: {result['total_slots']}",
+                parse_mode="Markdown"
+            )
+            logger.info(f"Schedule created by {self._get_display_name(user)}: {days} days, {result['scheduled']} posts")
+        except Exception as e:
+            await update.message.reply_text(
+                f"❌ *Error*\n\n{str(e)}",
+                parse_mode="Markdown"
+            )
+            logger.error(f"Schedule creation failed: {e}")
+
+        self.interaction_service.log_command(
+            user_id=str(user.id),
+            command="/schedule",
+            context={"days": days},
+            telegram_chat_id=update.effective_chat.id,
+            telegram_message_id=update.message.message_id,
+        )
+
+    async def _handle_stats(self, update, context):
+        """Handle /stats command - show media library statistics."""
+        user = self._get_or_create_user(update.effective_user)
+
+        # Gather stats
+        all_media = self.media_repo.get_all(is_active=True)
+        total = len(all_media)
+        never_posted = len([m for m in all_media if m.times_posted == 0])
+        posted_once = len([m for m in all_media if m.times_posted == 1])
+        posted_multiple = len([m for m in all_media if m.times_posted > 1])
+
+        # Lock stats
+        permanent_locks = len(self.lock_repo.get_permanent_locks())
+        temp_locks = len([m for m in all_media if self.lock_repo.is_locked(str(m.id))])
+
+        # Queue stats
+        pending_count = self.queue_repo.count_pending()
+
+        stats_msg = (
+            f"📊 *Media Library Stats*\n\n"
+            f"*Library:*\n"
+            f"├─ Total active: {total}\n"
+            f"├─ Never posted: {never_posted}\n"
+            f"├─ Posted once: {posted_once}\n"
+            f"└─ Posted 2+: {posted_multiple}\n\n"
+            f"*Locks:*\n"
+            f"├─ Permanent (rejected): {permanent_locks}\n"
+            f"└─ Temporary (30-day): {temp_locks - permanent_locks}\n\n"
+            f"*Queue:*\n"
+            f"└─ Pending posts: {pending_count}"
+        )
+
+        await update.message.reply_text(stats_msg, parse_mode="Markdown")
+
+        self.interaction_service.log_command(
+            user_id=str(user.id),
+            command="/stats",
+            telegram_chat_id=update.effective_chat.id,
+            telegram_message_id=update.message.message_id,
+        )
+
+    async def _handle_history(self, update, context):
+        """Handle /history command - show recent post history."""
+        user = self._get_or_create_user(update.effective_user)
+
+        # Parse limit argument
+        try:
+            limit = int(context.args[0]) if context.args else 5
+            limit = min(max(limit, 1), 20)  # Clamp between 1 and 20
+        except (ValueError, IndexError):
+            limit = 5
+
+        recent = self.history_repo.get_recent_posts(hours=168)[:limit]  # Last 7 days
+
+        if not recent:
+            await update.message.reply_text(
+                "📜 *No Recent History*\n\nNo posts in the last 7 days.",
+                parse_mode="Markdown"
+            )
+            return
+
+        lines = [f"📜 *Recent Posts* (last {len(recent)})\n"]
+        for post in recent:
+            status_emoji = "✅" if post.status == "posted" else "⏭️" if post.status == "skipped" else "🚫"
+            time_str = post.posted_at.strftime("%b %d %H:%M") if post.posted_at else "?"
+            username = f"@{post.posted_by_telegram_username}" if post.posted_by_telegram_username else "system"
+            lines.append(f"{status_emoji} {time_str} - {username}")
+
+        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+        self.interaction_service.log_command(
+            user_id=str(user.id),
+            command="/history",
+            context={"limit": limit, "returned": len(recent)},
+            telegram_chat_id=update.effective_chat.id,
+            telegram_message_id=update.message.message_id,
+        )
+
+    async def _handle_locks(self, update, context):
+        """Handle /locks command - show locked items."""
+        user = self._get_or_create_user(update.effective_user)
+
+        permanent = self.lock_repo.get_permanent_locks()
+
+        if not permanent:
+            await update.message.reply_text(
+                "🔓 *No Permanent Locks*\n\nNo items have been permanently rejected.",
+                parse_mode="Markdown"
+            )
+            return
+
+        lines = [f"🔒 *Permanently Locked* ({len(permanent)})\n"]
+        for i, lock in enumerate(permanent[:10], 1):  # Show max 10
+            media = self.media_repo.get_by_id(str(lock.media_item_id))
+            filename = media.file_name if media else "Unknown"
+            lines.append(f"{i}. {filename[:30]}")
+
+        if len(permanent) > 10:
+            lines.append(f"\n... and {len(permanent) - 10} more")
+
+        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+        self.interaction_service.log_command(
+            user_id=str(user.id),
+            command="/locks",
+            context={"total_locks": len(permanent)},
+            telegram_chat_id=update.effective_chat.id,
+            telegram_message_id=update.message.message_id,
+        )
+
+    async def _handle_clear(self, update, context):
+        """Handle /clear command - clear pending queue with confirmation."""
+        user = self._get_or_create_user(update.effective_user)
+
+        pending_count = self.queue_repo.count_pending()
+
+        if pending_count == 0:
+            await update.message.reply_text(
+                "📭 *Queue Already Empty*",
+                parse_mode="Markdown"
+            )
+            return
+
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ Yes, Clear All", callback_data="clear:confirm"),
+                InlineKeyboardButton("❌ Cancel", callback_data="clear:cancel"),
+            ]
+        ]
+
+        await update.message.reply_text(
+            f"⚠️ *Clear Queue?*\n\n"
+            f"This will remove all {pending_count} pending posts.\n"
+            f"Media items will remain in the library.\n\n"
+            f"This cannot be undone.",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+        self.interaction_service.log_command(
+            user_id=str(user.id),
+            command="/clear",
+            context={"pending_count": pending_count},
+            telegram_chat_id=update.effective_chat.id,
+            telegram_message_id=update.message.message_id,
+        )
+
     async def _handle_callback(self, update, context):
         """Handle inline button callbacks."""
         query = update.callback_query
         await query.answer()
 
         # Parse callback data
-        action, queue_id = query.data.split(":")
+        parts = query.data.split(":")
+        action = parts[0]
+        data = parts[1] if len(parts) > 1 else None
 
         # Get user info
         user = self._get_or_create_user(query.from_user)
 
+        # Queue item callbacks
         if action == "posted":
-            await self._handle_posted(queue_id, user, query)
+            await self._handle_posted(data, user, query)
         elif action == "skip":
-            await self._handle_skipped(queue_id, user, query)
+            await self._handle_skipped(data, user, query)
         elif action == "reject":
-            await self._handle_reject_confirmation(queue_id, user, query)
+            await self._handle_reject_confirmation(data, user, query)
         elif action == "confirm_reject":
-            await self._handle_rejected(queue_id, user, query)
+            await self._handle_rejected(data, user, query)
         elif action == "cancel_reject":
-            await self._handle_cancel_reject(queue_id, user, query)
+            await self._handle_cancel_reject(data, user, query)
+        # Resume callbacks
+        elif action == "resume":
+            await self._handle_resume_callback(data, user, query)
+        # Clear callbacks
+        elif action == "clear":
+            await self._handle_clear_callback(data, user, query)
 
     async def _handle_posted(self, queue_id: str, user, query):
         """Handle 'Posted' button click."""
@@ -681,6 +990,103 @@ class TelegramService(BaseService):
         )
 
         logger.info(f"Post permanently rejected by {self._get_display_name(user)}: {media_item.file_name if media_item else queue_item.media_item_id}")
+
+    async def _handle_resume_callback(self, action: str, user, query):
+        """Handle resume callback buttons (reschedule/clear/force)."""
+        now = datetime.utcnow()
+        all_pending = self.queue_repo.get_all(status="pending")
+        overdue = [p for p in all_pending if p.scheduled_for < now]
+
+        if action == "reschedule":
+            # Reschedule overdue posts to future times
+            from src.services.core.scheduler import SchedulerService
+            scheduler = SchedulerService()
+
+            # Get time slots for rescheduling
+            rescheduled = 0
+            for i, item in enumerate(overdue):
+                # Spread out over next few hours
+                new_time = now + timedelta(hours=1 + (i * 0.5))
+                self.queue_repo.update_scheduled_time(str(item.id), new_time)
+                rescheduled += 1
+
+            self.set_paused(False)
+            await query.edit_message_text(
+                f"✅ *Posting Resumed*\n\n"
+                f"🔄 Rescheduled {rescheduled} overdue posts.\n"
+                f"First post in ~1 hour.",
+                parse_mode="Markdown"
+            )
+            logger.info(f"Posting resumed by {self._get_display_name(user)}, rescheduled {rescheduled} overdue posts")
+
+        elif action == "clear":
+            # Clear all overdue posts
+            cleared = 0
+            for item in overdue:
+                self.queue_repo.delete(str(item.id))
+                cleared += 1
+
+            self.set_paused(False)
+            remaining = len(all_pending) - cleared
+            await query.edit_message_text(
+                f"✅ *Posting Resumed*\n\n"
+                f"🗑️ Cleared {cleared} overdue posts.\n"
+                f"📊 {remaining} scheduled posts remaining.",
+                parse_mode="Markdown"
+            )
+            logger.info(f"Posting resumed by {self._get_display_name(user)}, cleared {cleared} overdue posts")
+
+        elif action == "force":
+            # Resume without handling overdue - they'll be processed immediately
+            self.set_paused(False)
+            await query.edit_message_text(
+                f"✅ *Posting Resumed*\n\n"
+                f"⚠️ {len(overdue)} overdue posts will be processed immediately.",
+                parse_mode="Markdown"
+            )
+            logger.info(f"Posting resumed (force) by {self._get_display_name(user)}, {len(overdue)} overdue posts")
+
+        # Log interaction
+        self.interaction_service.log_callback(
+            user_id=str(user.id),
+            callback_name=f"resume:{action}",
+            context={"overdue_count": len(overdue), "action": action},
+            telegram_chat_id=query.message.chat_id,
+            telegram_message_id=query.message.message_id,
+        )
+
+    async def _handle_clear_callback(self, action: str, user, query):
+        """Handle clear queue callback buttons (confirm/cancel)."""
+        if action == "confirm":
+            # Clear all pending posts
+            all_pending = self.queue_repo.get_all(status="pending")
+            cleared = 0
+            for item in all_pending:
+                self.queue_repo.delete(str(item.id))
+                cleared += 1
+
+            await query.edit_message_text(
+                f"✅ *Queue Cleared*\n\n"
+                f"🗑️ Removed {cleared} pending posts.\n"
+                f"Media items remain in library.",
+                parse_mode="Markdown"
+            )
+            logger.info(f"Queue cleared by {self._get_display_name(user)}: {cleared} posts removed")
+
+        elif action == "cancel":
+            await query.edit_message_text(
+                f"❌ *Cancelled*\n\nQueue was not cleared.",
+                parse_mode="Markdown"
+            )
+
+        # Log interaction
+        self.interaction_service.log_callback(
+            user_id=str(user.id),
+            callback_name=f"clear:{action}",
+            context={"action": action},
+            telegram_chat_id=query.message.chat_id,
+            telegram_message_id=query.message.message_id,
+        )
 
     def _get_or_create_user(self, telegram_user):
         """Get or create user from Telegram data, syncing profile on each interaction."""
