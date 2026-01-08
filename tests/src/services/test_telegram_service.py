@@ -826,17 +826,14 @@ class TestNextCommand:
         # Should get all pending items
         mock_telegram_service.queue_repo.get_all.assert_called_with(status="pending")
 
-        # Should send notification for the queue item
-        mock_telegram_service.send_notification.assert_called_once_with(str(queue_item_id))
+        # Should send notification for the queue item with force_sent=True
+        mock_telegram_service.send_notification.assert_called_once_with(str(queue_item_id), force_sent=True)
 
         # Should update status to processing
         mock_telegram_service.queue_repo.update_status.assert_called_once_with(str(queue_item_id), "processing")
 
-        # Should send confirmation messages
-        assert mock_update.message.reply_text.call_count == 2
-        first_call = mock_update.message.reply_text.call_args_list[0]
-        assert "Sending next post" in first_call.args[0]
-        assert "next_post.jpg" in first_call.args[0]
+        # Should NOT send any extra messages on success (no clutter)
+        mock_update.message.reply_text.assert_not_called()
 
     async def test_next_empty_queue(self, mock_telegram_service):
         """Test /next shows error when queue is empty."""
@@ -928,9 +925,10 @@ class TestNextCommand:
         # Should NOT update status (since send failed)
         mock_telegram_service.queue_repo.update_status.assert_not_called()
 
-        # Should show failure message
-        last_call = mock_update.message.reply_text.call_args_list[-1]
-        assert "Failed to send" in last_call.args[0]
+        # Should show failure message (only message sent on failure)
+        mock_update.message.reply_text.assert_called_once()
+        call_args = mock_update.message.reply_text.call_args
+        assert "Failed to send" in call_args.args[0]
 
     async def test_next_logs_interaction(self, mock_telegram_service):
         """Test /next logs the interaction."""
@@ -965,6 +963,9 @@ class TestNextCommand:
         mock_context = Mock()
 
         await mock_telegram_service._handle_next(mock_update, mock_context)
+
+        # Should send notification with force_sent=True
+        mock_telegram_service.send_notification.assert_called_once_with(str(queue_item_id), force_sent=True)
 
         # Should log the command
         mock_telegram_service.interaction_service.log_command.assert_called_once()
