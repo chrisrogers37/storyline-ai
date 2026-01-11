@@ -27,7 +27,11 @@ class MediaRepository:
         return self.db.query(MediaItem).filter(MediaItem.file_hash == file_hash).all()
 
     def get_all(
-        self, is_active: Optional[bool] = None, requires_interaction: Optional[bool] = None, limit: Optional[int] = None
+        self,
+        is_active: Optional[bool] = None,
+        requires_interaction: Optional[bool] = None,
+        category: Optional[str] = None,
+        limit: Optional[int] = None,
     ) -> List[MediaItem]:
         """Get all media items with optional filters."""
         query = self.db.query(MediaItem)
@@ -38,12 +42,25 @@ class MediaRepository:
         if requires_interaction is not None:
             query = query.filter(MediaItem.requires_interaction == requires_interaction)
 
+        if category is not None:
+            query = query.filter(MediaItem.category == category)
+
         query = query.order_by(MediaItem.created_at.desc())
 
         if limit:
             query = query.limit(limit)
 
         return query.all()
+
+    def get_categories(self) -> List[str]:
+        """Get all unique categories."""
+        result = (
+            self.db.query(MediaItem.category)
+            .filter(MediaItem.category.isnot(None))
+            .distinct()
+            .all()
+        )
+        return [r[0] for r in result]
 
     def create(
         self,
@@ -53,6 +70,7 @@ class MediaRepository:
         file_size_bytes: int,
         mime_type: Optional[str] = None,
         requires_interaction: bool = False,
+        category: Optional[str] = None,
         title: Optional[str] = None,
         link_url: Optional[str] = None,
         caption: Optional[str] = None,
@@ -68,6 +86,7 @@ class MediaRepository:
             file_size=file_size_bytes,
             mime_type=mime_type,
             requires_interaction=requires_interaction,
+            category=category,
             title=title,
             link_url=link_url,
             caption=caption,

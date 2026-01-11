@@ -21,18 +21,23 @@ class MediaIngestionService(BaseService):
         self.image_processor = ImageProcessor()
 
     def scan_directory(
-        self, directory_path: str, user_id: Optional[str] = None, recursive: bool = True
+        self,
+        directory_path: str,
+        user_id: Optional[str] = None,
+        recursive: bool = True,
+        extract_category: bool = True,
     ) -> Dict[str, int]:
         """
         Scan a directory and index all media files.
 
         Args:
-            directory_path: Path to directory to scan
+            directory_path: Path to directory to scan (used as base for category extraction)
             user_id: User who triggered the scan
             recursive: Whether to scan subdirectories
+            extract_category: Whether to extract category from immediate parent folder
 
         Returns:
-            Dict with counts: {indexed: 10, skipped: 2, errors: 1}
+            Dict with counts: {indexed: 10, skipped: 2, errors: 1, categories: ["memes", "merch"]}
         """
         with self.track_execution(
             method_name="scan_directory",
@@ -43,18 +48,19 @@ class MediaIngestionService(BaseService):
             indexed_count = 0
             skipped_count = 0
             error_count = 0
+            categories_found = set()
 
-            path = Path(directory_path)
+            base_path = Path(directory_path)
 
-            if not path.exists():
+            if not base_path.exists():
                 raise ValueError(f"Directory does not exist: {directory_path}")
 
-            if not path.is_dir():
+            if not base_path.is_dir():
                 raise ValueError(f"Path is not a directory: {directory_path}")
 
             pattern = "**/*" if recursive else "*"
 
-            for file_path in path.glob(pattern):
+            for file_path in base_path.glob(pattern):
                 if not file_path.is_file():
                     continue
 
@@ -63,8 +69,15 @@ class MediaIngestionService(BaseService):
                     continue
 
                 try:
+                    # Extract category from folder structure
+                    category = None
+                    if extract_category:
+                        category = self._extract_category(file_path, base_path)
+                        if category:
+                            categories_found.add(category)
+
                     # Index the file
-                    self._index_file(file_path, user_id)
+                    self._index_file(file_path, user_id, category=category)
                     indexed_count += 1
 
                 except Exception as e:
@@ -77,14 +90,53 @@ class MediaIngestionService(BaseService):
                 "skipped": skipped_count,
                 "errors": error_count,
                 "total_files": indexed_count + skipped_count + error_count,
+                "categories": sorted(categories_found),
             }
 
             self.set_result_summary(run_id, result_summary)
 
             return result_summary
 
-    def _index_file(self, file_path: Path, user_id: Optional[str]):
-        """Index a single file."""
+    def _extract_category(self, file_path: Path, base_path: Path) -> Optional[str]:
+        """
+        Extract category from the folder structure.
+
+        The category is the immediate subdirectory of base_path that contains the file.
+        E.g., if base_path is /media/stories/ and file is /media/stories/memes/image.jpg,
+        the category is "memes".
+
+        Args:
+            file_path: Full path to the file
+            base_path: Base directory being scanned
+
+        Returns:
+            Category name or None if file is directly in base_path
+        """
+        try:
+            relative = file_path.relative_to(base_path)
+            parts = relative.parts
+
+            # If file is directly in base_path, no category
+            if len(parts) <= 1:
+                return None
+
+            # First part of relative path is the category folder
+            return parts[0]
+
+        except ValueError:
+            # File is not under base_path
+            return None
+
+    def _index_file(
+        self, file_path: Path, user_id: Optional[str], category: Optional[str] = None
+    ):
+        """Index a single file.
+
+        Args:
+            file_path: Path to the file
+            user_id: User who triggered the indexing
+            category: Category extracted from folder structure
+        """
         # Check if already indexed
         existing = self.media_repo.get_by_path(str(file_path))
         if existing:
@@ -120,10 +172,12 @@ class MediaIngestionService(BaseService):
             file_hash=file_hash,
             file_size_bytes=file_path.stat().st_size,
             mime_type=mime_type,
+            category=category,
             indexed_by_user_id=user_id,
         )
 
-        logger.info(f"Indexed: {file_path.name}")
+        category_info = f" [{category}]" if category else ""
+        logger.info(f"Indexed: {file_path.name}{category_info}")
 
     def detect_duplicates(self) -> list[tuple]:
         """

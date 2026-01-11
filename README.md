@@ -5,6 +5,7 @@ A self-hosted Instagram Story scheduling system with Telegram-based team collabo
 ## Features
 
 - 📅 **Smart Scheduling**: Intelligent posting schedule based on your preferences
+- 📁 **Category-Based Scheduling**: Organize media by folder (memes/, merch/) with configurable ratios
 - 📱 **Telegram Integration**: Team collaboration via Telegram bot with lifecycle notifications
 - 🔄 **Phased Approach**: Start with manual posting, optionally enable automation
 - 🔒 **TTL Locks**: Prevent premature reposts with 30-day locks
@@ -110,7 +111,7 @@ storyline-cli validate-image /path/to/image.jpg
 ### Queue Management
 
 ```bash
-# Create posting schedule
+# Create posting schedule (uses category ratios)
 storyline-cli create-schedule --days 7
 
 # Process pending posts
@@ -121,6 +122,19 @@ storyline-cli process-queue --force
 
 # View queue
 storyline-cli list-queue
+```
+
+### Category Management
+
+```bash
+# List categories and their posting ratios
+storyline-cli list-categories
+
+# Update category posting ratios (interactive prompts)
+storyline-cli update-category-mix
+
+# View ratio history (Type 2 SCD)
+storyline-cli category-mix-history --limit 10
 ```
 
 ### User Management
@@ -181,7 +195,14 @@ The bot responds to these commands in Telegram:
 - ✅ 3-button layout: Posted, Skip, Reject
 - ✅ 7 new bot commands: `/pause`, `/resume`, `/schedule`, `/stats`, `/history`, `/locks`, `/clear`
 - ✅ Smart overdue handling when resuming after pause
-- ✅ 173 comprehensive tests
+
+**Phase 1.6** (Category Scheduling) - ✅ COMPLETE (v1.4.0):
+- ✅ Category-based media organization (folder structure → category)
+- ✅ Configurable posting ratios per category (e.g., 70% memes, 30% merch)
+- ✅ Type 2 SCD tracking for ratio history
+- ✅ Interactive ratio configuration during indexing
+- ✅ Scheduler integration with category-aware slot allocation
+- ✅ 268 comprehensive tests
 
 **Phase 2** (Hybrid Mode - Optional):
 - 🔄 Enable Instagram API for simple stories
@@ -193,7 +214,7 @@ The bot responds to these commands in Telegram:
 
 ### Running Tests
 
-The project includes 173 comprehensive tests with automatic test database setup:
+The project includes 268 comprehensive tests with automatic test database setup:
 
 ```bash
 # Run all tests with coverage
@@ -224,6 +245,9 @@ storyline-ai/
 ├── tests/                 # Test suite
 ├── scripts/               # Database scripts
 └── media/                 # Media storage
+    └── stories/           # Instagram stories
+        ├── memes/         # Meme content
+        └── merch/         # Merchandise content
 ```
 
 ## Documentation
