@@ -1,8 +1,9 @@
 # User Interactions System Design
 
 **Created**: 2026-01-06
-**Status**: Draft
-**Phase**: 1.5 Enhancement
+**Status**: 📋 PENDING (Future Enhancement)
+**Phase**: Post-1.6 Enhancement
+**Priority**: Low - Nice to have for analytics
 
 ## Overview
 

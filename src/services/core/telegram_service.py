@@ -349,58 +349,67 @@ class TelegramService(BaseService):
         )
 
     async def _handle_next(self, update, context):
-        """Handle /next command - force send next scheduled post immediately."""
+        """
+        Handle /next command - force send next scheduled post immediately.
+
+        Uses the shared force_post_next() method which:
+        1. Gets the earliest pending item
+        2. Shifts all subsequent items forward by one slot
+        3. Sends to Telegram with ⚡ indicator
+        """
         user = self._get_or_create_user(update.effective_user)
 
-        # Get next pending item (earliest scheduled, regardless of time)
-        all_pending = self.queue_repo.get_all(status="pending")
+        # Use shared force_post_next() method (lazy import to avoid circular import)
+        from src.services.core.posting import PostingService
+        posting_service = PostingService()
 
-        if not all_pending:
-            await update.message.reply_text(
-                "📭 *Queue Empty*\n\nNo posts to send.",
-                parse_mode="Markdown"
-            )
+        result = await posting_service.force_post_next(
+            user_id=str(user.id),
+            triggered_by="telegram",
+            force_sent_indicator=True,  # Shows ⚡ in caption
+        )
+
+        if not result["success"]:
+            if result["error"] == "No pending items in queue":
+                await update.message.reply_text(
+                    "📭 *Queue Empty*\n\nNo posts to send.",
+                    parse_mode="Markdown"
+                )
+            elif result["error"] == "Media item not found":
+                await update.message.reply_text(
+                    "⚠️ *Error*\n\nMedia item not found.",
+                    parse_mode="Markdown"
+                )
+            else:
+                await update.message.reply_text(
+                    f"❌ *Failed to send*\n\nCheck logs for details.",
+                    parse_mode="Markdown"
+                )
             return
 
-        # Take the first one (earliest scheduled)
-        queue_item = all_pending[0]
-        media_item = self.media_repo.get_by_id(str(queue_item.media_item_id))
+        # Success - log interaction
+        media_item = result["media_item"]
+        shifted_count = result["shifted_count"]
 
-        if not media_item:
-            await update.message.reply_text(
-                "⚠️ *Error*\n\nMedia item not found.",
-                parse_mode="Markdown"
-            )
-            return
-
-        # Send the notification to channel (with force_sent flag for caption)
-        success = await self.send_notification(str(queue_item.id), force_sent=True)
-
-        if success:
-            # Update status to processing
-            self.queue_repo.update_status(str(queue_item.id), "processing")
-        else:
-            # Only send message on failure
-            await update.message.reply_text(
-                f"❌ *Failed to send*\n\nCheck logs for details.",
-                parse_mode="Markdown"
-            )
-
-        # Log interaction
         self.interaction_service.log_command(
             user_id=str(user.id),
             command="/next",
             context={
-                "queue_item_id": str(queue_item.id),
-                "media_id": str(queue_item.media_item_id),
-                "media_filename": media_item.file_name,
-                "success": success,
+                "queue_item_id": result["queue_item_id"],
+                "media_id": str(media_item.id) if media_item else None,
+                "media_filename": media_item.file_name if media_item else None,
+                "success": True,
+                "shifted_count": shifted_count,
             },
             telegram_chat_id=update.effective_chat.id,
             telegram_message_id=update.message.message_id,
         )
 
-        logger.info(f"Force-sent next post by {self._get_display_name(user)}: {media_item.file_name}")
+        shift_msg = f" (shifted {shifted_count} items)" if shifted_count > 0 else ""
+        logger.info(
+            f"Force-sent next post by {self._get_display_name(user)}: "
+            f"{media_item.file_name}{shift_msg}"
+        )
 
     async def _handle_help(self, update, context):
         """Handle /help command."""
