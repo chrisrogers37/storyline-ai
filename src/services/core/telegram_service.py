@@ -15,6 +15,13 @@ from src.services.core.interaction_service import InteractionService
 from src.config.settings import settings
 from src.utils.logger import logger
 from datetime import datetime, timedelta
+import re
+
+
+def _escape_markdown(text: str) -> str:
+    """Escape Telegram Markdown special characters in text."""
+    # For Telegram's Markdown mode, escape: _ * ` [
+    return re.sub(r'([_*`\[])', r'\\\1', text)
 
 
 class TelegramService(BaseService):
@@ -316,6 +323,10 @@ class TelegramService(BaseService):
                 media_item = self.media_repo.get_by_id(str(item.media_item_id))
                 filename = media_item.file_name if media_item else "Unknown"
                 category = media_item.category if media_item and media_item.category else "-"
+
+                # Escape markdown special characters in dynamic content
+                filename = _escape_markdown(filename)
+                category = _escape_markdown(category)
 
                 # Format scheduled time
                 scheduled = item.scheduled_for.strftime("%b %d %H:%M UTC")
