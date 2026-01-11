@@ -6,6 +6,7 @@ from src.models.posting_history import PostingHistory
 from src.models.media_lock import MediaPostingLock
 from src.models.service_run import ServiceRun
 from src.models.user_interaction import UserInteraction
+from src.models.category_mix import CategoryPostCaseMix
 
 __all__ = [
     "User",
@@ -15,4 +16,5 @@ __all__ = [
     "MediaPostingLock",
     "ServiceRun",
     "UserInteraction",
+    "CategoryPostCaseMix",
 ]

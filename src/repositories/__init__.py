@@ -6,6 +6,7 @@ from src.repositories.history_repository import HistoryRepository
 from src.repositories.lock_repository import LockRepository
 from src.repositories.service_run_repository import ServiceRunRepository
 from src.repositories.interaction_repository import InteractionRepository
+from src.repositories.category_mix_repository import CategoryMixRepository
 
 __all__ = [
     "UserRepository",
@@ -15,4 +16,5 @@ __all__ = [
     "LockRepository",
     "ServiceRunRepository",
     "InteractionRepository",
+    "CategoryMixRepository",
 ]
