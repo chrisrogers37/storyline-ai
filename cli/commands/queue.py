@@ -50,7 +50,11 @@ def create_schedule(days):
 @click.command(name="process-queue")
 @click.option("--force", is_flag=True, help="Process next item immediately (ignore schedule)")
 def process_queue(force):
-    """Process pending queue items."""
+    """Process pending queue items.
+
+    With --force: Force-posts the next scheduled item immediately and shifts
+    all subsequent items forward by one slot. The last slot is discarded.
+    """
     if force:
         console.print("[bold blue]Force-processing next scheduled item...[/bold blue]")
     else:
@@ -60,14 +64,32 @@ def process_queue(force):
 
     try:
         if force:
-            result = asyncio.run(service.process_next_immediate())
+            # Use new shared force_post_next() method
+            result = asyncio.run(service.force_post_next(
+                triggered_by="cli",
+                force_sent_indicator=False,  # CLI doesn't need ⚡ in caption
+            ))
+
+            if result["success"]:
+                console.print(f"\n[bold green]✓ Force-posted successfully![/bold green]")
+                media = result["media_item"]
+                console.print(f"  File: {media.file_name if media else 'Unknown'}")
+                console.print(f"  Queue ID: {result['queue_item_id']}")
+
+                shifted = result["shifted_count"]
+                if shifted > 0:
+                    console.print(f"  [cyan]Shifted {shifted} items forward[/cyan]")
+                else:
+                    console.print(f"  [dim]No items to shift (was last in queue)[/dim]")
+            else:
+                console.print(f"\n[bold red]✗ Failed:[/bold red] {result['error']}")
         else:
             result = asyncio.run(service.process_pending_posts())
 
-        console.print(f"\n[bold green]✓ Processing complete![/bold green]")
-        console.print(f"  Processed: {result['processed']}")
-        console.print(f"  Telegram: {result['telegram']}")
-        console.print(f"  Failed: {result['failed']}")
+            console.print(f"\n[bold green]✓ Processing complete![/bold green]")
+            console.print(f"  Processed: {result['processed']}")
+            console.print(f"  Telegram: {result['telegram']}")
+            console.print(f"  Failed: {result['failed']}")
 
     except Exception as e:
         console.print(f"[bold red]✗ Error:[/bold red] {str(e)}")
