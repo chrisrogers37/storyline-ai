@@ -2,15 +2,21 @@
 
 Welcome to the Storyline AI documentation hub. All project documentation is organized here by purpose.
 
+**Last Updated**: 2026-01-11
+**Current Version**: v1.4.0
+**Current Phase**: Phase 1.6 (Category Scheduling) - ✅ COMPLETE
+
 ## 📁 Documentation Structure
 
 ```
 documentation/
 ├── README.md (this file)          # Documentation index
+├── ROADMAP.md                     # Product roadmap and version history
 ├── planning/                       # Planning and design documents
 ├── guides/                         # How-to guides and tutorials
 ├── operations/                     # Operational runbooks
 ├── updates/                        # Project updates, bugfixes, patches
+├── archive/                        # Completed/obsolete documents
 └── api/                            # API documentation (Phase 5)
 ```
 
@@ -19,7 +25,7 @@ documentation/
 ## 📋 Planning & Architecture
 
 ### Master Implementation Plan
-**[instagram_automation_plan.md](planning/instagram_automation_plan.md)**
+**[instagram_automation_plan.md](planning/instagram_automation_plan.md)** - ✅ Phases 1-1.6 Complete
 - Complete technical specification
 - All phases (1-5) with detailed requirements
 - Database schema design
@@ -27,25 +33,27 @@ documentation/
 - API endpoints
 - UI mockups and workflows
 
-### Implementation Status
-**[IMPLEMENTATION_COMPLETE.md](planning/IMPLEMENTATION_COMPLETE.md)**
-- Phase 1 completion checklist
-- Delivered components
-- Testing summary
-- Next steps for Phase 2
+### Test Coverage Report
+**[TEST_COVERAGE.md](planning/TEST_COVERAGE.md)** - ✅ COMPLETE (268 tests)
+- Test suite summary by layer
+- Phase 1.6 test additions
+- Coverage gaps and future work
+- Test infrastructure documentation
 
 ### Feature Designs
-**[user-interactions-design.md](planning/user-interactions-design.md)**
-- User interaction tracking system
-- InteractionService architecture
-- Analytics capabilities
-- `/queue` and `/status` command design
 
-**[phase-1.5-telegram-enhancements.md](planning/phase-1.5-telegram-enhancements.md)**
+**[phase-1.5-telegram-enhancements.md](planning/phase-1.5-telegram-enhancements.md)** - ✅ COMPLETE (v1.3.0)
 - Telegram UX improvements
 - Bot lifecycle notifications
 - Instagram deep links
 - Enhanced captions
+- 7 new bot commands
+
+**[user-interactions-design.md](planning/user-interactions-design.md)** - 📋 PENDING
+- User interaction tracking system (future)
+- InteractionService architecture
+- Analytics capabilities
+- `/queue` and `/status` command design
 
 ---
 
@@ -129,6 +137,23 @@ Coming in Phase 5:
 
 ---
 
+## 📦 Archive
+
+Completed and historical documents:
+
+**[archive/IMPLEMENTATION_COMPLETE.md](archive/IMPLEMENTATION_COMPLETE.md)** - ✅ Phase 1 Complete (v1.0.1)
+- Phase 1 completion checklist and delivered components
+- Deployment verification results
+
+**[archive/HANDOFF-2026-01-05.md](archive/HANDOFF-2026-01-05.md)** - ✅ Merged
+- Phase 1.5 implementation handoff for v1.2.0
+- Database schema changes documentation
+
+**[archive/upcoming_build_notes.md](archive/upcoming_build_notes.md)** - ✅ Implemented
+- Original feature ideas (all implemented in Phase 1.5)
+
+---
+
 ## 🔍 Quick Reference
 
 ### For New Developers
@@ -199,14 +224,21 @@ When adding new documentation:
 
 Current documentation status:
 
-| Area | Coverage | Files |
-|------|----------|-------|
-| **Planning** | ✅ Complete | 3 files |
-| **Getting Started** | ✅ Complete | 4 guides |
-| **Testing** | ✅ Complete | 2 guides |
-| **Updates** | ✅ Current | 2 files |
-| **Operations** | 🚧 Planned | 0 files |
-| **API Docs** | ⏳ Phase 5 | 0 files |
+| Area | Status | Files | Notes |
+|------|--------|-------|-------|
+| **Planning** | ✅ Complete | 4 files | Phase 1.6 complete |
+| **Getting Started** | ✅ Complete | 4 guides | All setup guides |
+| **Testing** | ✅ Complete | 2 guides | 268 tests documented |
+| **Updates** | ✅ Current | 2 files | v1.4.0 category scheduling |
+| **Archive** | ✅ Organized | 3 files | Historical docs preserved |
+| **Operations** | 🚧 Planned | 0 files | Future: monitoring, backups |
+| **API Docs** | ⏳ Phase 5 | 0 files | Future: REST API |
+
+### Document Status Legend
+- ✅ **COMPLETE** - Fully implemented and documented
+- 🚧 **WIP** - Work in progress
+- 📋 **PENDING** - Planned for future implementation
+- ⏳ **FUTURE** - Scheduled for later phases
 
 ---
 
@@ -216,7 +248,8 @@ Current documentation status:
 - **Deployment questions?** → Check [deployment.md](guides/deployment.md)
 - **Test failures?** → Review [testing-guide.md](guides/testing-guide.md)
 - **Architecture questions?** → Read [instagram_automation_plan.md](planning/instagram_automation_plan.md)
+- **Version history?** → Check [ROADMAP.md](ROADMAP.md)
 
 ---
 
-*Last updated: 2026-01-10*
+*Last updated: 2026-01-11*

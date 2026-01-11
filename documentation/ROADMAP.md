@@ -1,8 +1,8 @@
 # Storyline AI - Product Roadmap
 
-**Last Updated**: 2026-01-08
-**Current Version**: v1.3.0
-**Current Phase**: Phase 1.5 (Telegram Enhancements) - ✅ COMPLETE
+**Last Updated**: 2026-01-11
+**Current Version**: v1.4.0
+**Current Phase**: Phase 1.6 (Category Scheduling) - ✅ COMPLETE
 
 ---
 
@@ -96,6 +96,35 @@ Build a delightful Instagram Story automation system that:
 - 📋 **Smart Scheduling Hints** - Optimal posting times based on history
 
 **Completed**: 2026-01-08
+
+---
+
+## Phase 1.6: Category-Based Scheduling ✅ COMPLETE
+
+**Status**: ✅ Released v1.4.0
+**Branch**: `main`
+**Duration**: January 2026 (1 week)
+**Goal**: Organize media by category with configurable posting ratios
+
+### Delivered Features
+- ✅ **Category Extraction** - Automatic category from folder structure
+  - `media/stories/memes/` → category: `memes`
+  - `media/stories/merch/` → category: `merch`
+- ✅ **Posting Ratios** - Type 2 SCD for ratio configuration
+  - Configurable ratios per category (e.g., 70% memes, 30% merch)
+  - Full audit trail of ratio changes
+  - Validation ensures ratios sum to 100%
+- ✅ **Scheduler Integration** - Category-aware slot allocation
+  - Proportional slot allocation based on ratios
+  - Fallback to any category when target exhausted
+  - Shuffled for variety
+- ✅ **New CLI Commands**
+  - `list-categories` - Show categories with ratios
+  - `update-category-mix` - Interactive ratio configuration
+  - `category-mix-history` - View ratio change history
+- ✅ **268 comprehensive tests**
+
+**Completed**: 2026-01-10
 
 ---
 
@@ -203,6 +232,7 @@ Build a delightful Instagram Story automation system that:
 
 | Version | Date | Phase | Description |
 |---------|------|-------|-------------|
+| v1.4.0 | 2026-01-10 | Phase 1.6 | Category-based scheduling with configurable ratios |
 | v1.3.0 | 2026-01-08 | Phase 1.5 | Bot management commands (/pause, /resume, /stats, etc.) |
 | v1.2.0 | 2026-01-05 | Phase 1.5 | Telegram workflow enhancements + Permanent Reject |
 | v1.0.1 | 2026-01-04 | Phase 1 | Production release with bug fixes |
@@ -212,6 +242,20 @@ Build a delightful Instagram Story automation system that:
 ---
 
 ## Decision Log
+
+### 2026-01-10: Category-Based Scheduling Added (Phase 1.6)
+**Decision**: Implement category-based media organization with configurable posting ratios
+**Features Added**:
+- Folder structure → category extraction during indexing
+- Type 2 SCD table for posting ratio configuration
+- Category-aware scheduler slot allocation
+- 3 new CLI commands for category management
+**Rationale**:
+- Media naturally organizes by type (memes, merch, quotes, etc.)
+- Different content types need different posting frequencies
+- Type 2 SCD provides full audit trail of ratio changes
+- Enables business rules like "70% memes, 30% merchandise"
+**Status**: ✅ COMPLETE - 95 new tests, 268 total
 
 ### 2026-01-08: Bot Management Commands Added
 **Decision**: Implement comprehensive Telegram bot commands for queue/system management
