@@ -315,12 +315,13 @@ class TelegramService(BaseService):
                 # Get media info
                 media_item = self.media_repo.get_by_id(str(item.media_item_id))
                 filename = media_item.file_name if media_item else "Unknown"
+                category = media_item.category if media_item and media_item.category else "-"
 
                 # Format scheduled time
                 scheduled = item.scheduled_for.strftime("%b %d %H:%M UTC")
 
                 lines.append(f"{i}. 🕐 {scheduled}")
-                lines.append(f"    📁 {filename}\n")
+                lines.append(f"    📁 {filename} ({category})\n")
 
             await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
