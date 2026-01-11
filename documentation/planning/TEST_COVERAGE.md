@@ -1,9 +1,10 @@
 # Test Coverage Report
 
-**Last Updated**: 2026-01-08
-**Total Tests**: 173
+**Last Updated**: 2026-01-11
+**Total Tests**: 268
 **Test Framework**: pytest 7.4.3
 **Coverage Target**: Core business logic and critical paths
+**Status**: ✅ COMPLETE (Phase 1.6)
 
 ---
 
@@ -13,11 +14,18 @@
 
 | Layer | Files | Tests | Coverage Focus |
 |-------|-------|-------|----------------|
-| **Repositories** | 6 | 49 | CRUD operations, database interactions |
-| **Services** | 7 | 82 | Business logic, workflow orchestration |
-| **Utilities** | 4 | 33 | File hashing, image processing, validation |
-| **CLI** | 4 | 18 | Command interface, user interactions |
-| **TOTAL** | **21** | **173** | **Full Phase 1.5 functionality** |
+| **Repositories** | 7 | 67 | CRUD operations, database interactions |
+| **Services** | 8 | 116 | Business logic, workflow orchestration |
+| **Utilities** | 4 | 40 | File hashing, image processing, validation |
+| **CLI** | 4 | 45 | Command interface, user interactions |
+| **TOTAL** | **23** | **268** | **Full Phase 1.6 functionality** |
+
+### Phase 1.6 Additions (95 new tests)
+- **Category Extraction** (7 tests) - Folder structure → category mapping
+- **CategoryMixRepository** (18 tests) - Type 2 SCD ratio management
+- **Scheduler Category Allocation** (9 tests) - Category-aware slot distribution
+- **CLI Category Commands** (27 tests) - list-categories, update-category-mix, category-mix-history
+- **Integration Tests** (34 tests) - End-to-end category scheduling
 
 ---
 
@@ -495,11 +503,13 @@ pytest -n auto
 
 ## Conclusion
 
-✅ **Phase 1.5 Test Suite Status**: **COMPLETE**
+✅ **Phase 1.6 Test Suite Status**: **COMPLETE**
 
-- All critical workflows tested (173 tests)
+- All critical workflows tested (268 tests)
+- Category-based scheduling fully tested
+- Type 2 SCD ratio management validated
 - Deployment bugs caught and fixed
-- Full coverage of 7 new bot commands
+- Full coverage of 10+ bot commands
 - Resume/clear callback handlers tested
 - Pause integration with PostingService verified
 - Test coverage adequate for production use
@@ -508,7 +518,8 @@ pytest -n auto
 **Version History**:
 - v1.0.0: 147 tests (Phase 1)
 - v1.2.0: 155 tests (Phase 1.5 Week 1)
-- v1.3.0: 173 tests (Phase 1.5 Week 2 - current)
+- v1.3.0: 173 tests (Phase 1.5 Week 2)
+- v1.4.0: 268 tests (Phase 1.6 - current)
 
 **Next Steps**:
 - Maintain test coverage as new features added

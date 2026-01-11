@@ -123,3 +123,64 @@ class QueueRepository:
         count = self.db.query(PostingQueue).filter(PostingQueue.status == "pending").delete()
         self.db.commit()
         return count
+
+    def shift_slots_forward(self, from_item_id: str) -> int:
+        """
+        Shift all pending items forward by one slot when force-posting.
+
+        Each item after the force-posted item inherits the scheduled_for time
+        of the item before it. The last item's original time slot is discarded.
+
+        Example:
+            Before: A(10:00), B(14:00), C(18:00), D(22:00)
+            Force-post A at 09:00
+            After:  A(09:00->removed), B(10:00), C(14:00), D(18:00)
+                    (22:00 slot discarded)
+
+        Args:
+            from_item_id: The item being force-posted (its slot will be inherited by next item)
+
+        Returns:
+            Number of items shifted
+        """
+        from src.utils.logger import logger
+
+        # Get all pending items in scheduled order
+        pending_items = self.get_all(status="pending")
+
+        if not pending_items:
+            return 0
+
+        # Find the index of the force-posted item
+        from_index = None
+        for i, item in enumerate(pending_items):
+            if str(item.id) == from_item_id:
+                from_index = i
+                break
+
+        if from_index is None:
+            logger.warning(f"Item {from_item_id} not found in pending queue")
+            return 0
+
+        # Get items AFTER the force-posted one
+        items_to_shift = pending_items[from_index + 1:]
+
+        if not items_to_shift:
+            logger.info("No items to shift (force-posted item is last in queue)")
+            return 0
+
+        # Build list of times to assign: [from_item's time, next's time, ...]
+        # We take all times except the last one (which gets discarded)
+        times = [pending_items[from_index].scheduled_for]
+        for item in items_to_shift[:-1]:
+            times.append(item.scheduled_for)
+
+        # Assign new times to each item
+        for i, item in enumerate(items_to_shift):
+            old_time = item.scheduled_for
+            item.scheduled_for = times[i]
+            logger.debug(f"Shifted item {item.id}: {old_time} -> {times[i]}")
+
+        self.db.commit()
+        logger.info(f"Shifted {len(items_to_shift)} queue items forward by one slot")
+        return len(items_to_shift)
