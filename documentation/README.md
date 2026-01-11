@@ -93,6 +93,13 @@ Coming soon:
 
 ## 🔄 Project Updates
 
+### Feature Updates
+**[2026-01-10-category-scheduling.md](updates/2026-01-10-category-scheduling.md)**
+- Category-based media organization (folder → category extraction)
+- Configurable posting ratios per category (Type 2 SCD)
+- Scheduler integration with category-aware slot allocation
+- New CLI commands: `list-categories`, `update-category-mix`, `category-mix-history`
+
 ### Bug Fixes & Patches
 **[2026-01-04-bugfixes.md](updates/2026-01-04-bugfixes.md)**
 - 4 critical bugs fixed (service run metadata, scheduler date mutation, health check, lock creation)
@@ -186,9 +193,10 @@ Current documentation status:
 
 | Area | Coverage | Files |
 |------|----------|-------|
-| **Planning** | ✅ Complete | 2 files |
+| **Planning** | ✅ Complete | 3 files |
 | **Getting Started** | ✅ Complete | 3 guides |
 | **Testing** | ✅ Complete | 2 guides |
+| **Updates** | ✅ Current | 2 files |
 | **Operations** | 🚧 Planned | 0 files |
 | **API Docs** | ⏳ Phase 5 | 0 files |
 
@@ -203,4 +211,4 @@ Current documentation status:
 
 ---
 
-*Last updated: 2026-01-06*
+*Last updated: 2026-01-10*

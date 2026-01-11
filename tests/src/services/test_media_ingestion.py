@@ -204,3 +204,107 @@ class TestMediaIngestionService:
         assert ".mov" in MediaIngestionService.SUPPORTED_EXTENSIONS
         # Text files should NOT be supported
         assert ".txt" not in MediaIngestionService.SUPPORTED_EXTENSIONS
+
+    def test_extract_category_from_subfolder(self, ingestion_service):
+        """Test that _extract_category extracts category from immediate subfolder."""
+        base_path = Path("/media/stories")
+        file_path = Path("/media/stories/memes/image.jpg")
+
+        category = ingestion_service._extract_category(file_path, base_path)
+
+        assert category == "memes"
+
+    def test_extract_category_nested_subfolder(self, ingestion_service):
+        """Test that _extract_category extracts top-level category from nested paths."""
+        base_path = Path("/media/stories")
+        file_path = Path("/media/stories/memes/funny/2024/image.jpg")
+
+        category = ingestion_service._extract_category(file_path, base_path)
+
+        # Should return the immediate subfolder, not nested ones
+        assert category == "memes"
+
+    def test_extract_category_returns_none_for_root_files(self, ingestion_service):
+        """Test that _extract_category returns None for files in base directory."""
+        base_path = Path("/media/stories")
+        file_path = Path("/media/stories/image.jpg")
+
+        category = ingestion_service._extract_category(file_path, base_path)
+
+        assert category is None
+
+    def test_extract_category_returns_none_for_unrelated_path(self, ingestion_service):
+        """Test that _extract_category returns None for unrelated file paths."""
+        base_path = Path("/media/stories")
+        file_path = Path("/other/path/image.jpg")
+
+        category = ingestion_service._extract_category(file_path, base_path)
+
+        assert category is None
+
+    def test_scan_directory_extracts_categories(self, ingestion_service):
+        """Test that scan_directory extracts and returns categories."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create category subfolders with images
+            memes_dir = Path(temp_dir) / "memes"
+            merch_dir = Path(temp_dir) / "merch"
+            memes_dir.mkdir()
+            merch_dir.mkdir()
+
+            (memes_dir / "meme1.jpg").write_bytes(b"meme image")
+            (merch_dir / "product1.jpg").write_bytes(b"product image")
+
+            # Mock dependencies
+            ingestion_service.media_repo.get_by_path.return_value = None
+            ingestion_service.media_repo.get_by_hash.return_value = []
+            mock_validation = Mock(is_valid=True, warnings=[])
+            ingestion_service.image_processor.validate_image.return_value = mock_validation
+
+            result = ingestion_service.scan_directory(temp_dir)
+
+            assert "categories" in result
+            assert sorted(result["categories"]) == ["memes", "merch"]
+
+    def test_scan_directory_with_extract_category_disabled(self, ingestion_service):
+        """Test that scan_directory skips category extraction when disabled."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create category subfolder with image
+            memes_dir = Path(temp_dir) / "memes"
+            memes_dir.mkdir()
+            (memes_dir / "meme1.jpg").write_bytes(b"meme image")
+
+            # Mock dependencies
+            ingestion_service.media_repo.get_by_path.return_value = None
+            ingestion_service.media_repo.get_by_hash.return_value = []
+            mock_validation = Mock(is_valid=True, warnings=[])
+            ingestion_service.image_processor.validate_image.return_value = mock_validation
+
+            result = ingestion_service.scan_directory(
+                temp_dir, extract_category=False
+            )
+
+            # Categories should be empty when extraction is disabled
+            assert result["categories"] == []
+
+    @patch("src.services.core.media_ingestion.calculate_file_hash")
+    def test_index_file_passes_category_to_repository(self, mock_hash, ingestion_service):
+        """Test that _index_file passes category to repository create."""
+        mock_hash.return_value = "abc123hash"
+        ingestion_service.media_repo.get_by_path.return_value = None
+        ingestion_service.media_repo.get_by_hash.return_value = []
+        mock_validation = Mock(is_valid=True, warnings=[])
+        ingestion_service.image_processor.validate_image.return_value = mock_validation
+
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+            tmp.write(b"test image content")
+            try:
+                ingestion_service._index_file(
+                    Path(tmp.name), user_id="user-123", category="memes"
+                )
+
+                # Should create media item with category
+                ingestion_service.media_repo.create.assert_called_once()
+                call_kwargs = ingestion_service.media_repo.create.call_args.kwargs
+                assert call_kwargs["category"] == "memes"
+            finally:
+                os.unlink(tmp.name)

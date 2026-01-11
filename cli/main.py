@@ -13,7 +13,14 @@ def cli():
 
 
 # Import commands
-from cli.commands.media import index, list_media, validate
+from cli.commands.media import (
+    index,
+    list_media,
+    validate,
+    list_categories,
+    update_category_mix,
+    category_mix_history,
+)
 from cli.commands.queue import create_schedule, process_queue, list_queue
 from cli.commands.users import list_users, promote_user
 from cli.commands.health import check_health
@@ -21,6 +28,9 @@ from cli.commands.health import check_health
 # Add commands to CLI
 cli.add_command(index)
 cli.add_command(list_media)
+cli.add_command(list_categories)
+cli.add_command(update_category_mix)
+cli.add_command(category_mix_history)
 cli.add_command(validate)
 cli.add_command(create_schedule)
 cli.add_command(process_queue)

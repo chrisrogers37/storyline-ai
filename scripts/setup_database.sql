@@ -44,6 +44,9 @@ CREATE TABLE IF NOT EXISTS media_items (
     -- Routing logic: determines auto vs manual posting
     requires_interaction BOOLEAN DEFAULT FALSE, -- TRUE = send to Telegram, FALSE = auto-post
 
+    -- Category: extracted from folder structure during indexing (e.g., "memes", "merch")
+    category TEXT,
+
     -- Optional metadata (flexible for any use case)
     title TEXT, -- General purpose title (product name, meme title, etc.)
     link_url TEXT, -- Link for sticker (if requires_interaction = TRUE)
@@ -68,6 +71,7 @@ CREATE INDEX IF NOT EXISTS idx_media_items_file_path ON media_items(file_path);
 CREATE INDEX IF NOT EXISTS idx_media_items_file_hash ON media_items(file_hash);
 CREATE INDEX IF NOT EXISTS idx_media_items_is_active ON media_items(is_active);
 CREATE INDEX IF NOT EXISTS idx_media_items_requires_interaction ON media_items(requires_interaction);
+CREATE INDEX IF NOT EXISTS idx_media_items_category ON media_items(category);
 CREATE INDEX IF NOT EXISTS idx_media_items_tags ON media_items USING GIN(tags);
 
 -- Posting queue table (active work items only)
@@ -235,6 +239,35 @@ CREATE INDEX IF NOT EXISTS idx_user_interactions_name ON user_interactions(inter
 CREATE INDEX IF NOT EXISTS idx_user_interactions_created_at ON user_interactions(created_at);
 CREATE INDEX IF NOT EXISTS idx_user_interactions_context ON user_interactions USING GIN(context);
 
+-- Category post case mix (Type 2 SCD for posting ratio configuration)
+CREATE TABLE IF NOT EXISTS category_post_case_mix (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+    -- Category name (matches media_items.category)
+    category VARCHAR(100) NOT NULL,
+
+    -- Ratio as decimal (0.70 = 70%)
+    ratio NUMERIC(5, 4) NOT NULL,
+
+    -- Type 2 SCD fields
+    effective_from TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    effective_to TIMESTAMP,  -- NULL = currently active
+    is_current BOOLEAN DEFAULT TRUE,
+
+    -- Audit fields
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by_user_id UUID REFERENCES users(id),
+
+    -- Constraints
+    CONSTRAINT check_ratio_range CHECK (ratio >= 0 AND ratio <= 1)
+);
+
+CREATE INDEX IF NOT EXISTS idx_category_mix_category ON category_post_case_mix(category);
+CREATE INDEX IF NOT EXISTS idx_category_mix_is_current ON category_post_case_mix(is_current);
+CREATE INDEX IF NOT EXISTS idx_category_mix_effective_dates ON category_post_case_mix(effective_from, effective_to);
+
+COMMENT ON TABLE category_post_case_mix IS 'Type 2 SCD table tracking posting ratio configuration per category. All current ratios must sum to 1.0.';
+
 -- Schema version tracking
 CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER PRIMARY KEY,
@@ -245,4 +278,9 @@ CREATE TABLE IF NOT EXISTS schema_version (
 -- Insert initial schema version
 INSERT INTO schema_version (version, description)
 VALUES (1, 'Initial schema - Phase 1')
+ON CONFLICT (version) DO NOTHING;
+
+-- Record category features as version 2
+INSERT INTO schema_version (version, description)
+VALUES (2, 'Add category column and category_post_case_mix table')
 ON CONFLICT (version) DO NOTHING;
