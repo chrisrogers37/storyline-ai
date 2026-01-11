@@ -117,3 +117,9 @@ class QueueRepository:
             self.db.commit()
             return True
         return False
+
+    def delete_all_pending(self) -> int:
+        """Delete all pending queue items. Returns count of deleted items."""
+        count = self.db.query(PostingQueue).filter(PostingQueue.status == "pending").delete()
+        self.db.commit()
+        return count
