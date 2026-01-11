@@ -7,6 +7,117 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-01-10
+
+### Added - Phase 1.6: Category-Based Scheduling
+
+#### Category Organization
+- **Category Extraction** - Automatically extract category from folder structure during indexing
+  - Folder structure: `media/stories/memes/` → category: `memes`
+  - Folder structure: `media/stories/merch/` → category: `merch`
+  - Categories stored in `media_items.category` column
+  - Configurable via `--extract-category` flag (default: enabled)
+
+#### Posting Ratios (Type 2 SCD)
+- **`category_post_case_mix` Table** - Track posting ratio configuration with full history
+  - Type 2 Slowly Changing Dimension design for audit trail
+  - Ratios stored as decimals (0.70 = 70%)
+  - Validation: all active ratios must sum to 1.0 (100%)
+  - Supports multiple categories with any ratio split
+
+- **Interactive Ratio Configuration** - User-friendly prompts during indexing
+  - Prompts: "What % would you like 'memes'?" format
+  - Validates total sums to 100%
+  - Allows re-entry if validation fails
+  - Shows current vs new ratio comparisons
+
+#### Scheduler Integration
+- **Category-Aware Slot Allocation** - Deterministic ratio-based scheduling
+  - Allocates slots proportionally (e.g., 70% memes, 30% merch)
+  - Handles rounding with largest remainder to last category
+  - Shuffles allocation for variety (not all memes then all merch)
+  - Fallback to any category when target is exhausted
+
+- **Enhanced Selection Logic** - Category-filtered media selection
+  - Filters by target category first
+  - Falls back to any available media if category exhausted
+  - Maintains existing priority rules (never-posted first, least-posted)
+  - Logs category allocation and fallbacks
+
+#### New CLI Commands
+- **`storyline-cli list-categories`** - Show categories with posting ratios
+  - Displays current ratios and media counts per category
+  - Shows if no ratios are configured
+
+- **`storyline-cli update-category-mix`** - Update posting ratios interactively
+  - Prompts for each category's percentage
+  - Validates total and saves to database
+  - Creates new SCD record (preserves history)
+
+- **`storyline-cli category-mix-history`** - View ratio change history
+  - Shows all historical ratio configurations
+  - Includes effective dates and who made changes
+  - Useful for auditing scheduling changes
+
+#### Enhanced Existing Commands
+- **`create-schedule`** - Now shows category breakdown
+  - Displays how many slots allocated per category
+  - Shows percentage breakdown of scheduled items
+  - Logs category allocation summary
+
+- **`list-queue`** - Added category column
+  - Shows category for each queued item
+  - Helps verify ratio-based scheduling
+
+- **`index-media`** - Category extraction and ratio prompts
+  - Extracts category from folder structure
+  - Prompts for ratio configuration after indexing
+  - Option to skip ratio configuration
+
+### Technical Details
+
+#### Database Schema
+- **New column**: `media_items.category` (TEXT, indexed)
+- **New table**: `category_post_case_mix`
+  - `id` (UUID) - Primary key
+  - `category` (VARCHAR 100) - Category name
+  - `ratio` (NUMERIC 5,4) - Ratio as decimal (0.0000-1.0000)
+  - `effective_from` (TIMESTAMP) - When ratio became active
+  - `effective_to` (TIMESTAMP) - When ratio was superseded (NULL = current)
+  - `is_current` (BOOLEAN) - Quick filter for active ratios
+  - `created_by_user_id` (UUID FK) - Who made the change
+
+#### Migrations
+- `scripts/migrations/001_add_category_column.sql` - Add category to media_items
+- `scripts/migrations/002_add_category_post_case_mix.sql` - Create ratio table
+- `scripts/setup_database.sql` - Updated for fresh installations
+
+#### New Components
+- **CategoryPostCaseMix** model (`src/models/category_mix.py`)
+- **CategoryMixRepository** (`src/repositories/category_mix_repository.py`)
+  - `get_current_mix()` - Returns list of active ratio records
+  - `get_current_mix_as_dict()` - Returns {category: ratio} dict
+  - `set_mix()` - Sets new ratios (creates SCD records)
+  - `get_history()` - Returns all historical records
+
+#### Modified Components
+- **SchedulerService** - Added category-based slot allocation
+- **MediaRepository** - Added category parameter and get_categories()
+- **MediaIngestionService** - Added category extraction logic
+
+### Testing
+- **34 new tests** for category scheduling features
+  - Category extraction tests (7 tests)
+  - CategoryMixRepository tests (18 tests)
+  - Scheduler category allocation tests (9 tests)
+- **Total tests: 173 → 268** (95 new, including other improvements)
+
+### Documentation
+- Updated README.md with Phase 1.6 features
+- Updated CHANGELOG.md (this file)
+- Updated project structure with media subdirectories
+- Updated CLAUDE.md with new database tables and CLI commands
+
 ## [1.3.0] - 2026-01-08
 
 ### Added - Phase 1.5 Week 2: Telegram Bot Commands
@@ -497,6 +608,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Posting Mode**: 100% manual via Telegram
 - **Instagram API**: Not required for Phase 1
 
-[Unreleased]: https://github.com/yourusername/storyline-ai/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/yourusername/storyline-ai/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/yourusername/storyline-ai/compare/v1.3.0...v1.4.0
+[1.3.0]: https://github.com/yourusername/storyline-ai/compare/v1.2.0...v1.3.0
+[1.2.0]: https://github.com/yourusername/storyline-ai/compare/v1.0.1...v1.2.0
 [1.0.1]: https://github.com/yourusername/storyline-ai/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/yourusername/storyline-ai/releases/tag/v1.0.0

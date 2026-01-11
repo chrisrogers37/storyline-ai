@@ -29,6 +29,9 @@ class MediaItem(Base):
     # Routing logic: determines auto vs manual posting
     requires_interaction = Column(Boolean, default=False)  # TRUE = send to Telegram, FALSE = auto-post
 
+    # Category: extracted from parent folder during indexing (e.g., "memes", "merch")
+    category = Column(Text, index=True)
+
     # Optional metadata (flexible for any use case)
     title = Column(Text)  # General purpose title (product name, meme title, etc.)
     link_url = Column(Text)  # Link for sticker (if requires_interaction = TRUE)

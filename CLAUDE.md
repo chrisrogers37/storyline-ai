@@ -107,6 +107,11 @@ storyline-cli list-history --limit 20
 storyline-cli list-users
 storyline-cli promote-user <telegram_user_id> --role admin
 
+# Category management
+storyline-cli list-categories
+storyline-cli update-category-mix
+storyline-cli category-mix-history --limit 10
+
 # Run main application (scheduler + Telegram bot)
 python -m src.main
 
@@ -162,12 +167,14 @@ storyline-cli migrate           # Run migrations
 ### Key Tables
 
 **Core Tables** (Phase 1):
-- `media_items` - All indexed media (source of truth)
+- `media_items` - All indexed media (source of truth, includes `category` column)
 - `posting_queue` - Active work items (ephemeral)
 - `posting_history` - Permanent audit log (never deleted)
 - `media_posting_locks` - TTL-based repost prevention
 - `users` - Auto-populated from Telegram interactions
 - `service_runs` - Service execution tracking (observability)
+- `category_post_case_mix` - Type 2 SCD for posting ratio configuration
+- `user_interactions` - Bot interaction tracking for analytics
 
 **Integration Tables** (Phase 2+):
 - `shopify_products` - Type 2 SCD for product history
@@ -184,7 +191,8 @@ storyline-cli migrate           # Run migrations
 2. **TTL Locks** (`media_posting_locks`):
    - Prevents premature reposts
    - Automatic expiration (no manual cleanup)
-   - Lock types: `recent_post`, `manual_hold`, `seasonal`
+   - Lock types: `recent_post`, `manual_hold`, `seasonal`, `permanent_reject`
+   - Permanent locks: `locked_until = NULL` (infinite TTL)
 
 3. **User Auto-Discovery**:
    - Users created automatically from Telegram interactions
@@ -196,6 +204,11 @@ storyline-cli migrate           # Run migrations
    - Enables queries like "What was the price when we posted this story?"
    - Critical for accurate performance analysis
 
+5. **Type 2 SCD for Category Ratios** (`category_post_case_mix`):
+   - Tracks posting ratio changes per category
+   - Enables auditing: "Who changed the ratios and when?"
+   - All active ratios must sum to 1.0 (100%)
+
 ## Scheduler Algorithm
 
 **Selection Logic** (in order of priority):
@@ -205,6 +218,7 @@ storyline-cli migrate           # Run migrations
    WHERE is_active = TRUE
      AND NOT locked (no active locks in media_posting_locks)
      AND NOT queued (not already in posting_queue)
+     AND category = target_category (if category ratios configured)
    ```
 
 2. Sort by:
@@ -221,7 +235,17 @@ storyline-cli migrate           # Run migrations
    scheduled_time = base_time + random_jitter(-30min, +30min)
    ```
 
-4. After posting:
+4. Category-based slot allocation (if ratios configured):
+   ```python
+   # Allocate slots proportionally to category ratios
+   # Example: 70% memes, 30% merch with 21 slots → 15 memes, 6 merch
+   slot_allocation = allocate_by_ratio(total_slots, category_ratios)
+   random.shuffle(slot_allocation)  # Variety in scheduling
+
+   # Fallback: If category exhausted, select from any category
+   ```
+
+5. After posting:
    - Create 30-day TTL lock automatically
    - Increment `times_posted` counter
    - Update `last_posted_at` timestamp

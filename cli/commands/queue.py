@@ -14,7 +14,11 @@ console = Console()
 @click.command(name="create-schedule")
 @click.option("--days", default=7, help="Number of days to schedule")
 def create_schedule(days):
-    """Create posting schedule for N days."""
+    """Create posting schedule for N days.
+
+    Uses category ratios to allocate posts across categories.
+    Run 'list-categories' to see current ratios.
+    """
     console.print(f"[bold blue]Creating schedule for {days} days...[/bold blue]")
 
     service = SchedulerService()
@@ -26,6 +30,14 @@ def create_schedule(days):
         console.print(f"  Scheduled: {result['scheduled']}")
         console.print(f"  Skipped: {result['skipped']}")
         console.print(f"  Total slots: {result['total_slots']}")
+
+        # Show category breakdown
+        breakdown = result.get("category_breakdown", {})
+        if breakdown:
+            console.print(f"\n[bold]Category breakdown:[/bold]")
+            for cat, count in sorted(breakdown.items()):
+                pct = (count / result['scheduled'] * 100) if result['scheduled'] > 0 else 0
+                console.print(f"  • {cat}: {count} ({pct:.0f}%)")
 
         if "error" in result:
             console.print(f"\n[yellow]⚠ Warning: {result['error']}[/yellow]")
@@ -65,8 +77,11 @@ def process_queue(force):
 @click.command(name="list-queue")
 def list_queue():
     """List pending queue items."""
-    repo = QueueRepository()
-    items = repo.get_all(status="pending")
+    from src.repositories.media_repository import MediaRepository
+
+    queue_repo = QueueRepository()
+    media_repo = MediaRepository()
+    items = queue_repo.get_all(status="pending")
 
     if not items:
         console.print("[yellow]Queue is empty[/yellow]")
@@ -74,14 +89,21 @@ def list_queue():
 
     table = Table(title=f"Pending Queue Items ({len(items)})")
     table.add_column("Scheduled For", style="cyan")
+    table.add_column("File Name")
+    table.add_column("Category", style="magenta")
     table.add_column("Status")
-    table.add_column("Retry Count", justify="right")
 
     for item in items:
+        # Get media item details
+        media = media_repo.get_by_id(str(item.media_item_id))
+        file_name = media.file_name[:30] if media else "Unknown"
+        category = media.category if media else "-"
+
         table.add_row(
             item.scheduled_for.strftime("%Y-%m-%d %H:%M"),
+            file_name,
+            category or "-",
             item.status,
-            str(item.retry_count)
         )
 
     console.print(table)
