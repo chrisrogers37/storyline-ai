@@ -107,3 +107,37 @@ def list_queue():
         )
 
     console.print(table)
+
+
+@click.command(name="clear-queue")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
+def clear_queue(yes):
+    """Clear all pending queue items.
+
+    Removes all items from the posting queue. Media items remain
+    in the library and can be scheduled again.
+
+    Use --yes to skip the confirmation prompt.
+    """
+    queue_repo = QueueRepository()
+    items = queue_repo.get_all(status="pending")
+
+    if not items:
+        console.print("[yellow]Queue is already empty[/yellow]")
+        return
+
+    count = len(items)
+
+    if not yes:
+        console.print(f"[bold yellow]Warning:[/bold yellow] This will remove {count} pending queue items.")
+        console.print("Media items will remain in the library and can be scheduled again.")
+        if not click.confirm("Do you want to continue?"):
+            console.print("[dim]Cancelled[/dim]")
+            return
+
+    try:
+        deleted = queue_repo.delete_all_pending()
+        console.print(f"[bold green]✓ Cleared {deleted} items from queue[/bold green]")
+    except Exception as e:
+        console.print(f"[bold red]✗ Error:[/bold red] {str(e)}")
+        raise click.Abort()

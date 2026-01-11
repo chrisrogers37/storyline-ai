@@ -78,6 +78,14 @@ documentation/
 - CI/CD integration
 - Troubleshooting test failures
 
+### Development Environment Setup
+**[dev-environment-setup.md](guides/dev-environment-setup.md)**
+- Mac ↔ Raspberry Pi workflow optimization
+- Shell aliases for both environments
+- Database permission setup
+- Deployment scripts and rsync shortcuts
+- Quick reference command card
+
 ---
 
 ## 🛠 Operations & Maintenance
@@ -194,7 +202,7 @@ Current documentation status:
 | Area | Coverage | Files |
 |------|----------|-------|
 | **Planning** | ✅ Complete | 3 files |
-| **Getting Started** | ✅ Complete | 3 guides |
+| **Getting Started** | ✅ Complete | 4 guides |
 | **Testing** | ✅ Complete | 2 guides |
 | **Updates** | ✅ Current | 2 files |
 | **Operations** | 🚧 Planned | 0 files |
