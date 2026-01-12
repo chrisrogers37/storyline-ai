@@ -76,6 +76,8 @@ class HistoryRepository:
         media_metadata: Optional[dict] = None,
         instagram_media_id: Optional[str] = None,
         instagram_permalink: Optional[str] = None,
+        instagram_story_id: Optional[str] = None,
+        posting_method: str = "telegram_manual",
         posted_by_user_id: Optional[str] = None,
         posted_by_telegram_username: Optional[str] = None,
         error_message: Optional[str] = None,
@@ -94,6 +96,8 @@ class HistoryRepository:
             media_metadata=media_metadata,
             instagram_media_id=instagram_media_id,
             instagram_permalink=instagram_permalink,
+            instagram_story_id=instagram_story_id,
+            posting_method=posting_method,
             posted_by_user_id=posted_by_user_id,
             posted_by_telegram_username=posted_by_telegram_username,
             error_message=error_message,
@@ -136,3 +140,28 @@ class HistoryRepository:
             .order_by(PostingHistory.posted_at.desc())
             .all()
         )
+
+    def count_by_method(self, method: str, since: datetime) -> int:
+        """
+        Count posts by posting method since a given time.
+
+        Used for rate limit calculations (e.g., Instagram API posts in last hour).
+
+        Args:
+            method: Posting method ('instagram_api' or 'telegram_manual')
+            since: Start of time window
+
+        Returns:
+            Count of posts matching criteria
+        """
+        return (
+            self.db.query(func.count(PostingHistory.id))
+            .filter(
+                and_(
+                    PostingHistory.posting_method == method,
+                    PostingHistory.posted_at >= since,
+                    PostingHistory.success == True,
+                )
+            )
+            .scalar()
+        ) or 0

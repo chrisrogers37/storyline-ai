@@ -18,6 +18,26 @@ class HealthCheckService(BaseService):
         self.queue_repo = QueueRepository()
         self.history_repo = HistoryRepository()
 
+        # Lazy-loaded services for Instagram checks
+        self._token_service = None
+        self._instagram_service = None
+
+    @property
+    def token_service(self):
+        """Lazy-load token service."""
+        if self._token_service is None:
+            from src.services.integrations.token_refresh import TokenRefreshService
+            self._token_service = TokenRefreshService()
+        return self._token_service
+
+    @property
+    def instagram_service(self):
+        """Lazy-load Instagram API service."""
+        if self._instagram_service is None:
+            from src.services.integrations.instagram_api import InstagramAPIService
+            self._instagram_service = InstagramAPIService()
+        return self._instagram_service
+
     def check_all(self) -> dict:
         """
         Run all health checks.
@@ -28,6 +48,7 @@ class HealthCheckService(BaseService):
         checks = {
             "database": self._check_database(),
             "telegram": self._check_telegram_config(),
+            "instagram_api": self._check_instagram_api(),
             "queue": self._check_queue(),
             "recent_posts": self._check_recent_posts(),
         }
@@ -57,6 +78,79 @@ class HealthCheckService(BaseService):
             return {"healthy": False, "message": "Telegram channel ID not configured"}
 
         return {"healthy": True, "message": "Telegram configuration OK"}
+
+    def _check_instagram_api(self) -> dict:
+        """Check Instagram API health."""
+        # If Instagram API is disabled, report as healthy but disabled
+        if not settings.ENABLE_INSTAGRAM_API:
+            return {
+                "healthy": True,
+                "message": "Disabled via config",
+                "enabled": False,
+            }
+
+        # Check configuration
+        if not settings.INSTAGRAM_ACCOUNT_ID:
+            return {
+                "healthy": False,
+                "message": "INSTAGRAM_ACCOUNT_ID not configured",
+                "enabled": True,
+            }
+
+        if not settings.FACEBOOK_APP_ID:
+            return {
+                "healthy": False,
+                "message": "FACEBOOK_APP_ID not configured",
+                "enabled": True,
+            }
+
+        # Check token health
+        try:
+            token_health = self.token_service.check_token_health("instagram")
+
+            if not token_health["valid"]:
+                return {
+                    "healthy": False,
+                    "message": f"Token invalid: {token_health.get('error', 'Unknown')}",
+                    "enabled": True,
+                    "token_source": token_health.get("source"),
+                }
+
+            # Check rate limit
+            remaining = self.instagram_service.get_rate_limit_remaining()
+
+            # Build response
+            expires_in_hours = token_health.get("expires_in_hours")
+            expires_in_days = int(expires_in_hours // 24) if expires_in_hours else None
+
+            response = {
+                "healthy": True,
+                "enabled": True,
+                "rate_limit_remaining": remaining,
+                "rate_limit_total": settings.INSTAGRAM_POSTS_PER_HOUR,
+            }
+
+            # Add token info
+            if expires_in_days is not None:
+                response["token_expires_in_days"] = expires_in_days
+
+            if token_health.get("needs_refresh"):
+                response["message"] = f"OK ({remaining}/{settings.INSTAGRAM_POSTS_PER_HOUR} posts), token refresh recommended"
+            elif remaining == 0:
+                response["healthy"] = False
+                response["message"] = "Rate limit exhausted (0 posts remaining)"
+            else:
+                response["message"] = f"OK ({remaining}/{settings.INSTAGRAM_POSTS_PER_HOUR} posts remaining)"
+
+            return response
+
+        except Exception as e:
+            logger.error(f"Instagram API health check failed: {e}")
+            return {
+                "healthy": False,
+                "message": f"Check failed: {str(e)}",
+                "enabled": True,
+            }
 
     def _check_queue(self) -> dict:
         """Check posting queue health."""

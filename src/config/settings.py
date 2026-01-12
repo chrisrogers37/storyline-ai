@@ -49,9 +49,17 @@ class Settings(BaseSettings):
     FACEBOOK_APP_SECRET: Optional[str] = None
 
     # Cloudinary Configuration (Phase 2 Only)
+    CLOUD_STORAGE_PROVIDER: str = "cloudinary"  # Currently only cloudinary supported
     CLOUDINARY_CLOUD_NAME: Optional[str] = None
     CLOUDINARY_API_KEY: Optional[str] = None
     CLOUDINARY_API_SECRET: Optional[str] = None
+    CLOUD_UPLOAD_RETENTION_HOURS: int = 24  # Delete cloud uploads after this time
+
+    # Instagram API Rate Limiting (Phase 2)
+    INSTAGRAM_POSTS_PER_HOUR: int = 25  # Meta's limit for Stories
+
+    # Security (Phase 2 - required for token encryption)
+    ENCRYPTION_KEY: Optional[str] = None  # Fernet key for encrypting tokens in DB
 
     # Development Settings
     DRY_RUN_MODE: bool = False

@@ -44,6 +44,10 @@ class PostingHistory(Base):
     # Instagram result (if successful)
     instagram_media_id = Column(Text)
     instagram_permalink = Column(Text)
+    instagram_story_id = Column(Text)  # Story ID from Meta Graph API
+
+    # Posting method tracking (Phase 2)
+    posting_method = Column(String(20), default="telegram_manual")  # 'instagram_api' or 'telegram_manual'
 
     # User tracking
     posted_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
