@@ -112,6 +112,10 @@ storyline-cli list-categories
 storyline-cli update-category-mix
 storyline-cli category-mix-history --limit 10
 
+# Instagram API (Phase 2)
+storyline-cli instagram-auth         # Authenticate with Instagram
+storyline-cli instagram-status       # Check token status
+
 # Run main application (scheduler + Telegram bot)
 python -m src.main
 
@@ -147,11 +151,15 @@ storyline-cli migrate           # Run migrations
 
 ### Phase 2 Services (When ENABLE_INSTAGRAM_API=true)
 
-| Service | Responsibility |
-|---------|---------------|
-| **CloudStorageService** | Upload to Cloudinary/S3 |
-| **InstagramAPIService** | Post to Instagram Graph API |
-| **TokenRefreshService** | Manage access token lifecycle |
+| Service | Responsibility | Key Methods |
+|---------|---------------|-------------|
+| **CloudStorageService** | Upload to Cloudinary | `upload_media()`, `delete_media()`, `cleanup_expired()` |
+| **InstagramAPIService** | Post to Instagram Graph API | `post_story()`, `get_rate_limit_remaining()`, `validate_media_url()` |
+| **TokenRefreshService** | Manage OAuth token lifecycle | `get_token()`, `refresh_instagram_token()`, `check_token_health()` |
+
+**Token Flow**: Initial token from `.env` → bootstrapped to DB → auto-refreshed before expiry (60 days).
+
+**Rate Limiting**: Derived from `posting_history` (count API posts in trailing 60 min). Default: 25 posts/hour.
 
 ### Future Services (Phase 3+)
 
@@ -177,9 +185,14 @@ storyline-cli migrate           # Run migrations
 - `user_interactions` - Bot interaction tracking for analytics
 
 **Integration Tables** (Phase 2+):
+- `api_tokens` - Encrypted OAuth tokens for Instagram, Shopify, etc.
 - `shopify_products` - Type 2 SCD for product history
 - `media_product_links` - Many-to-many media ↔ products
 - `instagram_post_metrics` - Performance data from Meta API
+
+**Phase 2 Columns Added**:
+- `media_items`: `cloud_url`, `cloud_public_id`, `cloud_uploaded_at`, `cloud_expires_at`
+- `posting_history`: `instagram_story_id`, `posting_method` ('instagram_api' | 'telegram_manual')
 
 ### Critical Design Patterns
 
@@ -269,11 +282,17 @@ If ENABLE_INSTAGRAM_API = false:
   → ALL posts go to Telegram (manual)
 
 If ENABLE_INSTAGRAM_API = true:
-  If media.requires_interaction = false:
-    → Instagram API (automated)
   If media.requires_interaction = true:
     → Telegram (manual)
+  If rate_limit_remaining = 0:
+    → Telegram (fallback, with warning log)
+  Try Instagram API:
+    If success → Done
+    If error (RateLimitError, TokenExpiredError, InstagramAPIError):
+      → Telegram (fallback)
 ```
+
+**Fallback Behavior**: The system gracefully falls back to Telegram when Instagram API is unavailable, rate-limited, or erroring. This ensures posts are never lost.
 
 ## Image Processing Requirements
 
@@ -749,5 +768,6 @@ HotfixDec2025.md                                    # Use ISO date format: YYYY-
 - Check health: `storyline-cli check-health`
 - **All documentation**: See `documentation/README.md` for complete index
 - Full technical spec: `documentation/planning/instagram_automation_plan.md`
+- Instagram API setup: `documentation/guides/instagram-api-setup.md`
 - Deployment guide: `documentation/guides/deployment.md`
 - Testing guide: `documentation/guides/testing-guide.md`

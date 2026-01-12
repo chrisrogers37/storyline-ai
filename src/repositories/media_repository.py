@@ -137,6 +137,41 @@ class MediaRepository:
             self.db.refresh(media_item)
         return media_item
 
+    def update_cloud_info(
+        self,
+        media_id: str,
+        cloud_url: Optional[str] = None,
+        cloud_public_id: Optional[str] = None,
+        cloud_uploaded_at: Optional[datetime] = None,
+        cloud_expires_at: Optional[datetime] = None,
+    ) -> MediaItem:
+        """
+        Update cloud storage information for a media item.
+
+        Used when uploading to/deleting from Cloudinary for Instagram API posting.
+        Pass None values to clear the cloud info after successful posting.
+
+        Args:
+            media_id: Media item ID
+            cloud_url: Cloudinary URL (or None to clear)
+            cloud_public_id: Cloudinary public_id (or None to clear)
+            cloud_uploaded_at: Upload timestamp (or None to clear)
+            cloud_expires_at: URL expiry timestamp (or None to clear)
+
+        Returns:
+            Updated MediaItem
+        """
+        media_item = self.get_by_id(media_id)
+        if media_item:
+            media_item.cloud_url = cloud_url
+            media_item.cloud_public_id = cloud_public_id
+            media_item.cloud_uploaded_at = cloud_uploaded_at
+            media_item.cloud_expires_at = cloud_expires_at
+            media_item.updated_at = datetime.utcnow()
+            self.db.commit()
+            self.db.refresh(media_item)
+        return media_item
+
     def deactivate(self, media_id: str) -> MediaItem:
         """Deactivate a media item."""
         media_item = self.get_by_id(media_id)
