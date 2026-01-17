@@ -1,17 +1,16 @@
 """Token repository - CRUD operations for API tokens."""
 from typing import Optional, List
 from datetime import datetime, timedelta
-from sqlalchemy.orm import Session
 
-from src.config.database import get_db
+from src.repositories.base_repository import BaseRepository
 from src.models.api_token import ApiToken
 
 
-class TokenRepository:
+class TokenRepository(BaseRepository):
     """Repository for ApiToken CRUD operations."""
 
     def __init__(self):
-        self.db: Session = next(get_db())
+        super().__init__()
 
     def get_token(
         self,

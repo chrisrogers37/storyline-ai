@@ -1,17 +1,16 @@
 """Media lock repository - CRUD operations for media locks."""
 from typing import Optional, List
 from datetime import datetime, timedelta
-from sqlalchemy.orm import Session
 
-from src.config.database import get_db
+from src.repositories.base_repository import BaseRepository
 from src.models.media_lock import MediaPostingLock
 
 
-class LockRepository:
+class LockRepository(BaseRepository):
     """Repository for MediaPostingLock CRUD operations."""
 
     def __init__(self):
-        self.db: Session = next(get_db())
+        super().__init__()
 
     def get_by_id(self, lock_id: str) -> Optional[MediaPostingLock]:
         """Get lock by ID."""

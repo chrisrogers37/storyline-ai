@@ -403,16 +403,20 @@ class PostingService(BaseService):
         mime_type = getattr(media_item, "mime_type", "image/jpeg")
         media_type = "VIDEO" if mime_type.startswith("video") else "IMAGE"
 
+        # Apply 9:16 Story transformation for images (blurred background padding)
+        if media_type == "IMAGE":
+            story_url = self.cloud_service.get_story_optimized_url(cloud_url)
+        else:
+            # Videos don't need the same transformation
+            story_url = cloud_url
+
         # Post to Instagram
         result = await self.instagram_service.post_story(
-            media_url=cloud_url,
+            media_url=story_url,
             media_type=media_type,
         )
 
         if result["success"]:
-            # Update queue status
-            self.queue_repo.update_status(queue_item_id, "posted")
-
             # Create history record with instagram_api method
             self.history_repo.create(
                 media_item_id=media_item_id,

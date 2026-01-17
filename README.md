@@ -38,12 +38,11 @@ pip install -e .
 ### 2. Configuration
 
 ```bash
-# Copy example environment file
-cp .env.example .env
-
-# Edit .env with your credentials
+# Create .env file with your credentials
 nano .env
 ```
+
+Add the following required variables to your `.env` file:
 
 Required configuration:
 - `TELEGRAM_BOT_TOKEN`: Get from @BotFather on Telegram
@@ -122,6 +121,9 @@ storyline-cli process-queue --force
 
 # View queue
 storyline-cli list-queue
+
+# Clear all pending posts
+storyline-cli clear-queue
 ```
 
 ### Category Management

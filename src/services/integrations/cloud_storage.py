@@ -272,3 +272,65 @@ class CloudStorageService(BaseService):
         if path.suffix.lower() in video_extensions:
             return "video"
         return "image"
+
+    def get_story_optimized_url(self, url: str, blur_intensity: int = 2000) -> str:
+        """
+        Transform a Cloudinary URL for Instagram Story format (9:16).
+
+        Uses underlay technique: creates a blurred, filled version of the image
+        as the background, then places the original image centered on top with
+        padding. This preserves the original image while filling the 9:16 frame.
+
+        Note: b_blurred only works for videos in Cloudinary. For images, we use
+        an underlay of the same image with e_blur effect applied.
+
+        Args:
+            url: Original Cloudinary URL
+            blur_intensity: Blur strength for background (100-2000, default 400)
+
+        Returns:
+            Transformed URL optimized for Instagram Stories
+
+        Example:
+            Input:  https://res.cloudinary.com/xxx/image/upload/v123/folder/img.jpg
+            Output: Complex underlay transformation URL
+        """
+        import re
+
+        if "/upload/" not in url:
+            logger.warning(f"Could not apply transformation - unexpected URL format: {url[:50]}...")
+            return url
+
+        # Extract the public_id from the URL
+        # URL format: https://res.cloudinary.com/cloud/image/upload/v123/folder/file.ext
+        match = re.search(r'/upload/(?:v\d+/)?(.+?)(?:\.[^.]+)?$', url)
+        if not match:
+            logger.warning(f"Could not extract public_id from URL: {url[:50]}...")
+            return url
+
+        public_id = match.group(1)
+        # Replace slashes with colons for underlay reference
+        underlay_id = public_id.replace('/', ':')
+
+        # Build the transformation chain:
+        # 1. Define underlay (same image)
+        # 2. Transform underlay: fill to 9:16 frame, apply blur
+        # 3. fl_layer_apply to close underlay section
+        # 4. Transform base image: scale to fill WIDTH (1080), then pad HEIGHT only
+        #
+        # This ensures the main image fills edge-to-edge horizontally,
+        # with blurred padding only on top/bottom.
+        #
+        # URL structure: /u_<id>/underlay_transforms/fl_layer_apply/base_transforms/
+        transformation = (
+            f"u_{underlay_id}/"
+            f"c_fill,w_1080,h_1920,e_blur:{blur_intensity}/"
+            f"fl_layer_apply/"
+            f"c_limit,w_1080/"  # Scale to fit width, maintain aspect ratio
+            f"c_pad,w_1080,h_1920,g_center"  # Pad vertically to 9:16
+        )
+
+        transformed_url = url.replace("/upload/", f"/upload/{transformation}/")
+        logger.info(f"Applied Story transformation with blurred underlay (public_id: {public_id})")
+
+        return transformed_url

@@ -361,6 +361,28 @@ LLM Service → Email Drafts → Gmail
 
 ---
 
+## Backlog / Future Improvements
+
+Items to address in future iterations:
+
+### Telegram Bot UX Improvements
+
+**Race Condition Handling for Button Clicks**
+- **Problem**: Multiple rapid button clicks can trigger duplicate operations or conflicting actions
+- **Proposed Solution**:
+  1. Track pending operations per queue_id with cancellation tokens
+  2. Use asyncio locks to prevent concurrent execution on same item
+  3. Terminal actions (Skip/Posted/Reject) cancel any pending Auto Post
+  4. Same button clicked twice cancels current operation
+  5. Visual feedback: "⏳ Processing..." state distinct from idle
+- **Implementation Details**:
+  - Add `_operation_locks: Dict[str, asyncio.Lock]` to TelegramService
+  - Add `_cancel_flags: Dict[str, asyncio.Event]` for cancellation signaling
+  - Check cancellation at key points: after Cloudinary upload, before Instagram API call
+  - Graceful abort with cleanup if cancelled mid-operation
+
+---
+
 ## Getting Started
 
 1. Read this document for overall vision

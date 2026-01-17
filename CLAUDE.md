@@ -100,9 +100,6 @@ storyline-cli process-queue
 # Check system health
 storyline-cli check-health
 
-# View posting history
-storyline-cli list-history --limit 20
-
 # Manage users
 storyline-cli list-users
 storyline-cli promote-user <telegram_user_id> --role admin
@@ -119,9 +116,6 @@ storyline-cli instagram-status       # Check token status
 # Run main application (scheduler + Telegram bot)
 python -m src.main
 
-# Run API server (development)
-uvicorn src.api.app:app --reload --port 8000
-
 # Run tests
 pytest                          # All tests
 pytest tests/src/services/      # Service tests only
@@ -129,9 +123,8 @@ pytest -m unit                  # Unit tests only
 pytest -m integration           # Integration tests only
 pytest --cov=src --cov-report=html  # With coverage
 
-# Database operations
-storyline-cli backup --full
-storyline-cli migrate           # Run migrations
+# Queue operations
+storyline-cli clear-queue        # Clear all pending posts
 ```
 
 ## Core Services Reference
@@ -146,8 +139,7 @@ storyline-cli migrate           # Run migrations
 | **TelegramService** | Telegram bot operations | `send_notification()`, `handle_callback()`, `handle_commands()` |
 | **MediaLockService** | TTL lock management | `create_lock()`, `is_locked()`, `cleanup_expired_locks()` |
 | **HealthCheckService** | System health monitoring | `check_all()`, `check_database()`, `check_instagram_api()` |
-| **AlertService** | Admin alerts via Telegram | `alert_admin()`, send severity-based notifications |
-| **BackupService** | Automated backups | `backup_database()`, `backup_media()`, `full_backup()` |
+| **InteractionService** | Bot interaction tracking | `log_command()`, `log_callback()`, track user interactions |
 
 ### Phase 2 Services (When ENABLE_INSTAGRAM_API=true)
 

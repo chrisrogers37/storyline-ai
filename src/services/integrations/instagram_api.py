@@ -378,3 +378,155 @@ class InstagramAPIService(BaseService):
             settings.INSTAGRAM_ACCOUNT_ID,
             settings.FACEBOOK_APP_ID,
         ])
+
+    def validate_instagram_account_id(self) -> dict:
+        """
+        SAFETY GATE: Validate that the account ID is an Instagram Business Account,
+        NOT a Facebook Page ID.
+
+        Instagram Business Account IDs:
+        - Start with '17841' (Meta's Instagram ID prefix)
+        - Are 17 digits long
+
+        Facebook Page IDs:
+        - Are typically 15-16 digits
+        - Do NOT start with '17841'
+
+        Returns:
+            dict with 'valid', 'account_id', 'reason'
+        """
+        account_id = settings.INSTAGRAM_ACCOUNT_ID
+
+        if not account_id:
+            return {
+                "valid": False,
+                "account_id": None,
+                "reason": "INSTAGRAM_ACCOUNT_ID not configured",
+            }
+
+        account_id_str = str(account_id)
+
+        # Safety check 1: Must start with Instagram prefix
+        if not account_id_str.startswith("17841"):
+            return {
+                "valid": False,
+                "account_id": account_id_str,
+                "reason": f"DANGER: Account ID {account_id_str} does NOT start with '17841'. "
+                          "This may be a Facebook Page ID, NOT an Instagram Business Account ID. "
+                          "Posting to this ID could post to Facebook instead of Instagram!",
+            }
+
+        # Safety check 2: Should be 17 digits
+        if len(account_id_str) != 17:
+            logger.warning(
+                f"Instagram Account ID {account_id_str} is {len(account_id_str)} digits "
+                f"(expected 17). This may still be valid but verify in Meta Business Suite."
+            )
+
+        return {
+            "valid": True,
+            "account_id": account_id_str,
+            "reason": "Account ID appears to be a valid Instagram Business Account ID",
+        }
+
+    # Class-level cache for account info (avoid repeated API calls)
+    _account_info_cache: dict = {}
+
+    async def get_account_info(self) -> dict:
+        """
+        Fetch Instagram account info (username, name, etc.) from the API.
+
+        Results are cached to avoid repeated API calls.
+
+        Returns:
+            dict with 'username', 'name', 'id', or 'error' if failed
+        """
+        account_id = settings.INSTAGRAM_ACCOUNT_ID
+
+        # Return cached result if available
+        if account_id in self._account_info_cache:
+            return self._account_info_cache[account_id]
+
+        token = self.token_service.get_token("instagram")
+        if not token:
+            return {"error": "No token available"}
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{self.META_GRAPH_BASE}/{account_id}",
+                    params={
+                        "fields": "username,name",
+                        "access_token": token,
+                    },
+                    timeout=30.0,
+                )
+
+                if response.status_code == 200:
+                    data = response.json()
+                    result = {
+                        "id": account_id,
+                        "username": data.get("username"),
+                        "name": data.get("name"),
+                    }
+                    # Cache the result
+                    self._account_info_cache[account_id] = result
+                    logger.info(f"Fetched Instagram account info: @{result.get('username')}")
+                    return result
+                else:
+                    logger.warning(f"Failed to fetch account info: HTTP {response.status_code}")
+                    return {"error": f"HTTP {response.status_code}", "id": account_id}
+
+        except Exception as e:
+            logger.error(f"Error fetching account info: {e}")
+            return {"error": str(e), "id": account_id}
+
+    def safety_check_before_post(self) -> dict:
+        """
+        CRITICAL SAFETY GATE: Run all safety checks before posting.
+
+        This method MUST be called before any post_story() call.
+        Returns detailed validation results.
+
+        Returns:
+            dict with 'safe_to_post', 'checks', 'errors'
+        """
+        checks = {}
+        errors = []
+
+        # Check 1: Instagram API enabled
+        checks["instagram_api_enabled"] = settings.ENABLE_INSTAGRAM_API
+        if not settings.ENABLE_INSTAGRAM_API:
+            errors.append("ENABLE_INSTAGRAM_API is False")
+
+        # Check 2: Validate Instagram Account ID format
+        id_validation = self.validate_instagram_account_id()
+        checks["account_id_valid"] = id_validation["valid"]
+        if not id_validation["valid"]:
+            errors.append(id_validation["reason"])
+
+        # Check 3: Token exists
+        token = self.token_service.get_token("instagram")
+        checks["token_exists"] = token is not None
+        if not token:
+            errors.append("No Instagram access token found")
+
+        # Check 4: DRY_RUN_MODE check (not an error, just informational)
+        checks["dry_run_mode"] = settings.DRY_RUN_MODE
+
+        # Log the safety check
+        safe_to_post = len(errors) == 0
+        if safe_to_post:
+            logger.info(
+                f"✅ SAFETY CHECK PASSED: Ready to post to Instagram "
+                f"(Account ID: {settings.INSTAGRAM_ACCOUNT_ID}, DRY_RUN: {settings.DRY_RUN_MODE})"
+            )
+        else:
+            logger.error(f"❌ SAFETY CHECK FAILED: {errors}")
+
+        return {
+            "safe_to_post": safe_to_post,
+            "checks": checks,
+            "errors": errors,
+            "dry_run_mode": settings.DRY_RUN_MODE,
+        }

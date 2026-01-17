@@ -1,17 +1,16 @@
 """Service run repository - CRUD operations for service runs."""
 from typing import Optional, List
 from datetime import datetime, timedelta
-from sqlalchemy.orm import Session
 
-from src.config.database import get_db
+from src.repositories.base_repository import BaseRepository
 from src.models.service_run import ServiceRun
 
 
-class ServiceRunRepository:
+class ServiceRunRepository(BaseRepository):
     """Repository for ServiceRun CRUD operations."""
 
     def __init__(self):
-        self.db: Session = next(get_db())
+        super().__init__()
 
     def get_by_id(self, run_id: str) -> Optional[ServiceRun]:
         """Get service run by ID."""
