@@ -167,7 +167,15 @@ class PostingService(BaseService):
                     "error": str(e),
                 }
 
-            self.set_result_summary(run_id, result)
+            # Create serializable summary (media_item is SQLAlchemy object)
+            summary = {
+                "success": result["success"],
+                "queue_item_id": result["queue_item_id"],
+                "media_file_name": media_item.file_name if media_item else None,
+                "shifted_count": result["shifted_count"],
+                "error": result["error"],
+            }
+            self.set_result_summary(run_id, summary)
             return result
 
     async def process_next_immediate(self, user_id: Optional[str] = None) -> dict:
