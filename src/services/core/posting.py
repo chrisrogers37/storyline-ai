@@ -314,53 +314,22 @@ class PostingService(BaseService):
 
     async def _route_post(self, queue_item, media_item) -> dict:
         """
-        Route post to appropriate channel based on settings and content.
+        Route post to Telegram for human approval.
 
-        Decision tree:
-        1. If ENABLE_INSTAGRAM_API = False → Telegram
-        2. If media.requires_interaction = True → Telegram
-        3. If rate limit exhausted → Telegram (with warning)
-        4. If Instagram API healthy → Instagram API
-        5. Fallback → Telegram
+        ALL scheduled posts go through Telegram first for review/approval.
+        The Instagram API is only used when a user explicitly clicks "Auto Post"
+        in the Telegram bot interface.
+
+        This ensures:
+        1. Human review of all content before posting
+        2. Ability to skip inappropriate content
+        3. Control over what gets posted to Instagram
 
         Returns:
-            dict with method ('instagram_api' or 'telegram_manual') and success bool
+            dict with method ('telegram_manual') and success bool
         """
-        queue_item_id = str(queue_item.id)
-
-        # Phase 1 mode: Everything goes to Telegram
-        if not settings.ENABLE_INSTAGRAM_API:
-            success = await self._post_via_telegram(queue_item)
-            return {"method": "telegram_manual", "success": success}
-
-        # Content that needs human interaction
-        if getattr(media_item, "requires_interaction", False):
-            logger.info(f"Media {media_item.id} requires interaction, routing to Telegram")
-            success = await self._post_via_telegram(queue_item)
-            return {"method": "telegram_manual", "success": success}
-
-        # Check rate limits
-        remaining = self.instagram_service.get_rate_limit_remaining()
-        if remaining <= 0:
-            logger.warning("Instagram API rate limit exhausted, routing to Telegram")
-            success = await self._post_via_telegram(queue_item)
-            return {"method": "telegram_manual", "success": success}
-
-        # Try Instagram API
-        try:
-            result = await self._post_via_instagram(queue_item, media_item)
-            if result["success"]:
-                return {"method": "instagram_api", "success": True, **result}
-
-        except RateLimitError as e:
-            logger.warning(f"Instagram API rate limit hit: {e}, falling back to Telegram")
-        except TokenExpiredError as e:
-            logger.warning(f"Instagram token expired: {e}, falling back to Telegram")
-        except InstagramAPIError as e:
-            logger.error(f"Instagram API error: {e}, falling back to Telegram")
-
-        # Fallback to Telegram
-        logger.info(f"Falling back to Telegram for queue item {queue_item_id}")
+        # ALL scheduled posts go to Telegram for approval
+        # Instagram API posting happens via the "Auto Post" button callback
         success = await self._post_via_telegram(queue_item)
         return {"method": "telegram_manual", "success": success}
 
