@@ -1,18 +1,17 @@
 """Posting history repository - CRUD operations for posting history."""
 from typing import Optional, List
 from datetime import datetime, timedelta
-from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 
-from src.config.database import get_db
+from src.repositories.base_repository import BaseRepository
 from src.models.posting_history import PostingHistory
 
 
-class HistoryRepository:
+class HistoryRepository(BaseRepository):
     """Repository for PostingHistory CRUD operations."""
 
     def __init__(self):
-        self.db: Session = next(get_db())
+        super().__init__()
 
     def get_by_id(self, history_id: str) -> Optional[PostingHistory]:
         """Get history record by ID."""
@@ -76,6 +75,8 @@ class HistoryRepository:
         media_metadata: Optional[dict] = None,
         instagram_media_id: Optional[str] = None,
         instagram_permalink: Optional[str] = None,
+        instagram_story_id: Optional[str] = None,
+        posting_method: str = "telegram_manual",
         posted_by_user_id: Optional[str] = None,
         posted_by_telegram_username: Optional[str] = None,
         error_message: Optional[str] = None,
@@ -94,6 +95,8 @@ class HistoryRepository:
             media_metadata=media_metadata,
             instagram_media_id=instagram_media_id,
             instagram_permalink=instagram_permalink,
+            instagram_story_id=instagram_story_id,
+            posting_method=posting_method,
             posted_by_user_id=posted_by_user_id,
             posted_by_telegram_username=posted_by_telegram_username,
             error_message=error_message,
@@ -136,3 +139,28 @@ class HistoryRepository:
             .order_by(PostingHistory.posted_at.desc())
             .all()
         )
+
+    def count_by_method(self, method: str, since: datetime) -> int:
+        """
+        Count posts by posting method since a given time.
+
+        Used for rate limit calculations (e.g., Instagram API posts in last hour).
+
+        Args:
+            method: Posting method ('instagram_api' or 'telegram_manual')
+            since: Start of time window
+
+        Returns:
+            Count of posts matching criteria
+        """
+        return (
+            self.db.query(func.count(PostingHistory.id))
+            .filter(
+                and_(
+                    PostingHistory.posting_method == method,
+                    PostingHistory.posted_at >= since,
+                    PostingHistory.success == True,
+                )
+            )
+            .scalar()
+        ) or 0

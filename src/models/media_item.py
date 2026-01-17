@@ -39,6 +39,12 @@ class MediaItem(Base):
     tags = Column(ARRAY(Text))  # Array of custom tags (user-defined)
     custom_metadata = Column(JSONB)  # Flexible JSON field for any additional data
 
+    # Cloud storage (Phase 2 - temporary uploads for Instagram API)
+    cloud_url = Column(Text)  # Cloudinary URL for Instagram API posting
+    cloud_public_id = Column(Text)  # Cloudinary public_id for deletion
+    cloud_uploaded_at = Column(DateTime)  # When uploaded to cloud
+    cloud_expires_at = Column(DateTime)  # When cloud URL expires
+
     # Tracking
     times_posted = Column(Integer, default=0)
     last_posted_at = Column(DateTime)

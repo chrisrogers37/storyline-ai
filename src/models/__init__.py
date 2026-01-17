@@ -7,6 +7,7 @@ from src.models.media_lock import MediaPostingLock
 from src.models.service_run import ServiceRun
 from src.models.user_interaction import UserInteraction
 from src.models.category_mix import CategoryPostCaseMix
+from src.models.api_token import ApiToken
 
 __all__ = [
     "User",
@@ -17,4 +18,5 @@ __all__ = [
     "ServiceRun",
     "UserInteraction",
     "CategoryPostCaseMix",
+    "ApiToken",
 ]

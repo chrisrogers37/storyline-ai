@@ -6,7 +6,7 @@ console = Console()
 
 
 @click.group()
-@click.version_option(version="1.0.0")
+@click.version_option(version="1.4.0")
 def cli():
     """Storyline AI - Instagram Story Automation System"""
     pass
@@ -24,6 +24,7 @@ from cli.commands.media import (
 from cli.commands.queue import create_schedule, process_queue, list_queue, clear_queue
 from cli.commands.users import list_users, promote_user
 from cli.commands.health import check_health
+from cli.commands.instagram import instagram_auth, instagram_status
 
 # Add commands to CLI
 cli.add_command(index)
@@ -39,6 +40,8 @@ cli.add_command(clear_queue)
 cli.add_command(list_users)
 cli.add_command(promote_user)
 cli.add_command(check_health)
+cli.add_command(instagram_auth)
+cli.add_command(instagram_status)
 
 
 if __name__ == "__main__":

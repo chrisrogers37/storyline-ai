@@ -180,7 +180,7 @@ DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=storyline_ai
 DB_USER=storyline_user
-DB_PASSWORD=storyline2024
+DB_PASSWORD=your_secure_password_here
 
 TELEGRAM_BOT_TOKEN=your_token_here
 TELEGRAM_CHANNEL_ID=your_channel_id

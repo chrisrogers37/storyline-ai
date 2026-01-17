@@ -71,6 +71,7 @@ class TelegramService(BaseService):
         self.application.add_handler(CommandHandler("locks", self._handle_locks))
         self.application.add_handler(CommandHandler("clear", self._handle_clear))
         self.application.add_handler(CommandHandler("help", self._handle_help))
+        self.application.add_handler(CommandHandler("dryrun", self._handle_dryrun))
         self.application.add_handler(CallbackQueryHandler(self._handle_callback))
 
         logger.info("Telegram bot initialized")
@@ -105,8 +106,20 @@ class TelegramService(BaseService):
         caption = self._build_caption(media_item, queue_item, force_sent=force_sent)
 
         # Build inline keyboard
-        # Note: Instagram button is above Reject so it's not blocked by "Save Image" popup
-        keyboard = [
+        # Layout: Auto Post (if enabled) → Manual workflow → Reject
+        keyboard = []
+
+        # Add Auto Post button if Instagram API is enabled
+        if settings.ENABLE_INSTAGRAM_API:
+            keyboard.append([
+                InlineKeyboardButton(
+                    "🤖 Auto Post to Instagram",
+                    callback_data=f"autopost:{queue_item_id}"
+                ),
+            ])
+
+        # Manual workflow buttons
+        keyboard.extend([
             [
                 InlineKeyboardButton("✅ Posted", callback_data=f"posted:{queue_item_id}"),
                 InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{queue_item_id}"),
@@ -117,7 +130,7 @@ class TelegramService(BaseService):
             [
                 InlineKeyboardButton("🚫 Reject", callback_data=f"reject:{queue_item_id}"),
             ]
-        ]
+        ])
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         try:
@@ -275,15 +288,35 @@ class TelegramService(BaseService):
         else:
             last_posted = "Never"
 
+        # Mode indicators
+        dry_run_status = "🧪 ON" if settings.DRY_RUN_MODE else "🚀 OFF"
+        pause_status = "⏸️ PAUSED" if self.is_paused else "▶️ Active"
+
+        # Instagram API status
+        if settings.ENABLE_INSTAGRAM_API:
+            from src.services.integrations.instagram_api import InstagramAPIService
+            with InstagramAPIService() as ig_service:
+                rate_remaining = ig_service.get_rate_limit_remaining()
+            ig_status = f"✅ Enabled ({rate_remaining}/{settings.INSTAGRAM_POSTS_PER_HOUR} remaining)"
+        else:
+            ig_status = "❌ Disabled"
+
         status_msg = (
-            f"✅ *Storyline AI Status*\n\n"
+            f"📊 *Storyline AI Status*\n\n"
+            f"*System:*\n"
             f"🤖 Bot: Online\n"
-            f"📊 Queue: {pending_count} pending\n"
-            f"📁 Media Library: {media_count} active\n"
-            f"🔒 Locked Items: {locked_count}\n"
-            f"⏰ Next Post: {next_post_str}\n"
-            f"📤 Last Posted: {last_posted}\n"
-            f"📈 Posted (24h): {len(recent_posts)}"
+            f"⏯️ Posting: {pause_status}\n"
+            f"🧪 Dry Run: {dry_run_status}\n\n"
+            f"*Instagram API:*\n"
+            f"📸 {ig_status}\n\n"
+            f"*Queue & Media:*\n"
+            f"📋 Queue: {pending_count} pending\n"
+            f"📁 Library: {media_count} active\n"
+            f"🔒 Locked: {locked_count}\n\n"
+            f"*Activity:*\n"
+            f"⏰ Next: {next_post_str}\n"
+            f"📤 Last: {last_posted}\n"
+            f"📈 24h: {len(recent_posts)} posts"
         )
 
         await update.message.reply_text(status_msg, parse_mode="Markdown")
@@ -361,13 +394,12 @@ class TelegramService(BaseService):
 
         # Use shared force_post_next() method (lazy import to avoid circular import)
         from src.services.core.posting import PostingService
-        posting_service = PostingService()
-
-        result = await posting_service.force_post_next(
-            user_id=str(user.id),
-            triggered_by="telegram",
-            force_sent_indicator=True,  # Shows ⚡ in caption
-        )
+        with PostingService() as posting_service:
+            result = await posting_service.force_post_next(
+                user_id=str(user.id),
+                triggered_by="telegram",
+                force_sent_indicator=True,  # Shows ⚡ in caption
+            )
 
         if not result["success"]:
             if result["error"] == "No pending items in queue":
@@ -425,6 +457,7 @@ class TelegramService(BaseService):
             "*Control Commands:*\n"
             "/pause - Pause automatic posting\n"
             "/resume - Resume posting\n"
+            "/dryrun - Toggle dry run mode\n"
             "/status - System health check\n\n"
             "*Info Commands:*\n"
             "/stats - Media library statistics\n"
@@ -432,7 +465,8 @@ class TelegramService(BaseService):
             "/locks - View locked items\n"
             "/help - Show this help\n\n"
             "*Button Actions:*\n"
-            "✅ Posted - Mark as posted\n"
+            "🤖 Auto Post - Post via Instagram API\n"
+            "✅ Posted - Mark as posted (manual)\n"
             "⏭️ Skip - Skip (requeue later)\n"
             "🚫 Reject - Permanently remove"
         )
@@ -443,6 +477,64 @@ class TelegramService(BaseService):
         self.interaction_service.log_command(
             user_id=str(user.id),
             command="/help",
+            telegram_chat_id=update.effective_chat.id,
+            telegram_message_id=update.message.message_id,
+        )
+
+    async def _handle_dryrun(self, update, context):
+        """
+        Handle /dryrun command - toggle or check dry run mode.
+
+        Usage:
+            /dryrun - Show current status
+            /dryrun on - Enable dry run mode
+            /dryrun off - Disable dry run mode
+        """
+        user = self._get_or_create_user(update.effective_user)
+
+        # Check if user provided an argument
+        args = context.args if context.args else []
+
+        if len(args) == 0:
+            # No argument - show current status
+            status = "ON" if settings.DRY_RUN_MODE else "OFF"
+            emoji = "🧪" if settings.DRY_RUN_MODE else "🚀"
+            await update.message.reply_text(
+                f"{emoji} Dry Run Mode: {status}\n\n"
+                f"Use /dryrun on or /dryrun off to change."
+            )
+        elif args[0].lower() == "on":
+            settings.DRY_RUN_MODE = True
+            await update.message.reply_text(
+                "🧪 Dry Run Mode: ON\n\n"
+                "• Auto Post will upload to Cloudinary but NOT post to Instagram\n"
+                "• Automatic posting loop will skip Instagram API calls\n"
+                "• Use /dryrun off to resume real posting"
+            )
+            logger.info(f"Dry run mode ENABLED by {self._get_display_name(user)}")
+        elif args[0].lower() == "off":
+            settings.DRY_RUN_MODE = False
+            await update.message.reply_text(
+                "🚀 Dry Run Mode: OFF\n\n"
+                "• Auto Post will now post to Instagram for real\n"
+                "• Automatic posting loop is active\n"
+                "• Use /dryrun on to test without posting"
+            )
+            logger.info(f"Dry run mode DISABLED by {self._get_display_name(user)}")
+        else:
+            await update.message.reply_text(
+                "❓ Invalid argument.\n\n"
+                "Usage:\n"
+                "• /dryrun - Show current status\n"
+                "• /dryrun on - Enable dry run\n"
+                "• /dryrun off - Disable dry run"
+            )
+
+        # Log interaction
+        self.interaction_service.log_command(
+            user_id=str(user.id),
+            command="/dryrun",
+            context={"args": args},
             telegram_chat_id=update.effective_chat.id,
             telegram_message_id=update.message.message_id,
         )
@@ -550,24 +642,23 @@ class TelegramService(BaseService):
 
         # Import scheduler service here to avoid circular imports
         from src.services.core.scheduler import SchedulerService
-        scheduler = SchedulerService()
-
-        try:
-            result = scheduler.create_schedule(days=days)
-            await update.message.reply_text(
-                f"📅 *Schedule Created*\n\n"
-                f"✅ Scheduled: {result['scheduled']} posts\n"
-                f"⏭️ Skipped: {result['skipped']} (locked/queued)\n"
-                f"📊 Total slots: {result['total_slots']}",
-                parse_mode="Markdown"
-            )
-            logger.info(f"Schedule created by {self._get_display_name(user)}: {days} days, {result['scheduled']} posts")
-        except Exception as e:
-            await update.message.reply_text(
-                f"❌ *Error*\n\n{str(e)}",
-                parse_mode="Markdown"
-            )
-            logger.error(f"Schedule creation failed: {e}")
+        with SchedulerService() as scheduler:
+            try:
+                result = scheduler.create_schedule(days=days)
+                await update.message.reply_text(
+                    f"📅 *Schedule Created*\n\n"
+                    f"✅ Scheduled: {result['scheduled']} posts\n"
+                    f"⏭️ Skipped: {result['skipped']} (locked/queued)\n"
+                    f"📊 Total slots: {result['total_slots']}",
+                    parse_mode="Markdown"
+                )
+                logger.info(f"Schedule created by {self._get_display_name(user)}: {days} days, {result['scheduled']} posts")
+            except Exception as e:
+                await update.message.reply_text(
+                    f"❌ *Error*\n\n{str(e)}",
+                    parse_mode="Markdown"
+                )
+                logger.error(f"Schedule creation failed: {e}")
 
         self.interaction_service.log_command(
             user_id=str(user.id),
@@ -742,6 +833,10 @@ class TelegramService(BaseService):
             await self._handle_posted(data, user, query)
         elif action == "skip":
             await self._handle_skipped(data, user, query)
+        elif action == "autopost":
+            await self._handle_autopost(data, user, query)
+        elif action == "back":
+            await self._handle_back(data, user, query)
         elif action == "reject":
             await self._handle_reject_confirmation(data, user, query)
         elif action == "confirm_reject":
@@ -856,6 +951,362 @@ class TelegramService(BaseService):
 
         logger.info(f"Post skipped by {self._get_display_name(user)}")
 
+    async def _handle_autopost(self, queue_id: str, user, query):
+        """
+        Handle 'Auto Post' button click.
+
+        This uploads the media to Cloudinary and posts to Instagram via API.
+        Includes CRITICAL safety gates to prevent accidental Facebook posting.
+        """
+        queue_item = self.queue_repo.get_by_id(queue_id)
+
+        if not queue_item:
+            await query.edit_message_caption(caption="⚠️ Queue item not found")
+            return
+
+        # Get media item
+        media_item = self.media_repo.get_by_id(str(queue_item.media_item_id))
+        if not media_item:
+            await query.edit_message_caption(caption="⚠️ Media item not found")
+            return
+
+        # ============================================
+        # CRITICAL SAFETY GATES
+        # ============================================
+        from src.services.integrations.instagram_api import InstagramAPIService
+        from src.services.integrations.cloud_storage import CloudStorageService
+
+        # Create services and ensure cleanup on exit
+        instagram_service = InstagramAPIService()
+        cloud_service = CloudStorageService()
+        try:
+            await self._do_autopost(queue_id, queue_item, media_item, user, query, instagram_service, cloud_service)
+        finally:
+            # Ensure services are cleaned up to prevent connection pool exhaustion
+            instagram_service.close()
+            cloud_service.close()
+
+    async def _do_autopost(self, queue_id, queue_item, media_item, user, query, instagram_service, cloud_service):
+        """Internal method to perform auto-post with pre-created services."""
+
+        # Run comprehensive safety check
+        safety_result = instagram_service.safety_check_before_post()
+
+        if not safety_result["safe_to_post"]:
+            error_list = "\n".join([f"• {e}" for e in safety_result["errors"]])
+            caption = (
+                f"🚫 *SAFETY CHECK FAILED*\n\n"
+                f"Cannot auto-post due to:\n{error_list}\n\n"
+                f"Please check your configuration."
+            )
+            await query.edit_message_caption(caption=caption, parse_mode="Markdown")
+            logger.error(f"Auto-post safety check failed: {safety_result['errors']}")
+            return
+
+        # ============================================
+        # UPLOAD TO CLOUDINARY (runs in both dry run and real mode)
+        # ============================================
+        try:
+            # Update message to show progress
+            await query.edit_message_caption(
+                caption=f"⏳ *Uploading to Cloudinary...*",
+                parse_mode="Markdown"
+            )
+
+            # Step 1: Upload to Cloudinary (uses passed-in cloud_service)
+            upload_result = cloud_service.upload_media(
+                file_path=media_item.file_path,
+                folder="instagram_stories",
+            )
+
+            cloud_url = upload_result.get("url")
+            cloud_public_id = upload_result.get("public_id")
+
+            if not cloud_url:
+                raise Exception(f"Cloudinary upload failed: No URL returned")
+
+            logger.info(f"Uploaded to Cloudinary: {cloud_public_id}")
+
+            # Update media item with cloud info
+            self.media_repo.update_cloud_info(
+                media_id=str(media_item.id),
+                cloud_url=cloud_url,
+                cloud_public_id=cloud_public_id,
+                cloud_uploaded_at=datetime.utcnow(),
+            )
+
+            # ============================================
+            # DRY RUN MODE - Stop before Instagram API
+            # ============================================
+            if settings.DRY_RUN_MODE:
+                # Dry run: only show Test Again and Back buttons
+                # Don't show Posted/Skip/Reject to prevent accidental marking
+                keyboard = [
+                    [
+                        InlineKeyboardButton(
+                            "🔄 Test Again",
+                            callback_data=f"autopost:{queue_id}"
+                        ),
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            "↩️ Back to Queue Item",
+                            callback_data=f"back:{queue_id}"
+                        ),
+                    ],
+                ]
+
+                # Escape filename for Markdown
+                escaped_filename = _escape_markdown(media_item.file_name)
+
+                # Fetch account username from API (cached)
+                account_info = await instagram_service.get_account_info()
+                if account_info.get("username"):
+                    account_display = f"@{account_info['username']}"
+                else:
+                    account_display = f"ID: {settings.INSTAGRAM_ACCOUNT_ID}"
+
+                # Apply the same transformation we'd use for Instagram
+                media_type = "VIDEO" if media_item.file_path.lower().endswith(('.mp4', '.mov')) else "IMAGE"
+                if media_type == "IMAGE":
+                    preview_url = cloud_service.get_story_optimized_url(cloud_url)
+                else:
+                    preview_url = cloud_url
+
+                caption = (
+                    f"🧪 DRY RUN - Cloudinary Upload Complete\n\n"
+                    f"📁 File: {media_item.file_name}\n"
+                    f"📸 Account: {account_display}\n\n"
+                    f"✅ Cloudinary upload: Success\n"
+                    f"🔗 Preview (with blur): {preview_url}\n\n"
+                    f"⏸️ Stopped before Instagram API\n"
+                    f"(DRY_RUN_MODE=true)\n\n"
+                    f"• No Instagram post made\n"
+                    f"• No history recorded\n"
+                    f"• No TTL lock created\n"
+                    f"• Queue item preserved\n\n"
+                    f"Tested by: {self._get_display_name(user)}"
+                )
+                await query.edit_message_caption(
+                    caption=caption,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                )
+
+                # Log interaction (dry run - but Cloudinary worked)
+                self.interaction_service.log_callback(
+                    user_id=str(user.id),
+                    callback_name="autopost",
+                    context={
+                        "queue_item_id": queue_id,
+                        "media_id": str(queue_item.media_item_id),
+                        "media_filename": media_item.file_name,
+                        "cloud_url": cloud_url,
+                        "cloud_public_id": cloud_public_id,
+                        "dry_run": True,
+                    },
+                    telegram_chat_id=query.message.chat_id,
+                    telegram_message_id=query.message.message_id,
+                )
+
+                logger.info(f"[DRY RUN] Cloudinary upload complete, stopped before Instagram API. User: {self._get_display_name(user)}, File: {media_item.file_name}")
+                return
+
+            # ============================================
+            # REAL POSTING - Continue to Instagram API
+            # ============================================
+            # Step 2: Post to Instagram
+            await query.edit_message_caption(
+                caption=f"⏳ *Posting to Instagram...*",
+                parse_mode="Markdown"
+            )
+
+            # Determine media type
+            media_type = "VIDEO" if media_item.file_path.lower().endswith(('.mp4', '.mov')) else "IMAGE"
+
+            # Apply 9:16 Story transformation (blurred background padding)
+            if media_type == "IMAGE":
+                story_url = cloud_service.get_story_optimized_url(cloud_url)
+            else:
+                # Videos don't need the same transformation
+                story_url = cloud_url
+
+            post_result = await instagram_service.post_story(
+                media_url=story_url,
+                media_type=media_type,
+            )
+
+            story_id = post_result.get("story_id")
+            logger.info(f"Posted to Instagram: story_id={story_id}")
+
+            # Step 3: Cleanup Cloudinary (optional - can keep for debugging)
+            # cloud_service.delete_media(cloud_public_id)
+
+            # Step 4: Create history record
+            self.history_repo.create(
+                media_item_id=str(queue_item.media_item_id),
+                queue_item_id=queue_id,
+                queue_created_at=queue_item.created_at,
+                queue_deleted_at=datetime.utcnow(),
+                scheduled_for=queue_item.scheduled_for,
+                posted_at=datetime.utcnow(),
+                status="posted",
+                success=True,
+                posted_by_user_id=str(user.id),
+                posted_by_telegram_username=user.telegram_username,
+                posting_method="instagram_api",
+                instagram_story_id=story_id,
+            )
+
+            # Update media item
+            self.media_repo.increment_times_posted(str(queue_item.media_item_id))
+
+            # Create 30-day lock to prevent reposting
+            self.lock_service.create_lock(str(queue_item.media_item_id))
+
+            # Delete from queue
+            self.queue_repo.delete(queue_id)
+
+            # Update user stats
+            self.user_repo.increment_posts(str(user.id))
+
+            # Success message (escape filename for Markdown)
+            escaped_filename = _escape_markdown(media_item.file_name)
+
+            # Fetch account username from API (cached)
+            account_info = await instagram_service.get_account_info()
+            if account_info.get("username"):
+                account_display = f"@{account_info['username']}"
+            else:
+                account_display = f"ID: {settings.INSTAGRAM_ACCOUNT_ID}"
+
+            caption = (
+                f"✅ *Posted to Instagram!*\n\n"
+                f"📁 {escaped_filename}\n"
+                f"📸 Account: {account_display}\n"
+                f"🆔 Story ID: {story_id[:20]}...\n\n"
+                f"Posted by: {self._get_display_name(user)}"
+            )
+            await query.edit_message_caption(caption=caption, parse_mode="Markdown")
+
+            # Log interaction
+            self.interaction_service.log_callback(
+                user_id=str(user.id),
+                callback_name="autopost",
+                context={
+                    "queue_item_id": queue_id,
+                    "media_id": str(queue_item.media_item_id),
+                    "media_filename": media_item.file_name,
+                    "instagram_story_id": story_id,
+                    "dry_run": False,
+                    "success": True,
+                },
+                telegram_chat_id=query.message.chat_id,
+                telegram_message_id=query.message.message_id,
+            )
+
+            logger.info(f"Auto-posted to Instagram by {self._get_display_name(user)}: {media_item.file_name} (story_id={story_id})")
+
+        except Exception as e:
+            # Error handling
+            error_msg = str(e)
+            logger.error(f"Auto-post failed: {error_msg}", exc_info=True)
+
+            caption = (
+                f"❌ *Auto Post Failed*\n\n"
+                f"Error: {error_msg[:200]}\n\n"
+                f"You can try again or use manual posting."
+            )
+
+            # Rebuild keyboard with all buttons
+            keyboard = []
+            if settings.ENABLE_INSTAGRAM_API:
+                keyboard.append([
+                    InlineKeyboardButton(
+                        "🔄 Retry Auto Post",
+                        callback_data=f"autopost:{queue_id}"
+                    ),
+                ])
+            keyboard.extend([
+                [
+                    InlineKeyboardButton("✅ Posted", callback_data=f"posted:{queue_id}"),
+                    InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{queue_id}"),
+                ],
+                [
+                    InlineKeyboardButton("📱 Open Instagram", url="https://www.instagram.com/"),
+                ],
+                [
+                    InlineKeyboardButton("🚫 Reject", callback_data=f"reject:{queue_id}"),
+                ]
+            ])
+
+            await query.edit_message_caption(
+                caption=caption,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="Markdown"
+            )
+
+            # Log interaction (failure)
+            self.interaction_service.log_callback(
+                user_id=str(user.id),
+                callback_name="autopost",
+                context={
+                    "queue_item_id": queue_id,
+                    "media_id": str(queue_item.media_item_id),
+                    "media_filename": media_item.file_name,
+                    "dry_run": False,
+                    "success": False,
+                    "error": error_msg[:200],
+                },
+                telegram_chat_id=query.message.chat_id,
+                telegram_message_id=query.message.message_id,
+            )
+
+    async def _handle_back(self, queue_id: str, user, query):
+        """Handle 'Back' button - restore original queue item message."""
+        queue_item = self.queue_repo.get_by_id(queue_id)
+
+        if not queue_item:
+            await query.edit_message_caption(caption="⚠️ Queue item not found")
+            return
+
+        media_item = self.media_repo.get_by_id(str(queue_item.media_item_id))
+
+        if not media_item:
+            await query.edit_message_caption(caption="⚠️ Media item not found")
+            return
+
+        # Rebuild original caption
+        caption = self._build_caption(media_item, queue_item)
+
+        # Rebuild original keyboard (including Auto Post if enabled)
+        keyboard = []
+        if settings.ENABLE_INSTAGRAM_API:
+            keyboard.append([
+                InlineKeyboardButton(
+                    "🤖 Auto Post to Instagram",
+                    callback_data=f"autopost:{queue_id}"
+                ),
+            ])
+        keyboard.extend([
+            [
+                InlineKeyboardButton("✅ Posted", callback_data=f"posted:{queue_id}"),
+                InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{queue_id}"),
+            ],
+            [
+                InlineKeyboardButton("📱 Open Instagram", url="https://www.instagram.com/"),
+            ],
+            [
+                InlineKeyboardButton("🚫 Reject", callback_data=f"reject:{queue_id}"),
+            ]
+        ])
+
+        await query.edit_message_caption(
+            caption=caption,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+        logger.info(f"Returned to queue item by {self._get_display_name(user)}")
+
     async def _handle_reject_confirmation(self, queue_id: str, user, query):
         """Show confirmation dialog before permanently rejecting media."""
         queue_item = self.queue_repo.get_by_id(queue_id)
@@ -921,8 +1372,16 @@ class TelegramService(BaseService):
         # Rebuild original caption
         caption = self._build_caption(media_item, queue_item)
 
-        # Rebuild original keyboard
-        keyboard = [
+        # Rebuild original keyboard (including Auto Post if enabled)
+        keyboard = []
+        if settings.ENABLE_INSTAGRAM_API:
+            keyboard.append([
+                InlineKeyboardButton(
+                    "🤖 Auto Post to Instagram",
+                    callback_data=f"autopost:{queue_id}"
+                ),
+            ])
+        keyboard.extend([
             [
                 InlineKeyboardButton("✅ Posted", callback_data=f"posted:{queue_id}"),
                 InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{queue_id}"),
@@ -933,7 +1392,7 @@ class TelegramService(BaseService):
             [
                 InlineKeyboardButton("🚫 Reject", callback_data=f"reject:{queue_id}"),
             ]
-        ]
+        ])
 
         await query.edit_message_caption(
             caption=caption,
@@ -1020,9 +1479,6 @@ class TelegramService(BaseService):
 
         if action == "reschedule":
             # Reschedule overdue posts to future times
-            from src.services.core.scheduler import SchedulerService
-            scheduler = SchedulerService()
-
             # Get time slots for rescheduling
             rescheduled = 0
             for i, item in enumerate(overdue):

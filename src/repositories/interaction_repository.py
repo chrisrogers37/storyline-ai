@@ -1,18 +1,17 @@
 """Interaction repository - CRUD operations for user interactions."""
 from typing import Optional, List
 from datetime import datetime, timedelta
-from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from src.config.database import get_db
+from src.repositories.base_repository import BaseRepository
 from src.models.user_interaction import UserInteraction
 
 
-class InteractionRepository:
+class InteractionRepository(BaseRepository):
     """Repository for UserInteraction CRUD operations."""
 
     def __init__(self):
-        self.db: Session = next(get_db())
+        super().__init__()
 
     def create(
         self,
