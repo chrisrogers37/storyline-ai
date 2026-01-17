@@ -7,6 +7,7 @@ import traceback
 from contextlib import contextmanager
 
 from src.repositories.service_run_repository import ServiceRunRepository
+from src.repositories.base_repository import BaseRepository
 from src.utils.logger import logger
 
 
@@ -17,11 +18,46 @@ class BaseService(ABC):
 
     All service methods should use the track_execution context manager
     to automatically log execution details.
+
+    Services can be used as context managers to ensure proper cleanup:
+        with PostingService() as service:
+            service.process_pending_posts()
     """
 
     def __init__(self):
         self.service_run_repo = ServiceRunRepository()
         self.service_name = self.__class__.__name__
+
+    def close(self):
+        """
+        Close all repository connections held by this service.
+
+        Called automatically when using the service as a context manager,
+        or can be called manually to release database connections.
+        """
+        for attr_name in dir(self):
+            try:
+                attr = getattr(self, attr_name, None)
+                if isinstance(attr, BaseRepository):
+                    attr.close()
+            except Exception:
+                pass  # Suppress errors during cleanup
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - ensures all repos are closed."""
+        self.close()
+        return False  # Don't suppress exceptions
+
+    def __del__(self):
+        """Cleanup when service is garbage collected."""
+        try:
+            self.close()
+        except Exception:
+            pass  # Suppress errors during garbage collection
 
     @contextmanager
     def track_execution(

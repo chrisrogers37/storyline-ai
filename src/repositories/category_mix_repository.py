@@ -2,18 +2,17 @@
 from typing import Optional, List, Dict
 from datetime import datetime
 from decimal import Decimal
-from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from src.config.database import get_db
+from src.repositories.base_repository import BaseRepository
 from src.models.category_mix import CategoryPostCaseMix
 
 
-class CategoryMixRepository:
+class CategoryMixRepository(BaseRepository):
     """Repository for CategoryPostCaseMix with Type 2 SCD operations."""
 
     def __init__(self):
-        self.db: Session = next(get_db())
+        super().__init__()
 
     def get_current_mix(self) -> List[CategoryPostCaseMix]:
         """Get all current (active) category ratios."""

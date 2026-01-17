@@ -1,18 +1,17 @@
 """Posting history repository - CRUD operations for posting history."""
 from typing import Optional, List
 from datetime import datetime, timedelta
-from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 
-from src.config.database import get_db
+from src.repositories.base_repository import BaseRepository
 from src.models.posting_history import PostingHistory
 
 
-class HistoryRepository:
+class HistoryRepository(BaseRepository):
     """Repository for PostingHistory CRUD operations."""
 
     def __init__(self):
-        self.db: Session = next(get_db())
+        super().__init__()
 
     def get_by_id(self, history_id: str) -> Optional[PostingHistory]:
         """Get history record by ID."""

@@ -1,18 +1,17 @@
 """Media item repository - CRUD operations for media items."""
 from typing import Optional, List
 from datetime import datetime
-from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from src.config.database import get_db
+from src.repositories.base_repository import BaseRepository
 from src.models.media_item import MediaItem
 
 
-class MediaRepository:
+class MediaRepository(BaseRepository):
     """Repository for MediaItem CRUD operations."""
 
     def __init__(self):
-        self.db: Session = next(get_db())
+        super().__init__()
 
     def get_by_id(self, media_id: str) -> Optional[MediaItem]:
         """Get media item by ID."""

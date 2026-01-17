@@ -1,17 +1,16 @@
 """User repository - CRUD operations for users."""
 from typing import Optional
 from datetime import datetime
-from sqlalchemy.orm import Session
 
-from src.config.database import get_db
+from src.repositories.base_repository import BaseRepository
 from src.models.user import User
 
 
-class UserRepository:
+class UserRepository(BaseRepository):
     """Repository for User CRUD operations."""
 
     def __init__(self):
-        self.db: Session = next(get_db())
+        super().__init__()
 
     def get_by_id(self, user_id: str) -> Optional[User]:
         """Get user by ID."""

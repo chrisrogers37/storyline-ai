@@ -6,7 +6,7 @@
 --   psql -U storyline_user -d storyline_ai -f scripts/migrations/004_instagram_api_phase2.sql
 --
 -- Run on Pi:
---   PGPASSWORD=storyline2024 psql -h localhost -U storyline_user -d storyline_ai -f scripts/migrations/004_instagram_api_phase2.sql
+--   PGPASSWORD=your_password psql -h localhost -U storyline_user -d storyline_ai -f scripts/migrations/004_instagram_api_phase2.sql
 
 BEGIN;
 

@@ -1,5 +1,5 @@
 -- Migration 003: Add user_interactions table
--- Run on Pi: PGPASSWORD=storyline2024 psql -h localhost -U storyline_user -d storyline_ai -f scripts/migrations/003_add_user_interactions.sql
+-- Run on Pi: PGPASSWORD=your_password psql -h localhost -U storyline_user -d storyline_ai -f scripts/migrations/003_add_user_interactions.sql
 
 -- User interactions table (tracks all bot interactions for analytics)
 CREATE TABLE IF NOT EXISTS user_interactions (
