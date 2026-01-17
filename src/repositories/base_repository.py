@@ -19,8 +19,21 @@ class BaseRepository:
 
     @property
     def db(self) -> Session:
-        """Get the database session."""
+        """Get the database session, ensuring it's in a clean state."""
+        # Rollback any failed transaction to reset session state
+        try:
+            if not self._db.is_active:
+                self._db.rollback()
+        except Exception:
+            pass
         return self._db
+
+    def rollback(self):
+        """Rollback the current transaction."""
+        try:
+            self._db.rollback()
+        except Exception as e:
+            logger.warning(f"Error during rollback: {e}")
 
     def close(self):
         """
