@@ -1,6 +1,6 @@
 # Storyline AI - Master Roadmap
 
-**Last Updated**: 2026-01-11
+**Last Updated**: 2026-01-18
 **Vision**: E-commerce Optimization Hub for Social Media Marketing
 
 ---
@@ -130,7 +130,7 @@ Entities (Tables):
 | 1.0 | Telegram-Only Posting | ✅ COMPLETE | - | - |
 | 1.5 | Telegram Enhancements | ✅ COMPLETE | - | Phase 1 |
 | 1.6 | Category Scheduling | ✅ COMPLETE | - | Phase 1.5 |
-| **2** | **Instagram API Automation** | 📋 PLANNED | 3-4 weeks | Phase 1.6 |
+| **2** | **Instagram API Automation** | ✅ COMPLETE | - | Phase 1.6 |
 | **3** | **Shopify Integration** | 📋 PLANNED | 2-3 weeks | Phase 2 |
 | **4** | **Printify Integration** | 📋 PLANNED | 2 weeks | Phase 3 |
 | **5** | **Media-Product Linking** | 📋 PLANNED | 2-3 weeks | Phase 3, 4 |

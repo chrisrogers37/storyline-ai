@@ -24,6 +24,8 @@ For current documentation, refer to:
 | `IMPLEMENTATION_COMPLETE.md` | Phase 1 completion checklist | Phase 1 shipped (v1.0.1) |
 | `HANDOFF-2026-01-05.md` | v1.2.0 deployment handoff | Merged to main, deployed |
 | `upcoming_build_notes.md` | Feature brainstorming | All features implemented |
+| `phase-1.5-telegram-enhancements.md` | Phase 1.5 planning | Phase 1.5 complete (v1.3.0) |
+| `instagram_automation_plan.md` | Original master planning doc | Superseded by `phases/` docs |
 
 ## When to Reference Archive
 
