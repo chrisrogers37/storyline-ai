@@ -131,12 +131,13 @@ Entities (Tables):
 | 1.5 | Telegram Enhancements | ✅ COMPLETE | - | Phase 1 |
 | 1.6 | Category Scheduling | ✅ COMPLETE | - | Phase 1.5 |
 | **2** | **Instagram API Automation** | ✅ COMPLETE | - | Phase 1.6 |
-| **3** | **Shopify Integration** | 📋 PLANNED | 2-3 weeks | Phase 2 |
-| **4** | **Printify Integration** | 📋 PLANNED | 2 weeks | Phase 3 |
-| **5** | **Media-Product Linking** | 📋 PLANNED | 2-3 weeks | Phase 3, 4 |
-| **6** | **LLM Integration** | 📋 PLANNED | 3-4 weeks | Phase 5 |
-| **7** | **Order & Email Automation** | 📋 PLANNED | 2-3 weeks | Phase 3, 6 |
-| **8** | **Dashboard UI** | 📋 PLANNED | 4-6 weeks | Phase 5, 6, 7 |
+| **2.5** | **Settings & Multi-Tenancy** | 📋 PLANNED | - | Phase 2 |
+| **3** | **Shopify Integration** | 📋 PLANNED | - | Phase 2 |
+| **4** | **Printify Integration** | 📋 PLANNED | - | Phase 3 |
+| **5** | **Media-Product Linking** | 📋 PLANNED | - | Phase 3, 4 |
+| **6** | **LLM Integration** | 📋 PLANNED | - | Phase 5 |
+| **7** | **Order & Email Automation** | 📋 PLANNED | - | Phase 3, 6 |
+| **8** | **Dashboard UI** | 📋 PLANNED | - | Phase 5, 6, 7 |
 
 ---
 
@@ -351,13 +352,16 @@ LLM Service → Email Drafts → Gmail
 
 | Document | Description |
 |----------|-------------|
-| [01_instagram_api.md](01_instagram_api.md) | Instagram Graph API integration |
+| [01_settings_and_multitenancy.md](01_settings_and_multitenancy.md) | Settings menu, cloud storage, multi-tenancy |
 | [02_shopify_integration.md](02_shopify_integration.md) | Shopify Admin API integration |
 | [03_printify_integration.md](03_printify_integration.md) | Printify API integration |
 | [04_media_product_linking.md](04_media_product_linking.md) | Media ↔ Product relationships |
 | [05_llm_integration.md](05_llm_integration.md) | AI/LLM service integration |
 | [06_order_email_automation.md](06_order_email_automation.md) | Order alerts + Email automation |
 | [07_dashboard_ui.md](07_dashboard_ui.md) | Web dashboard implementation |
+
+**Archived** (completed phases):
+| [archive/01_instagram_api.md](../archive/01_instagram_api.md) | Instagram Graph API (✅ COMPLETE) |
 
 ---
 
