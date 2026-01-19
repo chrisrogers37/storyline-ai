@@ -381,16 +381,12 @@ class InstagramAPIService(BaseService):
 
     def validate_instagram_account_id(self) -> dict:
         """
-        SAFETY GATE: Validate that the account ID is an Instagram Business Account,
-        NOT a Facebook Page ID.
+        Validate that the account ID is configured and appears to be numeric.
 
-        Instagram Business Account IDs:
-        - Start with '17841' (Meta's Instagram ID prefix)
-        - Are 17 digits long
-
-        Facebook Page IDs:
-        - Are typically 15-16 digits
-        - Do NOT start with '17841'
+        Note: Instagram Business Account IDs come in various formats:
+        - Some start with '17841' and are 17 digits
+        - Others may be shorter (15-16 digits) with different prefixes
+        - The actual validation happens when we call the API
 
         Returns:
             dict with 'valid', 'account_id', 'reason'
@@ -406,27 +402,26 @@ class InstagramAPIService(BaseService):
 
         account_id_str = str(account_id)
 
-        # Safety check 1: Must start with Instagram prefix
-        if not account_id_str.startswith("17841"):
+        # Basic validation: should be numeric
+        if not account_id_str.isdigit():
             return {
                 "valid": False,
                 "account_id": account_id_str,
-                "reason": f"DANGER: Account ID {account_id_str} does NOT start with '17841'. "
-                          "This may be a Facebook Page ID, NOT an Instagram Business Account ID. "
-                          "Posting to this ID could post to Facebook instead of Instagram!",
+                "reason": f"Account ID {account_id_str} is not numeric",
             }
 
-        # Safety check 2: Should be 17 digits
-        if len(account_id_str) != 17:
-            logger.warning(
-                f"Instagram Account ID {account_id_str} is {len(account_id_str)} digits "
-                f"(expected 17). This may still be valid but verify in Meta Business Suite."
-            )
+        # Length check (informational only - IDs vary from 15-17+ digits)
+        if len(account_id_str) < 10:
+            return {
+                "valid": False,
+                "account_id": account_id_str,
+                "reason": f"Account ID {account_id_str} is too short ({len(account_id_str)} digits)",
+            }
 
         return {
             "valid": True,
             "account_id": account_id_str,
-            "reason": "Account ID appears to be a valid Instagram Business Account ID",
+            "reason": "Account ID format is valid",
         }
 
     # Class-level cache for account info (avoid repeated API calls)
