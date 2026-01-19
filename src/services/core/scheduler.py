@@ -233,7 +233,7 @@ class SchedulerService(BaseService):
         Returns:
             MediaItem or None
         """
-        from sqlalchemy import and_, exists, select
+        from sqlalchemy import and_, exists, select, func
         from src.models.media_item import MediaItem
         from src.models.posting_queue import PostingQueue
         from src.models.media_lock import MediaPostingLock
@@ -264,17 +264,15 @@ class SchedulerService(BaseService):
         # Sort by priority:
         # 1. Never posted first (NULLS FIRST)
         # 2. Then least posted
-        # 3. Then random
-        query = query.order_by(MediaItem.last_posted_at.asc().nullsfirst(), MediaItem.times_posted.asc())
+        # 3. Then random (ensures variety when items are tied on above criteria)
+        query = query.order_by(
+            MediaItem.last_posted_at.asc().nullsfirst(),
+            MediaItem.times_posted.asc(),
+            func.random(),
+        )
 
-        # Get top candidates
-        candidates = query.limit(10).all()
-
-        if not candidates:
-            return None
-
-        # Random selection from top candidates for variety
-        return random.choice(candidates)
+        # Return top result (randomness is built into the query)
+        return query.first()
 
     def check_availability(self, media_id: str) -> bool:
         """
