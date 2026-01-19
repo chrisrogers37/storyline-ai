@@ -283,7 +283,7 @@ ENABLE_INSTAGRAM_API=true
 # Instagram API Configuration
 # ============================================
 INSTAGRAM_ACCOUNT_ID=12345678901234567
-INSTAGRAM_ACCESS_TOKEN=EAAXXXOQFRI...your_page_access_token...
+INSTAGRAM_ACCESS_TOKEN=EAAXXX...your_page_access_token...
 
 # Facebook App (for future token refresh)
 FACEBOOK_APP_ID=1234567890123456
@@ -456,13 +456,13 @@ The Page Access Token is what you store in `INSTAGRAM_ACCESS_TOKEN`. It:
 To manage multiple accounts, you can store alternate credentials commented out:
 
 ```bash
-# Currently active: Gatortails
+# Currently active: Account A
 INSTAGRAM_ACCOUNT_ID=12345678901234567
-INSTAGRAM_ACCESS_TOKEN=EAAXXX...token1...
+INSTAGRAM_ACCESS_TOKEN=EAAXXX...your_token_here...
 
 # Alternate: Account B
 # INSTAGRAM_ACCOUNT_ID=98765432109876543
-# INSTAGRAM_ACCESS_TOKEN=EAAXXX...token2...
+# INSTAGRAM_ACCESS_TOKEN=EAAXXX...alternate_token_here...
 ```
 
 Swap which lines are commented to switch accounts.
