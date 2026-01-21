@@ -1,0 +1,3 @@
+# Ignore Markdown files in archive documentation directory
+documentation/*.md
+documentation/**/*.md
