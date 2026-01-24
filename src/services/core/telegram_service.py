@@ -842,38 +842,42 @@ class TelegramService(BaseService):
 
     async def _handle_callback(self, update, context):
         """Handle inline button callbacks."""
-        query = update.callback_query
-        await query.answer()
+        try:
+            query = update.callback_query
+            await query.answer()
 
-        # Parse callback data
-        parts = query.data.split(":")
-        action = parts[0]
-        data = parts[1] if len(parts) > 1 else None
+            # Parse callback data
+            parts = query.data.split(":")
+            action = parts[0]
+            data = parts[1] if len(parts) > 1 else None
 
-        # Get user info
-        user = self._get_or_create_user(query.from_user)
+            # Get user info
+            user = self._get_or_create_user(query.from_user)
 
-        # Queue item callbacks
-        if action == "posted":
-            await self._handle_posted(data, user, query)
-        elif action == "skip":
-            await self._handle_skipped(data, user, query)
-        elif action == "autopost":
-            await self._handle_autopost(data, user, query)
-        elif action == "back":
-            await self._handle_back(data, user, query)
-        elif action == "reject":
-            await self._handle_reject_confirmation(data, user, query)
-        elif action == "confirm_reject":
-            await self._handle_rejected(data, user, query)
-        elif action == "cancel_reject":
-            await self._handle_cancel_reject(data, user, query)
-        # Resume callbacks
-        elif action == "resume":
-            await self._handle_resume_callback(data, user, query)
-        # Clear callbacks
-        elif action == "clear":
-            await self._handle_clear_callback(data, user, query)
+            # Queue item callbacks
+            if action == "posted":
+                await self._handle_posted(data, user, query)
+            elif action == "skip":
+                await self._handle_skipped(data, user, query)
+            elif action == "autopost":
+                await self._handle_autopost(data, user, query)
+            elif action == "back":
+                await self._handle_back(data, user, query)
+            elif action == "reject":
+                await self._handle_reject_confirmation(data, user, query)
+            elif action == "confirm_reject":
+                await self._handle_rejected(data, user, query)
+            elif action == "cancel_reject":
+                await self._handle_cancel_reject(data, user, query)
+            # Resume callbacks
+            elif action == "resume":
+                await self._handle_resume_callback(data, user, query)
+            # Clear callbacks
+            elif action == "clear":
+                await self._handle_clear_callback(data, user, query)
+        finally:
+            # Clean up open transactions to prevent "idle in transaction"
+            self.cleanup_transactions()
 
     async def _handle_posted(self, queue_id: str, user, query):
         """Handle 'Posted' button click."""

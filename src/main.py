@@ -39,6 +39,9 @@ async def run_scheduler_loop(posting_service: PostingService):
 
         except Exception as e:
             logger.error(f"Error in scheduler loop: {e}", exc_info=True)
+        finally:
+            # Clean up open transactions to prevent "idle in transaction"
+            posting_service.cleanup_transactions()
 
         # Wait 1 minute before next check
         await asyncio.sleep(60)
@@ -61,6 +64,9 @@ async def cleanup_locks_loop(lock_service: MediaLockService):
 
         except Exception as e:
             logger.error(f"Error in cleanup loop: {e}", exc_info=True)
+        finally:
+            # Clean up open transactions
+            lock_service.cleanup_transactions()
 
 
 async def main_async():

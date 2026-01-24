@@ -28,6 +28,22 @@ class BaseService(ABC):
         self.service_run_repo = ServiceRunRepository()
         self.service_name = self.__class__.__name__
 
+    def cleanup_transactions(self):
+        """
+        Commit/rollback all open transactions on repository sessions.
+
+        Call this periodically in long-running loops to prevent
+        "idle in transaction" connections from piling up.
+        This ends open transactions without closing the sessions.
+        """
+        for attr_name in dir(self):
+            try:
+                attr = getattr(self, attr_name, None)
+                if isinstance(attr, BaseRepository):
+                    attr.end_read_transaction()
+            except Exception:
+                pass  # Suppress errors during cleanup
+
     def close(self):
         """
         Close all repository connections held by this service.
