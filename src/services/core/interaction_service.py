@@ -131,6 +131,46 @@ class InteractionService:
             logger.warning(f"Failed to log message interaction: {e}")
             return None
 
+    def log_bot_response(
+        self,
+        response_type: str,
+        context: Optional[dict] = None,
+        telegram_chat_id: Optional[int] = None,
+        telegram_message_id: Optional[int] = None,
+    ) -> Optional[UserInteraction]:
+        """
+        Log an outgoing bot response (what the bot sends to users).
+
+        This enables full visibility into bot activity without needing
+        to view Telegram directly.
+
+        Args:
+            response_type: Type of response (e.g., 'photo_notification',
+                          'text_reply', 'caption_update', 'status_message')
+            context: Response details including:
+                - caption: The message text or caption sent
+                - buttons: List of button labels shown
+                - media_filename: Filename if sending media
+                - edited: True if this was an edit to existing message
+            telegram_chat_id: Telegram chat ID
+            telegram_message_id: Telegram message ID of sent message
+
+        Returns:
+            Created UserInteraction record, or None if logging failed
+        """
+        try:
+            return self.interaction_repo.create(
+                user_id=None,  # Bot responses don't have a user_id
+                interaction_type="bot_response",
+                interaction_name=response_type,
+                context=context,
+                telegram_chat_id=telegram_chat_id,
+                telegram_message_id=telegram_message_id,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to log bot response: {e}")
+            return None
+
     # ─────────────────────────────────────────────────────────────
     # Analytics Methods
     # ─────────────────────────────────────────────────────────────

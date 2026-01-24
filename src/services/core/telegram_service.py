@@ -24,6 +24,17 @@ def _escape_markdown(text: str) -> str:
     return re.sub(r'([_*`\[])', r'\\\1', text)
 
 
+def _extract_button_labels(reply_markup) -> list:
+    """Extract button labels from an InlineKeyboardMarkup for logging."""
+    if not reply_markup or not hasattr(reply_markup, 'inline_keyboard'):
+        return []
+    labels = []
+    for row in reply_markup.inline_keyboard:
+        for button in row:
+            labels.append(button.text)
+    return labels
+
+
 class TelegramService(BaseService):
     """All Telegram bot operations."""
 
@@ -142,6 +153,20 @@ class TelegramService(BaseService):
 
             # Save telegram message ID
             self.queue_repo.set_telegram_message(queue_item_id, message.message_id, self.channel_id)
+
+            # Log outgoing bot response for visibility
+            self.interaction_service.log_bot_response(
+                response_type="photo_notification",
+                context={
+                    "caption": caption,
+                    "buttons": _extract_button_labels(reply_markup),
+                    "media_filename": media_item.file_name,
+                    "queue_item_id": queue_item_id,
+                    "force_sent": force_sent,
+                },
+                telegram_chat_id=self.channel_id,
+                telegram_message_id=message.message_id,
+            )
 
             logger.info(f"Sent Telegram notification for {media_item.file_name}")
             return True
@@ -888,7 +913,8 @@ class TelegramService(BaseService):
         self.user_repo.increment_posts(str(user.id))
 
         # Update message
-        await query.edit_message_caption(caption=f"✅ Marked as posted by {self._get_display_name(user)}")
+        new_caption = f"✅ Marked as posted by {self._get_display_name(user)}"
+        await query.edit_message_caption(caption=new_caption)
 
         # Log interaction
         self.interaction_service.log_callback(
@@ -898,6 +924,19 @@ class TelegramService(BaseService):
                 "queue_item_id": queue_id,
                 "media_id": str(queue_item.media_item_id),
                 "media_filename": media_item.file_name if media_item else None,
+            },
+            telegram_chat_id=query.message.chat_id,
+            telegram_message_id=query.message.message_id,
+        )
+
+        # Log outgoing bot response
+        self.interaction_service.log_bot_response(
+            response_type="caption_update",
+            context={
+                "caption": new_caption,
+                "action": "posted",
+                "media_filename": media_item.file_name if media_item else None,
+                "edited": True,
             },
             telegram_chat_id=query.message.chat_id,
             telegram_message_id=query.message.message_id,
@@ -934,7 +973,8 @@ class TelegramService(BaseService):
         self.queue_repo.delete(queue_id)
 
         # Update message
-        await query.edit_message_caption(caption=f"⏭️ Skipped by {self._get_display_name(user)}")
+        new_caption = f"⏭️ Skipped by {self._get_display_name(user)}"
+        await query.edit_message_caption(caption=new_caption)
 
         # Log interaction
         self.interaction_service.log_callback(
@@ -944,6 +984,19 @@ class TelegramService(BaseService):
                 "queue_item_id": queue_id,
                 "media_id": str(queue_item.media_item_id),
                 "media_filename": media_item.file_name if media_item else None,
+            },
+            telegram_chat_id=query.message.chat_id,
+            telegram_message_id=query.message.message_id,
+        )
+
+        # Log outgoing bot response
+        self.interaction_service.log_bot_response(
+            response_type="caption_update",
+            context={
+                "caption": new_caption,
+                "action": "skipped",
+                "media_filename": media_item.file_name if media_item else None,
+                "edited": True,
             },
             telegram_chat_id=query.message.chat_id,
             telegram_message_id=query.message.message_id,
@@ -1199,6 +1252,20 @@ class TelegramService(BaseService):
                     "instagram_story_id": story_id,
                     "dry_run": False,
                     "success": True,
+                },
+                telegram_chat_id=query.message.chat_id,
+                telegram_message_id=query.message.message_id,
+            )
+
+            # Log outgoing bot response
+            self.interaction_service.log_bot_response(
+                response_type="caption_update",
+                context={
+                    "caption": caption,
+                    "action": "autopost_success",
+                    "media_filename": media_item.file_name,
+                    "instagram_story_id": story_id,
+                    "edited": True,
                 },
                 telegram_chat_id=query.message.chat_id,
                 telegram_message_id=query.message.message_id,
@@ -1464,6 +1531,19 @@ class TelegramService(BaseService):
                 "queue_item_id": queue_id,
                 "media_id": str(queue_item.media_item_id),
                 "media_filename": media_item.file_name if media_item else None,
+            },
+            telegram_chat_id=query.message.chat_id,
+            telegram_message_id=query.message.message_id,
+        )
+
+        # Log outgoing bot response
+        self.interaction_service.log_bot_response(
+            response_type="caption_update",
+            context={
+                "caption": caption,
+                "action": "rejected",
+                "media_filename": media_item.file_name if media_item else None,
+                "edited": True,
             },
             telegram_chat_id=query.message.chat_id,
             telegram_message_id=query.message.message_id,

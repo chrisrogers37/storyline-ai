@@ -17,26 +17,27 @@ class UserInteraction(Base):
     - 'command': Bot commands (/queue, /status, /help)
     - 'callback': Button callbacks (posted, skip, reject, etc.)
     - 'message': Reserved for future text message interactions
+    - 'bot_response': Outgoing messages from bot (for visibility/debugging)
     """
 
     __tablename__ = "user_interactions"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
-    # Who performed the interaction
+    # Who performed the interaction (nullable for bot_response type)
     user_id = Column(
         UUID(as_uuid=True),
         ForeignKey("users.id"),
-        nullable=False,
+        nullable=True,  # Allow NULL for bot_response entries
         index=True
     )
 
     # What type of interaction
-    interaction_type = Column(String(50), nullable=False, index=True)  # 'command', 'callback', 'message'
-    interaction_name = Column(String(100), nullable=False, index=True)  # '/queue', 'posted', 'skip', etc.
+    interaction_type = Column(String(50), nullable=False, index=True)  # 'command', 'callback', 'message', 'bot_response'
+    interaction_name = Column(String(100), nullable=False, index=True)  # '/queue', 'posted', 'photo_notification', etc.
 
     # Flexible context data
-    context = Column(JSONB)  # {queue_item_id, media_id, items_shown, etc.}
+    context = Column(JSONB)  # {queue_item_id, media_id, caption, buttons, etc.}
 
     # Telegram metadata
     telegram_chat_id = Column(BigInteger)
@@ -47,7 +48,7 @@ class UserInteraction(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "interaction_type IN ('command', 'callback', 'message')",
+            "interaction_type IN ('command', 'callback', 'message', 'bot_response')",
             name="check_interaction_type"
         ),
     )
