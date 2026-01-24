@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ssh *)",
+      "Bash(scp *)",
+      "Bash(rsync *)",
+      "Bash(psql *)",
+      "Bash(pg_dump *)",
+      "Bash(python*)",
+      "Bash(pip*)",
+      "Bash(pytest*)",
+      "Bash(storyline-cli index-media*)",
+      "Bash(storyline-cli list-*)",
+      "Bash(storyline-cli check-health*)",
+      "Bash(storyline-cli validate-image*)",
+      "Bash(storyline-cli category-mix-history*)",
+      "Bash(storyline-cli instagram-status*)",
+      "Bash(source venv*)",
+      "Bash(. venv*)"
+    ],
+    "deny": [
+      "Bash(storyline-cli process-queue*)",
+      "Bash(storyline-cli create-schedule*)",
+      "Bash(storyline-cli clear-queue*)",
+      "Bash(storyline-cli instagram-auth*)",
+      "Bash(python -m src.main*)",
+      "Bash(python src/main.py*)"
+    ]
+  }
+}

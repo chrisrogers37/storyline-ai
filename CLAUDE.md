@@ -2,6 +2,99 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+---
+
+## CRITICAL SAFETY RULES
+
+**THIS SYSTEM POSTS TO INSTAGRAM. DO NOT TRIGGER POSTING WITHOUT EXPLICIT USER APPROVAL.**
+
+### NEVER run these commands:
+```bash
+# DANGEROUS - Actually posts to Instagram/Telegram
+storyline-cli process-queue
+storyline-cli process-queue --force
+python -m src.main
+
+# DANGEROUS - Modifies production schedule
+storyline-cli create-schedule
+storyline-cli clear-queue
+
+# DANGEROUS - Modifies authentication
+storyline-cli instagram-auth
+```
+
+### SAFE commands you CAN run:
+```bash
+# Reading/inspection only - always safe
+storyline-cli list-queue
+storyline-cli list-media
+storyline-cli list-categories
+storyline-cli list-users
+storyline-cli check-health
+storyline-cli instagram-status
+storyline-cli validate-image <path>
+storyline-cli category-mix-history
+
+# Tests - always safe
+pytest
+```
+
+### Before ANY posting-related action:
+1. **STOP** and ask the user for explicit confirmation
+2. Explain exactly what will happen (e.g., "This will post to Instagram immediately")
+3. Wait for user to type "yes" or approve
+
+### Telegram Web (web.telegram.org) Rules:
+- **NEVER type or click** in Telegram Web - view/screenshot only
+- Use Telegram Web purely for visual verification of message formatting
+- All bot interactions must go through the database or user's phone
+
+---
+
+## Remote Development (Raspberry Pi)
+
+The production system runs on a Raspberry Pi. SSH access is configured via alias (see `~/.ssh/config`).
+
+### Connecting to the Pi
+```bash
+# SSH using configured alias (IP/hostname in ~/.ssh/config, not in repo)
+ssh crogberrypi
+
+# Database access via SSH tunnel
+ssh -L 5433:localhost:5432 crogberrypi
+
+# Then connect locally through the tunnel:
+psql -h localhost -p 5433 -U storyline_user -d storyline_ai
+
+# Or run psql directly on the Pi:
+ssh crogberrypi "psql -U storyline_user -d storyline_ai -c 'SELECT 1;'"
+```
+
+> **Note for contributors**: Set up your own SSH alias `crogberrypi` pointing to the Pi's IP.
+
+### Safe Database Queries
+```sql
+-- Check queue status
+SELECT * FROM posting_queue WHERE status = 'pending' ORDER BY scheduled_for;
+
+-- View recent posts
+SELECT * FROM posting_history ORDER BY posted_at DESC LIMIT 20;
+
+-- Check media items
+SELECT id, file_name, category, times_posted, last_posted_at
+FROM media_items WHERE is_active = true LIMIT 50;
+
+-- Service run history
+SELECT * FROM service_runs ORDER BY started_at DESC LIMIT 20;
+```
+
+### NEVER run on production Pi:
+- `storyline-cli process-queue` (posts to Instagram)
+- `python -m src.main` (starts the posting scheduler)
+- Any INSERT/UPDATE/DELETE on `posting_history` without explicit approval
+
+---
+
 ## Project Overview
 
 **Storyline AI** is a self-hosted Instagram Story scheduling and automation system with Telegram-based team collaboration.

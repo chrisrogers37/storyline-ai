@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-01-24
+
+### Added - Claude Code Automation & Bot Response Logging
+
+#### Bot Response Logging
+- **Outgoing Message Tracking** - Log all bot responses to `user_interactions` table
+  - New `bot_response` interaction type for outgoing messages
+  - Captures message text, button layouts, and media filenames
+  - Enables full visibility into bot activity without viewing Telegram
+  - Query both incoming (user actions) and outgoing (bot responses) in one place
+
+- **Enhanced Visibility Methods** - Log key bot actions
+  - `photo_notification` - When bot sends media with approve buttons
+  - `caption_update` - When marking posts or updating captions
+  - `text_reply` - For status messages and confirmations
+
+#### Claude Code Integration
+- **Project-Specific Configuration** - `.claude/settings.json` for safe automation
+  - Allow list for safe read-only commands (list, status, check)
+  - Deny list for dangerous posting commands (process-queue, create-schedule)
+  - Enables autonomous development iteration with guardrails
+
+- **`/telegram-status` Command** - SSH-based bot status checking
+  - Query bidirectional activity (incoming + outgoing messages)
+  - Show current queue and recent posts
+  - Check service health via systemctl
+  - No need to view Telegram directly
+
+- **Safety Documentation** - Updated CLAUDE.md with critical rules
+  - Clear dangerous vs safe command lists
+  - Remote development (Raspberry Pi) guidelines
+  - Database query examples for safe inspection
+
+### Changed
+- `user_interactions.user_id` is now nullable to support `bot_response` entries
+- Updated `check_interaction_type` constraint to include `bot_response`
+- Moved legacy docs from `documentation/updates/` to `documentation/archive/`
+
+### Technical Details
+
+#### Database Migration (005)
+- `ALTER TABLE user_interactions ALTER COLUMN user_id DROP NOT NULL`
+- Added `bot_response` to interaction_type check constraint
+- New partial index on `created_at` for bot_response queries
+
+#### Files Changed
+- `src/models/user_interaction.py` - Nullable user_id, updated docstring
+- `src/services/core/interaction_service.py` - Added `log_bot_response()` method
+- `src/services/core/telegram_service.py` - Log outgoing messages in handlers
+- `scripts/migrations/005_add_bot_response_logging.sql` - Schema migration
+- `.claude/settings.json` - Project permission configuration
+- `.claude/commands/telegram-status.md` - Status check slash command
+
 ## [1.4.0] - 2026-01-10
 
 ### Added - Phase 1.6: Category-Based Scheduling
