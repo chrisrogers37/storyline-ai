@@ -1,25 +1,29 @@
 # Settings Management & Multi-Tenancy
 
-**Status**: 📋 PLANNING
+**Status**: 🚧 IN PROGRESS (Phase 1 Complete, Phase 1.5 Planning)
 **Created**: 2026-01-18
 **Updated**: 2026-01-24
-**Priority**: Next Up
+**Priority**: Active Development
 **Dependencies**: Phase 2 (Instagram API) - Complete
-**Document Version**: 3.0
+**Document Version**: 4.0
 
 ---
 
 ## Executive Summary
 
-This document outlines the implementation of runtime-configurable settings and eventual multi-tenancy support. The work is split into three phases to minimize risk and allow incremental deployment.
+This document outlines the implementation of runtime-configurable settings, Instagram account management, and eventual multi-tenancy support. The work is split into phases to minimize risk and allow incremental deployment.
 
 **Current State Analysis (as of 2026-01-24):**
-- All settings loaded from `.env` via Pydantic `BaseSettings`
-- `DRY_RUN_MODE` can be toggled at runtime but not persisted (lost on restart)
-- Pause state is in-memory only (`TelegramService._paused` class variable)
-- No database-backed settings exist
-- Current migration version: **005** (next: **006**)
-- Type 2 SCD pattern successfully used in `category_post_case_mix` table
+- ✅ Phase 1 Complete: `/settings` command with database-backed toggles
+- ✅ Settings persist across restarts (migration 006 deployed)
+- ✅ Pause state tracked with user/timestamp
+- 🚧 Phase 1.5: Instagram Account Management (this section)
+- Current migration version: **006** (next: **007**)
+
+**Deployment Model:**
+- **Single-tenant by design** - Each deployment = one bot + one database
+- Multiple Instagram accounts supported **within a single deployment**
+- Other organizations should run their own deployment (not share bots)
 
 ---
 
@@ -38,11 +42,12 @@ The current system uses environment variables (`.env`) for all configuration, re
 
 ## Implementation Sequence
 
-| Phase | Name | Scope | Estimated Effort |
-|-------|------|-------|------------------|
-| **1** | Settings Menu | Runtime config via `/settings` for existing features | 2-3 days |
-| **2** | Cloud Media Storage | Google Drive / S3 integration, per-chat media source | 4-5 days |
-| **3** | Multi-Tenancy | Full `/init` flow, per-chat isolation, audit logs | 5-7 days |
+| Phase | Name | Scope | Status |
+|-------|------|-------|--------|
+| **1** | Settings Menu | Runtime config via `/settings` for existing features | ✅ Complete |
+| **1.5** | Instagram Account Management | Multiple IG accounts, account switching in settings | 📋 Planning |
+| **2** | Cloud Media Storage | Google Drive / S3 integration, per-chat media source | Future |
+| **3** | Multi-Tenancy | Full `/init` flow, per-chat isolation, audit logs | Future |
 
 ---
 
@@ -766,6 +771,643 @@ class TestSettingsIntegration:
 
 ---
 
+## Phase 1.5: Instagram Account Management
+
+**Goal**: Support multiple Instagram accounts within a single deployment, with the ability to switch between them via the `/settings` menu.
+
+### Problem Statement
+
+Currently, the system supports only ONE Instagram account (hardcoded via `.env`):
+- `INSTAGRAM_ACCOUNT_ID` - Single account ID
+- `api_tokens` table has unique constraint `(service_name, token_type)` - ONE token per service
+
+**User Need**: Manage multiple Instagram accounts (@brand_main, @brand_promo, etc.) and switch between them without redeploying.
+
+### Architecture: Separation of Concerns
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        TABLE RESPONSIBILITIES                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  instagram_accounts          api_tokens                 chat_settings       │
+│  ═══════════════════         ══════════                 ═════════════       │
+│  "What accounts exist"       "Auth credentials"         "Which is active"   │
+│                                                                              │
+│  ├── id (PK)                 ├── id (PK)                ├── id (PK)         │
+│  ├── display_name            ├── service_name           ├── ...             │
+│  ├── instagram_account_id    ├── token_type             ├── active_ig_      │
+│  ├── instagram_username      ├── instagram_account_id ──┤    account_id (FK)│
+│  └── is_active               │    (FK to instagram_     │                   │
+│                              │     accounts)            │                   │
+│       ▲                      ├── token_value            │                   │
+│       │                      └── expires_at             │                   │
+│       │                                                 │                   │
+│       └─────────────────────────────────────────────────┘                   │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Key Principle**:
+- `instagram_accounts` = **Identity** (what accounts do we have?)
+- `api_tokens` = **Credentials** (how do we authenticate to each account?)
+- `chat_settings` = **Selection** (which account is currently active?)
+
+This separation ensures:
+1. Account metadata persists even when tokens expire
+2. Tokens can be refreshed without touching account data
+3. Easy to extend for future services (Shopify, TikTok, etc.)
+
+### Database Schema
+
+#### New Table: `instagram_accounts`
+
+```sql
+-- Migration: 007_instagram_accounts.sql
+
+CREATE TABLE IF NOT EXISTS instagram_accounts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+    -- Account identification
+    display_name VARCHAR(100) NOT NULL,           -- User-friendly name: "Main Brand"
+    instagram_account_id VARCHAR(50) NOT NULL,    -- Meta's account ID (numeric string)
+    instagram_username VARCHAR(50),               -- @username for display
+
+    -- Status
+    is_active BOOLEAN DEFAULT true,               -- Can be disabled without deletion
+
+    -- Timestamps
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    -- Constraints
+    CONSTRAINT unique_instagram_account UNIQUE (instagram_account_id)
+);
+
+-- Index for quick lookup
+CREATE INDEX idx_instagram_accounts_active ON instagram_accounts(is_active) WHERE is_active = true;
+
+-- Record migration
+INSERT INTO schema_version (version, description, applied_at)
+VALUES (7, 'Add instagram_accounts table for multi-account support', NOW())
+ON CONFLICT DO NOTHING;
+```
+
+#### Modify: `api_tokens`
+
+```sql
+-- Migration: 008_api_tokens_account_fk.sql
+
+-- Add foreign key to instagram_accounts
+ALTER TABLE api_tokens
+ADD COLUMN instagram_account_id UUID REFERENCES instagram_accounts(id);
+
+-- Drop old unique constraint (one token per service)
+ALTER TABLE api_tokens
+DROP CONSTRAINT IF EXISTS unique_service_token_type;
+
+-- Add new unique constraint (one token per service per account)
+ALTER TABLE api_tokens
+ADD CONSTRAINT unique_service_token_type_account
+UNIQUE (service_name, token_type, instagram_account_id);
+
+-- For non-Instagram tokens (e.g., Shopify), instagram_account_id will be NULL
+-- The constraint allows: (shopify, access_token, NULL) alongside (instagram, access_token, <uuid>)
+
+-- Record migration
+INSERT INTO schema_version (version, description, applied_at)
+VALUES (8, 'Add instagram_account_id FK to api_tokens', NOW())
+ON CONFLICT DO NOTHING;
+```
+
+#### Modify: `chat_settings`
+
+```sql
+-- Migration: 009_chat_settings_active_account.sql
+
+-- Add active account selection
+ALTER TABLE chat_settings
+ADD COLUMN active_instagram_account_id UUID REFERENCES instagram_accounts(id);
+
+-- Record migration
+INSERT INTO schema_version (version, description, applied_at)
+VALUES (9, 'Add active_instagram_account_id to chat_settings', NOW())
+ON CONFLICT DO NOTHING;
+```
+
+### Model Implementation
+
+#### New Model: `src/models/instagram_account.py`
+
+```python
+"""Instagram account model - stores connected Instagram accounts."""
+from sqlalchemy import Column, String, Boolean, DateTime
+from sqlalchemy.dialects.postgresql import UUID
+from datetime import datetime
+import uuid
+
+from src.config.database import Base
+
+
+class InstagramAccount(Base):
+    """
+    Represents a connected Instagram account.
+
+    Separation of concerns:
+    - This model stores IDENTITY (who is the account?)
+    - api_tokens stores CREDENTIALS (how do we authenticate?)
+    """
+
+    __tablename__ = "instagram_accounts"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    # Account identification
+    display_name = Column(String(100), nullable=False)
+    instagram_account_id = Column(String(50), nullable=False, unique=True)
+    instagram_username = Column(String(50))
+
+    # Status
+    is_active = Column(Boolean, default=True)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<InstagramAccount {self.display_name} (@{self.instagram_username})>"
+```
+
+#### Modify: `src/models/api_token.py`
+
+```python
+# Add to existing ApiToken model:
+
+from sqlalchemy import ForeignKey
+from sqlalchemy.orm import relationship
+
+# Add column:
+instagram_account_id = Column(
+    UUID(as_uuid=True),
+    ForeignKey("instagram_accounts.id"),
+    nullable=True  # NULL for non-Instagram tokens
+)
+
+# Add relationship:
+instagram_account = relationship("InstagramAccount", backref="tokens")
+
+# Update unique constraint in __table_args__:
+__table_args__ = (
+    UniqueConstraint(
+        "service_name", "token_type", "instagram_account_id",
+        name="unique_service_token_type_account"
+    ),
+)
+```
+
+#### Modify: `src/models/chat_settings.py`
+
+```python
+# Add to existing ChatSettings model:
+
+from sqlalchemy import ForeignKey
+from sqlalchemy.orm import relationship
+
+# Add column:
+active_instagram_account_id = Column(
+    UUID(as_uuid=True),
+    ForeignKey("instagram_accounts.id"),
+    nullable=True  # NULL = no account selected yet
+)
+
+# Add relationship:
+active_instagram_account = relationship("InstagramAccount")
+```
+
+### Repository Implementation
+
+#### New Repository: `src/repositories/instagram_account_repository.py`
+
+```python
+"""Instagram account repository - CRUD for connected accounts."""
+from typing import Optional, List
+from datetime import datetime
+
+from src.repositories.base_repository import BaseRepository
+from src.models.instagram_account import InstagramAccount
+
+
+class InstagramAccountRepository(BaseRepository):
+    """Repository for InstagramAccount CRUD operations."""
+
+    def get_all_active(self) -> List[InstagramAccount]:
+        """Get all active Instagram accounts."""
+        result = self.db.query(InstagramAccount).filter(
+            InstagramAccount.is_active == True
+        ).order_by(InstagramAccount.display_name).all()
+        self.end_read_transaction()
+        return result
+
+    def get_by_id(self, account_id: str) -> Optional[InstagramAccount]:
+        """Get account by UUID."""
+        result = self.db.query(InstagramAccount).filter(
+            InstagramAccount.id == account_id
+        ).first()
+        self.end_read_transaction()
+        return result
+
+    def get_by_instagram_id(self, instagram_account_id: str) -> Optional[InstagramAccount]:
+        """Get account by Instagram's account ID."""
+        result = self.db.query(InstagramAccount).filter(
+            InstagramAccount.instagram_account_id == instagram_account_id
+        ).first()
+        self.end_read_transaction()
+        return result
+
+    def create(
+        self,
+        display_name: str,
+        instagram_account_id: str,
+        instagram_username: Optional[str] = None
+    ) -> InstagramAccount:
+        """Create a new Instagram account record."""
+        account = InstagramAccount(
+            display_name=display_name,
+            instagram_account_id=instagram_account_id,
+            instagram_username=instagram_username,
+        )
+        self.db.add(account)
+        self.db.commit()
+        self.db.refresh(account)
+        return account
+
+    def update(self, account_id: str, **kwargs) -> InstagramAccount:
+        """Update an Instagram account."""
+        account = self.get_by_id(account_id)
+        if not account:
+            raise ValueError(f"Account {account_id} not found")
+
+        for key, value in kwargs.items():
+            if hasattr(account, key):
+                setattr(account, key, value)
+
+        account.updated_at = datetime.utcnow()
+        self.db.commit()
+        self.db.refresh(account)
+        return account
+
+    def deactivate(self, account_id: str) -> InstagramAccount:
+        """Soft-delete an account by marking inactive."""
+        return self.update(account_id, is_active=False)
+```
+
+### Service Implementation
+
+#### New Service: `src/services/core/instagram_account_service.py`
+
+```python
+"""Instagram account service - manage connected accounts."""
+from typing import Optional, List, Dict, Any
+
+from src.services.base_service import BaseService
+from src.repositories.instagram_account_repository import InstagramAccountRepository
+from src.repositories.chat_settings_repository import ChatSettingsRepository
+from src.repositories.token_repository import TokenRepository
+from src.models.instagram_account import InstagramAccount
+from src.models.user import User
+from src.utils.logger import logger
+
+
+class InstagramAccountService(BaseService):
+    """
+    Manage Instagram accounts within a deployment.
+
+    Handles:
+    - Listing available accounts
+    - Adding new accounts (with token storage)
+    - Switching active account
+    - Account status management
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.account_repo = InstagramAccountRepository()
+        self.settings_repo = ChatSettingsRepository()
+        self.token_repo = TokenRepository()
+
+    def list_accounts(self) -> List[InstagramAccount]:
+        """Get all active Instagram accounts."""
+        return self.account_repo.get_all_active()
+
+    def get_active_account(self, telegram_chat_id: int) -> Optional[InstagramAccount]:
+        """Get the currently active account for a chat."""
+        settings = self.settings_repo.get_or_create(telegram_chat_id)
+        if settings.active_instagram_account_id:
+            return self.account_repo.get_by_id(str(settings.active_instagram_account_id))
+        return None
+
+    def switch_account(
+        self,
+        telegram_chat_id: int,
+        account_id: str,
+        user: Optional[User] = None
+    ) -> InstagramAccount:
+        """
+        Switch the active Instagram account.
+
+        Args:
+            telegram_chat_id: Chat to update
+            account_id: UUID of account to switch to
+            user: User performing the switch
+
+        Returns:
+            The newly active InstagramAccount
+        """
+        with self.track_execution(
+            "switch_account",
+            user_id=user.id if user else None,
+            triggered_by="user",
+            input_params={"account_id": account_id}
+        ) as run_id:
+            account = self.account_repo.get_by_id(account_id)
+            if not account:
+                raise ValueError(f"Account {account_id} not found")
+
+            if not account.is_active:
+                raise ValueError(f"Account {account.display_name} is disabled")
+
+            # Get old account for logging
+            old_account = self.get_active_account(telegram_chat_id)
+
+            # Update settings
+            self.settings_repo.update(
+                telegram_chat_id,
+                active_instagram_account_id=account_id
+            )
+
+            self.set_result_summary(run_id, {
+                "old_account": old_account.display_name if old_account else None,
+                "new_account": account.display_name,
+                "changed_by": user.telegram_username if user else "system"
+            })
+
+            logger.info(
+                f"Switched Instagram account: "
+                f"{old_account.display_name if old_account else 'None'} -> {account.display_name}"
+            )
+
+            return account
+
+    def add_account(
+        self,
+        display_name: str,
+        instagram_account_id: str,
+        instagram_username: str,
+        access_token: str,
+        token_expires_at: Optional[datetime] = None,
+        user: Optional[User] = None
+    ) -> InstagramAccount:
+        """
+        Add a new Instagram account with its token.
+
+        Args:
+            display_name: User-friendly name
+            instagram_account_id: Meta's account ID
+            instagram_username: @username
+            access_token: OAuth access token
+            token_expires_at: When token expires
+            user: User adding the account
+
+        Returns:
+            Created InstagramAccount
+        """
+        with self.track_execution(
+            "add_account",
+            user_id=user.id if user else None,
+            triggered_by="user",
+            input_params={
+                "display_name": display_name,
+                "instagram_username": instagram_username
+            }
+        ) as run_id:
+            # Check if account already exists
+            existing = self.account_repo.get_by_instagram_id(instagram_account_id)
+            if existing:
+                raise ValueError(f"Account @{instagram_username} already exists")
+
+            # Create account record
+            account = self.account_repo.create(
+                display_name=display_name,
+                instagram_account_id=instagram_account_id,
+                instagram_username=instagram_username,
+            )
+
+            # Store token linked to this account
+            self.token_repo.create_or_update(
+                service_name="instagram",
+                token_type="access_token",
+                token_value=access_token,
+                expires_at=token_expires_at,
+                instagram_account_id=str(account.id),
+                token_metadata={
+                    "account_id": instagram_account_id,
+                    "username": instagram_username
+                }
+            )
+
+            self.set_result_summary(run_id, {
+                "account_id": str(account.id),
+                "display_name": display_name,
+                "username": instagram_username
+            })
+
+            logger.info(f"Added Instagram account: {display_name} (@{instagram_username})")
+
+            return account
+
+    def get_accounts_for_display(self, telegram_chat_id: int) -> Dict[str, Any]:
+        """
+        Get account info formatted for /settings display.
+
+        Returns:
+            {
+                "accounts": [{"id": ..., "display_name": ..., "username": ...}, ...],
+                "active_account_id": ... or None,
+                "active_account_name": ... or "Not selected"
+            }
+        """
+        accounts = self.list_accounts()
+        active = self.get_active_account(telegram_chat_id)
+
+        return {
+            "accounts": [
+                {
+                    "id": str(a.id),
+                    "display_name": a.display_name,
+                    "username": a.instagram_username
+                }
+                for a in accounts
+            ],
+            "active_account_id": str(active.id) if active else None,
+            "active_account_name": active.display_name if active else "Not selected",
+            "active_account_username": active.instagram_username if active else None
+        }
+```
+
+### UI Changes: `/settings` Menu
+
+Update the settings menu to include account selection:
+
+```
+User: /settings
+
+Bot: ⚙️ *Bot Settings*
+
+[✅ Dry Run]
+[Instagram API]
+[▶️ Active]
+
+📸 *Instagram Account*
+[📸 @brand_main (Main Brand)]  ← Click to switch
+
+[📊 Posts/Day: 10]
+[🕐 Hours: 14:00-2:00 UTC]
+
+[📋 Queue] [📊 Status]
+```
+
+When clicking the account button, show a selection menu:
+
+```
+Bot: Select Instagram Account:
+
+[✅ Main Brand (@brand_main)]  ← Currently active (checkmark)
+[   Promo Account (@brand_promo)]
+[   Seasonal (@brand_seasonal)]
+[   ➕ Add Account]  ← Opens CLI instructions or OAuth flow
+
+[🔙 Back to Settings]
+```
+
+### Adding Accounts: CLI Command
+
+```bash
+# Add account via CLI (requires Meta Business OAuth flow)
+storyline-cli add-instagram-account \
+    --display-name "Main Brand" \
+    --account-id "17841234567890" \
+    --username "brand_main" \
+    --access-token "EAABs..."
+
+# List accounts
+storyline-cli list-instagram-accounts
+
+# Output:
+# ID                                    Display Name     Username         Active
+# ────────────────────────────────────────────────────────────────────────────────
+# a1b2c3d4-...                          Main Brand       @brand_main      ✓
+# e5f6g7h8-...                          Promo Account    @brand_promo     ✓
+```
+
+### InstagramAPIService Changes
+
+Update to use the active account instead of `.env`:
+
+```python
+# In src/services/integrations/instagram_api.py
+
+def __init__(self):
+    super().__init__()
+    self.account_service = InstagramAccountService()
+    self.token_repo = TokenRepository()
+
+async def post_story(
+    self,
+    telegram_chat_id: int,  # NEW: Need chat context to get active account
+    media_url: str,
+    media_type: str = "IMAGE"
+):
+    """Post a story using the active account for this chat."""
+
+    # Get active account
+    active_account = self.account_service.get_active_account(telegram_chat_id)
+    if not active_account:
+        raise ValueError("No Instagram account selected. Use /settings to select one.")
+
+    # Get token for this specific account
+    token = self.token_repo.get_token(
+        service_name="instagram",
+        token_type="access_token",
+        instagram_account_id=str(active_account.id)  # Filter by account
+    )
+
+    if not token:
+        raise TokenExpiredError(f"No valid token for {active_account.display_name}")
+
+    # Use active_account.instagram_account_id (not .env)
+    account_id = active_account.instagram_account_id
+
+    # ... rest of posting logic using account_id and token
+```
+
+### Migration Path
+
+1. **Migration 007**: Create `instagram_accounts` table
+2. **Migration 008**: Add `instagram_account_id` FK to `api_tokens`, update constraint
+3. **Migration 009**: Add `active_instagram_account_id` to `chat_settings`
+4. **Data Migration**:
+   - Create `instagram_accounts` record from current `.env` values
+   - Update existing `api_tokens` to link to the new account
+   - Set as active account in `chat_settings`
+5. **Deploy code**: Services use new architecture
+6. **Add more accounts**: Via CLI or future Telegram OAuth flow
+
+### Test Plan
+
+```python
+class TestInstagramAccountService:
+
+    def test_list_accounts_returns_active_only(self):
+        """Inactive accounts should not appear in list."""
+        pass
+
+    def test_switch_account_updates_settings(self):
+        """Switching account should update chat_settings."""
+        pass
+
+    def test_switch_to_inactive_account_raises_error(self):
+        """Cannot switch to a disabled account."""
+        pass
+
+    def test_add_account_creates_record_and_token(self):
+        """Adding account should create both account and token records."""
+        pass
+
+    def test_add_duplicate_account_raises_error(self):
+        """Cannot add same Instagram account twice."""
+        pass
+
+    def test_get_active_account_returns_none_when_not_set(self):
+        """New chats should have no active account."""
+        pass
+```
+
+### Open Questions
+
+1. **OAuth Flow**: Should we implement full OAuth in Telegram bot, or require CLI?
+   - *Recommendation*: CLI for Phase 1.5, Telegram OAuth for Phase 2
+
+2. **Token Refresh per Account**: Current `TokenRefreshService` assumes single account
+   - *Required Change*: Iterate over all accounts when refreshing
+
+3. **Default Account**: Should we auto-select first account for new deployments?
+   - *Recommendation*: Yes, if exactly one account exists
+
+4. **Account Deletion**: Hard delete or soft delete?
+   - *Recommendation*: Soft delete (set `is_active = false`), preserve history
+
+---
+
 ## Phase 2: Cloud Media Storage
 
 *(Content unchanged from original document - see lines 157-234)*
@@ -796,25 +1438,43 @@ class TestSettingsIntegration:
 
 ## Files Summary
 
-### Phase 1 Files to Create
+### Phase 1 Files (✅ Complete)
+
+| File | Purpose | Status |
+|------|---------|--------|
+| `src/models/chat_settings.py` | ChatSettings SQLAlchemy model | ✅ |
+| `src/repositories/chat_settings_repository.py` | CRUD operations | ✅ |
+| `src/services/core/settings_service.py` | Business logic with audit | ✅ |
+| `scripts/migrations/006_chat_settings.sql` | Database migration | ✅ |
+| `tests/src/services/test_settings_service.py` | Unit tests (25 tests) | ✅ |
+| `src/services/core/telegram_service.py` | /settings command, toggles | ✅ |
+| `src/services/core/posting.py` | Use SettingsService | ✅ |
+| `src/services/core/scheduler.py` | Use SettingsService | ✅ |
+
+### Phase 1.5 Files to Create
 
 | File | Purpose |
 |------|---------|
-| `src/models/chat_settings.py` | ChatSettings SQLAlchemy model |
-| `src/repositories/chat_settings_repository.py` | CRUD operations |
-| `src/services/core/settings_service.py` | Business logic with audit |
-| `scripts/migrations/006_chat_settings.sql` | Database migration |
-| `tests/src/services/test_settings_service.py` | Unit tests |
-| `tests/src/repositories/test_chat_settings_repository.py` | Repository tests |
+| `src/models/instagram_account.py` | InstagramAccount SQLAlchemy model |
+| `src/repositories/instagram_account_repository.py` | CRUD for accounts |
+| `src/services/core/instagram_account_service.py` | Account management logic |
+| `scripts/migrations/007_instagram_accounts.sql` | Create instagram_accounts table |
+| `scripts/migrations/008_api_tokens_account_fk.sql` | Add FK to api_tokens |
+| `scripts/migrations/009_chat_settings_active_account.sql` | Add active account to settings |
+| `cli/commands/instagram_accounts.py` | CLI commands for account management |
+| `tests/src/services/test_instagram_account_service.py` | Unit tests |
 
-### Phase 1 Files to Modify
+### Phase 1.5 Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/models/__init__.py` | Import ChatSettings |
-| `src/services/core/telegram_service.py` | Add /settings command, toggle handlers |
-| `src/services/core/posting.py` | Use SettingsService for is_paused, dry_run |
-| `src/services/core/scheduler.py` | Use SettingsService for posts_per_day, hours |
+| `src/models/__init__.py` | Import InstagramAccount |
+| `src/models/api_token.py` | Add instagram_account_id FK |
+| `src/models/chat_settings.py` | Add active_instagram_account_id FK |
+| `src/repositories/token_repository.py` | Support per-account token lookup |
+| `src/services/core/telegram_service.py` | Add account selector to /settings |
+| `src/services/integrations/instagram_api.py` | Use active account, not .env |
+| `src/services/integrations/token_refresh.py` | Refresh tokens per account |
 
 ---
 
@@ -900,7 +1560,18 @@ async def _handle_mycommand(self, update, context):
 
 ---
 
-**Document Version**: 3.0
+**Document Version**: 4.0
 **Last Updated**: 2026-01-24
 **Author**: Claude + Chris
 **Reviewed By**: (pending)
+
+---
+
+## Changelog
+
+| Version | Date | Changes |
+|---------|------|---------|
+| 4.0 | 2026-01-24 | Added Phase 1.5 (Instagram Account Management), marked Phase 1 complete |
+| 3.0 | 2026-01-24 | Added full implementation details, code examples, test plan |
+| 2.0 | 2026-01-18 | Initial detailed planning |
+| 1.0 | 2026-01-15 | Draft outline |
