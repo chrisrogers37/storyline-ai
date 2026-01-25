@@ -985,9 +985,10 @@ class TelegramService(BaseService):
 
         await query.edit_message_text(
             "➕ *Add Instagram Account*\n\n"
-            "*Step 1 of 4: Display Name*\n\n"
-            "Enter a friendly name for this account (e.g., 'Main Account', 'Brand Account'):\n\n"
-            "_Reply to this message with the name_",
+            "*Step 1 of 3: Display Name*\n\n"
+            "Enter a friendly name for this account:\n"
+            "(e.g., 'Main Account', 'Brand Account')\n\n"
+            "_Reply with the name_",
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
@@ -1006,29 +1007,8 @@ class TelegramService(BaseService):
         message_text = update.message.text.strip()
 
         if state == "awaiting_display_name":
-            # Save display name and ask for username
+            # Save display name and ask for account ID
             context.user_data["add_account_data"]["display_name"] = message_text
-            context.user_data["add_account_state"] = "awaiting_username"
-
-            keyboard = [
-                [InlineKeyboardButton("❌ Cancel", callback_data="account_add_cancel:cancel")]
-            ]
-
-            await update.message.reply_text(
-                "➕ *Add Instagram Account*\n\n"
-                "*Step 2 of 4: Instagram Username*\n\n"
-                f"Display name: `{message_text}`\n\n"
-                "Enter the Instagram username (without @):\n\n"
-                "_Reply with the username_",
-                parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-            return True
-
-        elif state == "awaiting_username":
-            # Remove @ if present
-            username = message_text.lstrip("@")
-            context.user_data["add_account_data"]["username"] = username
             context.user_data["add_account_state"] = "awaiting_account_id"
 
             keyboard = [
@@ -1037,11 +1017,11 @@ class TelegramService(BaseService):
 
             await update.message.reply_text(
                 "➕ *Add Instagram Account*\n\n"
-                "*Step 3 of 4: Instagram Account ID*\n\n"
-                f"Display name: `{context.user_data['add_account_data']['display_name']}`\n"
-                f"Username: `@{username}`\n\n"
-                "Enter the Instagram Account ID (numeric ID from Meta Business Suite):\n\n"
-                "_This is found in Meta Business Suite > Settings > Business Assets > Instagram Accounts_",
+                "*Step 2 of 3: Instagram Account ID*\n\n"
+                f"Display name: `{message_text}`\n\n"
+                "Enter the numeric Account ID from Meta Business Suite:\n\n"
+                "_Found in: Settings → Business Assets → Instagram Accounts_\n\n"
+                "Reply with the ID",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
@@ -1065,12 +1045,10 @@ class TelegramService(BaseService):
 
             await update.message.reply_text(
                 "➕ *Add Instagram Account*\n\n"
-                "*Step 4 of 4: Access Token*\n\n"
+                "*Step 3 of 3: Access Token*\n\n"
                 f"Display name: `{context.user_data['add_account_data']['display_name']}`\n"
-                f"Username: `@{context.user_data['add_account_data']['username']}`\n"
                 f"Account ID: `{message_text}`\n\n"
-                "⚠️ *Security Notice*: Your message containing the token will be "
-                "deleted immediately after processing.\n\n"
+                "⚠️ *Security*: Your token message will be deleted immediately.\n\n"
                 "Paste your Instagram Graph API access token:",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup(keyboard)
@@ -1086,13 +1064,53 @@ class TelegramService(BaseService):
 
             # Attempt to create the account
             data = context.user_data["add_account_data"]
+            access_token = message_text
 
+            # First, validate the token by fetching account info from Instagram API
             try:
+                import httpx
+
+                # Send a "verifying" message
+                verifying_msg = await context.bot.send_message(
+                    chat_id=chat_id,
+                    text="⏳ Verifying credentials with Instagram API...",
+                    parse_mode="Markdown"
+                )
+
+                # Fetch username from Instagram API
+                async with httpx.AsyncClient() as client:
+                    response = await client.get(
+                        f"https://graph.facebook.com/v18.0/{data['account_id']}",
+                        params={
+                            "fields": "username",
+                            "access_token": access_token
+                        },
+                        timeout=30.0
+                    )
+
+                    if response.status_code != 200:
+                        error_data = response.json()
+                        error_msg = error_data.get("error", {}).get("message", "Unknown error")
+                        raise ValueError(f"Instagram API error: {error_msg}")
+
+                    api_data = response.json()
+                    username = api_data.get("username")
+
+                    if not username:
+                        raise ValueError("Could not fetch username from Instagram API")
+
+                # Delete verifying message
+                try:
+                    await verifying_msg.delete()
+                except Exception:
+                    pass
+
+                # Create the account with fetched username
                 account = self.ig_account_service.add_account(
                     display_name=data["display_name"],
                     instagram_account_id=data["account_id"],
-                    instagram_username=data["username"],
-                    access_token=message_text,
+                    instagram_username=username,
+                    access_token=access_token,
                     user=user,
                     set_as_active=True,
                     telegram_chat_id=chat_id
@@ -1136,7 +1154,13 @@ class TelegramService(BaseService):
                     f"{account.display_name} (@{account.instagram_username})"
                 )
 
-            except ValueError as e:
+            except Exception as e:
+                # Delete verifying message if it exists
+                try:
+                    await verifying_msg.delete()
+                except Exception:
+                    pass
+
                 # Clear state on error
                 context.user_data.pop("add_account_state", None)
                 context.user_data.pop("add_account_data", None)
@@ -1147,12 +1171,18 @@ class TelegramService(BaseService):
                     [InlineKeyboardButton("↩️ Back to Settings", callback_data="settings_accounts:back")]
                 ]
 
+                error_msg = str(e)
+                if "Invalid OAuth" in error_msg or "access token" in error_msg.lower():
+                    error_msg = "Invalid or expired access token. Please check your token and try again."
+
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text=f"❌ *Failed to add account*\n\n{str(e)}",
+                    text=f"❌ *Failed to add account*\n\n{error_msg}",
                     parse_mode="Markdown",
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
+
+                logger.error(f"Failed to add Instagram account: {e}")
 
             return True
 
