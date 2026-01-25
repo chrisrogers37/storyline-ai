@@ -9,7 +9,7 @@ from src.utils.logger import logger
 
 
 # Allowed settings that can be toggled/changed
-TOGGLEABLE_SETTINGS = {"dry_run_mode", "enable_instagram_api", "is_paused"}
+TOGGLEABLE_SETTINGS = {"dry_run_mode", "enable_instagram_api", "is_paused", "show_verbose_notifications"}
 NUMERIC_SETTINGS = {"posts_per_day", "posting_hours_start", "posting_hours_end"}
 
 
@@ -173,5 +173,6 @@ class SettingsService(BaseService):
             "posts_per_day": settings.posts_per_day,
             "posting_hours_start": settings.posting_hours_start,
             "posting_hours_end": settings.posting_hours_end,
+            "show_verbose_notifications": settings.show_verbose_notifications,
             "updated_at": settings.updated_at,
         }

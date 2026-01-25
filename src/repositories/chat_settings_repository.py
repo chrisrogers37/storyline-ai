@@ -46,6 +46,7 @@ class ChatSettingsRepository(BaseRepository):
             posts_per_day=env_settings.POSTS_PER_DAY,
             posting_hours_start=env_settings.POSTING_HOURS_START,
             posting_hours_end=env_settings.POSTING_HOURS_END,
+            show_verbose_notifications=True,
         )
         self.db.add(chat_settings)
         self.db.commit()

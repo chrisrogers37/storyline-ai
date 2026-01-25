@@ -36,6 +36,9 @@ class ChatSettings(Base):
     posting_hours_start = Column(Integer, default=14)
     posting_hours_end = Column(Integer, default=2)
 
+    # Notification settings
+    show_verbose_notifications = Column(Boolean, default=True)
+
     # Active Instagram account (for multi-account support)
     active_instagram_account_id = Column(
         UUID(as_uuid=True),

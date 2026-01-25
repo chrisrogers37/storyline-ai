@@ -105,6 +105,151 @@ class SchedulerService(BaseService):
 
             return result
 
+    def extend_schedule(self, days: int = 7, user_id: Optional[str] = None) -> dict:
+        """
+        Extend existing schedule by adding more days.
+
+        Unlike create_schedule(), this preserves existing queue items
+        and appends new slots starting after the last scheduled time.
+
+        Args:
+            days: Number of days to add
+            user_id: User who triggered extension
+
+        Returns:
+            Dict with results: {scheduled: N, skipped: M, extended_from: datetime, ...}
+        """
+        with self.track_execution(
+            method_name="extend_schedule",
+            user_id=user_id,
+            triggered_by="telegram" if user_id else "system",
+            input_params={"days": days},
+        ) as run_id:
+            scheduled_count = 0
+            skipped_count = 0
+            error_message = None
+            category_breakdown = {}
+
+            try:
+                # Find the last scheduled time in the queue
+                all_pending = self.queue_repo.get_all(status="pending")
+
+                if all_pending:
+                    # Find the latest scheduled_for time
+                    last_scheduled = max(item.scheduled_for for item in all_pending)
+                    # Start from the day after the last scheduled item
+                    start_date = last_scheduled.date() + timedelta(days=1)
+                else:
+                    # No existing queue - start from today
+                    start_date = datetime.utcnow().date()
+                    last_scheduled = None
+
+                logger.info(f"Extending schedule from {start_date} for {days} days")
+
+                # Generate time slots starting from start_date
+                time_slots = self._generate_time_slots_from_date(start_date, days)
+                total_slots = len(time_slots)
+
+                logger.info(f"Generated {total_slots} new time slots")
+
+                # Allocate slots to categories based on ratios
+                slot_categories = self._allocate_slots_to_categories(total_slots)
+
+                if slot_categories:
+                    logger.info(f"Category allocation: {self._summarize_allocation(slot_categories)}")
+
+                for i, scheduled_time in enumerate(time_slots):
+                    # Get target category for this slot (if ratios are configured)
+                    target_category = slot_categories[i] if slot_categories else None
+
+                    # Select media for this slot
+                    media_item = self._select_media(category=target_category)
+
+                    if not media_item:
+                        logger.warning(f"No eligible media found for slot {scheduled_time}")
+                        skipped_count += 1
+                        continue
+
+                    # Add to queue
+                    self.queue_repo.create(media_item_id=str(media_item.id), scheduled_for=scheduled_time)
+
+                    # Track category breakdown
+                    item_category = media_item.category or "uncategorized"
+                    category_breakdown[item_category] = category_breakdown.get(item_category, 0) + 1
+
+                    logger.info(f"Scheduled {media_item.file_name} [{item_category}] for {scheduled_time}")
+                    scheduled_count += 1
+
+            except Exception as e:
+                error_message = str(e)
+                logger.error(f"Error during schedule extension: {e}")
+
+            result = {
+                "scheduled": scheduled_count,
+                "skipped": skipped_count,
+                "total_slots": total_slots if 'total_slots' in dir() else 0,
+                "extended_from": last_scheduled.isoformat() if last_scheduled else None,
+                "category_breakdown": category_breakdown,
+            }
+
+            if error_message:
+                result["error"] = error_message
+
+            self.set_result_summary(run_id, result)
+
+            return result
+
+    def _generate_time_slots_from_date(self, start_date, days: int) -> list[datetime]:
+        """
+        Generate time slots starting from a specific date.
+
+        Args:
+            start_date: Date to start generating slots from
+            days: Number of days to generate
+
+        Returns:
+            List of datetime objects for posting
+        """
+        # Get schedule settings from database
+        chat_settings = self.settings_service.get_settings(settings.ADMIN_TELEGRAM_CHAT_ID)
+
+        time_slots = []
+        posts_per_day = chat_settings.posts_per_day
+        start_hour = chat_settings.posting_hours_start
+        end_hour = chat_settings.posting_hours_end
+
+        for day_offset in range(days):
+            base_date = start_date + timedelta(days=day_offset)
+
+            # Handle wrap-around posting hours (e.g., 22-2 means 22:00 to 02:00 next day)
+            if end_hour < start_hour:
+                posting_window_hours = (24 - start_hour) + end_hour
+            else:
+                posting_window_hours = end_hour - start_hour
+
+            interval_hours = posting_window_hours / posts_per_day
+
+            for post_num in range(posts_per_day):
+                hour_offset = start_hour + (post_num * interval_hours)
+
+                post_date = base_date
+                if hour_offset >= 24:
+                    hour_offset -= 24
+                    post_date = base_date + timedelta(days=1)
+
+                # Add jitter
+                jitter_minutes = random.randint(-30, 30)
+
+                scheduled_time = datetime.combine(post_date, datetime.min.time()) + timedelta(
+                    hours=hour_offset, minutes=jitter_minutes
+                )
+
+                # Only add future times
+                if scheduled_time > datetime.utcnow():
+                    time_slots.append(scheduled_time)
+
+        return sorted(time_slots)
+
     def _allocate_slots_to_categories(self, total_slots: int) -> List[Optional[str]]:
         """
         Allocate slots to categories based on configured ratios.

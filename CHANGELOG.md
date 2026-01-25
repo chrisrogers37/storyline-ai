@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Telegram /settings Menu Improvements
+
+#### New Settings Menu Features
+- **Close Button** - Dismiss the settings menu cleanly with ❌ Close button
+- **Verbose Mode Toggle** - Control notification verbosity via 📝 Verbose toggle
+  - ON (default): Shows detailed workflow instructions (save image, open Instagram, post)
+  - OFF: Shows minimal info (just "✅ Posted to @username")
+  - Applies to both manual posting notifications and auto-post success messages
+- **Schedule Management Buttons** - Manage queue directly from settings
+  - 🔄 Regenerate: Clears queue and creates new 7-day schedule (with confirmation)
+  - 📅 +7 Days: Extends existing queue by 7 days (preserves current items)
+
+#### Settings Menu Cleanup
+- Removed Quick Actions buttons (📋 Queue, 📊 Status) - use /queue and /status commands instead
+- Added explanatory text for schedule actions
+- Cleaner separation between /settings (configuration) and /status (read-only state)
+
+#### SchedulerService Enhancement
+- **`extend_schedule()` method** - Add days to existing schedule without clearing
+  - Finds last scheduled time in queue
+  - Generates new slots starting from the next day
+  - Respects category ratios and existing scheduler logic
+  - Returns detailed result with scheduled/skipped counts
+
+#### Database Changes
+- **Migration 010**: Add `show_verbose_notifications` column to `chat_settings`
+  - Boolean column, defaults to true
+  - Controls notification detail level per-chat
+
+### Technical Details
+
+#### New Callback Handlers
+- `settings_close` - Deletes the settings message
+- `settings_toggle:show_verbose_notifications` - Toggles verbose mode
+- `schedule_action:regenerate` - Shows confirmation, then clears queue and creates new schedule
+- `schedule_action:extend` - Extends schedule by 7 days
+- `schedule_confirm:regenerate` - Confirms and executes regeneration
+- `schedule_confirm:cancel` - Cancels and returns to settings
+
+#### Files Changed
+- `scripts/migrations/010_add_verbose_notifications.sql` - New migration
+- `src/models/chat_settings.py` - Added `show_verbose_notifications` column
+- `src/services/core/settings_service.py` - Added to toggleable settings
+- `src/services/core/scheduler.py` - Added `extend_schedule()` method
+- `src/services/core/telegram_service.py` - New buttons, handlers, verbose caption logic
+- `src/repositories/chat_settings_repository.py` - Updated get_or_create defaults
+
+---
+
 ### Added - Instagram Account Management (Phase 1.5)
 
 #### Multi-Account Support
