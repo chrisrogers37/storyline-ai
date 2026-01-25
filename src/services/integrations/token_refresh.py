@@ -1,11 +1,12 @@
 """Token refresh service for managing OAuth tokens."""
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List
 
 import httpx
 
 from src.services.base_service import BaseService
 from src.repositories.token_repository import TokenRepository
+from src.repositories.instagram_account_repository import InstagramAccountRepository
 from src.utils.encryption import TokenEncryption
 from src.config.settings import settings
 from src.exceptions import TokenExpiredError
@@ -44,6 +45,7 @@ class TokenRefreshService(BaseService):
     def __init__(self):
         super().__init__()
         self.token_repo = TokenRepository()
+        self.account_repo = InstagramAccountRepository()
         self._encryption: Optional[TokenEncryption] = None
 
     @property
@@ -157,12 +159,22 @@ class TokenRefreshService(BaseService):
             self.set_result_summary(run_id, {"success": True, "service": service})
             return True
 
-    async def refresh_instagram_token(self) -> bool:
+    async def refresh_instagram_token(
+        self,
+        instagram_account_id: Optional[str] = None
+    ) -> bool:
         """
         Refresh Instagram long-lived access token.
 
         Meta's long-lived tokens last 60 days but can be refreshed.
         A refreshed token is valid for another 60 days.
+
+        Supports both:
+        - Multi-account mode: Pass instagram_account_id to refresh specific account
+        - Legacy mode: Pass None to refresh the legacy token (no account FK)
+
+        Args:
+            instagram_account_id: UUID of Instagram account to refresh (None for legacy)
 
         Returns:
             True if refresh successful
@@ -170,12 +182,23 @@ class TokenRefreshService(BaseService):
         Raises:
             TokenExpiredError: If current token is invalid/expired
         """
-        with self.track_execution(method_name="refresh_instagram_token") as run_id:
+        account_label = instagram_account_id or "legacy"
+
+        with self.track_execution(
+            method_name="refresh_instagram_token",
+            input_params={"account_id": account_label}
+        ) as run_id:
             # Get current token
-            db_token = self.token_repo.get_token("instagram", "access_token")
+            if instagram_account_id:
+                db_token = self.token_repo.get_token_for_account(
+                    instagram_account_id,
+                    token_type="access_token"
+                )
+            else:
+                db_token = self.token_repo.get_token("instagram", "access_token")
 
             if not db_token:
-                logger.error("No Instagram token found to refresh")
+                logger.error(f"No Instagram token found to refresh for {account_label}")
                 self.set_result_summary(run_id, {"success": False, "reason": "no_token"})
                 return False
 
@@ -194,7 +217,7 @@ class TokenRefreshService(BaseService):
 
                     if response.status_code != 200:
                         error_data = response.json()
-                        logger.error(f"Instagram token refresh failed: {error_data}")
+                        logger.error(f"Instagram token refresh failed for {account_label}: {error_data}")
                         self.set_result_summary(run_id, {
                             "success": False,
                             "status_code": response.status_code,
@@ -207,7 +230,7 @@ class TokenRefreshService(BaseService):
                     expires_in = data.get("expires_in", 5184000)  # Default 60 days in seconds
 
                     if not new_token:
-                        logger.error("No access_token in refresh response")
+                        logger.error(f"No access_token in refresh response for {account_label}")
                         self.set_result_summary(run_id, {"success": False, "reason": "no_token_in_response"})
                         return False
 
@@ -227,24 +250,95 @@ class TokenRefreshService(BaseService):
                             "refreshed_at": issued_at.isoformat(),
                             "expires_in_seconds": expires_in,
                         },
+                        instagram_account_id=instagram_account_id,
                     )
 
                     logger.info(
-                        f"Instagram token refreshed successfully. "
+                        f"Instagram token refreshed successfully for {account_label}. "
                         f"New expiry: {expires_at.isoformat()}"
                     )
 
                     self.set_result_summary(run_id, {
                         "success": True,
+                        "account": account_label,
                         "expires_at": expires_at.isoformat(),
                         "expires_in_days": expires_in // 86400,
                     })
                     return True
 
             except httpx.RequestError as e:
-                logger.error(f"Network error refreshing Instagram token: {e}")
+                logger.error(f"Network error refreshing Instagram token for {account_label}: {e}")
                 self.set_result_summary(run_id, {"success": False, "error": str(e)})
                 return False
+
+    async def refresh_all_instagram_tokens(self) -> dict:
+        """
+        Refresh all Instagram tokens that need refreshing.
+
+        Iterates through all Instagram accounts and refreshes tokens
+        that are expiring within the buffer window.
+
+        Returns:
+            dict with:
+                - refreshed: int - count of successfully refreshed tokens
+                - failed: int - count of failed refreshes
+                - skipped: int - count skipped (not expiring soon)
+                - details: list - per-account results
+        """
+        with self.track_execution(method_name="refresh_all_instagram_tokens") as run_id:
+            results = {
+                "refreshed": 0,
+                "failed": 0,
+                "skipped": 0,
+                "details": [],
+            }
+
+            # Get all Instagram tokens
+            all_tokens = self.token_repo.get_all_instagram_tokens()
+
+            for token in all_tokens:
+                account_id = str(token.instagram_account_id) if token.instagram_account_id else None
+                account_label = account_id or "legacy"
+
+                # Check if needs refresh
+                hours_until_expiry = token.hours_until_expiry()
+                needs_refresh = (
+                    hours_until_expiry is not None
+                    and hours_until_expiry <= self.REFRESH_BUFFER_HOURS
+                )
+
+                if not needs_refresh:
+                    results["skipped"] += 1
+                    results["details"].append({
+                        "account": account_label,
+                        "status": "skipped",
+                        "reason": f"Not expiring soon ({int(hours_until_expiry or 0)}h remaining)",
+                    })
+                    continue
+
+                # Refresh this token
+                success = await self.refresh_instagram_token(instagram_account_id=account_id)
+
+                if success:
+                    results["refreshed"] += 1
+                    results["details"].append({
+                        "account": account_label,
+                        "status": "refreshed",
+                    })
+                else:
+                    results["failed"] += 1
+                    results["details"].append({
+                        "account": account_label,
+                        "status": "failed",
+                    })
+
+            logger.info(
+                f"Token refresh complete: {results['refreshed']} refreshed, "
+                f"{results['failed']} failed, {results['skipped']} skipped"
+            )
+
+            self.set_result_summary(run_id, results)
+            return results
 
     def check_token_health(self, service: str) -> dict:
         """

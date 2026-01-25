@@ -1,6 +1,6 @@
 # Settings Management & Multi-Tenancy
 
-**Status**: 🚧 IN PROGRESS (Phase 1 Complete, Phase 1.5 In Progress)
+**Status**: ✅ COMPLETE (Phase 1 + Phase 1.5)
 **Created**: 2026-01-18
 **Updated**: 2026-01-24
 **Priority**: Active Development
@@ -45,7 +45,7 @@ The current system uses environment variables (`.env`) for all configuration, re
 | Phase | Name | Scope | Status |
 |-------|------|-------|--------|
 | **1** | Settings Menu | Runtime config via `/settings` for existing features | ✅ Complete |
-| **1.5** | Instagram Account Management | Multiple IG accounts, account switching in settings | 🚧 In Progress |
+| **1.5** | Instagram Account Management | Multiple IG accounts, account switching in settings | ✅ Complete |
 | **2** | Cloud Media Storage | Google Drive / S3 integration, per-chat media source | Future |
 | **3** | Multi-Tenancy | Full `/init` flow, per-chat isolation, audit logs | Future |
 
@@ -1469,7 +1469,7 @@ class TestInstagramAccountService:
 | `src/repositories/token_repository.py` | Support per-account token lookup | ✅ |
 | `src/services/core/telegram_service.py` | Add account selector to /settings | ✅ |
 | `src/services/integrations/instagram_api.py` | Use active account, not .env | ✅ |
-| `src/services/integrations/token_refresh.py` | Refresh tokens per account | ⏳ Pending |
+| `src/services/integrations/token_refresh.py` | Refresh tokens per account | ✅ |
 
 ---
 
