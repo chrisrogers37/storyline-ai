@@ -978,6 +978,8 @@ class TelegramService(BaseService):
         context.user_data["add_account_state"] = "awaiting_display_name"
         context.user_data["add_account_chat_id"] = chat_id
         context.user_data["add_account_data"] = {}
+        # Track message IDs to delete later
+        context.user_data["add_account_messages"] = [query.message.message_id]
 
         keyboard = [
             [InlineKeyboardButton("❌ Cancel", callback_data="account_add_cancel:cancel")]
@@ -1007,6 +1009,9 @@ class TelegramService(BaseService):
         message_text = update.message.text.strip()
 
         if state == "awaiting_display_name":
+            # Track user's message for cleanup
+            context.user_data["add_account_messages"].append(update.message.message_id)
+
             # Save display name and ask for account ID
             context.user_data["add_account_data"]["display_name"] = message_text
             context.user_data["add_account_state"] = "awaiting_account_id"
@@ -1015,7 +1020,7 @@ class TelegramService(BaseService):
                 [InlineKeyboardButton("❌ Cancel", callback_data="account_add_cancel:cancel")]
             ]
 
-            await update.message.reply_text(
+            reply = await update.message.reply_text(
                 "➕ *Add Instagram Account*\n\n"
                 "*Step 2 of 3: Instagram Account ID*\n\n"
                 f"Display name: `{message_text}`\n\n"
@@ -1025,15 +1030,21 @@ class TelegramService(BaseService):
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
+            # Track bot's reply for cleanup
+            context.user_data["add_account_messages"].append(reply.message_id)
             return True
 
         elif state == "awaiting_account_id":
+            # Track user's message for cleanup
+            context.user_data["add_account_messages"].append(update.message.message_id)
+
             # Validate it's numeric
             if not message_text.isdigit():
-                await update.message.reply_text(
+                reply = await update.message.reply_text(
                     "⚠️ Account ID must be numeric. Please try again:",
                     parse_mode="Markdown"
                 )
+                context.user_data["add_account_messages"].append(reply.message_id)
                 return True
 
             context.user_data["add_account_data"]["account_id"] = message_text
@@ -1043,7 +1054,7 @@ class TelegramService(BaseService):
                 [InlineKeyboardButton("❌ Cancel", callback_data="account_add_cancel:cancel")]
             ]
 
-            await update.message.reply_text(
+            reply = await update.message.reply_text(
                 "➕ *Add Instagram Account*\n\n"
                 "*Step 3 of 3: Access Token*\n\n"
                 f"Display name: `{context.user_data['add_account_data']['display_name']}`\n"
@@ -1053,6 +1064,7 @@ class TelegramService(BaseService):
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
+            context.user_data["add_account_messages"].append(reply.message_id)
             return True
 
         elif state == "awaiting_token":
@@ -1099,12 +1111,6 @@ class TelegramService(BaseService):
                     if not username:
                         raise ValueError("Could not fetch username from Instagram API")
 
-                # Delete verifying message
-                try:
-                    await verifying_msg.delete()
-                except Exception:
-                    pass
-
                 # Create the account with fetched username
                 account = self.ig_account_service.add_account(
                     display_name=data["display_name"],
@@ -1116,10 +1122,25 @@ class TelegramService(BaseService):
                     telegram_chat_id=chat_id
                 )
 
+                # Delete verifying message
+                try:
+                    await verifying_msg.delete()
+                except Exception:
+                    pass
+
+                # Delete all tracked conversation messages
+                messages_to_delete = context.user_data.get("add_account_messages", [])
+                for msg_id in messages_to_delete:
+                    try:
+                        await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
+                    except Exception:
+                        pass  # Message may already be deleted
+
                 # Clear conversation state
                 context.user_data.pop("add_account_state", None)
                 context.user_data.pop("add_account_data", None)
                 context.user_data.pop("add_account_chat_id", None)
+                context.user_data.pop("add_account_messages", None)
 
                 # Log interaction
                 self.interaction_service.log_callback(
@@ -1134,24 +1155,47 @@ class TelegramService(BaseService):
                     telegram_message_id=update.message.message_id,
                 )
 
-                keyboard = [
-                    [InlineKeyboardButton("↩️ Back to Settings", callback_data="settings_accounts:back")]
-                ]
+                logger.info(
+                    f"User {self._get_display_name(user)} added Instagram account: "
+                    f"{account.display_name} (@{account.instagram_username})"
+                )
+
+                # Show Configure Accounts menu with success message
+                account_data = self.ig_account_service.get_accounts_for_display(chat_id)
+                keyboard = []
+
+                for acc in account_data["accounts"]:
+                    is_active = acc["id"] == account_data["active_account_id"]
+                    label = f"{'✅ ' if is_active else '   '}{acc['display_name']}"
+                    if acc["username"]:
+                        label += f" (@{acc['username']})"
+                    keyboard.append([
+                        InlineKeyboardButton(
+                            label,
+                            callback_data=f"switch_account:{acc['id']}"
+                        )
+                    ])
+
+                keyboard.append([
+                    InlineKeyboardButton("➕ Add Account", callback_data="accounts_config:add"),
+                ])
+                if account_data["accounts"]:
+                    keyboard.append([
+                        InlineKeyboardButton("🗑️ Remove Account", callback_data="accounts_config:remove"),
+                    ])
+                keyboard.append([
+                    InlineKeyboardButton("↩️ Back to Settings", callback_data="settings_accounts:back")
+                ])
 
                 await context.bot.send_message(
                     chat_id=chat_id,
                     text=(
-                        f"✅ *Account Added Successfully!*\n\n"
-                        f"📸 {account.display_name} (@{account.instagram_username})\n\n"
-                        f"This account is now active and will be used for posting."
+                        f"✅ *Added @{account.instagram_username}*\n\n"
+                        f"📸 *Configure Instagram Accounts*\n\n"
+                        "Select an account to make it active, or add/remove accounts."
                     ),
                     parse_mode="Markdown",
                     reply_markup=InlineKeyboardMarkup(keyboard)
-                )
-
-                logger.info(
-                    f"User {self._get_display_name(user)} added Instagram account: "
-                    f"{account.display_name} (@{account.instagram_username})"
                 )
 
             except Exception as e:
@@ -1161,10 +1205,19 @@ class TelegramService(BaseService):
                 except Exception:
                     pass
 
+                # Delete all tracked conversation messages
+                messages_to_delete = context.user_data.get("add_account_messages", [])
+                for msg_id in messages_to_delete:
+                    try:
+                        await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
+                    except Exception:
+                        pass
+
                 # Clear state on error
                 context.user_data.pop("add_account_state", None)
                 context.user_data.pop("add_account_data", None)
                 context.user_data.pop("add_account_chat_id", None)
+                context.user_data.pop("add_account_messages", None)
 
                 keyboard = [
                     [InlineKeyboardButton("🔄 Try Again", callback_data="accounts_config:add")],
@@ -1190,9 +1243,22 @@ class TelegramService(BaseService):
 
     async def _handle_add_account_cancel(self, user, query, context):
         """Cancel add account flow."""
+        chat_id = query.message.chat_id
+
+        # Delete all tracked conversation messages (except the current one which we'll edit)
+        messages_to_delete = context.user_data.get("add_account_messages", [])
+        current_msg_id = query.message.message_id
+        for msg_id in messages_to_delete:
+            if msg_id != current_msg_id:
+                try:
+                    await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
+                except Exception:
+                    pass
+
         context.user_data.pop("add_account_state", None)
         context.user_data.pop("add_account_data", None)
         context.user_data.pop("add_account_chat_id", None)
+        context.user_data.pop("add_account_messages", None)
 
         await query.answer("Cancelled")
         await self._handle_account_selection_menu(user, query)
