@@ -6,6 +6,7 @@ from typing import Optional
 from src.services.base_service import BaseService
 from src.services.core.telegram_service import TelegramService
 from src.services.core.media_lock import MediaLockService
+from src.services.core.settings_service import SettingsService
 from src.repositories.queue_repository import QueueRepository
 from src.repositories.media_repository import MediaRepository
 from src.repositories.history_repository import HistoryRepository
@@ -24,6 +25,7 @@ class PostingService(BaseService):
         self.history_repo = HistoryRepository()
         self.telegram_service = TelegramService()
         self.lock_service = MediaLockService()
+        self.settings_service = SettingsService()
 
         # Initialize Instagram API services only when enabled (lazy loading)
         self._instagram_service = None
@@ -44,6 +46,10 @@ class PostingService(BaseService):
             from src.services.integrations.cloud_storage import CloudStorageService
             self._cloud_service = CloudStorageService()
         return self._cloud_service
+
+    def _get_chat_settings(self):
+        """Get settings for the admin chat (for checking dry_run, is_paused, etc.)."""
+        return self.settings_service.get_settings(settings.ADMIN_TELEGRAM_CHAT_ID)
 
     async def force_post_next(
         self,
@@ -291,7 +297,8 @@ class PostingService(BaseService):
         Returns:
             True if sent successfully
         """
-        if settings.DRY_RUN_MODE:
+        chat_settings = self._get_chat_settings()
+        if chat_settings.dry_run_mode:
             logger.info(f"[DRY RUN] Would send Telegram notification for queue item {queue_item.id}")
             return True
 
@@ -350,7 +357,8 @@ class PostingService(BaseService):
         queue_item_id = str(queue_item.id)
         media_item_id = str(media_item.id)
 
-        if settings.DRY_RUN_MODE:
+        chat_settings = self._get_chat_settings()
+        if chat_settings.dry_run_mode:
             logger.info(f"[DRY RUN] Would post {media_item.file_name} via Instagram API")
             return {"success": True, "dry_run": True}
 

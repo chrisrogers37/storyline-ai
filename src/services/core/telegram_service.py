@@ -12,6 +12,7 @@ from src.repositories.media_repository import MediaRepository
 from src.repositories.lock_repository import LockRepository
 from src.services.core.media_lock import MediaLockService
 from src.services.core.interaction_service import InteractionService
+from src.services.core.settings_service import SettingsService
 from src.config.settings import settings
 from src.utils.logger import logger
 from datetime import datetime, timedelta
@@ -38,9 +39,6 @@ def _extract_button_labels(reply_markup) -> list:
 class TelegramService(BaseService):
     """All Telegram bot operations."""
 
-    # Class-level pause state (persists during runtime)
-    _paused = False
-
     def __init__(self):
         super().__init__()
         self.bot_token = settings.TELEGRAM_BOT_TOKEN
@@ -52,17 +50,20 @@ class TelegramService(BaseService):
         self.lock_repo = LockRepository()
         self.lock_service = MediaLockService()
         self.interaction_service = InteractionService()
+        self.settings_service = SettingsService()
         self.bot = None
         self.application = None
 
     @property
     def is_paused(self) -> bool:
-        """Check if bot posting is paused."""
-        return TelegramService._paused
+        """Check if bot posting is paused (from database)."""
+        chat_settings = self.settings_service.get_settings(self.channel_id)
+        return chat_settings.is_paused
 
-    def set_paused(self, paused: bool):
-        """Set pause state."""
-        TelegramService._paused = paused
+    def set_paused(self, paused: bool, user=None):
+        """Set pause state (persisted to database)."""
+        if self.is_paused != paused:
+            self.settings_service.toggle_setting(self.channel_id, "is_paused", user)
 
     async def initialize(self):
         """Initialize Telegram bot."""
@@ -83,6 +84,7 @@ class TelegramService(BaseService):
         self.application.add_handler(CommandHandler("clear", self._handle_clear))
         self.application.add_handler(CommandHandler("help", self._handle_help))
         self.application.add_handler(CommandHandler("dryrun", self._handle_dryrun))
+        self.application.add_handler(CommandHandler("settings", self._handle_settings))
         self.application.add_handler(CallbackQueryHandler(self._handle_callback))
 
         logger.info("Telegram bot initialized")
@@ -480,6 +482,7 @@ class TelegramService(BaseService):
             "/schedule N - Add N days to queue\n"
             "/clear - Clear all pending posts\n\n"
             "*Control Commands:*\n"
+            "/settings - View/toggle bot settings\n"
             "/pause - Pause automatic posting\n"
             "/resume - Resume posting\n"
             "/dryrun - Toggle dry run mode\n"
@@ -564,6 +567,136 @@ class TelegramService(BaseService):
             telegram_message_id=update.message.message_id,
         )
 
+    async def _handle_settings(self, update, context):
+        """Handle /settings command - show settings menu with toggle buttons."""
+        user = self._get_or_create_user(update.effective_user)
+        chat_id = update.effective_chat.id
+
+        # Log interaction
+        self.interaction_service.log_command(
+            user_id=str(user.id),
+            command="/settings",
+            telegram_chat_id=chat_id,
+            telegram_message_id=update.message.message_id,
+        )
+
+        settings_data = self.settings_service.get_settings_display(chat_id)
+
+        # Build message header
+        message = "⚙️ *Bot Settings*\n\n"
+
+        # Build inline keyboard with toggles
+        keyboard = [
+            # Row 1: Dry Run toggle
+            [
+                InlineKeyboardButton(
+                    "✅ Dry Run" if settings_data["dry_run_mode"] else "Dry Run",
+                    callback_data="settings_toggle:dry_run_mode"
+                ),
+            ],
+            # Row 2: Instagram API toggle
+            [
+                InlineKeyboardButton(
+                    "✅ Instagram API" if settings_data["enable_instagram_api"] else "Instagram API",
+                    callback_data="settings_toggle:enable_instagram_api"
+                ),
+            ],
+            # Row 3: Pause toggle
+            [
+                InlineKeyboardButton(
+                    "⏸️ Paused" if settings_data["is_paused"] else "▶️ Active",
+                    callback_data="settings_toggle:is_paused"
+                ),
+            ],
+            # Row 4: Info display (non-interactive)
+            [
+                InlineKeyboardButton(
+                    f"📊 Posts/Day: {settings_data['posts_per_day']}",
+                    callback_data="settings_info:posts_per_day"
+                ),
+            ],
+            # Row 5: Posting hours
+            [
+                InlineKeyboardButton(
+                    f"🕐 Hours: {settings_data['posting_hours_start']}:00-{settings_data['posting_hours_end']}:00 UTC",
+                    callback_data="settings_info:hours"
+                ),
+            ],
+            # Row 6: Quick actions
+            [
+                InlineKeyboardButton("📋 Queue", callback_data="quick:queue"),
+                InlineKeyboardButton("📊 Status", callback_data="quick:status"),
+            ],
+        ]
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        await update.message.reply_text(
+            message,
+            parse_mode="Markdown",
+            reply_markup=reply_markup
+        )
+
+    async def _handle_settings_toggle(self, setting_name: str, user, query):
+        """Handle settings toggle button click."""
+        chat_id = query.message.chat_id
+
+        try:
+            new_value = self.settings_service.toggle_setting(chat_id, setting_name, user)
+
+            # Log the interaction
+            self.interaction_service.log_callback(
+                user_id=str(user.id),
+                callback_name=f"settings_toggle:{setting_name}",
+                context={"new_value": new_value},
+                telegram_chat_id=chat_id,
+                telegram_message_id=query.message.message_id,
+            )
+
+            # Refresh the settings display
+            await self._refresh_settings_message(query)
+
+        except ValueError as e:
+            await query.answer(f"Error: {e}", show_alert=True)
+
+    async def _refresh_settings_message(self, query):
+        """Refresh the settings message with current values."""
+        chat_id = query.message.chat_id
+        settings_data = self.settings_service.get_settings_display(chat_id)
+
+        # Rebuild keyboard with updated values
+        keyboard = [
+            [InlineKeyboardButton(
+                "✅ Dry Run" if settings_data["dry_run_mode"] else "Dry Run",
+                callback_data="settings_toggle:dry_run_mode"
+            )],
+            [InlineKeyboardButton(
+                "✅ Instagram API" if settings_data["enable_instagram_api"] else "Instagram API",
+                callback_data="settings_toggle:enable_instagram_api"
+            )],
+            [InlineKeyboardButton(
+                "⏸️ Paused" if settings_data["is_paused"] else "▶️ Active",
+                callback_data="settings_toggle:is_paused"
+            )],
+            [InlineKeyboardButton(
+                f"📊 Posts/Day: {settings_data['posts_per_day']}",
+                callback_data="settings_info:posts_per_day"
+            )],
+            [InlineKeyboardButton(
+                f"🕐 Hours: {settings_data['posting_hours_start']}:00-{settings_data['posting_hours_end']}:00 UTC",
+                callback_data="settings_info:hours"
+            )],
+            [
+                InlineKeyboardButton("📋 Queue", callback_data="quick:queue"),
+                InlineKeyboardButton("📊 Status", callback_data="quick:status"),
+            ],
+        ]
+
+        await query.edit_message_reply_markup(
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        await query.answer("Setting updated!")
+
     async def _handle_pause(self, update, context):
         """Handle /pause command - pause automatic posting."""
         user = self._get_or_create_user(update.effective_user)
@@ -574,7 +707,7 @@ class TelegramService(BaseService):
                 parse_mode="Markdown"
             )
         else:
-            self.set_paused(True)
+            self.set_paused(True, user)
             pending_count = self.queue_repo.count_pending()
             await update.message.reply_text(
                 f"⏸️ *Posting Paused*\n\n"
@@ -631,7 +764,7 @@ class TelegramService(BaseService):
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
             else:
-                self.set_paused(False)
+                self.set_paused(False, user)
                 await update.message.reply_text(
                     f"▶️ *Posting Resumed*\n\n"
                     f"Automatic posting is now active.\n"
@@ -875,6 +1008,20 @@ class TelegramService(BaseService):
             # Clear callbacks
             elif action == "clear":
                 await self._handle_clear_callback(data, user, query)
+            # Settings callbacks
+            elif action == "settings_toggle":
+                await self._handle_settings_toggle(data, user, query)
+            elif action == "settings_refresh":
+                await self._refresh_settings_message(query)
+            elif action == "settings_info":
+                # Info buttons are non-interactive, just acknowledge
+                await query.answer("Use CLI to change this setting")
+            # Quick action callbacks
+            elif action == "quick":
+                if data == "queue":
+                    await query.answer("Use /queue command")
+                elif data == "status":
+                    await query.answer("Use /status command")
         finally:
             # Clean up open transactions to prevent "idle in transaction"
             self.cleanup_transactions()
@@ -1571,7 +1718,7 @@ class TelegramService(BaseService):
                 self.queue_repo.update_scheduled_time(str(item.id), new_time)
                 rescheduled += 1
 
-            self.set_paused(False)
+            self.set_paused(False, user)
             await query.edit_message_text(
                 f"✅ *Posting Resumed*\n\n"
                 f"🔄 Rescheduled {rescheduled} overdue posts.\n"
@@ -1587,7 +1734,7 @@ class TelegramService(BaseService):
                 self.queue_repo.delete(str(item.id))
                 cleared += 1
 
-            self.set_paused(False)
+            self.set_paused(False, user)
             remaining = len(all_pending) - cleared
             await query.edit_message_text(
                 f"✅ *Posting Resumed*\n\n"
@@ -1599,7 +1746,7 @@ class TelegramService(BaseService):
 
         elif action == "force":
             # Resume without handling overdue - they'll be processed immediately
-            self.set_paused(False)
+            self.set_paused(False, user)
             await query.edit_message_text(
                 f"✅ *Posting Resumed*\n\n"
                 f"⚠️ {len(overdue)} overdue posts will be processed immediately.",

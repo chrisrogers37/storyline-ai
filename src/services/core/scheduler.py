@@ -5,6 +5,7 @@ from decimal import Decimal
 import random
 
 from src.services.base_service import BaseService
+from src.services.core.settings_service import SettingsService
 from src.repositories.media_repository import MediaRepository
 from src.repositories.queue_repository import QueueRepository
 from src.repositories.lock_repository import LockRepository
@@ -22,6 +23,7 @@ class SchedulerService(BaseService):
         self.queue_repo = QueueRepository()
         self.lock_repo = LockRepository()
         self.category_mix_repo = CategoryMixRepository()
+        self.settings_service = SettingsService()
 
     def create_schedule(self, days: int = 7, user_id: Optional[str] = None) -> dict:
         """
@@ -155,10 +157,13 @@ class SchedulerService(BaseService):
         Returns:
             List of datetime objects for posting
         """
+        # Get schedule settings from database (falls back to .env if not in DB)
+        chat_settings = self.settings_service.get_settings(settings.ADMIN_TELEGRAM_CHAT_ID)
+
         time_slots = []
-        posts_per_day = settings.POSTS_PER_DAY
-        start_hour = settings.POSTING_HOURS_START
-        end_hour = settings.POSTING_HOURS_END
+        posts_per_day = chat_settings.posts_per_day
+        start_hour = chat_settings.posting_hours_start
+        end_hour = chat_settings.posting_hours_end
 
         for day_offset in range(days):
             base_date = datetime.utcnow().date() + timedelta(days=day_offset)
