@@ -7,6 +7,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Instagram Account Management (Phase 1.5)
+
+#### Multi-Account Support
+- **Instagram Accounts Table** - Store multiple Instagram account identities
+  - Display name, Instagram ID, username per account
+  - Active/inactive status for soft deletion
+  - Separation of concerns: identity (accounts) vs credentials (tokens) vs selection (settings)
+
+- **Account Switching via Telegram** - Switch between accounts in /settings menu
+  - "📱 Switch Account" button in settings menu
+  - Per-chat active account selection stored in `chat_settings`
+  - Auto-select when only one account exists
+  - Visual indicator of currently active account
+
+- **Per-Account Token Storage** - OAuth tokens linked to specific accounts
+  - `api_tokens.instagram_account_id` foreign key
+  - Supports multiple tokens per service (one per account)
+  - Backward compatible with legacy .env-based tokens
+
+#### New CLI Commands
+- `add-instagram-account` - Register new Instagram account with encrypted token
+- `list-instagram-accounts` - Show all registered accounts with status
+- `deactivate-instagram-account` - Soft-delete an account
+- `reactivate-instagram-account` - Restore a deactivated account
+
+#### Service Layer Updates
+- **InstagramAccountService** - New service for account management
+  - `list_accounts()`, `get_active_account()`, `switch_account()`
+  - `add_account()`, `deactivate_account()`, `reactivate_account()`
+  - `get_accounts_for_display()` - Formatted data for Telegram UI
+  - `auto_select_account_if_single()` - Auto-selection logic
+
+- **InstagramAPIService** - Multi-account posting support
+  - `post_story()` now accepts `telegram_chat_id` parameter
+  - Credentials retrieved based on active account for chat
+  - Fallback to legacy .env config when no account selected
+
+- **TokenRefreshService** - Per-account token refresh
+  - `refresh_instagram_token()` accepts `instagram_account_id`
+  - `refresh_all_instagram_tokens()` - Batch refresh for all accounts
+  - Maintains backward compatibility with legacy tokens
+
+#### Test Coverage
+- 24 new unit tests for InstagramAccountService
+- Tests for separation of concerns architecture
+- Tests for multi-account scenarios and edge cases
+
+### Technical Details
+
+#### Database Migrations
+- `007_instagram_accounts.sql` - Creates `instagram_accounts` table
+- `008_api_tokens_account_fk.sql` - Adds FK to `api_tokens`, updates unique constraint
+- `009_chat_settings_active_account.sql` - Adds `active_instagram_account_id` to `chat_settings`
+
+#### New Files
+- `src/models/instagram_account.py` - InstagramAccount SQLAlchemy model
+- `src/repositories/instagram_account_repository.py` - Full CRUD operations
+- `src/services/core/instagram_account_service.py` - Business logic layer
+- `tests/src/services/test_instagram_account_service.py` - Unit tests
+
+#### Modified Files
+- `src/models/api_token.py` - Added instagram_account_id FK and relationship
+- `src/models/chat_settings.py` - Added active_instagram_account_id FK
+- `src/repositories/token_repository.py` - Per-account token methods
+- `src/services/core/telegram_service.py` - Account switching UI
+- `src/services/integrations/instagram_api.py` - Multi-account support
+- `src/services/integrations/token_refresh.py` - Per-account refresh
+- `cli/commands/instagram.py` - New CLI commands
+- `cli/main.py` - Registered new commands
+
 ## [1.5.0] - 2026-01-24
 
 ### Added - Claude Code Automation & Bot Response Logging
