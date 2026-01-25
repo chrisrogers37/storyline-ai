@@ -1468,7 +1468,7 @@ class TestInstagramAccountService:
 | `src/models/chat_settings.py` | Add active_instagram_account_id FK | ✅ |
 | `src/repositories/token_repository.py` | Support per-account token lookup | ✅ |
 | `src/services/core/telegram_service.py` | Add account selector to /settings | ✅ |
-| `src/services/integrations/instagram_api.py` | Use active account, not .env | ⏳ Pending |
+| `src/services/integrations/instagram_api.py` | Use active account, not .env | ✅ |
 | `src/services/integrations/token_refresh.py` | Refresh tokens per account | ⏳ Pending |
 
 ---

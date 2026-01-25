@@ -8,7 +8,10 @@ import httpx
 from src.services.base_service import BaseService
 from src.services.integrations.token_refresh import TokenRefreshService
 from src.services.integrations.cloud_storage import CloudStorageService
+from src.services.core.instagram_account_service import InstagramAccountService
 from src.repositories.history_repository import HistoryRepository
+from src.repositories.token_repository import TokenRepository
+from src.utils.encryption import TokenEncryption
 from src.config.settings import settings
 from src.exceptions import (
     InstagramAPIError,
@@ -49,11 +52,67 @@ class InstagramAPIService(BaseService):
         self.token_service = TokenRefreshService()
         self.cloud_service = CloudStorageService()
         self.history_repo = HistoryRepository()
+        self.account_service = InstagramAccountService()
+        self.token_repo = TokenRepository()
+        self.encryption = TokenEncryption()
+
+    def _get_active_account_credentials(
+        self,
+        telegram_chat_id: int
+    ) -> tuple[Optional[str], Optional[str], Optional[str]]:
+        """
+        Get credentials for the active Instagram account.
+
+        Supports both:
+        - Multi-account mode: Uses active account from database
+        - Legacy mode: Falls back to .env token if no account configured
+
+        Args:
+            telegram_chat_id: Chat to get active account for
+
+        Returns:
+            Tuple of (decrypted_token, instagram_account_id, username)
+            Any value may be None if not available
+        """
+        # Try multi-account mode first
+        active_account = self.account_service.get_active_account(telegram_chat_id)
+
+        if active_account:
+            # Get token for this specific account
+            token_record = self.token_repo.get_token_for_account(
+                str(active_account.id),
+                token_type="access_token"
+            )
+            if token_record and not token_record.is_expired:
+                # Decrypt the token
+                try:
+                    decrypted_token = self.encryption.decrypt(token_record.token_value)
+                    return (
+                        decrypted_token,
+                        active_account.instagram_account_id,
+                        active_account.instagram_username
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to decrypt token for account {active_account.display_name}: {e}")
+
+            # Token missing or expired for active account
+            logger.warning(f"No valid token for active account {active_account.display_name}")
+
+        # Fallback to legacy .env mode (for backward compatibility)
+        legacy_token = self.token_service.get_token("instagram")
+        legacy_account_id = settings.INSTAGRAM_ACCOUNT_ID
+
+        if legacy_token and legacy_account_id:
+            logger.debug("Using legacy .env Instagram configuration")
+            return (legacy_token, legacy_account_id, None)
+
+        return (None, None, None)
 
     async def post_story(
         self,
         media_url: str,
         media_type: str = "IMAGE",
+        telegram_chat_id: Optional[int] = None,
     ) -> dict:
         """
         Post a Story to Instagram.
@@ -66,6 +125,7 @@ class InstagramAPIService(BaseService):
         Args:
             media_url: Public URL to media (from CloudStorageService)
             media_type: IMAGE or VIDEO
+            telegram_chat_id: Chat ID to get active account for (uses ADMIN chat if not specified)
 
         Returns:
             dict with:
@@ -73,12 +133,17 @@ class InstagramAPIService(BaseService):
                 - story_id: str (Instagram media ID)
                 - container_id: str
                 - timestamp: datetime
+                - account_username: str (which account was used)
 
         Raises:
             InstagramAPIError: On API failure
             RateLimitError: When rate limited
             TokenExpiredError: When token needs refresh
         """
+        # Default to admin chat if not specified (for backward compatibility)
+        if telegram_chat_id is None:
+            telegram_chat_id = settings.ADMIN_TELEGRAM_CHAT_ID
+
         with self.track_execution(
             method_name="post_story",
             input_params={"media_url": media_url[:50] + "...", "media_type": media_type},
@@ -90,14 +155,14 @@ class InstagramAPIService(BaseService):
                     f"Rate limit exhausted. 0/{settings.INSTAGRAM_POSTS_PER_HOUR} remaining."
                 )
 
-            # Get access token
-            token = self.token_service.get_token("instagram")
-            if not token:
-                raise TokenExpiredError("No valid Instagram token available")
+            # Get active account and its token
+            token, account_id, account_username = self._get_active_account_credentials(telegram_chat_id)
 
-            account_id = settings.INSTAGRAM_ACCOUNT_ID
+            if not token:
+                raise TokenExpiredError("No valid Instagram token available for active account")
+
             if not account_id:
-                raise InstagramAPIError("INSTAGRAM_ACCOUNT_ID not configured")
+                raise InstagramAPIError("No Instagram account selected. Use /settings to select one.")
 
             try:
                 # Step 1: Create media container
@@ -127,11 +192,14 @@ class InstagramAPIService(BaseService):
                     "story_id": story_id,
                     "container_id": container_id,
                     "timestamp": datetime.utcnow(),
+                    "account_username": account_username,
+                    "account_id": account_id,
                 }
 
                 self.set_result_summary(run_id, {
                     "success": True,
                     "story_id": story_id,
+                    "account": account_username,
                 })
 
                 return result
@@ -371,13 +439,31 @@ class InstagramAPIService(BaseService):
                 "error": str(e),
             }
 
-    def is_configured(self) -> bool:
-        """Check if Instagram API is properly configured."""
-        return all([
-            settings.ENABLE_INSTAGRAM_API,
-            settings.INSTAGRAM_ACCOUNT_ID,
-            settings.FACEBOOK_APP_ID,
-        ])
+    def is_configured(self, telegram_chat_id: Optional[int] = None) -> bool:
+        """
+        Check if Instagram API is properly configured.
+
+        Supports both multi-account mode and legacy .env mode.
+
+        Args:
+            telegram_chat_id: Chat to check (uses ADMIN chat if not specified)
+        """
+        if not settings.ENABLE_INSTAGRAM_API:
+            return False
+
+        if not settings.FACEBOOK_APP_ID:
+            return False
+
+        if telegram_chat_id is None:
+            telegram_chat_id = settings.ADMIN_TELEGRAM_CHAT_ID
+
+        # Check for multi-account configuration
+        active_account = self.account_service.get_active_account(telegram_chat_id)
+        if active_account:
+            return True
+
+        # Fallback to legacy .env check
+        return bool(settings.INSTAGRAM_ACCOUNT_ID)
 
     def validate_instagram_account_id(self) -> dict:
         """
@@ -427,24 +513,47 @@ class InstagramAPIService(BaseService):
     # Class-level cache for account info (avoid repeated API calls)
     _account_info_cache: dict = {}
 
-    async def get_account_info(self) -> dict:
+    async def get_account_info(
+        self,
+        telegram_chat_id: Optional[int] = None
+    ) -> dict:
         """
         Fetch Instagram account info (username, name, etc.) from the API.
 
+        Supports both multi-account mode and legacy .env mode.
         Results are cached to avoid repeated API calls.
+
+        Args:
+            telegram_chat_id: Chat to get active account for (uses ADMIN chat if not specified)
 
         Returns:
             dict with 'username', 'name', 'id', or 'error' if failed
         """
-        account_id = settings.INSTAGRAM_ACCOUNT_ID
+        if telegram_chat_id is None:
+            telegram_chat_id = settings.ADMIN_TELEGRAM_CHAT_ID
+
+        # Get active account credentials
+        token, account_id, username = self._get_active_account_credentials(telegram_chat_id)
+
+        if not account_id:
+            return {"error": "No Instagram account configured"}
 
         # Return cached result if available
         if account_id in self._account_info_cache:
             return self._account_info_cache[account_id]
 
-        token = self.token_service.get_token("instagram")
+        # If we already have username from multi-account mode, return it
+        if username:
+            result = {
+                "id": account_id,
+                "username": username,
+                "name": None,  # Not stored in our DB, could fetch from API if needed
+            }
+            self._account_info_cache[account_id] = result
+            return result
+
         if not token:
-            return {"error": "No token available"}
+            return {"error": "No token available", "id": account_id}
 
         try:
             async with httpx.AsyncClient() as client:
@@ -476,37 +585,58 @@ class InstagramAPIService(BaseService):
             logger.error(f"Error fetching account info: {e}")
             return {"error": str(e), "id": account_id}
 
-    def safety_check_before_post(self) -> dict:
+    def safety_check_before_post(
+        self,
+        telegram_chat_id: Optional[int] = None
+    ) -> dict:
         """
         CRITICAL SAFETY GATE: Run all safety checks before posting.
 
         This method MUST be called before any post_story() call.
         Returns detailed validation results.
 
+        Supports both multi-account mode (database) and legacy .env mode.
+
+        Args:
+            telegram_chat_id: Chat to check (uses ADMIN chat if not specified)
+
         Returns:
             dict with 'safe_to_post', 'checks', 'errors'
         """
+        if telegram_chat_id is None:
+            telegram_chat_id = settings.ADMIN_TELEGRAM_CHAT_ID
+
         checks = {}
         errors = []
+        account_info = None
 
         # Check 1: Instagram API enabled
         checks["instagram_api_enabled"] = settings.ENABLE_INSTAGRAM_API
         if not settings.ENABLE_INSTAGRAM_API:
             errors.append("ENABLE_INSTAGRAM_API is False")
 
-        # Check 2: Validate Instagram Account ID format
-        id_validation = self.validate_instagram_account_id()
-        checks["account_id_valid"] = id_validation["valid"]
-        if not id_validation["valid"]:
-            errors.append(id_validation["reason"])
+        # Check 2: Get active account credentials (multi-account or legacy)
+        token, account_id, username = self._get_active_account_credentials(telegram_chat_id)
 
-        # Check 3: Token exists
-        token = self.token_service.get_token("instagram")
+        checks["account_configured"] = account_id is not None
         checks["token_exists"] = token is not None
-        if not token:
-            errors.append("No Instagram access token found")
 
-        # Check 4: DRY_RUN_MODE check (not an error, just informational)
+        if not account_id:
+            # Check if using legacy mode
+            if settings.INSTAGRAM_ACCOUNT_ID:
+                errors.append("Active account not selected in database, and no valid token for legacy .env config")
+            else:
+                errors.append("No Instagram account configured. Use /settings to select one or add via CLI.")
+
+        if not token:
+            errors.append("No valid Instagram access token found for the active account")
+
+        if account_id and username:
+            account_info = f"@{username}"
+        elif account_id:
+            account_info = f"ID: {account_id}"
+
+        # Check 3: DRY_RUN_MODE check (not an error, just informational)
         checks["dry_run_mode"] = settings.DRY_RUN_MODE
 
         # Log the safety check
@@ -514,7 +644,7 @@ class InstagramAPIService(BaseService):
         if safe_to_post:
             logger.info(
                 f"✅ SAFETY CHECK PASSED: Ready to post to Instagram "
-                f"(Account ID: {settings.INSTAGRAM_ACCOUNT_ID}, DRY_RUN: {settings.DRY_RUN_MODE})"
+                f"(Account: {account_info}, DRY_RUN: {settings.DRY_RUN_MODE})"
             )
         else:
             logger.error(f"❌ SAFETY CHECK FAILED: {errors}")
@@ -524,4 +654,5 @@ class InstagramAPIService(BaseService):
             "checks": checks,
             "errors": errors,
             "dry_run_mode": settings.DRY_RUN_MODE,
+            "account": account_info,
         }
