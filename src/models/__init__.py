@@ -7,6 +7,7 @@ from src.models.media_lock import MediaPostingLock
 from src.models.service_run import ServiceRun
 from src.models.user_interaction import UserInteraction
 from src.models.category_mix import CategoryPostCaseMix
+from src.models.instagram_account import InstagramAccount
 from src.models.api_token import ApiToken
 from src.models.chat_settings import ChatSettings
 
@@ -19,6 +20,7 @@ __all__ = [
     "ServiceRun",
     "UserInteraction",
     "CategoryPostCaseMix",
+    "InstagramAccount",
     "ApiToken",
     "ChatSettings",
 ]

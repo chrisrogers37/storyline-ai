@@ -24,7 +24,14 @@ from cli.commands.media import (
 from cli.commands.queue import create_schedule, process_queue, list_queue, clear_queue
 from cli.commands.users import list_users, promote_user
 from cli.commands.health import check_health
-from cli.commands.instagram import instagram_auth, instagram_status
+from cli.commands.instagram import (
+    instagram_auth,
+    instagram_status,
+    add_instagram_account,
+    list_instagram_accounts,
+    deactivate_instagram_account,
+    reactivate_instagram_account,
+)
 
 # Add commands to CLI
 cli.add_command(index)
@@ -42,6 +49,10 @@ cli.add_command(promote_user)
 cli.add_command(check_health)
 cli.add_command(instagram_auth)
 cli.add_command(instagram_status)
+cli.add_command(add_instagram_account)
+cli.add_command(list_instagram_accounts)
+cli.add_command(deactivate_instagram_account)
+cli.add_command(reactivate_instagram_account)
 
 
 if __name__ == "__main__":

@@ -1,11 +1,11 @@
 # Settings Management & Multi-Tenancy
 
-**Status**: 🚧 IN PROGRESS (Phase 1 Complete, Phase 1.5 Planning)
+**Status**: 🚧 IN PROGRESS (Phase 1 Complete, Phase 1.5 In Progress)
 **Created**: 2026-01-18
 **Updated**: 2026-01-24
 **Priority**: Active Development
 **Dependencies**: Phase 2 (Instagram API) - Complete
-**Document Version**: 4.0
+**Document Version**: 4.1
 
 ---
 
@@ -45,7 +45,7 @@ The current system uses environment variables (`.env`) for all configuration, re
 | Phase | Name | Scope | Status |
 |-------|------|-------|--------|
 | **1** | Settings Menu | Runtime config via `/settings` for existing features | ✅ Complete |
-| **1.5** | Instagram Account Management | Multiple IG accounts, account switching in settings | 📋 Planning |
+| **1.5** | Instagram Account Management | Multiple IG accounts, account switching in settings | 🚧 In Progress |
 | **2** | Cloud Media Storage | Google Drive / S3 integration, per-chat media source | Future |
 | **3** | Multi-Tenancy | Full `/init` flow, per-chat isolation, audit logs | Future |
 
@@ -1451,30 +1451,25 @@ class TestInstagramAccountService:
 | `src/services/core/posting.py` | Use SettingsService | ✅ |
 | `src/services/core/scheduler.py` | Use SettingsService | ✅ |
 
-### Phase 1.5 Files to Create
+### Phase 1.5 Files (🚧 In Progress)
 
-| File | Purpose |
-|------|---------|
-| `src/models/instagram_account.py` | InstagramAccount SQLAlchemy model |
-| `src/repositories/instagram_account_repository.py` | CRUD for accounts |
-| `src/services/core/instagram_account_service.py` | Account management logic |
-| `scripts/migrations/007_instagram_accounts.sql` | Create instagram_accounts table |
-| `scripts/migrations/008_api_tokens_account_fk.sql` | Add FK to api_tokens |
-| `scripts/migrations/009_chat_settings_active_account.sql` | Add active account to settings |
-| `cli/commands/instagram_accounts.py` | CLI commands for account management |
-| `tests/src/services/test_instagram_account_service.py` | Unit tests |
-
-### Phase 1.5 Files to Modify
-
-| File | Changes |
-|------|---------|
-| `src/models/__init__.py` | Import InstagramAccount |
-| `src/models/api_token.py` | Add instagram_account_id FK |
-| `src/models/chat_settings.py` | Add active_instagram_account_id FK |
-| `src/repositories/token_repository.py` | Support per-account token lookup |
-| `src/services/core/telegram_service.py` | Add account selector to /settings |
-| `src/services/integrations/instagram_api.py` | Use active account, not .env |
-| `src/services/integrations/token_refresh.py` | Refresh tokens per account |
+| File | Purpose | Status |
+|------|---------|--------|
+| `src/models/instagram_account.py` | InstagramAccount SQLAlchemy model | ✅ |
+| `src/repositories/instagram_account_repository.py` | CRUD for accounts | ✅ |
+| `src/services/core/instagram_account_service.py` | Account management logic | ✅ |
+| `scripts/migrations/007_instagram_accounts.sql` | Create instagram_accounts table | ✅ |
+| `scripts/migrations/008_api_tokens_account_fk.sql` | Add FK to api_tokens | ✅ |
+| `scripts/migrations/009_chat_settings_active_account.sql` | Add active account to settings | ✅ |
+| `cli/commands/instagram.py` | CLI commands for account management | ✅ |
+| `tests/src/services/test_instagram_account_service.py` | Unit tests (24 tests) | ✅ |
+| `src/models/__init__.py` | Import InstagramAccount | ✅ |
+| `src/models/api_token.py` | Add instagram_account_id FK | ✅ |
+| `src/models/chat_settings.py` | Add active_instagram_account_id FK | ✅ |
+| `src/repositories/token_repository.py` | Support per-account token lookup | ✅ |
+| `src/services/core/telegram_service.py` | Add account selector to /settings | ✅ |
+| `src/services/integrations/instagram_api.py` | Use active account, not .env | ⏳ Pending |
+| `src/services/integrations/token_refresh.py` | Refresh tokens per account | ⏳ Pending |
 
 ---
 
@@ -1571,6 +1566,7 @@ async def _handle_mycommand(self, update, context):
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 4.1 | 2026-01-24 | Phase 1.5 implementation started - models, repos, services, CLI, tests created |
 | 4.0 | 2026-01-24 | Added Phase 1.5 (Instagram Account Management), marked Phase 1 complete |
 | 3.0 | 2026-01-24 | Added full implementation details, code examples, test plan |
 | 2.0 | 2026-01-18 | Initial detailed planning |

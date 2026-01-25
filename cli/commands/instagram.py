@@ -366,3 +366,211 @@ def instagram_status():
     )
 
     console.print(config_table)
+
+
+@click.command(name="add-instagram-account")
+@click.option("--display-name", required=True, help="User-friendly name for this account")
+@click.option("--account-id", required=True, help="Instagram Business Account ID from Meta")
+@click.option("--username", required=True, help="Instagram @username")
+@click.option("--access-token", prompt=True, hide_input=True, help="Long-lived access token")
+@click.option("--expires-days", default=60, help="Token expiry in days (default: 60)")
+@click.option("--set-active", is_flag=True, help="Set this as the active account")
+def add_instagram_account(display_name, account_id, username, access_token, expires_days, set_active):
+    """
+    Add a new Instagram account for posting.
+
+    Supports multiple Instagram accounts within a single deployment.
+    Use /settings in Telegram to switch between accounts.
+
+    Example:
+        storyline-cli add-instagram-account \\
+            --display-name "Main Brand" \\
+            --account-id "17841234567890" \\
+            --username "brand_main" \\
+            --set-active
+    """
+    from src.services.core.instagram_account_service import InstagramAccountService
+    from src.utils.encryption import TokenEncryption
+
+    console.print(Panel.fit(
+        f"[bold blue]Adding Instagram Account[/bold blue]\n\n"
+        f"Display Name: {display_name}\n"
+        f"Account ID: {account_id}\n"
+        f"Username: @{username.lstrip('@')}",
+        title="Storyline AI"
+    ))
+
+    # Validate token
+    if not access_token or len(access_token) < 50:
+        console.print("[red]Error: Invalid access token format[/red]")
+        return
+
+    # Encrypt token
+    encryption = TokenEncryption()
+    encrypted_token = encryption.encrypt(access_token)
+
+    # Calculate expiry
+    expires_at = datetime.utcnow() + timedelta(days=expires_days)
+
+    # Add account via service
+    service = InstagramAccountService()
+
+    try:
+        account = service.add_account(
+            display_name=display_name,
+            instagram_account_id=account_id,
+            instagram_username=username,
+            access_token=encrypted_token,
+            token_expires_at=expires_at,
+            set_as_active=set_active,
+            telegram_chat_id=settings.ADMIN_TELEGRAM_CHAT_ID if set_active else None
+        )
+
+        console.print("\n[bold green]Account added successfully![/bold green]\n")
+
+        table = Table(title="Account Details")
+        table.add_column("Property", style="cyan")
+        table.add_column("Value")
+
+        table.add_row("Account ID (Internal)", str(account.id))
+        table.add_row("Display Name", account.display_name)
+        table.add_row("Instagram ID", account.instagram_account_id)
+        table.add_row("Username", f"@{account.instagram_username}")
+        table.add_row("Token Expires", expires_at.strftime("%Y-%m-%d"))
+        table.add_row("Active", "[green]Yes[/green]" if set_active else "No")
+
+        console.print(table)
+
+        if not set_active:
+            console.print("\n[dim]Use /settings in Telegram to set this as the active account.[/dim]")
+
+    except ValueError as e:
+        console.print(f"\n[red]Error:[/red] {e}")
+
+
+@click.command(name="list-instagram-accounts")
+@click.option("--all", "include_inactive", is_flag=True, help="Include deactivated accounts")
+def list_instagram_accounts(include_inactive):
+    """
+    List all Instagram accounts.
+
+    Shows all configured Instagram accounts with their status and
+    whether they're currently active for posting.
+    """
+    from src.services.core.instagram_account_service import InstagramAccountService
+    from src.repositories.token_repository import TokenRepository
+
+    service = InstagramAccountService()
+    token_repo = TokenRepository()
+
+    accounts = service.list_accounts(include_inactive=include_inactive)
+    active_account = service.get_active_account(settings.ADMIN_TELEGRAM_CHAT_ID)
+
+    if not accounts:
+        console.print("[yellow]No Instagram accounts configured.[/yellow]")
+        console.print("\nAdd an account with:")
+        console.print("  storyline-cli add-instagram-account --help")
+        return
+
+    table = Table(title="Instagram Accounts")
+    table.add_column("Active", justify="center")
+    table.add_column("Display Name", style="cyan")
+    table.add_column("Username")
+    table.add_column("Instagram ID")
+    table.add_column("Token Status")
+    table.add_column("Status")
+
+    for account in accounts:
+        is_active = active_account and str(active_account.id) == str(account.id)
+
+        # Check token status
+        token = token_repo.get_token_for_account(str(account.id))
+        if token:
+            if token.is_expired:
+                token_status = "[red]Expired[/red]"
+            elif token.hours_until_expiry() and token.hours_until_expiry() < 168:
+                token_status = f"[yellow]{int(token.hours_until_expiry() / 24)}d left[/yellow]"
+            else:
+                hours = token.hours_until_expiry()
+                token_status = f"[green]{int(hours / 24) if hours else '∞'}d left[/green]"
+        else:
+            token_status = "[red]No token[/red]"
+
+        table.add_row(
+            "✓" if is_active else "",
+            account.display_name,
+            f"@{account.instagram_username}" if account.instagram_username else "-",
+            account.instagram_account_id,
+            token_status,
+            "[green]Active[/green]" if account.is_active else "[dim]Disabled[/dim]"
+        )
+
+    console.print(table)
+
+    if active_account:
+        console.print(f"\n[dim]Active account: {active_account.display_name}[/dim]")
+    else:
+        console.print("\n[yellow]No account selected as active. Use /settings in Telegram to select one.[/yellow]")
+
+
+@click.command(name="deactivate-instagram-account")
+@click.argument("username_or_id")
+def deactivate_instagram_account(username_or_id):
+    """
+    Deactivate an Instagram account (soft delete).
+
+    The account and tokens are preserved but won't appear in the selection list.
+
+    Argument can be the @username or the internal account UUID.
+    """
+    from src.services.core.instagram_account_service import InstagramAccountService
+
+    service = InstagramAccountService()
+
+    # Try to find account by username first, then by ID
+    account = service.get_account_by_username(username_or_id)
+    if not account:
+        account = service.get_account_by_id(username_or_id)
+
+    if not account:
+        console.print(f"[red]Error: Account '{username_or_id}' not found[/red]")
+        return
+
+    if not account.is_active:
+        console.print(f"[yellow]Account '{account.display_name}' is already deactivated[/yellow]")
+        return
+
+    if click.confirm(f"Deactivate account '{account.display_name}' (@{account.instagram_username})?"):
+        service.deactivate_account(str(account.id))
+        console.print(f"[green]Account '{account.display_name}' has been deactivated[/green]")
+    else:
+        console.print("[dim]Cancelled[/dim]")
+
+
+@click.command(name="reactivate-instagram-account")
+@click.argument("username_or_id")
+def reactivate_instagram_account(username_or_id):
+    """
+    Reactivate a previously deactivated Instagram account.
+
+    Argument can be the @username or the internal account UUID.
+    """
+    from src.services.core.instagram_account_service import InstagramAccountService
+
+    service = InstagramAccountService()
+
+    # Try to find account by username first, then by ID
+    account = service.get_account_by_username(username_or_id)
+    if not account:
+        account = service.get_account_by_id(username_or_id)
+
+    if not account:
+        console.print(f"[red]Error: Account '{username_or_id}' not found[/red]")
+        return
+
+    if account.is_active:
+        console.print(f"[yellow]Account '{account.display_name}' is already active[/yellow]")
+        return
+
+    service.reactivate_account(str(account.id))
+    console.print(f"[green]Account '{account.display_name}' has been reactivated[/green]")

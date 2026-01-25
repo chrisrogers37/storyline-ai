@@ -3,8 +3,9 @@ from datetime import datetime
 from typing import Optional
 import uuid
 
-from sqlalchemy import Column, String, DateTime, Text, UniqueConstraint
+from sqlalchemy import Column, String, DateTime, Text, UniqueConstraint, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, ARRAY, JSONB
+from sqlalchemy.orm import relationship
 
 from src.config.database import Base
 
@@ -30,6 +31,14 @@ class ApiToken(Base):
     service_name = Column(String(50), nullable=False, index=True)  # 'instagram', 'shopify'
     token_type = Column(String(50), nullable=False)  # 'access_token', 'refresh_token'
 
+    # Link to Instagram account (NULL for non-Instagram services)
+    instagram_account_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("instagram_accounts.id"),
+        nullable=True,
+        index=True
+    )
+
     # Token data (encrypted at application level)
     token_value = Column(Text, nullable=False)
 
@@ -46,8 +55,15 @@ class ApiToken(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # Relationship to InstagramAccount
+    instagram_account = relationship("InstagramAccount", back_populates="tokens")
+
     __table_args__ = (
-        UniqueConstraint("service_name", "token_type", name="unique_service_token_type"),
+        # One token per service per account (allows multiple IG accounts with separate tokens)
+        UniqueConstraint(
+            "service_name", "token_type", "instagram_account_id",
+            name="unique_service_token_type_account"
+        ),
     )
 
     def __repr__(self):

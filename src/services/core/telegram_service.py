@@ -13,6 +13,7 @@ from src.repositories.lock_repository import LockRepository
 from src.services.core.media_lock import MediaLockService
 from src.services.core.interaction_service import InteractionService
 from src.services.core.settings_service import SettingsService
+from src.services.core.instagram_account_service import InstagramAccountService
 from src.config.settings import settings
 from src.utils.logger import logger
 from datetime import datetime, timedelta
@@ -51,6 +52,7 @@ class TelegramService(BaseService):
         self.lock_service = MediaLockService()
         self.interaction_service = InteractionService()
         self.settings_service = SettingsService()
+        self.ig_account_service = InstagramAccountService()
         self.bot = None
         self.application = None
 
@@ -581,6 +583,7 @@ class TelegramService(BaseService):
         )
 
         settings_data = self.settings_service.get_settings_display(chat_id)
+        account_data = self.ig_account_service.get_accounts_for_display(chat_id)
 
         # Build message header
         message = "⚙️ *Bot Settings*\n\n"
@@ -608,21 +611,28 @@ class TelegramService(BaseService):
                     callback_data="settings_toggle:is_paused"
                 ),
             ],
-            # Row 4: Info display (non-interactive)
+            # Row 4: Instagram Account selector
+            [
+                InlineKeyboardButton(
+                    f"📸 @{account_data['active_account_username']}" if account_data["active_account_username"] else "📸 Select Account",
+                    callback_data="settings_accounts:select"
+                ),
+            ],
+            # Row 5: Info display (non-interactive)
             [
                 InlineKeyboardButton(
                     f"📊 Posts/Day: {settings_data['posts_per_day']}",
                     callback_data="settings_info:posts_per_day"
                 ),
             ],
-            # Row 5: Posting hours
+            # Row 6: Posting hours
             [
                 InlineKeyboardButton(
                     f"🕐 Hours: {settings_data['posting_hours_start']}:00-{settings_data['posting_hours_end']}:00 UTC",
                     callback_data="settings_info:hours"
                 ),
             ],
-            # Row 6: Quick actions
+            # Row 7: Quick actions
             [
                 InlineKeyboardButton("📋 Queue", callback_data="quick:queue"),
                 InlineKeyboardButton("📊 Status", callback_data="quick:status"),
@@ -663,6 +673,7 @@ class TelegramService(BaseService):
         """Refresh the settings message with current values."""
         chat_id = query.message.chat_id
         settings_data = self.settings_service.get_settings_display(chat_id)
+        account_data = self.ig_account_service.get_accounts_for_display(chat_id)
 
         # Rebuild keyboard with updated values
         keyboard = [
@@ -677,6 +688,10 @@ class TelegramService(BaseService):
             [InlineKeyboardButton(
                 "⏸️ Paused" if settings_data["is_paused"] else "▶️ Active",
                 callback_data="settings_toggle:is_paused"
+            )],
+            [InlineKeyboardButton(
+                f"📸 @{account_data['active_account_username']}" if account_data["active_account_username"] else "📸 Select Account",
+                callback_data="settings_accounts:select"
             )],
             [InlineKeyboardButton(
                 f"📊 Posts/Day: {settings_data['posts_per_day']}",
@@ -696,6 +711,119 @@ class TelegramService(BaseService):
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         await query.answer("Setting updated!")
+
+    async def _handle_account_selection_menu(self, user, query):
+        """Show Instagram account selection menu."""
+        chat_id = query.message.chat_id
+        account_data = self.ig_account_service.get_accounts_for_display(chat_id)
+
+        # Build account selection keyboard
+        keyboard = []
+
+        for account in account_data["accounts"]:
+            is_active = account["id"] == account_data["active_account_id"]
+            label = f"✅ {account['display_name']}" if is_active else f"   {account['display_name']}"
+            if account["username"]:
+                label += f" (@{account['username']})"
+            keyboard.append([
+                InlineKeyboardButton(
+                    label,
+                    callback_data=f"switch_account:{account['id']}"
+                )
+            ])
+
+        # Add "no accounts" message if empty
+        if not account_data["accounts"]:
+            keyboard.append([
+                InlineKeyboardButton(
+                    "No accounts configured",
+                    callback_data="settings_accounts:back"
+                )
+            ])
+            keyboard.append([
+                InlineKeyboardButton(
+                    "Use CLI: storyline-cli add-instagram-account",
+                    callback_data="settings_accounts:back"
+                )
+            ])
+
+        # Back button
+        keyboard.append([
+            InlineKeyboardButton("🔙 Back to Settings", callback_data="settings_accounts:back")
+        ])
+
+        await query.edit_message_text(
+            "📸 *Select Instagram Account*\n\nChoose which account to post to:",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        await query.answer()
+
+    async def _handle_account_switch(self, account_id: str, user, query):
+        """Handle switching to a different Instagram account."""
+        chat_id = query.message.chat_id
+
+        try:
+            account = self.ig_account_service.switch_account(chat_id, account_id, user)
+
+            # Log the interaction
+            self.interaction_service.log_callback(
+                user_id=str(user.id),
+                callback_name=f"switch_account:{account_id}",
+                context={
+                    "account_id": account_id,
+                    "display_name": account.display_name,
+                    "username": account.instagram_username
+                },
+                telegram_chat_id=chat_id,
+                telegram_message_id=query.message.message_id,
+            )
+
+            await query.answer(f"Switched to @{account.instagram_username}")
+
+            # Return to settings menu with updated values
+            settings_data = self.settings_service.get_settings_display(chat_id)
+            account_data = self.ig_account_service.get_accounts_for_display(chat_id)
+
+            keyboard = [
+                [InlineKeyboardButton(
+                    "✅ Dry Run" if settings_data["dry_run_mode"] else "Dry Run",
+                    callback_data="settings_toggle:dry_run_mode"
+                )],
+                [InlineKeyboardButton(
+                    "✅ Instagram API" if settings_data["enable_instagram_api"] else "Instagram API",
+                    callback_data="settings_toggle:enable_instagram_api"
+                )],
+                [InlineKeyboardButton(
+                    "⏸️ Paused" if settings_data["is_paused"] else "▶️ Active",
+                    callback_data="settings_toggle:is_paused"
+                )],
+                [InlineKeyboardButton(
+                    f"📸 @{account_data['active_account_username']}" if account_data["active_account_username"] else "📸 Select Account",
+                    callback_data="settings_accounts:select"
+                )],
+                [InlineKeyboardButton(
+                    f"📊 Posts/Day: {settings_data['posts_per_day']}",
+                    callback_data="settings_info:posts_per_day"
+                )],
+                [InlineKeyboardButton(
+                    f"🕐 Hours: {settings_data['posting_hours_start']}:00-{settings_data['posting_hours_end']}:00 UTC",
+                    callback_data="settings_info:hours"
+                )],
+                [
+                    InlineKeyboardButton("📋 Queue", callback_data="quick:queue"),
+                    InlineKeyboardButton("📊 Status", callback_data="quick:status"),
+                ],
+            ]
+
+            await query.edit_message_text(
+                "⚙️ *Bot Settings*\n\n",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+
+        except ValueError as e:
+            await query.answer(f"Error: {e}", show_alert=True)
 
     async def _handle_pause(self, update, context):
         """Handle /pause command - pause automatic posting."""
@@ -1016,6 +1144,14 @@ class TelegramService(BaseService):
             elif action == "settings_info":
                 # Info buttons are non-interactive, just acknowledge
                 await query.answer("Use CLI to change this setting")
+            # Instagram account selection callbacks
+            elif action == "settings_accounts":
+                if data == "select":
+                    await self._handle_account_selection_menu(user, query)
+                elif data == "back":
+                    await self._refresh_settings_message(query)
+            elif action == "switch_account":
+                await self._handle_account_switch(data, user, query)
             # Quick action callbacks
             elif action == "quick":
                 if data == "queue":

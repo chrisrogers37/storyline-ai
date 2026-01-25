@@ -1,6 +1,7 @@
 """Chat settings model - per-chat runtime configuration."""
 from sqlalchemy import Column, String, Integer, Boolean, BigInteger, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
 
@@ -35,9 +36,19 @@ class ChatSettings(Base):
     posting_hours_start = Column(Integer, default=14)
     posting_hours_end = Column(Integer, default=2)
 
+    # Active Instagram account (for multi-account support)
+    active_instagram_account_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("instagram_accounts.id"),
+        nullable=True  # NULL = no account selected yet
+    )
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationship to active Instagram account
+    active_instagram_account = relationship("InstagramAccount")
 
     def __repr__(self):
         return f"<ChatSettings chat_id={self.telegram_chat_id} paused={self.is_paused}>"
