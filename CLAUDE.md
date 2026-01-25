@@ -609,7 +609,87 @@ INSERT INTO schema_version (version, description)
 VALUES (2, 'Add new column to media_items');
 ```
 
-### 5. Logging Standards
+### 5. Changelog Maintenance (CRITICAL)
+
+**ALWAYS update CHANGELOG.md when creating PRs.** The changelog is the user-facing record of all changes.
+
+**Format**: This project uses [Keep a Changelog](https://keepachangelog.com/) with [Semantic Versioning](https://semver.org/).
+
+**When to update**:
+- **Every PR** must include a CHANGELOG.md entry
+- Add entries under `## [Unreleased]` section
+- Move entries to a versioned section when releasing
+
+**Version bump rules** (Semantic Versioning):
+- **MAJOR** (X.0.0): Breaking changes, incompatible API changes
+- **MINOR** (x.Y.0): New features, backward-compatible additions
+- **PATCH** (x.y.Z): Bug fixes, minor improvements
+
+**Entry categories** (use as applicable):
+- `### Added` - New features or capabilities
+- `### Changed` - Changes to existing functionality
+- `### Deprecated` - Features that will be removed
+- `### Removed` - Features that were removed
+- `### Fixed` - Bug fixes
+- `### Security` - Security-related changes
+
+**Entry format**:
+```markdown
+## [Unreleased]
+
+### Added
+- **Feature Name** - Brief description of what was added
+  - Sub-bullet with implementation detail
+  - Another detail if needed
+
+### Fixed
+- **Bug Name** - What was broken and how it was fixed
+```
+
+**Best practices**:
+- Write entries from the user's perspective (what changed for them)
+- Include enough detail to understand the change without reading code
+- Reference issue/PR numbers when relevant: `(#123)`
+- Group related changes under descriptive subheadings
+- Include technical details section for significant changes
+- List affected files for complex changes
+
+**Example entry**:
+```markdown
+## [Unreleased]
+
+### Added - Instagram Account Management (Phase 1.5)
+
+#### Multi-Account Support
+- **Instagram Accounts Table** - Store multiple Instagram account identities
+  - Display name, Instagram ID, username per account
+  - Active/inactive status for soft deletion
+  - Created via CLI: `storyline-cli add-instagram-account`
+
+- **Account Switching** - Switch between accounts via Telegram /settings
+  - Per-chat active account selection
+  - Auto-select when only one account exists
+
+#### New CLI Commands
+- `add-instagram-account` - Register new Instagram account with token
+- `list-instagram-accounts` - Show all registered accounts
+- `deactivate-instagram-account` - Soft-delete an account
+- `reactivate-instagram-account` - Restore a deactivated account
+
+### Technical Details
+
+#### Database Migrations
+- `007_instagram_accounts.sql` - Creates instagram_accounts table
+- `008_api_tokens_account_fk.sql` - Links tokens to accounts
+- `009_chat_settings_active_account.sql` - Per-chat account selection
+
+#### Files Changed
+- `src/models/instagram_account.py` - New model
+- `src/services/core/instagram_account_service.py` - Business logic
+- `src/services/core/telegram_service.py` - Account switching UI
+```
+
+### 6. Logging Standards
 
 ```python
 from src.utils.logger import logger
@@ -627,7 +707,7 @@ logger.error(f"Failed to upload to Cloudinary: {error}", exc_info=True)
 # CRITICAL: Severe error, app might crash
 ```
 
-### 6. Async/Await Usage
+### 7. Async/Await Usage
 
 ```python
 # Telegram and HTTP operations are async
