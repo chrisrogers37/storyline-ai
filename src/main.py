@@ -69,6 +69,22 @@ async def cleanup_locks_loop(lock_service: MediaLockService):
             lock_service.cleanup_transactions()
 
 
+async def transaction_cleanup_loop(services: list):
+    """
+    Periodically clean up idle database transactions from all services.
+
+    This prevents "idle in transaction" connections from piling up,
+    which can cause the bot to freeze when handling callbacks.
+    """
+    while True:
+        await asyncio.sleep(30)  # Run every 30 seconds
+        for service in services:
+            try:
+                service.cleanup_transactions()
+            except Exception:
+                pass  # Suppress cleanup errors
+
+
 async def main_async():
     """Main async application entry point."""
     global session_start_time
@@ -101,10 +117,12 @@ async def main_async():
     await telegram_service.send_startup_notification()
 
     # Create tasks
+    all_services = [posting_service, telegram_service, lock_service]
     tasks = [
         asyncio.create_task(run_scheduler_loop(posting_service)),
         asyncio.create_task(cleanup_locks_loop(lock_service)),
         asyncio.create_task(telegram_service.start_polling()),
+        asyncio.create_task(transaction_cleanup_loop(all_services)),
     ]
 
     logger.info("✓ All services started")
