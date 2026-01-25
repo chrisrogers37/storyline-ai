@@ -2,7 +2,7 @@
 from pathlib import Path
 from typing import Optional
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CallbackQueryHandler, CommandHandler
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler, MessageHandler, filters
 
 from src.services.base_service import BaseService
 from src.repositories.user_repository import UserRepository
@@ -88,6 +88,11 @@ class TelegramService(BaseService):
         self.application.add_handler(CommandHandler("dryrun", self._handle_dryrun))
         self.application.add_handler(CommandHandler("settings", self._handle_settings))
         self.application.add_handler(CallbackQueryHandler(self._handle_callback))
+        # Message handler for conversation flows (add account, etc.)
+        self.application.add_handler(MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            self._handle_conversation_message
+        ))
 
         logger.info("Telegram bot initialized")
 
@@ -517,6 +522,20 @@ class TelegramService(BaseService):
             telegram_message_id=update.message.message_id,
         )
 
+    async def _handle_conversation_message(self, update, context):
+        """
+        Handle text messages for active conversations.
+
+        Routes to appropriate conversation handler based on state in context.user_data.
+        """
+        # Check for add account conversation
+        if "add_account_state" in context.user_data:
+            handled = await self._handle_add_account_message(update, context)
+            if handled:
+                return
+
+        # Message not part of any conversation - ignore silently
+
     async def _handle_dryrun(self, update, context):
         """
         Handle /dryrun command - toggle or check dry run mode.
@@ -621,10 +640,10 @@ class TelegramService(BaseService):
                     callback_data="settings_toggle:is_paused"
                 ),
             ],
-            # Row 4: Instagram Account selector
+            # Row 4: Instagram Account config
             [
                 InlineKeyboardButton(
-                    f"📸 @{account_data['active_account_username']}" if account_data["active_account_username"] else "📸 Select Account",
+                    f"📸 @{account_data['active_account_username']}" if account_data["active_account_username"] else "📸 Configure Accounts",
                     callback_data="settings_accounts:select"
                 ),
             ],
@@ -718,7 +737,7 @@ class TelegramService(BaseService):
                 callback_data="settings_toggle:is_paused"
             )],
             [InlineKeyboardButton(
-                f"📸 @{account_data['active_account_username']}" if account_data["active_account_username"] else "📸 Select Account",
+                f"📸 @{account_data['active_account_username']}" if account_data["active_account_username"] else "📸 Configure Accounts",
                 callback_data="settings_accounts:select"
             )],
             [InlineKeyboardButton(
@@ -871,47 +890,53 @@ class TelegramService(BaseService):
                     await query.answer(f"Error: {str(e)[:100]}", show_alert=True)
 
     async def _handle_account_selection_menu(self, user, query):
-        """Show Instagram account selection menu."""
+        """Show Instagram account configuration menu."""
         chat_id = query.message.chat_id
         account_data = self.ig_account_service.get_accounts_for_display(chat_id)
 
-        # Build account selection keyboard
+        # Build account management keyboard
         keyboard = []
 
-        for account in account_data["accounts"]:
-            is_active = account["id"] == account_data["active_account_id"]
-            label = f"✅ {account['display_name']}" if is_active else f"   {account['display_name']}"
-            if account["username"]:
-                label += f" (@{account['username']})"
-            keyboard.append([
-                InlineKeyboardButton(
-                    label,
-                    callback_data=f"switch_account:{account['id']}"
-                )
-            ])
-
-        # Add "no accounts" message if empty
-        if not account_data["accounts"]:
+        # List existing accounts with select option
+        if account_data["accounts"]:
+            for account in account_data["accounts"]:
+                is_active = account["id"] == account_data["active_account_id"]
+                label = f"{'✅ ' if is_active else '   '}{account['display_name']}"
+                if account["username"]:
+                    label += f" (@{account['username']})"
+                keyboard.append([
+                    InlineKeyboardButton(
+                        label,
+                        callback_data=f"switch_account:{account['id']}"
+                    )
+                ])
+        else:
             keyboard.append([
                 InlineKeyboardButton(
                     "No accounts configured",
-                    callback_data="settings_accounts:back"
+                    callback_data="accounts_config:noop"
                 )
             ])
+
+        # Action buttons row
+        keyboard.append([
+            InlineKeyboardButton("➕ Add Account", callback_data="accounts_config:add"),
+        ])
+
+        # Only show remove option if there are accounts
+        if account_data["accounts"]:
             keyboard.append([
-                InlineKeyboardButton(
-                    "Use CLI: storyline-cli add-instagram-account",
-                    callback_data="settings_accounts:back"
-                )
+                InlineKeyboardButton("🗑️ Remove Account", callback_data="accounts_config:remove"),
             ])
 
         # Back button
         keyboard.append([
-            InlineKeyboardButton("🔙 Back to Settings", callback_data="settings_accounts:back")
+            InlineKeyboardButton("↩️ Back to Settings", callback_data="settings_accounts:back")
         ])
 
         await query.edit_message_text(
-            "📸 *Select Instagram Account*\n\nChoose which account to post to:",
+            "📸 *Configure Instagram Accounts*\n\n"
+            "Select an account to make it active, or add/remove accounts.",
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
@@ -941,6 +966,296 @@ class TelegramService(BaseService):
 
             # Return to settings menu with updated values
             await self._refresh_settings_message(query, show_answer=False)
+
+        except ValueError as e:
+            await query.answer(f"Error: {e}", show_alert=True)
+
+    async def _handle_add_account_start(self, user, query, context):
+        """Start the add account conversation flow."""
+        chat_id = query.message.chat_id
+
+        # Initialize conversation state
+        context.user_data["add_account_state"] = "awaiting_display_name"
+        context.user_data["add_account_chat_id"] = chat_id
+        context.user_data["add_account_data"] = {}
+
+        keyboard = [
+            [InlineKeyboardButton("❌ Cancel", callback_data="account_add_cancel:cancel")]
+        ]
+
+        await query.edit_message_text(
+            "➕ *Add Instagram Account*\n\n"
+            "*Step 1 of 4: Display Name*\n\n"
+            "Enter a friendly name for this account (e.g., 'Main Account', 'Brand Account'):\n\n"
+            "_Reply to this message with the name_",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        await query.answer()
+
+        logger.info(f"User {self._get_display_name(user)} started add account flow")
+
+    async def _handle_add_account_message(self, update, context):
+        """Handle text messages during add account conversation."""
+        if "add_account_state" not in context.user_data:
+            return False  # Not in add account flow
+
+        state = context.user_data["add_account_state"]
+        user = self._get_or_create_user(update.effective_user)
+        chat_id = update.effective_chat.id
+        message_text = update.message.text.strip()
+
+        if state == "awaiting_display_name":
+            # Save display name and ask for username
+            context.user_data["add_account_data"]["display_name"] = message_text
+            context.user_data["add_account_state"] = "awaiting_username"
+
+            keyboard = [
+                [InlineKeyboardButton("❌ Cancel", callback_data="account_add_cancel:cancel")]
+            ]
+
+            await update.message.reply_text(
+                "➕ *Add Instagram Account*\n\n"
+                "*Step 2 of 4: Instagram Username*\n\n"
+                f"Display name: `{message_text}`\n\n"
+                "Enter the Instagram username (without @):\n\n"
+                "_Reply with the username_",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return True
+
+        elif state == "awaiting_username":
+            # Remove @ if present
+            username = message_text.lstrip("@")
+            context.user_data["add_account_data"]["username"] = username
+            context.user_data["add_account_state"] = "awaiting_account_id"
+
+            keyboard = [
+                [InlineKeyboardButton("❌ Cancel", callback_data="account_add_cancel:cancel")]
+            ]
+
+            await update.message.reply_text(
+                "➕ *Add Instagram Account*\n\n"
+                "*Step 3 of 4: Instagram Account ID*\n\n"
+                f"Display name: `{context.user_data['add_account_data']['display_name']}`\n"
+                f"Username: `@{username}`\n\n"
+                "Enter the Instagram Account ID (numeric ID from Meta Business Suite):\n\n"
+                "_This is found in Meta Business Suite > Settings > Business Assets > Instagram Accounts_",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return True
+
+        elif state == "awaiting_account_id":
+            # Validate it's numeric
+            if not message_text.isdigit():
+                await update.message.reply_text(
+                    "⚠️ Account ID must be numeric. Please try again:",
+                    parse_mode="Markdown"
+                )
+                return True
+
+            context.user_data["add_account_data"]["account_id"] = message_text
+            context.user_data["add_account_state"] = "awaiting_token"
+
+            keyboard = [
+                [InlineKeyboardButton("❌ Cancel", callback_data="account_add_cancel:cancel")]
+            ]
+
+            await update.message.reply_text(
+                "➕ *Add Instagram Account*\n\n"
+                "*Step 4 of 4: Access Token*\n\n"
+                f"Display name: `{context.user_data['add_account_data']['display_name']}`\n"
+                f"Username: `@{context.user_data['add_account_data']['username']}`\n"
+                f"Account ID: `{message_text}`\n\n"
+                "⚠️ *Security Notice*: Your message containing the token will be "
+                "deleted immediately after processing.\n\n"
+                "Paste your Instagram Graph API access token:",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return True
+
+        elif state == "awaiting_token":
+            # Delete the message with the token immediately for security
+            try:
+                await update.message.delete()
+            except Exception as e:
+                logger.warning(f"Could not delete token message: {e}")
+
+            # Attempt to create the account
+            data = context.user_data["add_account_data"]
+
+            try:
+                account = self.ig_account_service.add_account(
+                    display_name=data["display_name"],
+                    instagram_account_id=data["account_id"],
+                    instagram_username=data["username"],
+                    access_token=message_text,
+                    user=user,
+                    set_as_active=True,
+                    telegram_chat_id=chat_id
+                )
+
+                # Clear conversation state
+                context.user_data.pop("add_account_state", None)
+                context.user_data.pop("add_account_data", None)
+                context.user_data.pop("add_account_chat_id", None)
+
+                # Log interaction
+                self.interaction_service.log_callback(
+                    user_id=str(user.id),
+                    callback_name="add_account",
+                    context={
+                        "account_id": str(account.id),
+                        "display_name": account.display_name,
+                        "username": account.instagram_username
+                    },
+                    telegram_chat_id=chat_id,
+                    telegram_message_id=update.message.message_id,
+                )
+
+                keyboard = [
+                    [InlineKeyboardButton("↩️ Back to Settings", callback_data="settings_accounts:back")]
+                ]
+
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=(
+                        f"✅ *Account Added Successfully!*\n\n"
+                        f"📸 {account.display_name} (@{account.instagram_username})\n\n"
+                        f"This account is now active and will be used for posting."
+                    ),
+                    parse_mode="Markdown",
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+
+                logger.info(
+                    f"User {self._get_display_name(user)} added Instagram account: "
+                    f"{account.display_name} (@{account.instagram_username})"
+                )
+
+            except ValueError as e:
+                # Clear state on error
+                context.user_data.pop("add_account_state", None)
+                context.user_data.pop("add_account_data", None)
+                context.user_data.pop("add_account_chat_id", None)
+
+                keyboard = [
+                    [InlineKeyboardButton("🔄 Try Again", callback_data="accounts_config:add")],
+                    [InlineKeyboardButton("↩️ Back to Settings", callback_data="settings_accounts:back")]
+                ]
+
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"❌ *Failed to add account*\n\n{str(e)}",
+                    parse_mode="Markdown",
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+
+            return True
+
+        return False
+
+    async def _handle_add_account_cancel(self, user, query, context):
+        """Cancel add account flow."""
+        context.user_data.pop("add_account_state", None)
+        context.user_data.pop("add_account_data", None)
+        context.user_data.pop("add_account_chat_id", None)
+
+        await query.answer("Cancelled")
+        await self._handle_account_selection_menu(user, query)
+
+    async def _handle_remove_account_menu(self, user, query):
+        """Show menu to select account to remove."""
+        chat_id = query.message.chat_id
+        account_data = self.ig_account_service.get_accounts_for_display(chat_id)
+
+        keyboard = []
+
+        for account in account_data["accounts"]:
+            is_active = account["id"] == account_data["active_account_id"]
+            label = f"🗑️ {account['display_name']}"
+            if account["username"]:
+                label += f" (@{account['username']})"
+            if is_active:
+                label += " ⚠️ ACTIVE"
+            keyboard.append([
+                InlineKeyboardButton(
+                    label,
+                    callback_data=f"account_remove:{account['id']}"
+                )
+            ])
+
+        keyboard.append([
+            InlineKeyboardButton("↩️ Back", callback_data="settings_accounts:select")
+        ])
+
+        await query.edit_message_text(
+            "🗑️ *Remove Instagram Account*\n\n"
+            "Select an account to remove:\n\n"
+            "_Note: Removing an account deactivates it. Tokens and history are preserved._",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        await query.answer()
+
+    async def _handle_account_remove_confirm(self, account_id: str, user, query):
+        """Show confirmation before removing account."""
+        account = self.ig_account_service.get_account_by_id(account_id)
+
+        if not account:
+            await query.answer("Account not found", show_alert=True)
+            return
+
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ Yes, Remove", callback_data=f"account_remove_confirmed:{account_id}"),
+                InlineKeyboardButton("❌ Cancel", callback_data="settings_accounts:select"),
+            ]
+        ]
+
+        await query.edit_message_text(
+            f"⚠️ *Confirm Remove Account*\n\n"
+            f"Are you sure you want to remove:\n\n"
+            f"📸 *{account.display_name}*\n"
+            f"Username: @{account.instagram_username}\n\n"
+            f"_The account can be reactivated later via CLI._",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        await query.answer()
+
+    async def _handle_account_remove_execute(self, account_id: str, user, query):
+        """Execute account removal (deactivation)."""
+        chat_id = query.message.chat_id
+
+        try:
+            account = self.ig_account_service.deactivate_account(account_id, user)
+
+            # Log interaction
+            self.interaction_service.log_callback(
+                user_id=str(user.id),
+                callback_name=f"remove_account:{account_id}",
+                context={
+                    "account_id": account_id,
+                    "display_name": account.display_name,
+                    "username": account.instagram_username
+                },
+                telegram_chat_id=chat_id,
+                telegram_message_id=query.message.message_id,
+            )
+
+            await query.answer(f"Removed @{account.instagram_username}")
+
+            logger.info(
+                f"User {self._get_display_name(user)} removed Instagram account: "
+                f"{account.display_name} (@{account.instagram_username})"
+            )
+
+            # Return to account config menu
+            await self._handle_account_selection_menu(user, query)
 
         except ValueError as e:
             await query.answer(f"Error: {e}", show_alert=True)
@@ -1279,6 +1594,20 @@ class TelegramService(BaseService):
                     await self._refresh_settings_message(query)
             elif action == "switch_account":
                 await self._handle_account_switch(data, user, query)
+            # Instagram account configuration callbacks
+            elif action == "accounts_config":
+                if data == "add":
+                    await self._handle_add_account_start(user, query, context)
+                elif data == "remove":
+                    await self._handle_remove_account_menu(user, query)
+                elif data == "noop":
+                    await query.answer()
+            elif action == "account_remove":
+                await self._handle_account_remove_confirm(data, user, query)
+            elif action == "account_remove_confirmed":
+                await self._handle_account_remove_execute(data, user, query)
+            elif action == "account_add_cancel":
+                await self._handle_add_account_cancel(user, query, context)
         finally:
             # Clean up open transactions to prevent "idle in transaction"
             self.cleanup_transactions()

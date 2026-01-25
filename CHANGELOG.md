@@ -24,6 +24,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added explanatory text for schedule actions
 - Cleaner separation between /settings (configuration) and /status (read-only state)
 
+#### Instagram Account Configuration via Telegram
+- **Renamed "Select Account" to "Configure Accounts"** - Now a full account management menu
+- **Add Account Flow** - 4-step conversation to add new Instagram accounts:
+  1. Display name
+  2. Instagram username
+  3. Instagram Account ID (from Meta Business Suite)
+  4. Access token (message deleted immediately for security)
+- **Remove Account** - Deactivate accounts directly from Telegram with confirmation
+- **Account Selection** - Select active account from the same menu
+- **Security**: Token messages are deleted immediately after processing
+
 #### SchedulerService Enhancement
 - **`extend_schedule()` method** - Add days to existing schedule without clearing
   - Finds last scheduled time in queue
@@ -45,6 +56,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `schedule_action:extend` - Extends schedule by 7 days
 - `schedule_confirm:regenerate` - Confirms and executes regeneration
 - `schedule_confirm:cancel` - Cancels and returns to settings
+- `accounts_config:add` - Start add account conversation
+- `accounts_config:remove` - Show remove account menu
+- `account_remove:{id}` - Confirm account removal
+- `account_remove_confirmed:{id}` - Execute account removal
+- `account_add_cancel:cancel` - Cancel add account flow
 
 #### Files Changed
 - `scripts/migrations/010_add_verbose_notifications.sql` - New migration
