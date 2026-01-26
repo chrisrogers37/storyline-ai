@@ -1,4 +1,5 @@
 """Service run repository - CRUD operations for service runs."""
+
 from typing import Optional, List
 from datetime import datetime, timedelta
 
@@ -94,7 +95,9 @@ class ServiceRunRepository(BaseRepository):
 
         return query.order_by(ServiceRun.started_at.desc()).limit(limit).all()
 
-    def get_failed_runs(self, since_hours: int = 24, limit: int = 50) -> List[ServiceRun]:
+    def get_failed_runs(
+        self, since_hours: int = 24, limit: int = 50
+    ) -> List[ServiceRun]:
         """Get recent failed runs."""
         since = datetime.utcnow() - timedelta(hours=since_hours)
         return (

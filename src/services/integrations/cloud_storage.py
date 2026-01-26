@@ -1,4 +1,5 @@
 """Cloud storage service for temporary media uploads (Cloudinary)."""
+
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
@@ -37,11 +38,13 @@ class CloudStorageService(BaseService):
 
     def _configure_cloudinary(self) -> None:
         """Configure Cloudinary SDK with credentials from settings."""
-        if not all([
-            settings.CLOUDINARY_CLOUD_NAME,
-            settings.CLOUDINARY_API_KEY,
-            settings.CLOUDINARY_API_SECRET,
-        ]):
+        if not all(
+            [
+                settings.CLOUDINARY_CLOUD_NAME,
+                settings.CLOUDINARY_API_KEY,
+                settings.CLOUDINARY_API_SECRET,
+            ]
+        ):
             logger.warning("Cloudinary credentials not configured")
             return
 
@@ -116,7 +119,9 @@ class CloudStorageService(BaseService):
                 result = cloudinary.uploader.upload(str(path), **upload_options)
 
                 uploaded_at = datetime.utcnow()
-                expires_at = uploaded_at + timedelta(hours=settings.CLOUD_UPLOAD_RETENTION_HOURS)
+                expires_at = uploaded_at + timedelta(
+                    hours=settings.CLOUD_UPLOAD_RETENTION_HOURS
+                )
 
                 upload_result = {
                     "url": result["secure_url"],
@@ -133,11 +138,14 @@ class CloudStorageService(BaseService):
                     f"Successfully uploaded {path.name} to Cloudinary: {result['public_id']}"
                 )
 
-                self.set_result_summary(run_id, {
-                    "success": True,
-                    "public_id": result["public_id"],
-                    "size_bytes": result.get("bytes", 0),
-                })
+                self.set_result_summary(
+                    run_id,
+                    {
+                        "success": True,
+                        "public_id": result["public_id"],
+                        "size_bytes": result.get("bytes", 0),
+                    },
+                )
 
                 return upload_result
 
@@ -249,22 +257,28 @@ class CloudStorageService(BaseService):
                                 f"Could not parse date for {resource['public_id']}: {created_at_str}"
                             )
 
-                logger.info(f"Cleaned up {deleted_count} expired uploads from Cloudinary")
+                logger.info(
+                    f"Cleaned up {deleted_count} expired uploads from Cloudinary"
+                )
                 self.set_result_summary(run_id, {"deleted_count": deleted_count})
                 return deleted_count
 
             except cloudinary.exceptions.Error as e:
                 logger.error(f"Cloudinary cleanup failed: {e}")
-                self.set_result_summary(run_id, {"deleted_count": deleted_count, "error": str(e)})
+                self.set_result_summary(
+                    run_id, {"deleted_count": deleted_count, "error": str(e)}
+                )
                 return deleted_count
 
     def is_configured(self) -> bool:
         """Check if Cloudinary is properly configured."""
-        return all([
-            settings.CLOUDINARY_CLOUD_NAME,
-            settings.CLOUDINARY_API_KEY,
-            settings.CLOUDINARY_API_SECRET,
-        ])
+        return all(
+            [
+                settings.CLOUDINARY_CLOUD_NAME,
+                settings.CLOUDINARY_API_KEY,
+                settings.CLOUDINARY_API_SECRET,
+            ]
+        )
 
     def _get_resource_type(self, path: Path) -> str:
         """Determine Cloudinary resource type from file extension."""
@@ -298,19 +312,21 @@ class CloudStorageService(BaseService):
         import re
 
         if "/upload/" not in url:
-            logger.warning(f"Could not apply transformation - unexpected URL format: {url[:50]}...")
+            logger.warning(
+                f"Could not apply transformation - unexpected URL format: {url[:50]}..."
+            )
             return url
 
         # Extract the public_id from the URL
         # URL format: https://res.cloudinary.com/cloud/image/upload/v123/folder/file.ext
-        match = re.search(r'/upload/(?:v\d+/)?(.+?)(?:\.[^.]+)?$', url)
+        match = re.search(r"/upload/(?:v\d+/)?(.+?)(?:\.[^.]+)?$", url)
         if not match:
             logger.warning(f"Could not extract public_id from URL: {url[:50]}...")
             return url
 
         public_id = match.group(1)
         # Replace slashes with colons for underlay reference
-        underlay_id = public_id.replace('/', ':')
+        underlay_id = public_id.replace("/", ":")
 
         # Build the transformation chain:
         # 1. Define underlay (same image)
@@ -331,6 +347,8 @@ class CloudStorageService(BaseService):
         )
 
         transformed_url = url.replace("/upload/", f"/upload/{transformation}/")
-        logger.info(f"Applied Story transformation with blurred underlay (public_id: {public_id})")
+        logger.info(
+            f"Applied Story transformation with blurred underlay (public_id: {public_id})"
+        )
 
         return transformed_url

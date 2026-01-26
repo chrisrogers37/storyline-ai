@@ -1,4 +1,5 @@
 """Input validation and configuration validation."""
+
 from typing import List, Tuple
 from pathlib import Path
 
@@ -46,13 +47,19 @@ class ConfigValidator:
         # Validate Instagram config (if API enabled)
         if settings.ENABLE_INSTAGRAM_API:
             if not settings.INSTAGRAM_ACCOUNT_ID:
-                errors.append("INSTAGRAM_ACCOUNT_ID required when ENABLE_INSTAGRAM_API=true")
+                errors.append(
+                    "INSTAGRAM_ACCOUNT_ID required when ENABLE_INSTAGRAM_API=true"
+                )
 
             if not settings.INSTAGRAM_ACCESS_TOKEN:
-                errors.append("INSTAGRAM_ACCESS_TOKEN required when ENABLE_INSTAGRAM_API=true")
+                errors.append(
+                    "INSTAGRAM_ACCESS_TOKEN required when ENABLE_INSTAGRAM_API=true"
+                )
 
             if not settings.CLOUDINARY_CLOUD_NAME:
-                errors.append("Cloudinary config required when ENABLE_INSTAGRAM_API=true")
+                errors.append(
+                    "Cloudinary config required when ENABLE_INSTAGRAM_API=true"
+                )
 
         # Validate database config
         if not settings.DB_NAME:

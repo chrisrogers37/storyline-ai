@@ -1,4 +1,5 @@
 """Interaction repository - CRUD operations for user interactions."""
+
 from typing import Optional, List
 from datetime import datetime, timedelta
 from sqlalchemy import func
@@ -38,9 +39,11 @@ class InteractionRepository(BaseRepository):
 
     def get_by_id(self, interaction_id: str) -> Optional[UserInteraction]:
         """Get interaction by ID."""
-        return self.db.query(UserInteraction).filter(
-            UserInteraction.id == interaction_id
-        ).first()
+        return (
+            self.db.query(UserInteraction)
+            .filter(UserInteraction.id == interaction_id)
+            .first()
+        )
 
     def get_by_user(
         self,
@@ -207,7 +210,9 @@ class InteractionRepository(BaseRepository):
             self.db.query(UserInteraction)
             .filter(
                 UserInteraction.interaction_type == "callback",
-                UserInteraction.interaction_name.in_(["posted", "skip", "confirm_reject"]),
+                UserInteraction.interaction_name.in_(
+                    ["posted", "skip", "confirm_reject"]
+                ),
                 UserInteraction.created_at >= since,
             )
             .all()

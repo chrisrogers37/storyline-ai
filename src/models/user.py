@@ -1,4 +1,5 @@
 """User model - auto-populated from Telegram interactions."""
+
 from sqlalchemy import Column, String, BigInteger, Boolean, Integer, DateTime
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime

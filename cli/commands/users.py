@@ -1,4 +1,5 @@
 """User management CLI commands."""
+
 import click
 from rich.console import Console
 from rich.table import Table
@@ -26,7 +27,11 @@ def list_users():
 
     for user in users:
         active = "✓" if user.is_active else "✗"
-        username = f"@{user.telegram_username}" if user.telegram_username else f"ID:{user.telegram_user_id}"
+        username = (
+            f"@{user.telegram_username}"
+            if user.telegram_username
+            else f"ID:{user.telegram_user_id}"
+        )
 
         table.add_row(username, user.role, str(user.total_posts), active)
 
@@ -47,5 +52,9 @@ def promote_user(telegram_user_id, role):
 
     repo.update_role(str(user.id), role)
 
-    username = f"@{user.telegram_username}" if user.telegram_username else f"ID:{user.telegram_user_id}"
+    username = (
+        f"@{user.telegram_username}"
+        if user.telegram_username
+        else f"ID:{user.telegram_user_id}"
+    )
     console.print(f"[bold green]✓ Updated {username} to role: {role}[/bold green]")

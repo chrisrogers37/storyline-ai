@@ -1,4 +1,5 @@
 """Base repository class with proper session management."""
+
 from sqlalchemy.orm import Session
 
 from src.config.database import get_db

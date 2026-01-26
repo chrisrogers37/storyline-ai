@@ -1,4 +1,5 @@
 """Database connection and session management."""
+
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
@@ -14,7 +15,7 @@ engine = create_engine(
     max_overflow=20,  # Increased from 10
     pool_recycle=300,  # Recycle connections after 5 minutes
     pool_timeout=30,  # Wait up to 30 seconds for connection
-    echo=False  # Set to True for SQL debugging
+    echo=False,  # Set to True for SQL debugging
 )
 
 # Create session factory
@@ -52,6 +53,13 @@ def init_db():
     Call this after importing all models.
     """
     # Import all models here to ensure they're registered
-    from src.models import user, media_item, posting_queue, posting_history, media_lock, service_run  # noqa
+    from src.models import (
+        user,
+        media_item,
+        posting_queue,
+        posting_history,
+        media_lock,
+        service_run,
+    )  # noqa
 
     Base.metadata.create_all(bind=engine)

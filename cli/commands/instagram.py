@@ -1,4 +1,5 @@
 """Instagram authentication CLI commands."""
+
 import asyncio
 import webbrowser
 from datetime import datetime, timedelta
@@ -18,7 +19,9 @@ console = Console()
 
 
 @click.command(name="instagram-auth")
-@click.option("--manual", is_flag=True, help="Show manual instructions without browser automation")
+@click.option(
+    "--manual", is_flag=True, help="Show manual instructions without browser automation"
+)
 def instagram_auth(manual: bool):
     """
     Authenticate with Instagram API.
@@ -32,28 +35,38 @@ def instagram_auth(manual: bool):
     - Instagram Business or Creator account
     - Facebook Page linked to your Instagram account
     """
-    console.print(Panel.fit(
-        "[bold blue]Instagram API Authentication Setup[/bold blue]\n\n"
-        "This wizard will help you obtain a long-lived Instagram access token.",
-        title="Storyline AI"
-    ))
+    console.print(
+        Panel.fit(
+            "[bold blue]Instagram API Authentication Setup[/bold blue]\n\n"
+            "This wizard will help you obtain a long-lived Instagram access token.",
+            title="Storyline AI",
+        )
+    )
 
     # Check prerequisites
     if not settings.FACEBOOK_APP_ID:
-        console.print("\n[bold red]Error:[/bold red] FACEBOOK_APP_ID not configured in .env")
+        console.print(
+            "\n[bold red]Error:[/bold red] FACEBOOK_APP_ID not configured in .env"
+        )
         console.print("Please add your Facebook App ID to .env first.")
         console.print("\nSee: documentation/guides/instagram-api-setup.md")
         return
 
     if not settings.FACEBOOK_APP_SECRET:
-        console.print("\n[bold red]Error:[/bold red] FACEBOOK_APP_SECRET not configured in .env")
+        console.print(
+            "\n[bold red]Error:[/bold red] FACEBOOK_APP_SECRET not configured in .env"
+        )
         console.print("Please add your Facebook App Secret to .env first.")
         return
 
     if not settings.ENCRYPTION_KEY:
-        console.print("\n[bold red]Error:[/bold red] ENCRYPTION_KEY not configured in .env")
+        console.print(
+            "\n[bold red]Error:[/bold red] ENCRYPTION_KEY not configured in .env"
+        )
         console.print("\nGenerate one with:")
-        console.print("  python -c \"from src.utils.encryption import TokenEncryption; print(TokenEncryption.generate_key())\"")
+        console.print(
+            '  python -c "from src.utils.encryption import TokenEncryption; print(TokenEncryption.generate_key())"'
+        )
         return
 
     if manual:
@@ -98,7 +111,9 @@ def _run_auth_wizard():
     # Ask if user wants to open browser
     if click.confirm("Open Graph API Explorer in browser?", default=True):
         webbrowser.open("https://developers.facebook.com/tools/explorer/")
-        console.print("\n[dim]Browser opened. Complete the authentication flow there.[/dim]\n")
+        console.print(
+            "\n[dim]Browser opened. Complete the authentication flow there.[/dim]\n"
+        )
 
     console.print("\n[bold]Step 2: Enter Your Token[/bold]\n")
 
@@ -182,7 +197,9 @@ async def _exchange_for_long_lived_token(short_token: str) -> tuple:
             if response.status_code != 200:
                 error = response.json()
                 console.print("\n[red]Error exchanging token:[/red]")
-                console.print(f"  {error.get('error', {}).get('message', 'Unknown error')}")
+                console.print(
+                    f"  {error.get('error', {}).get('message', 'Unknown error')}"
+                )
                 return None
 
             data = response.json()
@@ -235,7 +252,9 @@ async def _get_instagram_account_id(token: str) -> dict:
             ig_account = ig_data.get("instagram_business_account")
 
             if not ig_account:
-                console.print("[yellow]No Instagram Business Account linked to your Page.[/yellow]")
+                console.print(
+                    "[yellow]No Instagram Business Account linked to your Page.[/yellow]"
+                )
                 return None
 
             ig_account_id = ig_account["id"]
@@ -309,7 +328,9 @@ def instagram_status():
     if health["valid"]:
         table.add_row("Status", "[green]Authenticated[/green]")
     else:
-        table.add_row("Status", f"[red]Not Authenticated[/red] - {health.get('error', 'Unknown')}")
+        table.add_row(
+            "Status", f"[red]Not Authenticated[/red] - {health.get('error', 'Unknown')}"
+        )
 
     # Source
     if health["exists"]:
@@ -324,9 +345,15 @@ def instagram_status():
         if days > 7:
             table.add_row("Expires", f"{expires_at.strftime('%Y-%m-%d')} ({days} days)")
         elif days > 0:
-            table.add_row("Expires", f"[yellow]{expires_at.strftime('%Y-%m-%d')} ({days} days)[/yellow]")
+            table.add_row(
+                "Expires",
+                f"[yellow]{expires_at.strftime('%Y-%m-%d')} ({days} days)[/yellow]",
+            )
         else:
-            table.add_row("Expires", f"[red]{expires_at.strftime('%Y-%m-%d %H:%M')} ({int(hours)} hours)[/red]")
+            table.add_row(
+                "Expires",
+                f"[red]{expires_at.strftime('%Y-%m-%d %H:%M')} ({int(hours)} hours)[/red]",
+            )
 
     # Refresh needed
     if health.get("needs_refresh"):
@@ -336,7 +363,9 @@ def instagram_status():
 
     # Last refreshed
     if health.get("last_refreshed"):
-        table.add_row("Last Refreshed", health["last_refreshed"].strftime("%Y-%m-%d %H:%M"))
+        table.add_row(
+            "Last Refreshed", health["last_refreshed"].strftime("%Y-%m-%d %H:%M")
+        )
 
     console.print(table)
 
@@ -349,32 +378,44 @@ def instagram_status():
 
     config_table.add_row(
         "ENABLE_INSTAGRAM_API",
-        "[green]true[/green]" if settings.ENABLE_INSTAGRAM_API else "[dim]false[/dim]"
+        "[green]true[/green]" if settings.ENABLE_INSTAGRAM_API else "[dim]false[/dim]",
     )
     config_table.add_row(
         "INSTAGRAM_ACCOUNT_ID",
-        "[green]set[/green]" if settings.INSTAGRAM_ACCOUNT_ID else "[yellow]not set[/yellow]"
+        "[green]set[/green]"
+        if settings.INSTAGRAM_ACCOUNT_ID
+        else "[yellow]not set[/yellow]",
     )
     config_table.add_row(
         "FACEBOOK_APP_ID",
-        "[green]set[/green]" if settings.FACEBOOK_APP_ID else "[red]not set[/red]"
+        "[green]set[/green]" if settings.FACEBOOK_APP_ID else "[red]not set[/red]",
     )
     config_table.add_row(
         "CLOUDINARY_CLOUD_NAME",
-        "[green]set[/green]" if settings.CLOUDINARY_CLOUD_NAME else "[yellow]not set[/yellow]"
+        "[green]set[/green]"
+        if settings.CLOUDINARY_CLOUD_NAME
+        else "[yellow]not set[/yellow]",
     )
 
     console.print(config_table)
 
 
 @click.command(name="add-instagram-account")
-@click.option("--display-name", required=True, help="User-friendly name for this account")
-@click.option("--account-id", required=True, help="Instagram Business Account ID from Meta")
+@click.option(
+    "--display-name", required=True, help="User-friendly name for this account"
+)
+@click.option(
+    "--account-id", required=True, help="Instagram Business Account ID from Meta"
+)
 @click.option("--username", required=True, help="Instagram @username")
-@click.option("--access-token", prompt=True, hide_input=True, help="Long-lived access token")
+@click.option(
+    "--access-token", prompt=True, hide_input=True, help="Long-lived access token"
+)
 @click.option("--expires-days", default=60, help="Token expiry in days (default: 60)")
 @click.option("--set-active", is_flag=True, help="Set this as the active account")
-def add_instagram_account(display_name, account_id, username, access_token, expires_days, set_active):
+def add_instagram_account(
+    display_name, account_id, username, access_token, expires_days, set_active
+):
     """
     Add a new Instagram account for posting.
 
@@ -391,13 +432,15 @@ def add_instagram_account(display_name, account_id, username, access_token, expi
     from src.services.core.instagram_account_service import InstagramAccountService
     from src.utils.encryption import TokenEncryption
 
-    console.print(Panel.fit(
-        f"[bold blue]Adding Instagram Account[/bold blue]\n\n"
-        f"Display Name: {display_name}\n"
-        f"Account ID: {account_id}\n"
-        f"Username: @{username.lstrip('@')}",
-        title="Storyline AI"
-    ))
+    console.print(
+        Panel.fit(
+            f"[bold blue]Adding Instagram Account[/bold blue]\n\n"
+            f"Display Name: {display_name}\n"
+            f"Account ID: {account_id}\n"
+            f"Username: @{username.lstrip('@')}",
+            title="Storyline AI",
+        )
+    )
 
     # Validate token
     if not access_token or len(access_token) < 50:
@@ -422,7 +465,7 @@ def add_instagram_account(display_name, account_id, username, access_token, expi
             access_token=encrypted_token,
             token_expires_at=expires_at,
             set_as_active=set_active,
-            telegram_chat_id=settings.ADMIN_TELEGRAM_CHAT_ID if set_active else None
+            telegram_chat_id=settings.ADMIN_TELEGRAM_CHAT_ID if set_active else None,
         )
 
         console.print("\n[bold green]Account added successfully![/bold green]\n")
@@ -441,14 +484,18 @@ def add_instagram_account(display_name, account_id, username, access_token, expi
         console.print(table)
 
         if not set_active:
-            console.print("\n[dim]Use /settings in Telegram to set this as the active account.[/dim]")
+            console.print(
+                "\n[dim]Use /settings in Telegram to set this as the active account.[/dim]"
+            )
 
     except ValueError as e:
         console.print(f"\n[red]Error:[/red] {e}")
 
 
 @click.command(name="list-instagram-accounts")
-@click.option("--all", "include_inactive", is_flag=True, help="Include deactivated accounts")
+@click.option(
+    "--all", "include_inactive", is_flag=True, help="Include deactivated accounts"
+)
 def list_instagram_accounts(include_inactive):
     """
     List all Instagram accounts.
@@ -488,10 +535,14 @@ def list_instagram_accounts(include_inactive):
             if token.is_expired:
                 token_status = "[red]Expired[/red]"
             elif token.hours_until_expiry() and token.hours_until_expiry() < 168:
-                token_status = f"[yellow]{int(token.hours_until_expiry() / 24)}d left[/yellow]"
+                token_status = (
+                    f"[yellow]{int(token.hours_until_expiry() / 24)}d left[/yellow]"
+                )
             else:
                 hours = token.hours_until_expiry()
-                token_status = f"[green]{int(hours / 24) if hours else '∞'}d left[/green]"
+                token_status = (
+                    f"[green]{int(hours / 24) if hours else '∞'}d left[/green]"
+                )
         else:
             token_status = "[red]No token[/red]"
 
@@ -501,7 +552,7 @@ def list_instagram_accounts(include_inactive):
             f"@{account.instagram_username}" if account.instagram_username else "-",
             account.instagram_account_id,
             token_status,
-            "[green]Active[/green]" if account.is_active else "[dim]Disabled[/dim]"
+            "[green]Active[/green]" if account.is_active else "[dim]Disabled[/dim]",
         )
 
     console.print(table)
@@ -509,7 +560,9 @@ def list_instagram_accounts(include_inactive):
     if active_account:
         console.print(f"\n[dim]Active account: {active_account.display_name}[/dim]")
     else:
-        console.print("\n[yellow]No account selected as active. Use /settings in Telegram to select one.[/yellow]")
+        console.print(
+            "\n[yellow]No account selected as active. Use /settings in Telegram to select one.[/yellow]"
+        )
 
 
 @click.command(name="deactivate-instagram-account")
@@ -536,12 +589,18 @@ def deactivate_instagram_account(username_or_id):
         return
 
     if not account.is_active:
-        console.print(f"[yellow]Account '{account.display_name}' is already deactivated[/yellow]")
+        console.print(
+            f"[yellow]Account '{account.display_name}' is already deactivated[/yellow]"
+        )
         return
 
-    if click.confirm(f"Deactivate account '{account.display_name}' (@{account.instagram_username})?"):
+    if click.confirm(
+        f"Deactivate account '{account.display_name}' (@{account.instagram_username})?"
+    ):
         service.deactivate_account(str(account.id))
-        console.print(f"[green]Account '{account.display_name}' has been deactivated[/green]")
+        console.print(
+            f"[green]Account '{account.display_name}' has been deactivated[/green]"
+        )
     else:
         console.print("[dim]Cancelled[/dim]")
 
@@ -568,8 +627,12 @@ def reactivate_instagram_account(username_or_id):
         return
 
     if account.is_active:
-        console.print(f"[yellow]Account '{account.display_name}' is already active[/yellow]")
+        console.print(
+            f"[yellow]Account '{account.display_name}' is already active[/yellow]"
+        )
         return
 
     service.reactivate_account(str(account.id))
-    console.print(f"[green]Account '{account.display_name}' has been reactivated[/green]")
+    console.print(
+        f"[green]Account '{account.display_name}' has been reactivated[/green]"
+    )

@@ -1,4 +1,5 @@
 """SQLAlchemy models."""
+
 from src.models.user import User
 from src.models.media_item import MediaItem
 from src.models.posting_queue import PostingQueue

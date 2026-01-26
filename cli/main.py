@@ -1,4 +1,5 @@
 """CLI main entry point."""
+
 import click
 from rich.console import Console
 
@@ -30,6 +31,7 @@ console = Console()
 def cli():
     """Storyline AI - Instagram Story Automation System"""
     pass
+
 
 # Add commands to CLI
 cli.add_command(index)

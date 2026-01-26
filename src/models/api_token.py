@@ -1,4 +1,5 @@
 """API token model for OAuth token storage."""
+
 from datetime import datetime
 from typing import Optional
 import uuid
@@ -28,7 +29,9 @@ class ApiToken(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     # Token identification
-    service_name = Column(String(50), nullable=False, index=True)  # 'instagram', 'shopify'
+    service_name = Column(
+        String(50), nullable=False, index=True
+    )  # 'instagram', 'shopify'
     token_type = Column(String(50), nullable=False)  # 'access_token', 'refresh_token'
 
     # Link to Instagram account (NULL for non-Instagram services)
@@ -36,7 +39,7 @@ class ApiToken(Base):
         UUID(as_uuid=True),
         ForeignKey("instagram_accounts.id"),
         nullable=True,
-        index=True
+        index=True,
     )
 
     # Token data (encrypted at application level)
@@ -49,7 +52,9 @@ class ApiToken(Base):
 
     # OAuth metadata
     scopes = Column(ARRAY(Text), nullable=True)  # Array of granted scopes
-    token_metadata = Column(JSONB, nullable=True)  # Service-specific data (e.g., account_id)
+    token_metadata = Column(
+        JSONB, nullable=True
+    )  # Service-specific data (e.g., account_id)
 
     # Audit timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -61,8 +66,10 @@ class ApiToken(Base):
     __table_args__ = (
         # One token per service per account (allows multiple IG accounts with separate tokens)
         UniqueConstraint(
-            "service_name", "token_type", "instagram_account_id",
-            name="unique_service_token_type_account"
+            "service_name",
+            "token_type",
+            "instagram_account_id",
+            name="unique_service_token_type_account",
         ),
     )
 

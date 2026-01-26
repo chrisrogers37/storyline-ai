@@ -1,4 +1,5 @@
 """Instagram account repository - CRUD for connected accounts."""
+
 from typing import Optional, List
 from datetime import datetime
 
@@ -11,33 +12,44 @@ class InstagramAccountRepository(BaseRepository):
 
     def get_all_active(self) -> List[InstagramAccount]:
         """Get all active Instagram accounts."""
-        result = self.db.query(InstagramAccount).filter(
-            InstagramAccount.is_active
-        ).order_by(InstagramAccount.display_name).all()
+        result = (
+            self.db.query(InstagramAccount)
+            .filter(InstagramAccount.is_active)
+            .order_by(InstagramAccount.display_name)
+            .all()
+        )
         self.end_read_transaction()
         return result
 
     def get_all(self) -> List[InstagramAccount]:
         """Get all Instagram accounts (including inactive)."""
-        result = self.db.query(InstagramAccount).order_by(
-            InstagramAccount.display_name
-        ).all()
+        result = (
+            self.db.query(InstagramAccount)
+            .order_by(InstagramAccount.display_name)
+            .all()
+        )
         self.end_read_transaction()
         return result
 
     def get_by_id(self, account_id: str) -> Optional[InstagramAccount]:
         """Get account by UUID."""
-        result = self.db.query(InstagramAccount).filter(
-            InstagramAccount.id == account_id
-        ).first()
+        result = (
+            self.db.query(InstagramAccount)
+            .filter(InstagramAccount.id == account_id)
+            .first()
+        )
         self.end_read_transaction()
         return result
 
-    def get_by_instagram_id(self, instagram_account_id: str) -> Optional[InstagramAccount]:
+    def get_by_instagram_id(
+        self, instagram_account_id: str
+    ) -> Optional[InstagramAccount]:
         """Get account by Instagram's account ID."""
-        result = self.db.query(InstagramAccount).filter(
-            InstagramAccount.instagram_account_id == instagram_account_id
-        ).first()
+        result = (
+            self.db.query(InstagramAccount)
+            .filter(InstagramAccount.instagram_account_id == instagram_account_id)
+            .first()
+        )
         self.end_read_transaction()
         return result
 
@@ -45,9 +57,11 @@ class InstagramAccountRepository(BaseRepository):
         """Get account by Instagram username."""
         # Strip @ if present
         username = username.lstrip("@")
-        result = self.db.query(InstagramAccount).filter(
-            InstagramAccount.instagram_username == username
-        ).first()
+        result = (
+            self.db.query(InstagramAccount)
+            .filter(InstagramAccount.instagram_username == username)
+            .first()
+        )
         self.end_read_transaction()
         return result
 
@@ -55,7 +69,7 @@ class InstagramAccountRepository(BaseRepository):
         self,
         display_name: str,
         instagram_account_id: str,
-        instagram_username: Optional[str] = None
+        instagram_username: Optional[str] = None,
     ) -> InstagramAccount:
         """Create a new Instagram account record."""
         # Strip @ if present in username
@@ -74,9 +88,11 @@ class InstagramAccountRepository(BaseRepository):
 
     def update(self, account_id: str, **kwargs) -> InstagramAccount:
         """Update an Instagram account."""
-        account = self.db.query(InstagramAccount).filter(
-            InstagramAccount.id == account_id
-        ).first()
+        account = (
+            self.db.query(InstagramAccount)
+            .filter(InstagramAccount.id == account_id)
+            .first()
+        )
 
         if not account:
             raise ValueError(f"Account {account_id} not found")
@@ -103,8 +119,8 @@ class InstagramAccountRepository(BaseRepository):
 
     def count_active(self) -> int:
         """Count active Instagram accounts."""
-        result = self.db.query(InstagramAccount).filter(
-            InstagramAccount.is_active
-        ).count()
+        result = (
+            self.db.query(InstagramAccount).filter(InstagramAccount.is_active).count()
+        )
         self.end_read_transaction()
         return result

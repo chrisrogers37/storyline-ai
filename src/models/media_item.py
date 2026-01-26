@@ -1,5 +1,15 @@
 """Media item model - source of truth for all media."""
-from sqlalchemy import Column, String, BigInteger, Boolean, Integer, DateTime, Text, ARRAY
+
+from sqlalchemy import (
+    Column,
+    String,
+    BigInteger,
+    Boolean,
+    Integer,
+    DateTime,
+    Text,
+    ARRAY,
+)
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy import ForeignKey
 from datetime import datetime
@@ -27,7 +37,9 @@ class MediaItem(Base):
     mime_type = Column(String(100))
 
     # Routing logic: determines auto vs manual posting
-    requires_interaction = Column(Boolean, default=False)  # TRUE = send to Telegram, FALSE = auto-post
+    requires_interaction = Column(
+        Boolean, default=False
+    )  # TRUE = send to Telegram, FALSE = auto-post
 
     # Category: extracted from parent folder during indexing (e.g., "memes", "merch")
     category = Column(Text, index=True)

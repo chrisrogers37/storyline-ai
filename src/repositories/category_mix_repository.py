@@ -1,4 +1,5 @@
 """Category post case mix repository - CRUD with Type 2 SCD logic."""
+
 from typing import Optional, List, Dict
 from datetime import datetime
 from decimal import Decimal
@@ -154,15 +155,11 @@ class CategoryMixRepository(BaseRepository):
                 raise ValueError(f"Ratio for '{category}' cannot be negative: {ratio}")
 
             if ratio_decimal > 1:
-                raise ValueError(
-                    f"Ratio for '{category}' cannot exceed 1.0: {ratio}"
-                )
+                raise ValueError(f"Ratio for '{category}' cannot exceed 1.0: {ratio}")
 
         # Check sum equals 1.0 (with small tolerance for floating point)
         total = sum(Decimal(str(r)) for r in ratios.values())
         tolerance = Decimal("0.0001")
 
         if abs(total - Decimal("1.0")) > tolerance:
-            raise ValueError(
-                f"Ratios must sum to 1.0 (100%). Current sum: {total:.4f}"
-            )
+            raise ValueError(f"Ratios must sum to 1.0 (100%). Current sum: {total:.4f}")

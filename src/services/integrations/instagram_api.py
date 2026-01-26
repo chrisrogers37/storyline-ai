@@ -1,4 +1,5 @@
 """Instagram Graph API service for Story posting."""
+
 import asyncio
 from datetime import datetime, timedelta
 from typing import Optional
@@ -59,8 +60,7 @@ class InstagramAPIService(BaseService):
         self.settings_service = SettingsService()
 
     def _get_active_account_credentials(
-        self,
-        telegram_chat_id: int
+        self, telegram_chat_id: int
     ) -> tuple[Optional[str], Optional[str], Optional[str]]:
         """
         Get credentials for the active Instagram account.
@@ -82,8 +82,7 @@ class InstagramAPIService(BaseService):
         if active_account:
             # Get token for this specific account
             token_record = self.token_repo.get_token_for_account(
-                str(active_account.id),
-                token_type="access_token"
+                str(active_account.id), token_type="access_token"
             )
             if token_record and not token_record.is_expired:
                 # Decrypt the token
@@ -92,13 +91,17 @@ class InstagramAPIService(BaseService):
                     return (
                         decrypted_token,
                         active_account.instagram_account_id,
-                        active_account.instagram_username
+                        active_account.instagram_username,
                     )
                 except Exception as e:
-                    logger.error(f"Failed to decrypt token for account {active_account.display_name}: {e}")
+                    logger.error(
+                        f"Failed to decrypt token for account {active_account.display_name}: {e}"
+                    )
 
             # Token missing or expired for active account
-            logger.warning(f"No valid token for active account {active_account.display_name}")
+            logger.warning(
+                f"No valid token for active account {active_account.display_name}"
+            )
 
         # Fallback to legacy .env mode (for backward compatibility)
         legacy_token = self.token_service.get_token("instagram")
@@ -148,7 +151,10 @@ class InstagramAPIService(BaseService):
 
         with self.track_execution(
             method_name="post_story",
-            input_params={"media_url": media_url[:50] + "...", "media_type": media_type},
+            input_params={
+                "media_url": media_url[:50] + "...",
+                "media_type": media_type,
+            },
         ) as run_id:
             # Check rate limit first
             remaining = self.get_rate_limit_remaining()
@@ -158,13 +164,19 @@ class InstagramAPIService(BaseService):
                 )
 
             # Get active account and its token
-            token, account_id, account_username = self._get_active_account_credentials(telegram_chat_id)
+            token, account_id, account_username = self._get_active_account_credentials(
+                telegram_chat_id
+            )
 
             if not token:
-                raise TokenExpiredError("No valid Instagram token available for active account")
+                raise TokenExpiredError(
+                    "No valid Instagram token available for active account"
+                )
 
             if not account_id:
-                raise InstagramAPIError("No Instagram account selected. Use /settings to select one.")
+                raise InstagramAPIError(
+                    "No Instagram account selected. Use /settings to select one."
+                )
 
             try:
                 # Step 1: Create media container
@@ -198,11 +210,14 @@ class InstagramAPIService(BaseService):
                     "account_id": account_id,
                 }
 
-                self.set_result_summary(run_id, {
-                    "success": True,
-                    "story_id": story_id,
-                    "account": account_username,
-                })
+                self.set_result_summary(
+                    run_id,
+                    {
+                        "success": True,
+                        "story_id": story_id,
+                        "account": account_username,
+                    },
+                )
 
                 return result
 
@@ -268,7 +283,9 @@ class InstagramAPIService(BaseService):
                 status_code = data.get("status_code")
 
                 if status_code == "FINISHED":
-                    logger.debug(f"Container {container_id} ready after {poll_num + 1} polls")
+                    logger.debug(
+                        f"Container {container_id} ready after {poll_num + 1} polls"
+                    )
                     return
 
                 if status_code == "ERROR":
@@ -515,10 +532,7 @@ class InstagramAPIService(BaseService):
     # Class-level cache for account info (avoid repeated API calls)
     _account_info_cache: dict = {}
 
-    async def get_account_info(
-        self,
-        telegram_chat_id: Optional[int] = None
-    ) -> dict:
+    async def get_account_info(self, telegram_chat_id: Optional[int] = None) -> dict:
         """
         Fetch Instagram account info (username, name, etc.) from the API.
 
@@ -535,7 +549,9 @@ class InstagramAPIService(BaseService):
             telegram_chat_id = settings.ADMIN_TELEGRAM_CHAT_ID
 
         # Get active account credentials
-        token, account_id, username = self._get_active_account_credentials(telegram_chat_id)
+        token, account_id, username = self._get_active_account_credentials(
+            telegram_chat_id
+        )
 
         if not account_id:
             return {"error": "No Instagram account configured"}
@@ -577,20 +593,21 @@ class InstagramAPIService(BaseService):
                     }
                     # Cache the result
                     self._account_info_cache[account_id] = result
-                    logger.info(f"Fetched Instagram account info: @{result.get('username')}")
+                    logger.info(
+                        f"Fetched Instagram account info: @{result.get('username')}"
+                    )
                     return result
                 else:
-                    logger.warning(f"Failed to fetch account info: HTTP {response.status_code}")
+                    logger.warning(
+                        f"Failed to fetch account info: HTTP {response.status_code}"
+                    )
                     return {"error": f"HTTP {response.status_code}", "id": account_id}
 
         except Exception as e:
             logger.error(f"Error fetching account info: {e}")
             return {"error": str(e), "id": account_id}
 
-    def safety_check_before_post(
-        self,
-        telegram_chat_id: Optional[int] = None
-    ) -> dict:
+    def safety_check_before_post(self, telegram_chat_id: Optional[int] = None) -> dict:
         """
         CRITICAL SAFETY GATE: Run all safety checks before posting.
 
@@ -621,7 +638,9 @@ class InstagramAPIService(BaseService):
             errors.append("Instagram API is disabled in settings")
 
         # Check 2: Get active account credentials (multi-account or legacy)
-        token, account_id, username = self._get_active_account_credentials(telegram_chat_id)
+        token, account_id, username = self._get_active_account_credentials(
+            telegram_chat_id
+        )
 
         checks["account_configured"] = account_id is not None
         checks["token_exists"] = token is not None
@@ -629,12 +648,18 @@ class InstagramAPIService(BaseService):
         if not account_id:
             # Check if using legacy mode
             if settings.INSTAGRAM_ACCOUNT_ID:
-                errors.append("Active account not selected in database, and no valid token for legacy .env config")
+                errors.append(
+                    "Active account not selected in database, and no valid token for legacy .env config"
+                )
             else:
-                errors.append("No Instagram account configured. Use /settings to select one or add via CLI.")
+                errors.append(
+                    "No Instagram account configured. Use /settings to select one or add via CLI."
+                )
 
         if not token:
-            errors.append("No valid Instagram access token found for the active account")
+            errors.append(
+                "No valid Instagram access token found for the active account"
+            )
 
         if account_id and username:
             account_info = f"@{username}"

@@ -1,4 +1,5 @@
 """Scheduler service - create and manage posting schedule."""
+
 from datetime import datetime, timedelta
 from typing import Optional, List
 import random
@@ -56,13 +57,17 @@ class SchedulerService(BaseService):
                 time_slots = self._generate_time_slots(days)
                 total_slots = len(time_slots)
 
-                logger.info(f"Generating schedule for {days} days ({total_slots} slots)")
+                logger.info(
+                    f"Generating schedule for {days} days ({total_slots} slots)"
+                )
 
                 # Allocate slots to categories based on ratios
                 slot_categories = self._allocate_slots_to_categories(total_slots)
 
                 if slot_categories:
-                    logger.info(f"Category allocation: {self._summarize_allocation(slot_categories)}")
+                    logger.info(
+                        f"Category allocation: {self._summarize_allocation(slot_categories)}"
+                    )
 
                 for i, scheduled_time in enumerate(time_slots):
                     # Get target category for this slot (if ratios are configured)
@@ -72,18 +77,26 @@ class SchedulerService(BaseService):
                     media_item = self._select_media(category=target_category)
 
                     if not media_item:
-                        logger.warning(f"No eligible media found for slot {scheduled_time}")
+                        logger.warning(
+                            f"No eligible media found for slot {scheduled_time}"
+                        )
                         skipped_count += 1
                         continue
 
                     # Add to queue
-                    self.queue_repo.create(media_item_id=str(media_item.id), scheduled_for=scheduled_time)
+                    self.queue_repo.create(
+                        media_item_id=str(media_item.id), scheduled_for=scheduled_time
+                    )
 
                     # Track category breakdown
                     item_category = media_item.category or "uncategorized"
-                    category_breakdown[item_category] = category_breakdown.get(item_category, 0) + 1
+                    category_breakdown[item_category] = (
+                        category_breakdown.get(item_category, 0) + 1
+                    )
 
-                    logger.info(f"Scheduled {media_item.file_name} [{item_category}] for {scheduled_time}")
+                    logger.info(
+                        f"Scheduled {media_item.file_name} [{item_category}] for {scheduled_time}"
+                    )
                     scheduled_count += 1
 
             except Exception as e:
@@ -155,7 +168,9 @@ class SchedulerService(BaseService):
                 slot_categories = self._allocate_slots_to_categories(total_slots)
 
                 if slot_categories:
-                    logger.info(f"Category allocation: {self._summarize_allocation(slot_categories)}")
+                    logger.info(
+                        f"Category allocation: {self._summarize_allocation(slot_categories)}"
+                    )
 
                 for i, scheduled_time in enumerate(time_slots):
                     # Get target category for this slot (if ratios are configured)
@@ -165,18 +180,26 @@ class SchedulerService(BaseService):
                     media_item = self._select_media(category=target_category)
 
                     if not media_item:
-                        logger.warning(f"No eligible media found for slot {scheduled_time}")
+                        logger.warning(
+                            f"No eligible media found for slot {scheduled_time}"
+                        )
                         skipped_count += 1
                         continue
 
                     # Add to queue
-                    self.queue_repo.create(media_item_id=str(media_item.id), scheduled_for=scheduled_time)
+                    self.queue_repo.create(
+                        media_item_id=str(media_item.id), scheduled_for=scheduled_time
+                    )
 
                     # Track category breakdown
                     item_category = media_item.category or "uncategorized"
-                    category_breakdown[item_category] = category_breakdown.get(item_category, 0) + 1
+                    category_breakdown[item_category] = (
+                        category_breakdown.get(item_category, 0) + 1
+                    )
 
-                    logger.info(f"Scheduled {media_item.file_name} [{item_category}] for {scheduled_time}")
+                    logger.info(
+                        f"Scheduled {media_item.file_name} [{item_category}] for {scheduled_time}"
+                    )
                     scheduled_count += 1
 
             except Exception as e:
@@ -186,7 +209,7 @@ class SchedulerService(BaseService):
             result = {
                 "scheduled": scheduled_count,
                 "skipped": skipped_count,
-                "total_slots": total_slots if 'total_slots' in dir() else 0,
+                "total_slots": total_slots if "total_slots" in dir() else 0,
                 "extended_from": last_scheduled.isoformat() if last_scheduled else None,
                 "category_breakdown": category_breakdown,
             }
@@ -210,7 +233,9 @@ class SchedulerService(BaseService):
             List of datetime objects for posting
         """
         # Get schedule settings from database
-        chat_settings = self.settings_service.get_settings(settings.ADMIN_TELEGRAM_CHAT_ID)
+        chat_settings = self.settings_service.get_settings(
+            settings.ADMIN_TELEGRAM_CHAT_ID
+        )
 
         time_slots = []
         posts_per_day = chat_settings.posts_per_day
@@ -239,9 +264,9 @@ class SchedulerService(BaseService):
                 # Add jitter
                 jitter_minutes = random.randint(-30, 30)
 
-                scheduled_time = datetime.combine(post_date, datetime.min.time()) + timedelta(
-                    hours=hour_offset, minutes=jitter_minutes
-                )
+                scheduled_time = datetime.combine(
+                    post_date, datetime.min.time()
+                ) + timedelta(hours=hour_offset, minutes=jitter_minutes)
 
                 # Only add future times
                 if scheduled_time > datetime.utcnow():
@@ -270,7 +295,9 @@ class SchedulerService(BaseService):
         remaining_slots = total_slots
 
         # Sort categories by ratio descending to handle rounding better
-        sorted_categories = sorted(current_mix.items(), key=lambda x: x[1], reverse=True)
+        sorted_categories = sorted(
+            current_mix.items(), key=lambda x: x[1], reverse=True
+        )
 
         for i, (category, ratio) in enumerate(sorted_categories):
             if i == len(sorted_categories) - 1:
@@ -302,7 +329,9 @@ class SchedulerService(BaseService):
             List of datetime objects for posting
         """
         # Get schedule settings from database (falls back to .env if not in DB)
-        chat_settings = self.settings_service.get_settings(settings.ADMIN_TELEGRAM_CHAT_ID)
+        chat_settings = self.settings_service.get_settings(
+            settings.ADMIN_TELEGRAM_CHAT_ID
+        )
 
         time_slots = []
         posts_per_day = chat_settings.posts_per_day
@@ -334,9 +363,9 @@ class SchedulerService(BaseService):
                 # Add ±30min jitter for unpredictability
                 jitter_minutes = random.randint(-30, 30)
 
-                scheduled_time = datetime.combine(post_date, datetime.min.time()) + timedelta(
-                    hours=hour_offset, minutes=jitter_minutes
-                )
+                scheduled_time = datetime.combine(
+                    post_date, datetime.min.time()
+                ) + timedelta(hours=hour_offset, minutes=jitter_minutes)
 
                 # Ensure we don't schedule in the past
                 if scheduled_time > datetime.utcnow():
@@ -367,7 +396,9 @@ class SchedulerService(BaseService):
 
         # Fallback to any category if target category is exhausted
         if not media_item and category:
-            logger.warning(f"Category '{category}' exhausted, falling back to any available media")
+            logger.warning(
+                f"Category '{category}' exhausted, falling back to any available media"
+            )
             media_item = self._select_media_from_pool(category=None)
 
         return media_item
@@ -394,7 +425,9 @@ class SchedulerService(BaseService):
             query = query.filter(MediaItem.category == category)
 
         # Exclude already queued items
-        queued_subquery = exists(select(PostingQueue.id).where(PostingQueue.media_item_id == MediaItem.id))
+        queued_subquery = exists(
+            select(PostingQueue.id).where(PostingQueue.media_item_id == MediaItem.id)
+        )
         query = query.filter(~queued_subquery)
 
         # Exclude locked items (both permanent and TTL locks)
@@ -404,7 +437,8 @@ class SchedulerService(BaseService):
                 and_(
                     MediaPostingLock.media_item_id == MediaItem.id,
                     # Lock is active if: locked_until is NULL (permanent) OR locked_until > now (TTL not expired)
-                    (MediaPostingLock.locked_until.is_(None)) | (MediaPostingLock.locked_until > now)
+                    (MediaPostingLock.locked_until.is_(None))
+                    | (MediaPostingLock.locked_until > now),
                 )
             )
         )

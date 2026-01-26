@@ -1,4 +1,5 @@
 """Media-related CLI commands."""
+
 import click
 from rich.console import Console
 from rich.table import Table
@@ -13,7 +14,9 @@ from src.repositories.category_mix_repository import CategoryMixRepository
 console = Console()
 
 
-def prompt_for_category_ratios(categories: list[str], current_ratios: dict = None) -> dict:
+def prompt_for_category_ratios(
+    categories: list[str], current_ratios: dict = None
+) -> dict:
     """
     Prompt user to define ratios for each category.
 
@@ -30,7 +33,9 @@ def prompt_for_category_ratios(categories: list[str], current_ratios: dict = Non
     current_ratios = current_ratios or {}
 
     cat_list = ", ".join(sorted(categories))
-    console.print(f"\n[bold]Categories based on folder structure:[/bold] [cyan]{cat_list}[/cyan]")
+    console.print(
+        f"\n[bold]Categories based on folder structure:[/bold] [cyan]{cat_list}[/cyan]"
+    )
     console.print("[dim]Ratios must sum to 100%[/dim]\n")
 
     while True:
@@ -38,7 +43,9 @@ def prompt_for_category_ratios(categories: list[str], current_ratios: dict = Non
 
         for cat in sorted(categories):
             default = current_ratios.get(cat)
-            default_hint = f" [dim](current: {float(default) * 100:.0f}%)[/dim]" if default else ""
+            default_hint = (
+                f" [dim](current: {float(default) * 100:.0f}%)[/dim]" if default else ""
+            )
             console.print(f"What % would you like [cyan]'{cat}'[/cyan]?{default_hint}")
 
             while True:
@@ -57,7 +64,9 @@ def prompt_for_category_ratios(categories: list[str], current_ratios: dict = Non
                     ratios[cat] = Decimal(str(pct / 100))
                     break
                 except (ValueError, InvalidOperation):
-                    console.print("[red]  Invalid number. Enter a percentage (e.g., 70)[/red]")
+                    console.print(
+                        "[red]  Invalid number. Enter a percentage (e.g., 70)[/red]"
+                    )
 
         # Validate sum
         total = sum(ratios.values())
@@ -73,7 +82,9 @@ def prompt_for_category_ratios(categories: list[str], current_ratios: dict = Non
             console.print("\n[green]✓ Ratios sum to 100%[/green]")
             return ratios
         else:
-            console.print(f"\n[red]✗ Ratios sum to {total_pct:.1f}%, must equal 100%[/red]")
+            console.print(
+                f"\n[red]✗ Ratios sum to {total_pct:.1f}%, must equal 100%[/red]"
+            )
             if not Confirm.ask("Try again?", default=True):
                 raise click.Abort()
 
@@ -166,7 +177,9 @@ def index(directory, recursive, extract_category):
             # Fall through to redefine
 
         elif new_categories:
-            console.print(f"\n[yellow]New categories detected: {', '.join(new_categories)}[/yellow]")
+            console.print(
+                f"\n[yellow]New categories detected: {', '.join(new_categories)}[/yellow]"
+            )
             if has_mix:
                 console.print("[dim]Current ratios will need to be updated[/dim]")
 
@@ -253,11 +266,15 @@ def list_media(limit, active_only, category):
     table.add_column("Active", justify="center")
 
     for item in items:
-        last_posted = item.last_posted_at.strftime("%Y-%m-%d") if item.last_posted_at else "Never"
+        last_posted = (
+            item.last_posted_at.strftime("%Y-%m-%d") if item.last_posted_at else "Never"
+        )
         active = "✓" if item.is_active else "✗"
         cat = item.category or "-"
 
-        table.add_row(item.file_name[:40], cat, str(item.times_posted), last_posted, active)
+        table.add_row(
+            item.file_name[:40], cat, str(item.times_posted), last_posted, active
+        )
 
     console.print(table)
 
@@ -290,7 +307,9 @@ def list_categories():
     console.print(table)
 
     if not current_mix:
-        console.print("\n[yellow]Tip: Run 'update-category-mix' to set posting ratios[/yellow]")
+        console.print(
+            "\n[yellow]Tip: Run 'update-category-mix' to set posting ratios[/yellow]"
+        )
 
 
 @click.command(name="category-mix-history")
@@ -314,7 +333,11 @@ def category_mix_history(category):
 
     for record in history:
         eff_from = record.effective_from.strftime("%Y-%m-%d %H:%M")
-        eff_to = record.effective_to.strftime("%Y-%m-%d %H:%M") if record.effective_to else "-"
+        eff_to = (
+            record.effective_to.strftime("%Y-%m-%d %H:%M")
+            if record.effective_to
+            else "-"
+        )
         status = "[green]current[/green]" if record.is_current else "[dim]expired[/dim]"
 
         table.add_row(

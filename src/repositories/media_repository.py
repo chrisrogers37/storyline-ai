@@ -1,4 +1,5 @@
 """Media item repository - CRUD operations for media items."""
+
 from typing import Optional, List
 from datetime import datetime
 from sqlalchemy import func

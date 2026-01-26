@@ -1,4 +1,5 @@
 """Queue-related CLI commands."""
+
 import click
 import asyncio
 from rich.console import Console
@@ -36,7 +37,11 @@ def create_schedule(days):
         if breakdown:
             console.print("\n[bold]Category breakdown:[/bold]")
             for cat, count in sorted(breakdown.items()):
-                pct = (count / result['scheduled'] * 100) if result['scheduled'] > 0 else 0
+                pct = (
+                    (count / result["scheduled"] * 100)
+                    if result["scheduled"] > 0
+                    else 0
+                )
                 console.print(f"  • {cat}: {count} ({pct:.0f}%)")
 
         if "error" in result:
@@ -48,7 +53,9 @@ def create_schedule(days):
 
 
 @click.command(name="process-queue")
-@click.option("--force", is_flag=True, help="Process next item immediately (ignore schedule)")
+@click.option(
+    "--force", is_flag=True, help="Process next item immediately (ignore schedule)"
+)
 def process_queue(force):
     """Process pending queue items.
 
@@ -65,10 +72,12 @@ def process_queue(force):
     try:
         if force:
             # Use new shared force_post_next() method
-            result = asyncio.run(service.force_post_next(
-                triggered_by="cli",
-                force_sent_indicator=False,  # CLI doesn't need ⚡ in caption
-            ))
+            result = asyncio.run(
+                service.force_post_next(
+                    triggered_by="cli",
+                    force_sent_indicator=False,  # CLI doesn't need ⚡ in caption
+                )
+            )
 
             if result["success"]:
                 console.print("\n[bold green]✓ Force-posted successfully![/bold green]")
@@ -151,8 +160,12 @@ def clear_queue(yes):
     count = len(items)
 
     if not yes:
-        console.print(f"[bold yellow]Warning:[/bold yellow] This will remove {count} pending queue items.")
-        console.print("Media items will remain in the library and can be scheduled again.")
+        console.print(
+            f"[bold yellow]Warning:[/bold yellow] This will remove {count} pending queue items."
+        )
+        console.print(
+            "Media items will remain in the library and can be scheduled again."
+        )
         if not click.confirm("Do you want to continue?"):
             console.print("[dim]Cancelled[/dim]")
             return

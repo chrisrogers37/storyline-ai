@@ -1,4 +1,5 @@
 """Base service class with automatic execution tracking and error handling."""
+
 from abc import ABC
 from datetime import datetime
 from typing import Optional, Dict, Any
@@ -116,7 +117,9 @@ class BaseService(ABC):
         started_at = datetime.utcnow()
 
         try:
-            logger.info(f"[{self.service_name}.{method_name}] Starting execution (run_id: {run_id})")
+            logger.info(
+                f"[{self.service_name}.{method_name}] Starting execution (run_id: {run_id})"
+            )
 
             yield run_id  # Allow service to access run_id if needed
 
@@ -124,9 +127,13 @@ class BaseService(ABC):
             completed_at = datetime.utcnow()
             duration_ms = int((completed_at - started_at).total_seconds() * 1000)
 
-            self.service_run_repo.complete_run(run_id=run_id, success=True, duration_ms=duration_ms)
+            self.service_run_repo.complete_run(
+                run_id=run_id, success=True, duration_ms=duration_ms
+            )
 
-            logger.info(f"[{self.service_name}.{method_name}] Completed successfully ({duration_ms}ms)")
+            logger.info(
+                f"[{self.service_name}.{method_name}] Completed successfully ({duration_ms}ms)"
+            )
 
         except Exception as e:
             # Failure
@@ -146,7 +153,8 @@ class BaseService(ABC):
             )
 
             logger.error(
-                f"[{self.service_name}.{method_name}] Failed after {duration_ms}ms: {error_message}", exc_info=True
+                f"[{self.service_name}.{method_name}] Failed after {duration_ms}ms: {error_message}",
+                exc_info=True,
             )
 
             # Re-raise the exception

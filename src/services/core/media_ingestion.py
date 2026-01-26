@@ -1,4 +1,5 @@
 """Media ingestion service - scan filesystem and index media files."""
+
 from pathlib import Path
 from typing import Optional, Dict
 import mimetypes
@@ -149,7 +150,9 @@ class MediaIngestionService(BaseService):
         # Check for duplicate content
         duplicates = self.media_repo.get_by_hash(file_hash)
         if duplicates:
-            logger.warning(f"Duplicate content detected: {file_path.name} (hash: {file_hash[:8]}...)")
+            logger.warning(
+                f"Duplicate content detected: {file_path.name} (hash: {file_hash[:8]}...)"
+            )
 
         # Validate image (if it's an image)
         if file_path.suffix.lower() in {".jpg", ".jpeg", ".png", ".gif"}:
