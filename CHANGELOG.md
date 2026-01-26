@@ -96,6 +96,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **InstagramAccountService** - Added `update_account_token()` method for updating tokens on existing accounts and `get_account_by_instagram_id()` convenience method
 
+- **Token Encryption for Multi-Account** - Tokens added via Telegram were stored unencrypted but the posting code tried to decrypt them, causing fallback to legacy .env token. Now properly encrypts tokens when storing.
+
+- **Editable Posts/Day and Hours** - These settings were previously display-only in /settings menu. Now clicking them starts a conversation flow to edit values directly from Telegram.
+
 ---
 
 ### Added - Instagram Account Management (Phase 1.5)
