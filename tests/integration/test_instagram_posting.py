@@ -531,34 +531,40 @@ class TestHistoryRepositoryIntegration:
         """Test counting Instagram API posts in time window."""
         from src.repositories.history_repository import HistoryRepository
 
-        with patch.object(HistoryRepository, "__init__", lambda x: None):
+        with patch("src.repositories.base_repository.get_db") as mock_get_db:
+            mock_db = Mock()
+            mock_get_db.return_value = iter([mock_db])
+
             repo = HistoryRepository()
-            repo.db = Mock()
+            repo._db = mock_db
 
             # Mock the query chain
             mock_query = Mock()
             mock_query.filter.return_value = mock_query
             mock_query.scalar.return_value = 5
-            repo.db.query.return_value = mock_query
+            mock_db.query.return_value = mock_query
 
             since = datetime.utcnow() - timedelta(hours=1)
             result = repo.count_by_method("instagram_api", since)
 
             assert result == 5
-            repo.db.query.assert_called()
+            mock_db.query.assert_called()
 
     def test_count_by_method_returns_zero_for_none(self):
         """Test count returns 0 when scalar returns None."""
         from src.repositories.history_repository import HistoryRepository
 
-        with patch.object(HistoryRepository, "__init__", lambda x: None):
+        with patch("src.repositories.base_repository.get_db") as mock_get_db:
+            mock_db = Mock()
+            mock_get_db.return_value = iter([mock_db])
+
             repo = HistoryRepository()
-            repo.db = Mock()
+            repo._db = mock_db
 
             mock_query = Mock()
             mock_query.filter.return_value = mock_query
             mock_query.scalar.return_value = None
-            repo.db.query.return_value = mock_query
+            mock_db.query.return_value = mock_query
 
             since = datetime.utcnow() - timedelta(hours=1)
             result = repo.count_by_method("instagram_api", since)

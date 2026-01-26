@@ -37,11 +37,25 @@ def mock_telegram_service():
         patch(
             "src.services.core.telegram_service.InteractionService"
         ) as mock_interaction_service_class,
+        patch(
+            "src.services.core.telegram_service.SettingsService"
+        ) as mock_settings_service_class,
+        patch(
+            "src.services.core.telegram_service.InstagramAccountService"
+        ) as mock_ig_account_service_class,
     ):
         mock_settings.TELEGRAM_BOT_TOKEN = "123456:ABC-DEF1234ghIkl"
         mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
         mock_settings.CAPTION_STYLE = "enhanced"
         mock_settings.SEND_LIFECYCLE_NOTIFICATIONS = False
+
+        # Setup mock settings service
+        mock_chat_settings = Mock()
+        mock_chat_settings.is_paused = False
+        mock_chat_settings.show_verbose_notifications = False
+        mock_settings_service_class.return_value.get_settings.return_value = (
+            mock_chat_settings
+        )
 
         service = TelegramService()
 
@@ -53,6 +67,11 @@ def mock_telegram_service():
         service.lock_repo = mock_lock_repo_class.return_value
         service.lock_service = mock_lock_service_class.return_value
         service.interaction_service = mock_interaction_service_class.return_value
+        service.settings_service = mock_settings_service_class.return_value
+        service.ig_account_service = mock_ig_account_service_class.return_value
+
+        # Store mock_chat_settings for easy access in tests
+        service._mock_chat_settings = mock_chat_settings
 
         yield service
 
@@ -730,6 +749,7 @@ class TestQueueCommand:
 
         mock_media = Mock()
         mock_media.file_name = "test.jpg"
+        mock_media.category = "memes"
         mock_telegram_service.media_repo.get_by_id.return_value = mock_media
 
         mock_update = Mock()
@@ -802,6 +822,7 @@ class TestQueueCommand:
 
         mock_media = Mock()
         mock_media.file_name = "test.jpg"
+        mock_media.category = "memes"
         mock_telegram_service.media_repo.get_by_id.return_value = mock_media
 
         mock_update = Mock()
@@ -827,7 +848,10 @@ class TestQueueCommand:
 class TestNextCommand:
     """Tests for /next command - force send next post."""
 
-    async def test_next_sends_earliest_scheduled_post(self, mock_telegram_service):
+    @patch("src.services.core.posting.PostingService")
+    async def test_next_sends_earliest_scheduled_post(
+        self, mock_posting_service_class, mock_telegram_service
+    ):
         """Test /next sends the earliest scheduled post."""
         mock_user = Mock()
         mock_user.id = uuid4()
@@ -838,19 +862,25 @@ class TestNextCommand:
         queue_item_id = uuid4()
         media_id = uuid4()
 
-        mock_queue_item = Mock()
-        mock_queue_item.id = queue_item_id
-        mock_queue_item.media_item_id = media_id
-        mock_queue_item.scheduled_for = datetime(2030, 6, 15, 14, 0)
-
-        mock_telegram_service.queue_repo.get_all.return_value = [mock_queue_item]
-
         mock_media = Mock()
         mock_media.file_name = "next_post.jpg"
-        mock_telegram_service.media_repo.get_by_id.return_value = mock_media
+        mock_media.category = "memes"
+        mock_media.file_path = "/path/to/next_post.jpg"
 
-        # Mock send_notification
-        mock_telegram_service.send_notification = AsyncMock(return_value=True)
+        # Setup PostingService mock
+        mock_posting_service = Mock()
+        mock_posting_service.force_post_next = AsyncMock(
+            return_value={
+                "success": True,
+                "queue_item_id": str(queue_item_id),
+                "media_item": mock_media,
+                "shifted_count": 0,
+                "error": None,
+            }
+        )
+        mock_posting_service.__enter__ = Mock(return_value=mock_posting_service)
+        mock_posting_service.__exit__ = Mock(return_value=False)
+        mock_posting_service_class.return_value = mock_posting_service
 
         mock_update = Mock()
         mock_update.effective_user = Mock(
@@ -864,30 +894,36 @@ class TestNextCommand:
 
         await mock_telegram_service._handle_next(mock_update, mock_context)
 
-        # Should get all pending items
-        mock_telegram_service.queue_repo.get_all.assert_called_with(status="pending")
-
-        # Should send notification for the queue item with force_sent=True
-        mock_telegram_service.send_notification.assert_called_once_with(
-            str(queue_item_id), force_sent=True
-        )
-
-        # Should update status to processing
-        mock_telegram_service.queue_repo.update_status.assert_called_once_with(
-            str(queue_item_id), "processing"
-        )
+        # Should call force_post_next
+        mock_posting_service.force_post_next.assert_called_once()
 
         # Should NOT send any extra messages on success (no clutter)
         mock_update.message.reply_text.assert_not_called()
 
-    async def test_next_empty_queue(self, mock_telegram_service):
+    @patch("src.services.core.posting.PostingService")
+    async def test_next_empty_queue(
+        self, mock_posting_service_class, mock_telegram_service
+    ):
         """Test /next shows error when queue is empty."""
         mock_user = Mock()
         mock_user.id = uuid4()
         mock_telegram_service.user_repo.get_by_telegram_id.return_value = None
         mock_telegram_service.user_repo.create.return_value = mock_user
 
-        mock_telegram_service.queue_repo.get_all.return_value = []
+        # Setup PostingService mock to return empty queue error
+        mock_posting_service = Mock()
+        mock_posting_service.force_post_next = AsyncMock(
+            return_value={
+                "success": False,
+                "queue_item_id": None,
+                "media_item": None,
+                "shifted_count": 0,
+                "error": "No pending items in queue",
+            }
+        )
+        mock_posting_service.__enter__ = Mock(return_value=mock_posting_service)
+        mock_posting_service.__exit__ = Mock(return_value=False)
+        mock_posting_service_class.return_value = mock_posting_service
 
         mock_update = Mock()
         mock_update.effective_user = Mock(
@@ -907,22 +943,30 @@ class TestNextCommand:
         assert "Queue Empty" in message_text
         assert "No posts to send" in message_text
 
-    async def test_next_media_not_found(self, mock_telegram_service):
+    @patch("src.services.core.posting.PostingService")
+    async def test_next_media_not_found(
+        self, mock_posting_service_class, mock_telegram_service
+    ):
         """Test /next handles missing media gracefully."""
         mock_user = Mock()
         mock_user.id = uuid4()
         mock_telegram_service.user_repo.get_by_telegram_id.return_value = None
         mock_telegram_service.user_repo.create.return_value = mock_user
 
-        mock_queue_item = Mock()
-        mock_queue_item.id = uuid4()
-        mock_queue_item.media_item_id = uuid4()
-        mock_queue_item.scheduled_for = datetime(2030, 6, 15, 14, 0)
-
-        mock_telegram_service.queue_repo.get_all.return_value = [mock_queue_item]
-        mock_telegram_service.media_repo.get_by_id.return_value = (
-            None  # Media not found
+        # Setup PostingService mock to return media not found error
+        mock_posting_service = Mock()
+        mock_posting_service.force_post_next = AsyncMock(
+            return_value={
+                "success": False,
+                "queue_item_id": None,
+                "media_item": None,
+                "shifted_count": 0,
+                "error": "Media item not found",
+            }
         )
+        mock_posting_service.__enter__ = Mock(return_value=mock_posting_service)
+        mock_posting_service.__exit__ = Mock(return_value=False)
+        mock_posting_service_class.return_value = mock_posting_service
 
         mock_update = Mock()
         mock_update.effective_user = Mock(
@@ -941,7 +985,10 @@ class TestNextCommand:
         assert "Error" in message_text
         assert "Media item not found" in message_text
 
-    async def test_next_notification_failure(self, mock_telegram_service):
+    @patch("src.services.core.posting.PostingService")
+    async def test_next_notification_failure(
+        self, mock_posting_service_class, mock_telegram_service
+    ):
         """Test /next handles notification failure gracefully."""
         mock_user = Mock()
         mock_user.id = uuid4()
@@ -949,19 +996,20 @@ class TestNextCommand:
         mock_telegram_service.user_repo.get_by_telegram_id.return_value = None
         mock_telegram_service.user_repo.create.return_value = mock_user
 
-        mock_queue_item = Mock()
-        mock_queue_item.id = uuid4()
-        mock_queue_item.media_item_id = uuid4()
-        mock_queue_item.scheduled_for = datetime(2030, 6, 15, 14, 0)
-
-        mock_telegram_service.queue_repo.get_all.return_value = [mock_queue_item]
-
-        mock_media = Mock()
-        mock_media.file_name = "fail_post.jpg"
-        mock_telegram_service.media_repo.get_by_id.return_value = mock_media
-
-        # Mock send_notification to fail
-        mock_telegram_service.send_notification = AsyncMock(return_value=False)
+        # Setup PostingService mock to return notification failure
+        mock_posting_service = Mock()
+        mock_posting_service.force_post_next = AsyncMock(
+            return_value={
+                "success": False,
+                "queue_item_id": None,
+                "media_item": None,
+                "shifted_count": 0,
+                "error": "Failed to send notification",
+            }
+        )
+        mock_posting_service.__enter__ = Mock(return_value=mock_posting_service)
+        mock_posting_service.__exit__ = Mock(return_value=False)
+        mock_posting_service_class.return_value = mock_posting_service
 
         mock_update = Mock()
         mock_update.effective_user = Mock(
@@ -975,15 +1023,15 @@ class TestNextCommand:
 
         await mock_telegram_service._handle_next(mock_update, mock_context)
 
-        # Should NOT update status (since send failed)
-        mock_telegram_service.queue_repo.update_status.assert_not_called()
-
-        # Should show failure message (only message sent on failure)
+        # Should show failure message ("Failed to send" is the actual message)
         mock_update.message.reply_text.assert_called_once()
         call_args = mock_update.message.reply_text.call_args
         assert "Failed to send" in call_args.args[0]
 
-    async def test_next_logs_interaction(self, mock_telegram_service):
+    @patch("src.services.core.posting.PostingService")
+    async def test_next_logs_interaction(
+        self, mock_posting_service_class, mock_telegram_service
+    ):
         """Test /next logs the interaction."""
         mock_user = Mock()
         mock_user.id = uuid4()
@@ -992,20 +1040,26 @@ class TestNextCommand:
         mock_telegram_service.user_repo.create.return_value = mock_user
 
         queue_item_id = uuid4()
-        media_id = uuid4()
-
-        mock_queue_item = Mock()
-        mock_queue_item.id = queue_item_id
-        mock_queue_item.media_item_id = media_id
-        mock_queue_item.scheduled_for = datetime(2030, 6, 15, 14, 0)
-
-        mock_telegram_service.queue_repo.get_all.return_value = [mock_queue_item]
 
         mock_media = Mock()
         mock_media.file_name = "logged_post.jpg"
-        mock_telegram_service.media_repo.get_by_id.return_value = mock_media
+        mock_media.category = "memes"
+        mock_media.file_path = "/path/to/logged_post.jpg"
 
-        mock_telegram_service.send_notification = AsyncMock(return_value=True)
+        # Setup PostingService mock
+        mock_posting_service = Mock()
+        mock_posting_service.force_post_next = AsyncMock(
+            return_value={
+                "success": True,
+                "queue_item_id": str(queue_item_id),
+                "media_item": mock_media,
+                "shifted_count": 0,
+                "error": None,
+            }
+        )
+        mock_posting_service.__enter__ = Mock(return_value=mock_posting_service)
+        mock_posting_service.__exit__ = Mock(return_value=False)
+        mock_posting_service_class.return_value = mock_posting_service
 
         mock_update = Mock()
         mock_update.effective_user = Mock(
@@ -1019,10 +1073,8 @@ class TestNextCommand:
 
         await mock_telegram_service._handle_next(mock_update, mock_context)
 
-        # Should send notification with force_sent=True
-        mock_telegram_service.send_notification.assert_called_once_with(
-            str(queue_item_id), force_sent=True
-        )
+        # Should call force_post_next
+        mock_posting_service.force_post_next.assert_called_once()
 
         # Should log the command
         mock_telegram_service.interaction_service.log_command.assert_called_once()
@@ -1049,8 +1101,8 @@ class TestPauseCommand:
 
         mock_telegram_service.queue_repo.count_pending.return_value = 10
 
-        # Ensure not paused initially
-        mock_telegram_service.set_paused(False)
+        # Ensure not paused initially (via mock)
+        mock_telegram_service._mock_chat_settings.is_paused = False
 
         mock_update = Mock()
         mock_update.effective_user = Mock(
@@ -1064,8 +1116,8 @@ class TestPauseCommand:
 
         await mock_telegram_service._handle_pause(mock_update, mock_context)
 
-        # Should now be paused
-        assert mock_telegram_service.is_paused is True
+        # Should have called toggle_setting to pause
+        mock_telegram_service.settings_service.toggle_setting.assert_called()
 
         # Should show paused message
         call_args = mock_update.message.reply_text.call_args
@@ -1080,8 +1132,8 @@ class TestPauseCommand:
         mock_telegram_service.user_repo.get_by_telegram_id.return_value = None
         mock_telegram_service.user_repo.create.return_value = mock_user
 
-        # Set already paused
-        mock_telegram_service.set_paused(True)
+        # Set already paused (via mock)
+        mock_telegram_service._mock_chat_settings.is_paused = True
 
         mock_update = Mock()
         mock_update.effective_user = Mock(
@@ -1112,7 +1164,8 @@ class TestResumeCommand:
         mock_telegram_service.user_repo.get_by_telegram_id.return_value = None
         mock_telegram_service.user_repo.create.return_value = mock_user
 
-        mock_telegram_service.set_paused(False)
+        # Not paused (via mock)
+        mock_telegram_service._mock_chat_settings.is_paused = False
 
         mock_update = Mock()
         mock_update.effective_user = Mock(
@@ -1137,7 +1190,8 @@ class TestResumeCommand:
         mock_telegram_service.user_repo.get_by_telegram_id.return_value = None
         mock_telegram_service.user_repo.create.return_value = mock_user
 
-        mock_telegram_service.set_paused(True)
+        # Set paused (via mock)
+        mock_telegram_service._mock_chat_settings.is_paused = True
 
         # Create overdue and future items
         overdue_item = Mock()
@@ -1179,7 +1233,8 @@ class TestResumeCommand:
         mock_telegram_service.user_repo.get_by_telegram_id.return_value = None
         mock_telegram_service.user_repo.create.return_value = mock_user
 
-        mock_telegram_service.set_paused(True)
+        # Set paused (via mock)
+        mock_telegram_service._mock_chat_settings.is_paused = True
 
         # Only future items
         future_item = Mock()
@@ -1199,8 +1254,8 @@ class TestResumeCommand:
 
         await mock_telegram_service._handle_resume(mock_update, mock_context)
 
-        # Should be resumed
-        assert mock_telegram_service.is_paused is False
+        # Should have called toggle_setting to resume
+        mock_telegram_service.settings_service.toggle_setting.assert_called()
 
         call_args = mock_update.message.reply_text.call_args
         message_text = call_args.args[0]
@@ -1212,7 +1267,10 @@ class TestResumeCommand:
 class TestScheduleCommand:
     """Tests for /schedule command."""
 
-    async def test_schedule_creates_schedule(self, mock_telegram_service):
+    @patch("src.services.core.scheduler.SchedulerService")
+    async def test_schedule_creates_schedule(
+        self, mock_scheduler_class, mock_telegram_service
+    ):
         """Test /schedule creates a posting schedule."""
         mock_user = Mock()
         mock_user.id = uuid4()
@@ -1237,22 +1295,18 @@ class TestScheduleCommand:
             "skipped": 5,
             "total_slots": 21,
         }
+        mock_scheduler.__enter__ = Mock(return_value=mock_scheduler)
+        mock_scheduler.__exit__ = Mock(return_value=False)
+        mock_scheduler_class.return_value = mock_scheduler
 
-        # Patch the import statement in the function
-        import sys
+        await mock_telegram_service._handle_schedule(mock_update, mock_context)
 
-        mock_module = Mock()
-        mock_module.SchedulerService.return_value = mock_scheduler
+        mock_scheduler.create_schedule.assert_called_once_with(days=7)
 
-        with patch.dict(sys.modules, {"src.services.core.scheduler": mock_module}):
-            await mock_telegram_service._handle_schedule(mock_update, mock_context)
-
-            mock_scheduler.create_schedule.assert_called_once_with(days=7)
-
-            call_args = mock_update.message.reply_text.call_args
-            message_text = call_args.args[0]
-            assert "Schedule Created" in message_text
-            assert "21" in message_text
+        call_args = mock_update.message.reply_text.call_args
+        message_text = call_args.args[0]
+        assert "Schedule Created" in message_text
+        assert "21" in message_text
 
     async def test_schedule_invalid_days(self, mock_telegram_service):
         """Test /schedule handles invalid days argument."""
@@ -1543,7 +1597,8 @@ class TestResumeCallbacks:
         mock_user.id = uuid4()
         mock_user.telegram_username = "testuser"
 
-        mock_telegram_service.set_paused(True)
+        # Set paused via mock
+        mock_telegram_service._mock_chat_settings.is_paused = True
 
         # Create overdue item
         overdue_item = Mock()
@@ -1559,8 +1614,8 @@ class TestResumeCallbacks:
             "reschedule", mock_user, mock_query
         )
 
-        # Should be resumed
-        assert mock_telegram_service.is_paused is False
+        # Should have called toggle_setting to resume
+        mock_telegram_service.settings_service.toggle_setting.assert_called()
 
         # Should reschedule the item
         mock_telegram_service.queue_repo.update_scheduled_time.assert_called_once()
@@ -1576,7 +1631,8 @@ class TestResumeCallbacks:
         mock_user.id = uuid4()
         mock_user.telegram_username = "testuser"
 
-        mock_telegram_service.set_paused(True)
+        # Set paused via mock
+        mock_telegram_service._mock_chat_settings.is_paused = True
 
         # Create overdue and future items
         overdue_item = Mock()
@@ -1599,8 +1655,8 @@ class TestResumeCallbacks:
             "clear", mock_user, mock_query
         )
 
-        # Should be resumed
-        assert mock_telegram_service.is_paused is False
+        # Should have called toggle_setting to resume
+        mock_telegram_service.settings_service.toggle_setting.assert_called()
 
         # Should delete the overdue item
         mock_telegram_service.queue_repo.delete.assert_called_once_with(
@@ -1618,7 +1674,8 @@ class TestResumeCallbacks:
         mock_user.id = uuid4()
         mock_user.telegram_username = "testuser"
 
-        mock_telegram_service.set_paused(True)
+        # Set paused via mock
+        mock_telegram_service._mock_chat_settings.is_paused = True
 
         overdue_item = Mock()
         overdue_item.scheduled_for = datetime(2020, 1, 1, 12, 0)
@@ -1632,8 +1689,8 @@ class TestResumeCallbacks:
             "force", mock_user, mock_query
         )
 
-        # Should be resumed
-        assert mock_telegram_service.is_paused is False
+        # Should have called toggle_setting to resume
+        mock_telegram_service.settings_service.toggle_setting.assert_called()
 
         # Should NOT delete or reschedule anything
         mock_telegram_service.queue_repo.delete.assert_not_called()
@@ -1701,10 +1758,24 @@ class TestPauseIntegration:
     """Tests for pause integration with PostingService."""
 
     def test_posting_service_respects_pause(self):
-        """Test that PostingService checks pause state."""
-        from src.services.core.posting import PostingService
+        """Test that PostingService checks pause state via TelegramService."""
+        with (
+            patch("src.services.core.posting.TelegramService") as mock_ts_class,
+            patch("src.services.core.posting.HistoryRepository"),
+            patch("src.services.core.posting.QueueRepository"),
+            patch("src.services.core.posting.MediaRepository"),
+            patch("src.services.base_service.ServiceRunRepository"),
+        ):
+            from src.services.core.posting import PostingService
 
-        # Just verify the PostingService has access to telegram_service.is_paused
-        posting_service = PostingService()
-        # The is_paused property should be accessible
-        assert hasattr(posting_service.telegram_service, "is_paused")
+            # Setup mock telegram service with is_paused property
+            mock_telegram_service = Mock()
+            mock_telegram_service.is_paused = False
+            mock_ts_class.return_value = mock_telegram_service
+
+            # Create posting service with mocked dependencies
+            posting_service = PostingService()
+
+            # Verify the PostingService has access to telegram_service.is_paused
+            assert hasattr(posting_service.telegram_service, "is_paused")
+            assert posting_service.telegram_service.is_paused is False
