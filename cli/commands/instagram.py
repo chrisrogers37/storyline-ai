@@ -2,7 +2,6 @@
 import asyncio
 import webbrowser
 from datetime import datetime, timedelta
-from urllib.parse import urlencode
 
 import click
 import httpx
@@ -182,7 +181,7 @@ async def _exchange_for_long_lived_token(short_token: str) -> tuple:
 
             if response.status_code != 200:
                 error = response.json()
-                console.print(f"\n[red]Error exchanging token:[/red]")
+                console.print("\n[red]Error exchanging token:[/red]")
                 console.print(f"  {error.get('error', {}).get('message', 'Unknown error')}")
                 return None
 

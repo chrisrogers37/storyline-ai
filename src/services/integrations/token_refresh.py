@@ -1,6 +1,6 @@
 """Token refresh service for managing OAuth tokens."""
 from datetime import datetime, timedelta
-from typing import Optional, List
+from typing import Optional
 
 import httpx
 

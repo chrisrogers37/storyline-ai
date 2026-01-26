@@ -18,7 +18,7 @@ class CategoryMixRepository(BaseRepository):
         """Get all current (active) category ratios."""
         return (
             self.db.query(CategoryPostCaseMix)
-            .filter(CategoryPostCaseMix.is_current == True)
+            .filter(CategoryPostCaseMix.is_current)
             .order_by(CategoryPostCaseMix.category)
             .all()
         )
@@ -34,7 +34,7 @@ class CategoryMixRepository(BaseRepository):
             self.db.query(CategoryPostCaseMix)
             .filter(
                 CategoryPostCaseMix.category == category,
-                CategoryPostCaseMix.is_current == True,
+                CategoryPostCaseMix.is_current,
             )
             .first()
         )
@@ -123,7 +123,7 @@ class CategoryMixRepository(BaseRepository):
         """Check if any current mix ratios exist."""
         count = (
             self.db.query(func.count(CategoryPostCaseMix.id))
-            .filter(CategoryPostCaseMix.is_current == True)
+            .filter(CategoryPostCaseMix.is_current)
             .scalar()
         )
         return count > 0

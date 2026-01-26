@@ -116,11 +116,11 @@ class HistoryRepository(BaseRepository):
         ).scalar()
 
         successful = self.db.query(func.count(PostingHistory.id)).filter(
-            and_(PostingHistory.posted_at >= since, PostingHistory.success == True)
+            and_(PostingHistory.posted_at >= since, PostingHistory.success)
         ).scalar()
 
         failed = self.db.query(func.count(PostingHistory.id)).filter(
-            and_(PostingHistory.posted_at >= since, PostingHistory.success == False)
+            and_(PostingHistory.posted_at >= since, ~PostingHistory.success)
         ).scalar()
 
         return {
@@ -159,7 +159,7 @@ class HistoryRepository(BaseRepository):
                 and_(
                     PostingHistory.posting_method == method,
                     PostingHistory.posted_at >= since,
-                    PostingHistory.success == True,
+                    PostingHistory.success,
                 )
             )
             .scalar()

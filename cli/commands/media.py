@@ -70,7 +70,7 @@ def prompt_for_category_ratios(categories: list[str], current_ratios: dict = Non
                 largest_cat = max(ratios, key=lambda k: ratios[k])
                 ratios[largest_cat] += Decimal("1") - total
 
-            console.print(f"\n[green]✓ Ratios sum to 100%[/green]")
+            console.print("\n[green]✓ Ratios sum to 100%[/green]")
             return ratios
         else:
             console.print(f"\n[red]✗ Ratios sum to {total_pct:.1f}%, must equal 100%[/red]")
@@ -132,7 +132,7 @@ def index(directory, recursive, extract_category):
             directory, recursive=recursive, extract_category=extract_category
         )
 
-        console.print(f"\n[bold green]✓ Indexing complete![/bold green]")
+        console.print("\n[bold green]✓ Indexing complete![/bold green]")
         console.print(f"  Indexed: {result['indexed']}")
         console.print(f"  Skipped: {result['skipped']}")
         console.print(f"  Errors: {result['errors']}")
@@ -338,18 +338,18 @@ def validate(image_path):
     result = processor.validate_image(Path(image_path))
 
     if result.is_valid:
-        console.print(f"[bold green]✓ Image is valid![/bold green]")
+        console.print("[bold green]✓ Image is valid![/bold green]")
     else:
-        console.print(f"[bold red]✗ Image has errors:[/bold red]")
+        console.print("[bold red]✗ Image has errors:[/bold red]")
         for error in result.errors:
             console.print(f"  - {error}")
 
     if result.warnings:
-        console.print(f"\n[yellow]⚠ Warnings:[/yellow]")
+        console.print("\n[yellow]⚠ Warnings:[/yellow]")
         for warning in result.warnings:
             console.print(f"  - {warning}")
 
-    console.print(f"\n[bold]Image Details:[/bold]")
+    console.print("\n[bold]Image Details:[/bold]")
     console.print(f"  Resolution: {result.width}x{result.height}")
     console.print(f"  Aspect Ratio: {result.aspect_ratio:.2f}")
     console.print(f"  File Size: {result.file_size_mb:.2f} MB")

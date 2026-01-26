@@ -1,5 +1,5 @@
 """Posting history model - permanent audit log."""
-from sqlalchemy import Column, String, BigInteger, Integer, DateTime, Text, Boolean, CheckConstraint
+from sqlalchemy import Column, String, Integer, DateTime, Text, Boolean, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy import ForeignKey
 from datetime import datetime

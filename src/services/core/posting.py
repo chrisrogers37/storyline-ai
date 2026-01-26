@@ -12,7 +12,6 @@ from src.repositories.media_repository import MediaRepository
 from src.repositories.history_repository import HistoryRepository
 from src.config.settings import settings
 from src.utils.logger import logger
-from src.exceptions import InstagramAPIError, RateLimitError, TokenExpiredError
 
 
 class PostingService(BaseService):

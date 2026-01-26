@@ -2,7 +2,6 @@
 import asyncio
 import signal
 import sys
-from datetime import datetime
 from time import time
 
 from src.config.settings import settings

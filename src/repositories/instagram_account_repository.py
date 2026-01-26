@@ -12,7 +12,7 @@ class InstagramAccountRepository(BaseRepository):
     def get_all_active(self) -> List[InstagramAccount]:
         """Get all active Instagram accounts."""
         result = self.db.query(InstagramAccount).filter(
-            InstagramAccount.is_active == True
+            InstagramAccount.is_active
         ).order_by(InstagramAccount.display_name).all()
         self.end_read_transaction()
         return result
@@ -104,7 +104,7 @@ class InstagramAccountRepository(BaseRepository):
     def count_active(self) -> int:
         """Count active Instagram accounts."""
         result = self.db.query(InstagramAccount).filter(
-            InstagramAccount.is_active == True
+            InstagramAccount.is_active
         ).count()
         self.end_read_transaction()
         return result

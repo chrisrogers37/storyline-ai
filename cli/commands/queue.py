@@ -26,7 +26,7 @@ def create_schedule(days):
     try:
         result = service.create_schedule(days=days)
 
-        console.print(f"\n[bold green]✓ Schedule created![/bold green]")
+        console.print("\n[bold green]✓ Schedule created![/bold green]")
         console.print(f"  Scheduled: {result['scheduled']}")
         console.print(f"  Skipped: {result['skipped']}")
         console.print(f"  Total slots: {result['total_slots']}")
@@ -34,7 +34,7 @@ def create_schedule(days):
         # Show category breakdown
         breakdown = result.get("category_breakdown", {})
         if breakdown:
-            console.print(f"\n[bold]Category breakdown:[/bold]")
+            console.print("\n[bold]Category breakdown:[/bold]")
             for cat, count in sorted(breakdown.items()):
                 pct = (count / result['scheduled'] * 100) if result['scheduled'] > 0 else 0
                 console.print(f"  • {cat}: {count} ({pct:.0f}%)")
@@ -71,7 +71,7 @@ def process_queue(force):
             ))
 
             if result["success"]:
-                console.print(f"\n[bold green]✓ Force-posted successfully![/bold green]")
+                console.print("\n[bold green]✓ Force-posted successfully![/bold green]")
                 media = result["media_item"]
                 console.print(f"  File: {media.file_name if media else 'Unknown'}")
                 console.print(f"  Queue ID: {result['queue_item_id']}")
@@ -80,13 +80,13 @@ def process_queue(force):
                 if shifted > 0:
                     console.print(f"  [cyan]Shifted {shifted} items forward[/cyan]")
                 else:
-                    console.print(f"  [dim]No items to shift (was last in queue)[/dim]")
+                    console.print("  [dim]No items to shift (was last in queue)[/dim]")
             else:
                 console.print(f"\n[bold red]✗ Failed:[/bold red] {result['error']}")
         else:
             result = asyncio.run(service.process_pending_posts())
 
-            console.print(f"\n[bold green]✓ Processing complete![/bold green]")
+            console.print("\n[bold green]✓ Processing complete![/bold green]")
             console.print(f"  Processed: {result['processed']}")
             console.print(f"  Telegram: {result['telegram']}")
             console.print(f"  Failed: {result['failed']}")

@@ -1,7 +1,6 @@
 """Scheduler service - create and manage posting schedule."""
 from datetime import datetime, timedelta
-from typing import Optional, List, Dict
-from decimal import Decimal
+from typing import Optional, List
 import random
 
 from src.services.base_service import BaseService
@@ -388,7 +387,7 @@ class SchedulerService(BaseService):
         from src.models.posting_queue import PostingQueue
         from src.models.media_lock import MediaPostingLock
 
-        query = self.media_repo.db.query(MediaItem).filter(MediaItem.is_active == True)
+        query = self.media_repo.db.query(MediaItem).filter(MediaItem.is_active)
 
         # Filter by category if specified
         if category:

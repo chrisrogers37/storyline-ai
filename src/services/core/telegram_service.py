@@ -1,6 +1,4 @@
 """Telegram service - bot operations and callbacks."""
-from pathlib import Path
-from typing import Optional
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, MessageHandler, filters
 
@@ -253,9 +251,9 @@ class TelegramService(BaseService):
             lines.append(f"\n{'━' * 20}")
 
             # Workflow instructions
-            lines.append(f"1️⃣ Click & hold image → Save")
-            lines.append(f"2️⃣ Tap \"Open Instagram\" below")
-            lines.append(f"3️⃣ Post your story!")
+            lines.append("1️⃣ Click & hold image → Save")
+            lines.append("2️⃣ Tap \"Open Instagram\" below")
+            lines.append("3️⃣ Post your story!")
 
         return "\n".join(lines)
 
@@ -863,8 +861,8 @@ class TelegramService(BaseService):
                     chat_id=chat_id,
                     message_id=context.user_data.get("settings_edit_message_id"),
                     text=(
-                        f"📊 *Edit Posts Per Day*\n\n"
-                        f"❌ Invalid input. Please enter a number between 1 and 50:"
+                        "📊 *Edit Posts Per Day*\n\n"
+                        "❌ Invalid input. Please enter a number between 1 and 50:"
                     ),
                     parse_mode="Markdown",
                     reply_markup=InlineKeyboardMarkup(keyboard)
@@ -901,8 +899,8 @@ class TelegramService(BaseService):
                     chat_id=chat_id,
                     message_id=context.user_data.get("settings_edit_message_id"),
                     text=(
-                        f"🕐 *Edit Posting Hours*\n\n"
-                        f"❌ Invalid input. Please enter a number between 0 and 23:"
+                        "🕐 *Edit Posting Hours*\n\n"
+                        "❌ Invalid input. Please enter a number between 0 and 23:"
                     ),
                     parse_mode="Markdown",
                     reply_markup=InlineKeyboardMarkup(keyboard)
@@ -953,8 +951,6 @@ class TelegramService(BaseService):
 
     async def _handle_settings_edit_cancel(self, query, context):
         """Cancel settings edit and return to settings menu."""
-        chat_id = query.message.chat_id
-
         # Clear edit state
         context.user_data.pop("settings_edit_state", None)
         context.user_data.pop("settings_edit_chat_id", None)
@@ -2178,7 +2174,7 @@ class TelegramService(BaseService):
         try:
             # Update message to show progress
             await query.edit_message_caption(
-                caption=f"⏳ *Uploading to Cloudinary...*",
+                caption="⏳ *Uploading to Cloudinary...*",
                 parse_mode="Markdown"
             )
 
@@ -2192,7 +2188,7 @@ class TelegramService(BaseService):
             cloud_public_id = upload_result.get("public_id")
 
             if not cloud_url:
-                raise Exception(f"Cloudinary upload failed: No URL returned")
+                raise Exception("Cloudinary upload failed: No URL returned")
 
             logger.info(f"Uploaded to Cloudinary: {cloud_public_id}")
 
@@ -2285,7 +2281,7 @@ class TelegramService(BaseService):
             # ============================================
             # Step 2: Post to Instagram
             await query.edit_message_caption(
-                caption=f"⏳ *Posting to Instagram...*",
+                caption="⏳ *Posting to Instagram...*",
                 parse_mode="Markdown"
             )
 
@@ -2756,7 +2752,7 @@ class TelegramService(BaseService):
 
         elif action == "cancel":
             await query.edit_message_text(
-                f"❌ *Cancelled*\n\nQueue was not cleared.",
+                "❌ *Cancelled*\n\nQueue was not cleared.",
                 parse_mode="Markdown"
             )
 
