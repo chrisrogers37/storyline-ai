@@ -76,8 +76,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **CRITICAL: Settings Workflow - Database vs .env** - Fixed issue where .env values were overriding database settings
+  - Dry Run toggle in /settings now actually controls posting behavior
+  - Instagram API toggle now works correctly
+  - Account switching now affects which account is used for posting
+  - Verbose mode toggle now controls notification detail level
+  - All settings now persist across service restarts
+
+- **Settings toggle locations fixed**:
+  - `telegram_service.py:_do_autopost()` - Now reads `chat_settings.dry_run_mode`
+  - `telegram_service.py:send_notification()` - Now reads `chat_settings.enable_instagram_api`
+  - `telegram_service.py:/dryrun` command - Now updates database instead of in-memory
+  - `instagram_api.py:safety_check_before_post()` - Now reads from database settings
+  - All `post_story()` and `get_account_info()` calls now pass `telegram_chat_id`
+
 - **Add Account Flow - Existing Account Handling** - When adding an account that already exists (e.g., after a previous failed attempt), the token is now updated instead of showing "Account already exists" error
-- **Add Account Flow - Security Warning** - Added warning message after flow completion reminding users to delete their own messages containing sensitive data (Account ID, Access Token), since Telegram bots cannot delete user messages in private chats
+
+- **Add Account Flow - Security Warning** - Fixed misleading message that claimed "Your token message will be deleted immediately" (bots cannot delete user messages in private chats). Now correctly warns users to delete their own messages.
+
 - **InstagramAccountService** - Added `update_account_token()` method for updating tokens on existing accounts and `get_account_by_instagram_id()` convenience method
 
 ---
