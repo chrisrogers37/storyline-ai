@@ -9,6 +9,7 @@
       "Bash(python*)",
       "Bash(pip*)",
       "Bash(pytest*)",
+      "Bash(ruff*)",
       "Bash(storyline-cli index-media*)",
       "Bash(storyline-cli list-*)",
       "Bash(storyline-cli check-health*)",
@@ -16,7 +17,24 @@
       "Bash(storyline-cli category-mix-history*)",
       "Bash(storyline-cli instagram-status*)",
       "Bash(source venv*)",
-      "Bash(. venv*)"
+      "Bash(. venv*)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git branch*)",
+      "Bash(git checkout*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git push*)",
+      "Bash(git pull*)",
+      "Bash(git fetch*)",
+      "Bash(gh pr*)",
+      "Bash(gh issue*)",
+      "Bash(gh api*)",
+      "Bash(ls*)",
+      "Bash(mkdir*)",
+      "Bash(cp*)",
+      "Bash(mv*)"
     ],
     "deny": [
       "Bash(storyline-cli process-queue*)",
@@ -25,6 +43,19 @@
       "Bash(storyline-cli instagram-auth*)",
       "Bash(python -m src.main*)",
       "Bash(python src/main.py*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [[ \"$CLAUDE_FILE_PATH\" == *.py ]]; then ruff format \"$CLAUDE_FILE_PATH\" 2>/dev/null || true; fi"
+          }
+        ]
+      }
     ]
   }
 }
