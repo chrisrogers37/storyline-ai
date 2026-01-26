@@ -1,4 +1,5 @@
 """Media posting lock model - TTL-based repost prevention."""
+
 from sqlalchemy import Column, String, DateTime, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy import ForeignKey
@@ -23,13 +24,17 @@ class MediaPostingLock(Base):
         UUID(as_uuid=True),
         ForeignKey("media_items.id", ondelete="CASCADE"),
         nullable=False,
-        index=True
+        index=True,
     )
 
     # Lock details
     locked_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    locked_until = Column(DateTime, nullable=True, index=True)  # TTL: locked_at + X days, NULL = permanent
-    lock_reason = Column(String(100), default="recent_post")  # 'recent_post', 'manual_hold', 'seasonal', 'permanent_reject'
+    locked_until = Column(
+        DateTime, nullable=True, index=True
+    )  # TTL: locked_at + X days, NULL = permanent
+    lock_reason = Column(
+        String(100), default="recent_post"
+    )  # 'recent_post', 'manual_hold', 'seasonal', 'permanent_reject'
 
     # Who created the lock
     created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
@@ -38,11 +43,7 @@ class MediaPostingLock(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
-        UniqueConstraint(
-            "media_item_id",
-            "locked_until",
-            name="unique_active_lock"
-        ),
+        UniqueConstraint("media_item_id", "locked_until", name="unique_active_lock"),
     )
 
     def __repr__(self):

@@ -1,4 +1,5 @@
 """Media lock service - TTL lock management."""
+
 from typing import Optional
 
 from src.services.base_service import BaseService
@@ -50,9 +51,13 @@ class MediaLockService(BaseService):
         )
 
         if ttl_days is None:
-            logger.info(f"Created permanent lock for media {media_item_id} (reason: {lock_reason})")
+            logger.info(
+                f"Created permanent lock for media {media_item_id} (reason: {lock_reason})"
+            )
         else:
-            logger.info(f"Created {ttl_days}-day lock for media {media_item_id} (reason: {lock_reason})")
+            logger.info(
+                f"Created {ttl_days}-day lock for media {media_item_id} (reason: {lock_reason})"
+            )
         return True
 
     def create_permanent_lock(

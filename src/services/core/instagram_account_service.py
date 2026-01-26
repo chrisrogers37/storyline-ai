@@ -1,4 +1,5 @@
 """Instagram account service - manage connected accounts."""
+
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
@@ -69,14 +70,13 @@ class InstagramAccountService(BaseService):
         """
         settings = self.settings_repo.get_or_create(telegram_chat_id)
         if settings.active_instagram_account_id:
-            return self.account_repo.get_by_id(str(settings.active_instagram_account_id))
+            return self.account_repo.get_by_id(
+                str(settings.active_instagram_account_id)
+            )
         return None
 
     def switch_account(
-        self,
-        telegram_chat_id: int,
-        account_id: str,
-        user: Optional[User] = None
+        self, telegram_chat_id: int, account_id: str, user: Optional[User] = None
     ) -> InstagramAccount:
         """
         Switch the active Instagram account.
@@ -96,7 +96,7 @@ class InstagramAccountService(BaseService):
             "switch_account",
             user_id=user.id if user else None,
             triggered_by="user",
-            input_params={"account_id": account_id}
+            input_params={"account_id": account_id},
         ) as run_id:
             account = self.account_repo.get_by_id(account_id)
             if not account:
@@ -110,15 +110,17 @@ class InstagramAccountService(BaseService):
 
             # Update settings
             self.settings_repo.update(
-                telegram_chat_id,
-                active_instagram_account_id=account_id
+                telegram_chat_id, active_instagram_account_id=account_id
             )
 
-            self.set_result_summary(run_id, {
-                "old_account": old_account.display_name if old_account else None,
-                "new_account": account.display_name,
-                "changed_by": user.telegram_username if user else "system"
-            })
+            self.set_result_summary(
+                run_id,
+                {
+                    "old_account": old_account.display_name if old_account else None,
+                    "new_account": account.display_name,
+                    "changed_by": user.telegram_username if user else "system",
+                },
+            )
 
             logger.info(
                 f"Switched Instagram account: "
@@ -136,7 +138,7 @@ class InstagramAccountService(BaseService):
         token_expires_at: Optional[datetime] = None,
         user: Optional[User] = None,
         set_as_active: bool = False,
-        telegram_chat_id: Optional[int] = None
+        telegram_chat_id: Optional[int] = None,
     ) -> InstagramAccount:
         """
         Add a new Instagram account with its token.
@@ -163,8 +165,8 @@ class InstagramAccountService(BaseService):
             triggered_by="user",
             input_params={
                 "display_name": display_name,
-                "instagram_username": instagram_username
-            }
+                "instagram_username": instagram_username,
+            },
         ) as run_id:
             # Check if account already exists
             existing = self.account_repo.get_by_instagram_id(instagram_account_id)
@@ -199,27 +201,33 @@ class InstagramAccountService(BaseService):
                 instagram_account_id=str(account.id),
                 metadata={
                     "account_id": instagram_account_id,
-                    "username": instagram_username
-                }
+                    "username": instagram_username,
+                },
             )
 
             # Optionally set as active
             if set_as_active:
                 if not telegram_chat_id:
-                    raise ValueError("telegram_chat_id required when set_as_active=True")
+                    raise ValueError(
+                        "telegram_chat_id required when set_as_active=True"
+                    )
                 self.settings_repo.update(
-                    telegram_chat_id,
-                    active_instagram_account_id=str(account.id)
+                    telegram_chat_id, active_instagram_account_id=str(account.id)
                 )
 
-            self.set_result_summary(run_id, {
-                "account_id": str(account.id),
-                "display_name": display_name,
-                "username": instagram_username,
-                "set_as_active": set_as_active
-            })
+            self.set_result_summary(
+                run_id,
+                {
+                    "account_id": str(account.id),
+                    "display_name": display_name,
+                    "username": instagram_username,
+                    "set_as_active": set_as_active,
+                },
+            )
 
-            logger.info(f"Added Instagram account: {display_name} (@{instagram_username})")
+            logger.info(
+                f"Added Instagram account: {display_name} (@{instagram_username})"
+            )
 
             return account
 
@@ -228,7 +236,7 @@ class InstagramAccountService(BaseService):
         account_id: str,
         display_name: Optional[str] = None,
         instagram_username: Optional[str] = None,
-        user: Optional[User] = None
+        user: Optional[User] = None,
     ) -> InstagramAccount:
         """
         Update an Instagram account's display info.
@@ -246,7 +254,7 @@ class InstagramAccountService(BaseService):
             "update_account",
             user_id=user.id if user else None,
             triggered_by="user",
-            input_params={"account_id": account_id}
+            input_params={"account_id": account_id},
         ) as run_id:
             updates = {}
             if display_name is not None:
@@ -259,10 +267,9 @@ class InstagramAccountService(BaseService):
 
             account = self.account_repo.update(account_id, **updates)
 
-            self.set_result_summary(run_id, {
-                "account_id": str(account.id),
-                "updates": updates
-            })
+            self.set_result_summary(
+                run_id, {"account_id": str(account.id), "updates": updates}
+            )
 
             logger.info(f"Updated Instagram account: {account.display_name}")
 
@@ -276,7 +283,7 @@ class InstagramAccountService(BaseService):
         token_expires_at: Optional[datetime] = None,
         user: Optional[User] = None,
         set_as_active: bool = False,
-        telegram_chat_id: Optional[int] = None
+        telegram_chat_id: Optional[int] = None,
     ) -> InstagramAccount:
         """
         Update the token for an existing Instagram account.
@@ -303,7 +310,7 @@ class InstagramAccountService(BaseService):
             "update_account_token",
             user_id=user.id if user else None,
             triggered_by="user",
-            input_params={"instagram_account_id": instagram_account_id}
+            input_params={"instagram_account_id": instagram_account_id},
         ) as run_id:
             # Find existing account
             account = self.account_repo.get_by_instagram_id(instagram_account_id)
@@ -313,8 +320,7 @@ class InstagramAccountService(BaseService):
             # Update username if provided
             if instagram_username and instagram_username != account.instagram_username:
                 account = self.account_repo.update(
-                    str(account.id),
-                    instagram_username=instagram_username
+                    str(account.id), instagram_username=instagram_username
                 )
 
             # Encrypt and update/create token
@@ -327,8 +333,8 @@ class InstagramAccountService(BaseService):
                 instagram_account_id=str(account.id),
                 metadata={
                     "account_id": instagram_account_id,
-                    "username": account.instagram_username
-                }
+                    "username": account.instagram_username,
+                },
             )
 
             # Reactivate if was deactivated
@@ -339,18 +345,22 @@ class InstagramAccountService(BaseService):
             # Optionally set as active
             if set_as_active:
                 if not telegram_chat_id:
-                    raise ValueError("telegram_chat_id required when set_as_active=True")
+                    raise ValueError(
+                        "telegram_chat_id required when set_as_active=True"
+                    )
                 self.settings_repo.update(
-                    telegram_chat_id,
-                    active_instagram_account_id=str(account.id)
+                    telegram_chat_id, active_instagram_account_id=str(account.id)
                 )
 
-            self.set_result_summary(run_id, {
-                "account_id": str(account.id),
-                "display_name": account.display_name,
-                "username": account.instagram_username,
-                "token_updated": True
-            })
+            self.set_result_summary(
+                run_id,
+                {
+                    "account_id": str(account.id),
+                    "display_name": account.display_name,
+                    "username": account.instagram_username,
+                    "token_updated": True,
+                },
+            )
 
             logger.info(
                 f"Updated token for Instagram account: "
@@ -359,14 +369,14 @@ class InstagramAccountService(BaseService):
 
             return account
 
-    def get_account_by_instagram_id(self, instagram_account_id: str) -> Optional[InstagramAccount]:
+    def get_account_by_instagram_id(
+        self, instagram_account_id: str
+    ) -> Optional[InstagramAccount]:
         """Get account by Instagram's numeric ID."""
         return self.account_repo.get_by_instagram_id(instagram_account_id)
 
     def deactivate_account(
-        self,
-        account_id: str,
-        user: Optional[User] = None
+        self, account_id: str, user: Optional[User] = None
     ) -> InstagramAccount:
         """
         Soft-delete an account by marking it inactive.
@@ -384,23 +394,21 @@ class InstagramAccountService(BaseService):
             "deactivate_account",
             user_id=user.id if user else None,
             triggered_by="user",
-            input_params={"account_id": account_id}
+            input_params={"account_id": account_id},
         ) as run_id:
             account = self.account_repo.deactivate(account_id)
 
-            self.set_result_summary(run_id, {
-                "account_id": str(account.id),
-                "display_name": account.display_name
-            })
+            self.set_result_summary(
+                run_id,
+                {"account_id": str(account.id), "display_name": account.display_name},
+            )
 
             logger.info(f"Deactivated Instagram account: {account.display_name}")
 
             return account
 
     def reactivate_account(
-        self,
-        account_id: str,
-        user: Optional[User] = None
+        self, account_id: str, user: Optional[User] = None
     ) -> InstagramAccount:
         """
         Reactivate a previously deactivated account.
@@ -416,14 +424,14 @@ class InstagramAccountService(BaseService):
             "reactivate_account",
             user_id=user.id if user else None,
             triggered_by="user",
-            input_params={"account_id": account_id}
+            input_params={"account_id": account_id},
         ) as run_id:
             account = self.account_repo.activate(account_id)
 
-            self.set_result_summary(run_id, {
-                "account_id": str(account.id),
-                "display_name": account.display_name
-            })
+            self.set_result_summary(
+                run_id,
+                {"account_id": str(account.id), "display_name": account.display_name},
+            )
 
             logger.info(f"Reactivated Instagram account: {account.display_name}")
 
@@ -447,19 +455,16 @@ class InstagramAccountService(BaseService):
                 {
                     "id": str(a.id),
                     "display_name": a.display_name,
-                    "username": a.instagram_username
+                    "username": a.instagram_username,
                 }
                 for a in accounts
             ],
             "active_account_id": str(active.id) if active else None,
             "active_account_name": active.display_name if active else "Not selected",
-            "active_account_username": active.instagram_username if active else None
+            "active_account_username": active.instagram_username if active else None,
         }
 
-    def get_token_for_active_account(
-        self,
-        telegram_chat_id: int
-    ) -> Optional[str]:
+    def get_token_for_active_account(self, telegram_chat_id: int) -> Optional[str]:
         """
         Get the access token for the currently active account.
 
@@ -476,12 +481,13 @@ class InstagramAccountService(BaseService):
             return None
 
         token = self.token_repo.get_token_for_account(
-            str(active.id),
-            token_type="access_token"
+            str(active.id), token_type="access_token"
         )
         return token.token_value if token else None
 
-    def auto_select_account_if_single(self, telegram_chat_id: int) -> Optional[InstagramAccount]:
+    def auto_select_account_if_single(
+        self, telegram_chat_id: int
+    ) -> Optional[InstagramAccount]:
         """
         Auto-select an account if exactly one exists and none is selected.
 
@@ -501,8 +507,7 @@ class InstagramAccountService(BaseService):
         if len(accounts) == 1:
             # Auto-select the only account
             self.settings_repo.update(
-                telegram_chat_id,
-                active_instagram_account_id=str(accounts[0].id)
+                telegram_chat_id, active_instagram_account_id=str(accounts[0].id)
             )
             logger.info(f"Auto-selected Instagram account: {accounts[0].display_name}")
             return accounts[0]

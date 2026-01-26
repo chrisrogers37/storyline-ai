@@ -1,4 +1,5 @@
 """Application settings and configuration management."""
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 
@@ -7,10 +8,7 @@ class Settings(BaseSettings):
     """Application configuration."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=False,
-        extra="ignore"
+        env_file=".env", env_file_encoding="utf-8", case_sensitive=False, extra="ignore"
     )
 
     # Phase Control
@@ -32,7 +30,7 @@ class Settings(BaseSettings):
     # Posting Schedule Configuration
     POSTS_PER_DAY: int = 3
     POSTING_HOURS_START: int = 14  # UTC
-    POSTING_HOURS_END: int = 2     # UTC (next day)
+    POSTING_HOURS_END: int = 2  # UTC (next day)
     REPOST_TTL_DAYS: int = 30
 
     # Media Configuration
@@ -75,7 +73,9 @@ class Settings(BaseSettings):
         """Get database URL for SQLAlchemy."""
         if self.DB_PASSWORD:
             return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
-        return f"postgresql://{self.DB_USER}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        return (
+            f"postgresql://{self.DB_USER}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        )
 
     @property
     def test_database_url(self) -> str:

@@ -1,4 +1,5 @@
 """Storyline AI exception classes."""
+
 from src.exceptions.base import StorylineError
 from src.exceptions.instagram import (
     InstagramAPIError,

@@ -1,4 +1,5 @@
 """Token encryption utility for secure database storage."""
+
 from typing import Optional
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -44,7 +45,7 @@ class TokenEncryption:
         if not key:
             raise ValueError(
                 "ENCRYPTION_KEY not configured. "
-                "Generate one with: python -c \"from src.utils.encryption import TokenEncryption; print(TokenEncryption.generate_key())\""
+                'Generate one with: python -c "from src.utils.encryption import TokenEncryption; print(TokenEncryption.generate_key())"'
             )
 
         try:

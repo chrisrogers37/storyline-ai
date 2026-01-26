@@ -1,4 +1,5 @@
 """Instagram and cloud storage related exceptions."""
+
 from typing import Optional
 
 from src.exceptions.base import StorylineError

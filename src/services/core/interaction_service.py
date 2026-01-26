@@ -1,4 +1,5 @@
 """Interaction service - tracks all user interactions with the bot."""
+
 from typing import Optional
 
 from src.repositories.interaction_repository import InteractionRepository

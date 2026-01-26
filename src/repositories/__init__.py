@@ -1,4 +1,5 @@
 """Repository layer - database access."""
+
 from src.repositories.base_repository import BaseRepository
 from src.repositories.user_repository import UserRepository
 from src.repositories.media_repository import MediaRepository

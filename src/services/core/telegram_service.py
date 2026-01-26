@@ -1,8 +1,13 @@
 """Telegram service - bot operations and callbacks."""
-from pathlib import Path
-from typing import Optional
+
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CallbackQueryHandler, CommandHandler, MessageHandler, filters
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    MessageHandler,
+    filters,
+)
 
 from src.services.base_service import BaseService
 from src.repositories.user_repository import UserRepository
@@ -23,12 +28,12 @@ import re
 def _escape_markdown(text: str) -> str:
     """Escape Telegram Markdown special characters in text."""
     # For Telegram's Markdown mode, escape: _ * ` [
-    return re.sub(r'([_*`\[])', r'\\\1', text)
+    return re.sub(r"([_*`\[])", r"\\\1", text)
 
 
 def _extract_button_labels(reply_markup) -> list:
     """Extract button labels from an InlineKeyboardMarkup for logging."""
-    if not reply_markup or not hasattr(reply_markup, 'inline_keyboard'):
+    if not reply_markup or not hasattr(reply_markup, "inline_keyboard"):
         return []
     labels = []
     for row in reply_markup.inline_keyboard:
@@ -89,14 +94,17 @@ class TelegramService(BaseService):
         self.application.add_handler(CommandHandler("settings", self._handle_settings))
         self.application.add_handler(CallbackQueryHandler(self._handle_callback))
         # Message handler for conversation flows (add account, etc.)
-        self.application.add_handler(MessageHandler(
-            filters.TEXT & ~filters.COMMAND,
-            self._handle_conversation_message
-        ))
+        self.application.add_handler(
+            MessageHandler(
+                filters.TEXT & ~filters.COMMAND, self._handle_conversation_message
+            )
+        )
 
         logger.info("Telegram bot initialized")
 
-    async def send_notification(self, queue_item_id: str, force_sent: bool = False) -> bool:
+    async def send_notification(
+        self, queue_item_id: str, force_sent: bool = False
+    ) -> bool:
         """
         Send posting notification to Telegram channel.
 
@@ -124,10 +132,16 @@ class TelegramService(BaseService):
 
         # Get verbose setting from chat settings
         chat_settings = self.settings_service.get_settings(self.channel_id)
-        verbose = chat_settings.show_verbose_notifications if chat_settings.show_verbose_notifications is not None else True
+        verbose = (
+            chat_settings.show_verbose_notifications
+            if chat_settings.show_verbose_notifications is not None
+            else True
+        )
 
         # Build caption (pass queue_item for enhanced mode)
-        caption = self._build_caption(media_item, queue_item, force_sent=force_sent, verbose=verbose)
+        caption = self._build_caption(
+            media_item, queue_item, force_sent=force_sent, verbose=verbose
+        )
 
         # Build inline keyboard
         # Layout: Auto Post (if enabled) → Manual workflow → Reject
@@ -135,37 +149,54 @@ class TelegramService(BaseService):
 
         # Add Auto Post button if Instagram API is enabled (from database settings)
         if chat_settings.enable_instagram_api:
-            keyboard.append([
-                InlineKeyboardButton(
-                    "🤖 Auto Post to Instagram",
-                    callback_data=f"autopost:{queue_item_id}"
-                ),
-            ])
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        "🤖 Auto Post to Instagram",
+                        callback_data=f"autopost:{queue_item_id}",
+                    ),
+                ]
+            )
 
         # Manual workflow buttons
-        keyboard.extend([
+        keyboard.extend(
             [
-                InlineKeyboardButton("✅ Posted", callback_data=f"posted:{queue_item_id}"),
-                InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{queue_item_id}"),
-            ],
-            [
-                InlineKeyboardButton("📱 Open Instagram", url="https://www.instagram.com/"),
-            ],
-            [
-                InlineKeyboardButton("🚫 Reject", callback_data=f"reject:{queue_item_id}"),
+                [
+                    InlineKeyboardButton(
+                        "✅ Posted", callback_data=f"posted:{queue_item_id}"
+                    ),
+                    InlineKeyboardButton(
+                        "⏭️ Skip", callback_data=f"skip:{queue_item_id}"
+                    ),
+                ],
+                [
+                    InlineKeyboardButton(
+                        "📱 Open Instagram", url="https://www.instagram.com/"
+                    ),
+                ],
+                [
+                    InlineKeyboardButton(
+                        "🚫 Reject", callback_data=f"reject:{queue_item_id}"
+                    ),
+                ],
             ]
-        ])
+        )
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         try:
             # Send photo with buttons
             with open(media_item.file_path, "rb") as photo:
                 message = await self.bot.send_photo(
-                    chat_id=self.channel_id, photo=photo, caption=caption, reply_markup=reply_markup
+                    chat_id=self.channel_id,
+                    photo=photo,
+                    caption=caption,
+                    reply_markup=reply_markup,
                 )
 
             # Save telegram message ID
-            self.queue_repo.set_telegram_message(queue_item_id, message.message_id, self.channel_id)
+            self.queue_repo.set_telegram_message(
+                queue_item_id, message.message_id, self.channel_id
+            )
 
             # Log outgoing bot response for visibility
             self.interaction_service.log_bot_response(
@@ -188,11 +219,19 @@ class TelegramService(BaseService):
             logger.error(f"Failed to send Telegram notification: {e}")
             return False
 
-    def _build_caption(self, media_item, queue_item=None, force_sent: bool = False, verbose: bool = True) -> str:
+    def _build_caption(
+        self,
+        media_item,
+        queue_item=None,
+        force_sent: bool = False,
+        verbose: bool = True,
+    ) -> str:
         """Build caption for Telegram message with enhanced or simple formatting."""
 
         if settings.CAPTION_STYLE == "enhanced":
-            return self._build_enhanced_caption(media_item, queue_item, force_sent=force_sent, verbose=verbose)
+            return self._build_enhanced_caption(
+                media_item, queue_item, force_sent=force_sent, verbose=verbose
+            )
         else:
             return self._build_simple_caption(media_item, force_sent=force_sent)
 
@@ -222,7 +261,13 @@ class TelegramService(BaseService):
 
         return "\n\n".join(caption_parts)
 
-    def _build_enhanced_caption(self, media_item, queue_item=None, force_sent: bool = False, verbose: bool = True) -> str:
+    def _build_enhanced_caption(
+        self,
+        media_item,
+        queue_item=None,
+        force_sent: bool = False,
+        verbose: bool = True,
+    ) -> str:
         """Build enhanced caption with better formatting."""
         lines = []
 
@@ -253,9 +298,9 @@ class TelegramService(BaseService):
             lines.append(f"\n{'━' * 20}")
 
             # Workflow instructions
-            lines.append(f"1️⃣ Click & hold image → Save")
-            lines.append(f"2️⃣ Tap \"Open Instagram\" below")
-            lines.append(f"3️⃣ Post your story!")
+            lines.append("1️⃣ Click & hold image → Save")
+            lines.append('2️⃣ Tap "Open Instagram" below')
+            lines.append("3️⃣ Post your story!")
 
         return "\n".join(lines)
 
@@ -267,15 +312,15 @@ class TelegramService(BaseService):
         tags_lower = [tag.lower() for tag in tags]
 
         # Map tags to emojis
-        if any(tag in tags_lower for tag in ['meme', 'funny', 'humor']):
+        if any(tag in tags_lower for tag in ["meme", "funny", "humor"]):
             return "😂"
-        elif any(tag in tags_lower for tag in ['product', 'shop', 'store', 'sale']):
+        elif any(tag in tags_lower for tag in ["product", "shop", "store", "sale"]):
             return "🛍️"
-        elif any(tag in tags_lower for tag in ['quote', 'inspiration', 'motivational']):
+        elif any(tag in tags_lower for tag in ["quote", "inspiration", "motivational"]):
             return "✨"
-        elif any(tag in tags_lower for tag in ['announcement', 'news', 'update']):
+        elif any(tag in tags_lower for tag in ["announcement", "news", "update"]):
             return "📢"
-        elif any(tag in tags_lower for tag in ['question', 'poll', 'interactive']):
+        elif any(tag in tags_lower for tag in ["question", "poll", "interactive"]):
             return "💬"
         else:
             return "📸"
@@ -291,7 +336,7 @@ class TelegramService(BaseService):
             "/next - Force send next post\n"
             "/status - Check system status\n"
             "/help - Show all commands",
-            parse_mode="Markdown"
+            parse_mode="Markdown",
         )
 
         # Log interaction
@@ -335,6 +380,7 @@ class TelegramService(BaseService):
         # Instagram API status
         if settings.ENABLE_INSTAGRAM_API:
             from src.services.integrations.instagram_api import InstagramAPIService
+
             with InstagramAPIService() as ig_service:
                 rate_remaining = ig_service.get_rate_limit_remaining()
             ig_status = f"✅ Enabled ({rate_remaining}/{settings.INSTAGRAM_POSTS_PER_HOUR} remaining)"
@@ -385,8 +431,7 @@ class TelegramService(BaseService):
 
         if not queue_items:
             await update.message.reply_text(
-                "📭 *Queue Empty*\n\nNo posts scheduled.",
-                parse_mode="Markdown"
+                "📭 *Queue Empty*\n\nNo posts scheduled.", parse_mode="Markdown"
             )
         else:
             lines = [f"📅 *Upcoming Queue* ({len(queue_items)} of {total_count})\n"]
@@ -395,7 +440,9 @@ class TelegramService(BaseService):
                 # Get media info
                 media_item = self.media_repo.get_by_id(str(item.media_item_id))
                 filename = media_item.file_name if media_item else "Unknown"
-                category = media_item.category if media_item and media_item.category else "-"
+                category = (
+                    media_item.category if media_item and media_item.category else "-"
+                )
 
                 # Escape markdown special characters in dynamic content
                 filename = _escape_markdown(filename)
@@ -434,6 +481,7 @@ class TelegramService(BaseService):
 
         # Use shared force_post_next() method (lazy import to avoid circular import)
         from src.services.core.posting import PostingService
+
         with PostingService() as posting_service:
             result = await posting_service.force_post_next(
                 user_id=str(user.id),
@@ -444,18 +492,16 @@ class TelegramService(BaseService):
         if not result["success"]:
             if result["error"] == "No pending items in queue":
                 await update.message.reply_text(
-                    "📭 *Queue Empty*\n\nNo posts to send.",
-                    parse_mode="Markdown"
+                    "📭 *Queue Empty*\n\nNo posts to send.", parse_mode="Markdown"
                 )
             elif result["error"] == "Media item not found":
                 await update.message.reply_text(
-                    "⚠️ *Error*\n\nMedia item not found.",
-                    parse_mode="Markdown"
+                    "⚠️ *Error*\n\nMedia item not found.", parse_mode="Markdown"
                 )
             else:
                 await update.message.reply_text(
-                    f"❌ *Failed to send*\n\nCheck logs for details.",
-                    parse_mode="Markdown"
+                    "❌ *Failed to send*\n\nCheck logs for details.",
+                    parse_mode="Markdown",
                 )
             return
 
@@ -635,55 +681,63 @@ class TelegramService(BaseService):
             [
                 InlineKeyboardButton(
                     "✅ Dry Run" if settings_data["dry_run_mode"] else "Dry Run",
-                    callback_data="settings_toggle:dry_run_mode"
+                    callback_data="settings_toggle:dry_run_mode",
                 ),
             ],
             # Row 2: Instagram API toggle
             [
                 InlineKeyboardButton(
-                    "✅ Instagram API" if settings_data["enable_instagram_api"] else "Instagram API",
-                    callback_data="settings_toggle:enable_instagram_api"
+                    "✅ Instagram API"
+                    if settings_data["enable_instagram_api"]
+                    else "Instagram API",
+                    callback_data="settings_toggle:enable_instagram_api",
                 ),
             ],
             # Row 3: Pause toggle
             [
                 InlineKeyboardButton(
                     "⏸️ Paused" if settings_data["is_paused"] else "▶️ Active",
-                    callback_data="settings_toggle:is_paused"
+                    callback_data="settings_toggle:is_paused",
                 ),
             ],
             # Row 4: Instagram Account config
             [
                 InlineKeyboardButton(
-                    f"📸 @{account_data['active_account_username']}" if account_data["active_account_username"] else "📸 Configure Accounts",
-                    callback_data="settings_accounts:select"
+                    f"📸 @{account_data['active_account_username']}"
+                    if account_data["active_account_username"]
+                    else "📸 Configure Accounts",
+                    callback_data="settings_accounts:select",
                 ),
             ],
             # Row 5: Posts per day (editable)
             [
                 InlineKeyboardButton(
                     f"📊 Posts/Day: {settings_data['posts_per_day']}",
-                    callback_data="settings_edit:posts_per_day"
+                    callback_data="settings_edit:posts_per_day",
                 ),
             ],
             # Row 6: Posting hours (editable)
             [
                 InlineKeyboardButton(
                     f"🕐 Hours: {settings_data['posting_hours_start']}:00-{settings_data['posting_hours_end']}:00 UTC",
-                    callback_data="settings_edit:hours"
+                    callback_data="settings_edit:hours",
                 ),
             ],
             # Row 7: Verbose notifications toggle
             [
                 InlineKeyboardButton(
                     f"📝 Verbose: {'ON' if settings_data['show_verbose_notifications'] else 'OFF'}",
-                    callback_data="settings_toggle:show_verbose_notifications"
+                    callback_data="settings_toggle:show_verbose_notifications",
                 ),
             ],
             # Row 8: Schedule management
             [
-                InlineKeyboardButton("🔄 Regenerate", callback_data="schedule_action:regenerate"),
-                InlineKeyboardButton("📅 +7 Days", callback_data="schedule_action:extend"),
+                InlineKeyboardButton(
+                    "🔄 Regenerate", callback_data="schedule_action:regenerate"
+                ),
+                InlineKeyboardButton(
+                    "📅 +7 Days", callback_data="schedule_action:extend"
+                ),
             ],
             # Row 9: Close button
             [
@@ -694,9 +748,7 @@ class TelegramService(BaseService):
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         await update.message.reply_text(
-            message,
-            parse_mode="Markdown",
-            reply_markup=reply_markup
+            message, parse_mode="Markdown", reply_markup=reply_markup
         )
 
     async def _handle_settings_toggle(self, setting_name: str, user, query):
@@ -704,7 +756,9 @@ class TelegramService(BaseService):
         chat_id = query.message.chat_id
 
         try:
-            new_value = self.settings_service.toggle_setting(chat_id, setting_name, user)
+            new_value = self.settings_service.toggle_setting(
+                chat_id, setting_name, user
+            )
 
             # Log the interaction
             self.interaction_service.log_callback(
@@ -736,37 +790,59 @@ class TelegramService(BaseService):
 
         # Rebuild keyboard with updated values
         keyboard = [
-            [InlineKeyboardButton(
-                "✅ Dry Run" if settings_data["dry_run_mode"] else "Dry Run",
-                callback_data="settings_toggle:dry_run_mode"
-            )],
-            [InlineKeyboardButton(
-                "✅ Instagram API" if settings_data["enable_instagram_api"] else "Instagram API",
-                callback_data="settings_toggle:enable_instagram_api"
-            )],
-            [InlineKeyboardButton(
-                "⏸️ Paused" if settings_data["is_paused"] else "▶️ Active",
-                callback_data="settings_toggle:is_paused"
-            )],
-            [InlineKeyboardButton(
-                f"📸 @{account_data['active_account_username']}" if account_data["active_account_username"] else "📸 Configure Accounts",
-                callback_data="settings_accounts:select"
-            )],
-            [InlineKeyboardButton(
-                f"📊 Posts/Day: {settings_data['posts_per_day']}",
-                callback_data="settings_edit:posts_per_day"
-            )],
-            [InlineKeyboardButton(
-                f"🕐 Hours: {settings_data['posting_hours_start']}:00-{settings_data['posting_hours_end']}:00 UTC",
-                callback_data="settings_edit:hours"
-            )],
-            [InlineKeyboardButton(
-                f"📝 Verbose: {'ON' if settings_data['show_verbose_notifications'] else 'OFF'}",
-                callback_data="settings_toggle:show_verbose_notifications"
-            )],
             [
-                InlineKeyboardButton("🔄 Regenerate", callback_data="schedule_action:regenerate"),
-                InlineKeyboardButton("📅 +7 Days", callback_data="schedule_action:extend"),
+                InlineKeyboardButton(
+                    "✅ Dry Run" if settings_data["dry_run_mode"] else "Dry Run",
+                    callback_data="settings_toggle:dry_run_mode",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "✅ Instagram API"
+                    if settings_data["enable_instagram_api"]
+                    else "Instagram API",
+                    callback_data="settings_toggle:enable_instagram_api",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "⏸️ Paused" if settings_data["is_paused"] else "▶️ Active",
+                    callback_data="settings_toggle:is_paused",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    f"📸 @{account_data['active_account_username']}"
+                    if account_data["active_account_username"]
+                    else "📸 Configure Accounts",
+                    callback_data="settings_accounts:select",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    f"📊 Posts/Day: {settings_data['posts_per_day']}",
+                    callback_data="settings_edit:posts_per_day",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    f"🕐 Hours: {settings_data['posting_hours_start']}:00-{settings_data['posting_hours_end']}:00 UTC",
+                    callback_data="settings_edit:hours",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    f"📝 Verbose: {'ON' if settings_data['show_verbose_notifications'] else 'OFF'}",
+                    callback_data="settings_toggle:show_verbose_notifications",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "🔄 Regenerate", callback_data="schedule_action:regenerate"
+                ),
+                InlineKeyboardButton(
+                    "📅 +7 Days", callback_data="schedule_action:extend"
+                ),
             ],
             [InlineKeyboardButton("❌ Close", callback_data="settings_close")],
         ]
@@ -774,7 +850,7 @@ class TelegramService(BaseService):
         await query.edit_message_text(
             text=message,
             parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard),
         )
         if show_answer:
             await query.answer("Setting updated!")
@@ -787,7 +863,9 @@ class TelegramService(BaseService):
             logger.warning(f"Could not delete settings message: {e}")
             await query.answer("Could not close menu")
 
-    async def _handle_settings_edit_start(self, setting_name: str, user, query, context):
+    async def _handle_settings_edit_start(
+        self, setting_name: str, user, query, context
+    ):
         """Start editing a numeric setting (posts_per_day or hours)."""
         chat_id = query.message.chat_id
         chat_settings = self.settings_service.get_settings(chat_id)
@@ -797,14 +875,20 @@ class TelegramService(BaseService):
             context.user_data["settings_edit_chat_id"] = chat_id
             context.user_data["settings_edit_message_id"] = query.message.message_id
 
-            keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="settings_edit_cancel")]]
+            keyboard = [
+                [
+                    InlineKeyboardButton(
+                        "❌ Cancel", callback_data="settings_edit_cancel"
+                    )
+                ]
+            ]
 
             await query.edit_message_text(
                 f"📊 *Edit Posts Per Day*\n\n"
                 f"Current value: *{chat_settings.posts_per_day}*\n\n"
                 f"Enter a number between 1 and 50:",
                 parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup(keyboard)
+                reply_markup=InlineKeyboardMarkup(keyboard),
             )
 
         elif setting_name == "hours":
@@ -812,14 +896,20 @@ class TelegramService(BaseService):
             context.user_data["settings_edit_chat_id"] = chat_id
             context.user_data["settings_edit_message_id"] = query.message.message_id
 
-            keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="settings_edit_cancel")]]
+            keyboard = [
+                [
+                    InlineKeyboardButton(
+                        "❌ Cancel", callback_data="settings_edit_cancel"
+                    )
+                ]
+            ]
 
             await query.edit_message_text(
                 f"🕐 *Edit Posting Hours*\n\n"
                 f"Current window: *{chat_settings.posting_hours_start}:00 - {chat_settings.posting_hours_end}:00 UTC*\n\n"
                 f"Enter the *start hour* (0-23 UTC):",
                 parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup(keyboard)
+                reply_markup=InlineKeyboardMarkup(keyboard),
             )
 
     async def _handle_settings_edit_message(self, update, context):
@@ -845,7 +935,9 @@ class TelegramService(BaseService):
                     raise ValueError("Out of range")
 
                 # Update the setting
-                self.settings_service.update_setting(chat_id, "posts_per_day", value, user)
+                self.settings_service.update_setting(
+                    chat_id, "posts_per_day", value, user
+                )
 
                 # Clear state and refresh settings
                 context.user_data.pop("settings_edit_state", None)
@@ -854,20 +946,28 @@ class TelegramService(BaseService):
                 # Rebuild settings message
                 await self._send_settings_message_by_chat_id(chat_id, context)
 
-                logger.info(f"User {self._get_display_name(user)} updated posts_per_day to {value}")
+                logger.info(
+                    f"User {self._get_display_name(user)} updated posts_per_day to {value}"
+                )
 
             except ValueError:
                 # Show error, keep waiting for valid input
-                keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="settings_edit_cancel")]]
+                keyboard = [
+                    [
+                        InlineKeyboardButton(
+                            "❌ Cancel", callback_data="settings_edit_cancel"
+                        )
+                    ]
+                ]
                 await context.bot.edit_message_text(
                     chat_id=chat_id,
                     message_id=context.user_data.get("settings_edit_message_id"),
                     text=(
-                        f"📊 *Edit Posts Per Day*\n\n"
-                        f"❌ Invalid input. Please enter a number between 1 and 50:"
+                        "📊 *Edit Posts Per Day*\n\n"
+                        "❌ Invalid input. Please enter a number between 1 and 50:"
                     ),
                     parse_mode="Markdown",
-                    reply_markup=InlineKeyboardMarkup(keyboard)
+                    reply_markup=InlineKeyboardMarkup(keyboard),
                 )
 
             return True
@@ -882,7 +982,13 @@ class TelegramService(BaseService):
                 context.user_data["settings_edit_hours_start"] = value
                 context.user_data["settings_edit_state"] = "awaiting_hours_end"
 
-                keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="settings_edit_cancel")]]
+                keyboard = [
+                    [
+                        InlineKeyboardButton(
+                            "❌ Cancel", callback_data="settings_edit_cancel"
+                        )
+                    ]
+                ]
                 await context.bot.edit_message_text(
                     chat_id=chat_id,
                     message_id=context.user_data.get("settings_edit_message_id"),
@@ -892,20 +998,26 @@ class TelegramService(BaseService):
                         f"Enter the *end hour* (0-23 UTC):"
                     ),
                     parse_mode="Markdown",
-                    reply_markup=InlineKeyboardMarkup(keyboard)
+                    reply_markup=InlineKeyboardMarkup(keyboard),
                 )
 
             except ValueError:
-                keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="settings_edit_cancel")]]
+                keyboard = [
+                    [
+                        InlineKeyboardButton(
+                            "❌ Cancel", callback_data="settings_edit_cancel"
+                        )
+                    ]
+                ]
                 await context.bot.edit_message_text(
                     chat_id=chat_id,
                     message_id=context.user_data.get("settings_edit_message_id"),
                     text=(
-                        f"🕐 *Edit Posting Hours*\n\n"
-                        f"❌ Invalid input. Please enter a number between 0 and 23:"
+                        "🕐 *Edit Posting Hours*\n\n"
+                        "❌ Invalid input. Please enter a number between 0 and 23:"
                     ),
                     parse_mode="Markdown",
-                    reply_markup=InlineKeyboardMarkup(keyboard)
+                    reply_markup=InlineKeyboardMarkup(keyboard),
                 )
 
             return True
@@ -919,8 +1031,12 @@ class TelegramService(BaseService):
                 start_hour = context.user_data.get("settings_edit_hours_start")
 
                 # Update both settings
-                self.settings_service.update_setting(chat_id, "posting_hours_start", start_hour, user)
-                self.settings_service.update_setting(chat_id, "posting_hours_end", value, user)
+                self.settings_service.update_setting(
+                    chat_id, "posting_hours_start", start_hour, user
+                )
+                self.settings_service.update_setting(
+                    chat_id, "posting_hours_end", value, user
+                )
 
                 # Clear state
                 context.user_data.pop("settings_edit_state", None)
@@ -931,10 +1047,18 @@ class TelegramService(BaseService):
                 # Rebuild settings message
                 await self._send_settings_message_by_chat_id(chat_id, context)
 
-                logger.info(f"User {self._get_display_name(user)} updated posting hours to {start_hour}:00-{value}:00 UTC")
+                logger.info(
+                    f"User {self._get_display_name(user)} updated posting hours to {start_hour}:00-{value}:00 UTC"
+                )
 
             except ValueError:
-                keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="settings_edit_cancel")]]
+                keyboard = [
+                    [
+                        InlineKeyboardButton(
+                            "❌ Cancel", callback_data="settings_edit_cancel"
+                        )
+                    ]
+                ]
                 await context.bot.edit_message_text(
                     chat_id=chat_id,
                     message_id=context.user_data.get("settings_edit_message_id"),
@@ -944,7 +1068,7 @@ class TelegramService(BaseService):
                         f"❌ Invalid input. Please enter a number between 0 and 23:"
                     ),
                     parse_mode="Markdown",
-                    reply_markup=InlineKeyboardMarkup(keyboard)
+                    reply_markup=InlineKeyboardMarkup(keyboard),
                 )
 
             return True
@@ -953,8 +1077,6 @@ class TelegramService(BaseService):
 
     async def _handle_settings_edit_cancel(self, query, context):
         """Cancel settings edit and return to settings menu."""
-        chat_id = query.message.chat_id
-
         # Clear edit state
         context.user_data.pop("settings_edit_state", None)
         context.user_data.pop("settings_edit_chat_id", None)
@@ -977,37 +1099,59 @@ class TelegramService(BaseService):
         )
 
         keyboard = [
-            [InlineKeyboardButton(
-                "✅ Dry Run" if settings_data["dry_run_mode"] else "Dry Run",
-                callback_data="settings_toggle:dry_run_mode"
-            )],
-            [InlineKeyboardButton(
-                "✅ Instagram API" if settings_data["enable_instagram_api"] else "Instagram API",
-                callback_data="settings_toggle:enable_instagram_api"
-            )],
-            [InlineKeyboardButton(
-                "⏸️ Paused" if settings_data["is_paused"] else "▶️ Active",
-                callback_data="settings_toggle:is_paused"
-            )],
-            [InlineKeyboardButton(
-                f"📸 @{account_data['active_account_username']}" if account_data["active_account_username"] else "📸 Configure Accounts",
-                callback_data="settings_accounts:select"
-            )],
-            [InlineKeyboardButton(
-                f"📊 Posts/Day: {settings_data['posts_per_day']}",
-                callback_data="settings_edit:posts_per_day"
-            )],
-            [InlineKeyboardButton(
-                f"🕐 Hours: {settings_data['posting_hours_start']}:00-{settings_data['posting_hours_end']}:00 UTC",
-                callback_data="settings_edit:hours"
-            )],
-            [InlineKeyboardButton(
-                f"📝 Verbose: {'ON' if settings_data['show_verbose_notifications'] else 'OFF'}",
-                callback_data="settings_toggle:show_verbose_notifications"
-            )],
             [
-                InlineKeyboardButton("🔄 Regenerate", callback_data="schedule_action:regenerate"),
-                InlineKeyboardButton("📅 +7 Days", callback_data="schedule_action:extend"),
+                InlineKeyboardButton(
+                    "✅ Dry Run" if settings_data["dry_run_mode"] else "Dry Run",
+                    callback_data="settings_toggle:dry_run_mode",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "✅ Instagram API"
+                    if settings_data["enable_instagram_api"]
+                    else "Instagram API",
+                    callback_data="settings_toggle:enable_instagram_api",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "⏸️ Paused" if settings_data["is_paused"] else "▶️ Active",
+                    callback_data="settings_toggle:is_paused",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    f"📸 @{account_data['active_account_username']}"
+                    if account_data["active_account_username"]
+                    else "📸 Configure Accounts",
+                    callback_data="settings_accounts:select",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    f"📊 Posts/Day: {settings_data['posts_per_day']}",
+                    callback_data="settings_edit:posts_per_day",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    f"🕐 Hours: {settings_data['posting_hours_start']}:00-{settings_data['posting_hours_end']}:00 UTC",
+                    callback_data="settings_edit:hours",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    f"📝 Verbose: {'ON' if settings_data['show_verbose_notifications'] else 'OFF'}",
+                    callback_data="settings_toggle:show_verbose_notifications",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "🔄 Regenerate", callback_data="schedule_action:regenerate"
+                ),
+                InlineKeyboardButton(
+                    "📅 +7 Days", callback_data="schedule_action:extend"
+                ),
             ],
             [InlineKeyboardButton("❌ Close", callback_data="settings_close")],
         ]
@@ -1016,7 +1160,7 @@ class TelegramService(BaseService):
             chat_id=chat_id,
             text=message,
             parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard),
         )
 
     async def _handle_schedule_action(self, action: str, user, query):
@@ -1030,8 +1174,13 @@ class TelegramService(BaseService):
             # Confirm before regenerating (destructive action)
             keyboard = [
                 [
-                    InlineKeyboardButton("✅ Yes, Regenerate", callback_data="schedule_confirm:regenerate"),
-                    InlineKeyboardButton("❌ Cancel", callback_data="schedule_confirm:cancel"),
+                    InlineKeyboardButton(
+                        "✅ Yes, Regenerate",
+                        callback_data="schedule_confirm:regenerate",
+                    ),
+                    InlineKeyboardButton(
+                        "❌ Cancel", callback_data="schedule_confirm:cancel"
+                    ),
                 ]
             ]
 
@@ -1044,7 +1193,7 @@ class TelegramService(BaseService):
                 f"• Create a new 7-day schedule\n\n"
                 f"This cannot be undone.",
                 parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup(keyboard)
+                reply_markup=InlineKeyboardMarkup(keyboard),
             )
             await query.answer()
 
@@ -1071,7 +1220,9 @@ class TelegramService(BaseService):
 
                     # Show result and return to settings
                     await query.answer(f"Added {result['scheduled']} posts!")
-                    logger.info(f"Schedule extended by {self._get_display_name(user)}: +{result['scheduled']} posts")
+                    logger.info(
+                        f"Schedule extended by {self._get_display_name(user)}: +{result['scheduled']} posts"
+                    )
 
                     # Refresh settings menu
                     await self._refresh_settings_message(query, show_answer=False)
@@ -1126,7 +1277,9 @@ class TelegramService(BaseService):
                     )
 
                     # Show result and return to settings
-                    await query.answer(f"Cleared {cleared}, added {result['scheduled']} posts!")
+                    await query.answer(
+                        f"Cleared {cleared}, added {result['scheduled']} posts!"
+                    )
                     await self._refresh_settings_message(query, show_answer=False)
 
                 except Exception as e:
@@ -1148,41 +1301,55 @@ class TelegramService(BaseService):
                 label = f"{'✅ ' if is_active else '   '}{account['display_name']}"
                 if account["username"]:
                     label += f" (@{account['username']})"
-                keyboard.append([
-                    InlineKeyboardButton(
-                        label,
-                        callback_data=f"switch_account:{account['id']}"
-                    )
-                ])
-        else:
-            keyboard.append([
-                InlineKeyboardButton(
-                    "No accounts configured",
-                    callback_data="accounts_config:noop"
+                keyboard.append(
+                    [
+                        InlineKeyboardButton(
+                            label, callback_data=f"switch_account:{account['id']}"
+                        )
+                    ]
                 )
-            ])
+        else:
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        "No accounts configured", callback_data="accounts_config:noop"
+                    )
+                ]
+            )
 
         # Action buttons row
-        keyboard.append([
-            InlineKeyboardButton("➕ Add Account", callback_data="accounts_config:add"),
-        ])
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    "➕ Add Account", callback_data="accounts_config:add"
+                ),
+            ]
+        )
 
         # Only show remove option if there are accounts
         if account_data["accounts"]:
-            keyboard.append([
-                InlineKeyboardButton("🗑️ Remove Account", callback_data="accounts_config:remove"),
-            ])
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        "🗑️ Remove Account", callback_data="accounts_config:remove"
+                    ),
+                ]
+            )
 
         # Back button
-        keyboard.append([
-            InlineKeyboardButton("↩️ Back to Settings", callback_data="settings_accounts:back")
-        ])
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    "↩️ Back to Settings", callback_data="settings_accounts:back"
+                )
+            ]
+        )
 
         await query.edit_message_text(
             "📸 *Configure Instagram Accounts*\n\n"
             "Select an account to make it active, or add/remove accounts.",
             parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard),
         )
         await query.answer()
 
@@ -1200,7 +1367,7 @@ class TelegramService(BaseService):
                 context={
                     "account_id": account_id,
                     "display_name": account.display_name,
-                    "username": account.instagram_username
+                    "username": account.instagram_username,
                 },
                 telegram_chat_id=chat_id,
                 telegram_message_id=query.message.message_id,
@@ -1226,7 +1393,11 @@ class TelegramService(BaseService):
         context.user_data["add_account_messages"] = [query.message.message_id]
 
         keyboard = [
-            [InlineKeyboardButton("❌ Cancel", callback_data="account_add_cancel:cancel")]
+            [
+                InlineKeyboardButton(
+                    "❌ Cancel", callback_data="account_add_cancel:cancel"
+                )
+            ]
         ]
 
         await query.edit_message_text(
@@ -1236,7 +1407,7 @@ class TelegramService(BaseService):
             "(e.g., 'Main Account', 'Brand Account')\n\n"
             "_Reply with the name_",
             parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard),
         )
         await query.answer()
 
@@ -1261,7 +1432,11 @@ class TelegramService(BaseService):
             context.user_data["add_account_state"] = "awaiting_account_id"
 
             keyboard = [
-                [InlineKeyboardButton("❌ Cancel", callback_data="account_add_cancel:cancel")]
+                [
+                    InlineKeyboardButton(
+                        "❌ Cancel", callback_data="account_add_cancel:cancel"
+                    )
+                ]
             ]
 
             reply = await update.message.reply_text(
@@ -1272,7 +1447,7 @@ class TelegramService(BaseService):
                 "_Found in: Settings → Business Assets → Instagram Accounts_\n\n"
                 "Reply with the ID",
                 parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup(keyboard)
+                reply_markup=InlineKeyboardMarkup(keyboard),
             )
             # Track bot's reply for cleanup
             context.user_data["add_account_messages"].append(reply.message_id)
@@ -1286,7 +1461,7 @@ class TelegramService(BaseService):
             if not message_text.isdigit():
                 reply = await update.message.reply_text(
                     "⚠️ Account ID must be numeric. Please try again:",
-                    parse_mode="Markdown"
+                    parse_mode="Markdown",
                 )
                 context.user_data["add_account_messages"].append(reply.message_id)
                 return True
@@ -1295,7 +1470,11 @@ class TelegramService(BaseService):
             context.user_data["add_account_state"] = "awaiting_token"
 
             keyboard = [
-                [InlineKeyboardButton("❌ Cancel", callback_data="account_add_cancel:cancel")]
+                [
+                    InlineKeyboardButton(
+                        "❌ Cancel", callback_data="account_add_cancel:cancel"
+                    )
+                ]
             ]
 
             reply = await update.message.reply_text(
@@ -1307,7 +1486,7 @@ class TelegramService(BaseService):
                 "(Bots cannot delete user messages in private chats)\n\n"
                 "Paste your Instagram Graph API access token:",
                 parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup(keyboard)
+                reply_markup=InlineKeyboardMarkup(keyboard),
             )
             context.user_data["add_account_messages"].append(reply.message_id)
             return True
@@ -1331,23 +1510,22 @@ class TelegramService(BaseService):
                 verifying_msg = await context.bot.send_message(
                     chat_id=chat_id,
                     text="⏳ Verifying credentials with Instagram API...",
-                    parse_mode="Markdown"
+                    parse_mode="Markdown",
                 )
 
                 # Fetch username from Instagram API
                 async with httpx.AsyncClient() as client:
                     response = await client.get(
                         f"https://graph.facebook.com/v18.0/{data['account_id']}",
-                        params={
-                            "fields": "username",
-                            "access_token": access_token
-                        },
-                        timeout=30.0
+                        params={"fields": "username", "access_token": access_token},
+                        timeout=30.0,
                     )
 
                     if response.status_code != 200:
                         error_data = response.json()
-                        error_msg = error_data.get("error", {}).get("message", "Unknown error")
+                        error_msg = error_data.get("error", {}).get(
+                            "message", "Unknown error"
+                        )
                         raise ValueError(f"Instagram API error: {error_msg}")
 
                     api_data = response.json()
@@ -1369,7 +1547,7 @@ class TelegramService(BaseService):
                         instagram_username=username,
                         user=user,
                         set_as_active=True,
-                        telegram_chat_id=chat_id
+                        telegram_chat_id=chat_id,
                     )
                     was_update = True
                 else:
@@ -1381,7 +1559,7 @@ class TelegramService(BaseService):
                         access_token=access_token,
                         user=user,
                         set_as_active=True,
-                        telegram_chat_id=chat_id
+                        telegram_chat_id=chat_id,
                     )
                     was_update = False
 
@@ -1395,7 +1573,9 @@ class TelegramService(BaseService):
                 messages_to_delete = context.user_data.get("add_account_messages", [])
                 for msg_id in messages_to_delete:
                     try:
-                        await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
+                        await context.bot.delete_message(
+                            chat_id=chat_id, message_id=msg_id
+                        )
                     except Exception:
                         pass  # Message may already be deleted
 
@@ -1408,12 +1588,14 @@ class TelegramService(BaseService):
                 # Log interaction
                 self.interaction_service.log_callback(
                     user_id=str(user.id),
-                    callback_name="update_account_token" if was_update else "add_account",
+                    callback_name="update_account_token"
+                    if was_update
+                    else "add_account",
                     context={
                         "account_id": str(account.id),
                         "display_name": account.display_name,
                         "username": account.instagram_username,
-                        "was_update": was_update
+                        "was_update": was_update,
                     },
                     telegram_chat_id=chat_id,
                     telegram_message_id=update.message.message_id,
@@ -1434,23 +1616,37 @@ class TelegramService(BaseService):
                     label = f"{'✅ ' if is_active else '   '}{acc['display_name']}"
                     if acc["username"]:
                         label += f" (@{acc['username']})"
-                    keyboard.append([
-                        InlineKeyboardButton(
-                            label,
-                            callback_data=f"switch_account:{acc['id']}"
-                        )
-                    ])
+                    keyboard.append(
+                        [
+                            InlineKeyboardButton(
+                                label, callback_data=f"switch_account:{acc['id']}"
+                            )
+                        ]
+                    )
 
-                keyboard.append([
-                    InlineKeyboardButton("➕ Add Account", callback_data="accounts_config:add"),
-                ])
+                keyboard.append(
+                    [
+                        InlineKeyboardButton(
+                            "➕ Add Account", callback_data="accounts_config:add"
+                        ),
+                    ]
+                )
                 if account_data["accounts"]:
-                    keyboard.append([
-                        InlineKeyboardButton("🗑️ Remove Account", callback_data="accounts_config:remove"),
-                    ])
-                keyboard.append([
-                    InlineKeyboardButton("↩️ Back to Settings", callback_data="settings_accounts:back")
-                ])
+                    keyboard.append(
+                        [
+                            InlineKeyboardButton(
+                                "🗑️ Remove Account",
+                                callback_data="accounts_config:remove",
+                            ),
+                        ]
+                    )
+                keyboard.append(
+                    [
+                        InlineKeyboardButton(
+                            "↩️ Back to Settings", callback_data="settings_accounts:back"
+                        )
+                    ]
+                )
 
                 # Build success message with security warning
                 if was_update:
@@ -1469,7 +1665,7 @@ class TelegramService(BaseService):
                         "Select an account to make it active, or add/remove accounts."
                     ),
                     parse_mode="Markdown",
-                    reply_markup=InlineKeyboardMarkup(keyboard)
+                    reply_markup=InlineKeyboardMarkup(keyboard),
                 )
 
             except Exception as e:
@@ -1483,7 +1679,9 @@ class TelegramService(BaseService):
                 messages_to_delete = context.user_data.get("add_account_messages", [])
                 for msg_id in messages_to_delete:
                     try:
-                        await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
+                        await context.bot.delete_message(
+                            chat_id=chat_id, message_id=msg_id
+                        )
                     except Exception:
                         pass
 
@@ -1494,8 +1692,16 @@ class TelegramService(BaseService):
                 context.user_data.pop("add_account_messages", None)
 
                 keyboard = [
-                    [InlineKeyboardButton("🔄 Try Again", callback_data="accounts_config:add")],
-                    [InlineKeyboardButton("↩️ Back to Settings", callback_data="settings_accounts:back")]
+                    [
+                        InlineKeyboardButton(
+                            "🔄 Try Again", callback_data="accounts_config:add"
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            "↩️ Back to Settings", callback_data="settings_accounts:back"
+                        )
+                    ],
                 ]
 
                 error_msg = str(e)
@@ -1510,7 +1716,7 @@ class TelegramService(BaseService):
                         "that contain sensitive data (Account ID, Access Token)."
                     ),
                     parse_mode="Markdown",
-                    reply_markup=InlineKeyboardMarkup(keyboard)
+                    reply_markup=InlineKeyboardMarkup(keyboard),
                 )
 
                 logger.error(f"Failed to add Instagram account: {e}")
@@ -1555,23 +1761,24 @@ class TelegramService(BaseService):
                 label += f" (@{account['username']})"
             if is_active:
                 label += " ⚠️ ACTIVE"
-            keyboard.append([
-                InlineKeyboardButton(
-                    label,
-                    callback_data=f"account_remove:{account['id']}"
-                )
-            ])
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        label, callback_data=f"account_remove:{account['id']}"
+                    )
+                ]
+            )
 
-        keyboard.append([
-            InlineKeyboardButton("↩️ Back", callback_data="settings_accounts:select")
-        ])
+        keyboard.append(
+            [InlineKeyboardButton("↩️ Back", callback_data="settings_accounts:select")]
+        )
 
         await query.edit_message_text(
             "🗑️ *Remove Instagram Account*\n\n"
             "Select an account to remove:\n\n"
             "_Note: Removing an account deactivates it. Tokens and history are preserved._",
             parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard),
         )
         await query.answer()
 
@@ -1585,8 +1792,13 @@ class TelegramService(BaseService):
 
         keyboard = [
             [
-                InlineKeyboardButton("✅ Yes, Remove", callback_data=f"account_remove_confirmed:{account_id}"),
-                InlineKeyboardButton("❌ Cancel", callback_data="settings_accounts:select"),
+                InlineKeyboardButton(
+                    "✅ Yes, Remove",
+                    callback_data=f"account_remove_confirmed:{account_id}",
+                ),
+                InlineKeyboardButton(
+                    "❌ Cancel", callback_data="settings_accounts:select"
+                ),
             ]
         ]
 
@@ -1597,7 +1809,7 @@ class TelegramService(BaseService):
             f"Username: @{account.instagram_username}\n\n"
             f"_The account can be reactivated later via CLI._",
             parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard),
         )
         await query.answer()
 
@@ -1615,7 +1827,7 @@ class TelegramService(BaseService):
                 context={
                     "account_id": account_id,
                     "display_name": account.display_name,
-                    "username": account.instagram_username
+                    "username": account.instagram_username,
                 },
                 telegram_chat_id=chat_id,
                 telegram_message_id=query.message.message_id,
@@ -1641,7 +1853,7 @@ class TelegramService(BaseService):
         if self.is_paused:
             await update.message.reply_text(
                 "⏸️ *Already Paused*\n\nAutomatic posting is already paused.\nUse /resume to restart.",
-                parse_mode="Markdown"
+                parse_mode="Markdown",
             )
         else:
             self.set_paused(True, user)
@@ -1652,7 +1864,7 @@ class TelegramService(BaseService):
                 f"📊 {pending_count} posts still in queue.\n\n"
                 f"Use /resume to restart posting.\n"
                 f"Use /next to manually send posts.",
-                parse_mode="Markdown"
+                parse_mode="Markdown",
             )
             logger.info(f"Posting paused by {self._get_display_name(user)}")
 
@@ -1671,7 +1883,7 @@ class TelegramService(BaseService):
         if not self.is_paused:
             await update.message.reply_text(
                 "▶️ *Already Running*\n\nAutomatic posting is already active.",
-                parse_mode="Markdown"
+                parse_mode="Markdown",
             )
         else:
             # Check for overdue posts
@@ -1684,12 +1896,18 @@ class TelegramService(BaseService):
                 # Show options for handling overdue posts
                 keyboard = [
                     [
-                        InlineKeyboardButton("🔄 Reschedule", callback_data="resume:reschedule"),
-                        InlineKeyboardButton("🗑️ Clear Overdue", callback_data="resume:clear"),
+                        InlineKeyboardButton(
+                            "🔄 Reschedule", callback_data="resume:reschedule"
+                        ),
+                        InlineKeyboardButton(
+                            "🗑️ Clear Overdue", callback_data="resume:clear"
+                        ),
                     ],
                     [
-                        InlineKeyboardButton("▶️ Resume Anyway", callback_data="resume:force"),
-                    ]
+                        InlineKeyboardButton(
+                            "▶️ Resume Anyway", callback_data="resume:force"
+                        ),
+                    ],
                 ]
                 await update.message.reply_text(
                     f"⚠️ *{len(overdue)} Overdue Posts Found*\n\n"
@@ -1698,7 +1916,7 @@ class TelegramService(BaseService):
                     f"• {len(future)} still scheduled\n\n"
                     f"What would you like to do?",
                     parse_mode="Markdown",
-                    reply_markup=InlineKeyboardMarkup(keyboard)
+                    reply_markup=InlineKeyboardMarkup(keyboard),
                 )
             else:
                 self.set_paused(False, user)
@@ -1706,7 +1924,7 @@ class TelegramService(BaseService):
                     f"▶️ *Posting Resumed*\n\n"
                     f"Automatic posting is now active.\n"
                     f"📊 {len(future)} posts scheduled.",
-                    parse_mode="Markdown"
+                    parse_mode="Markdown",
                 )
                 logger.info(f"Posting resumed by {self._get_display_name(user)}")
 
@@ -1731,12 +1949,13 @@ class TelegramService(BaseService):
                 "⚠️ *Usage:* /schedule N\n\n"
                 "Where N is number of days (1-30).\n"
                 "Example: /schedule 7",
-                parse_mode="Markdown"
+                parse_mode="Markdown",
             )
             return
 
         # Import scheduler service here to avoid circular imports
         from src.services.core.scheduler import SchedulerService
+
         with SchedulerService() as scheduler:
             try:
                 result = scheduler.create_schedule(days=days)
@@ -1745,13 +1964,14 @@ class TelegramService(BaseService):
                     f"✅ Scheduled: {result['scheduled']} posts\n"
                     f"⏭️ Skipped: {result['skipped']} (locked/queued)\n"
                     f"📊 Total slots: {result['total_slots']}",
-                    parse_mode="Markdown"
+                    parse_mode="Markdown",
                 )
-                logger.info(f"Schedule created by {self._get_display_name(user)}: {days} days, {result['scheduled']} posts")
+                logger.info(
+                    f"Schedule created by {self._get_display_name(user)}: {days} days, {result['scheduled']} posts"
+                )
             except Exception as e:
                 await update.message.reply_text(
-                    f"❌ *Error*\n\n{str(e)}",
-                    parse_mode="Markdown"
+                    f"❌ *Error*\n\n{str(e)}", parse_mode="Markdown"
                 )
                 logger.error(f"Schedule creation failed: {e}")
 
@@ -1820,15 +2040,25 @@ class TelegramService(BaseService):
         if not recent:
             await update.message.reply_text(
                 "📜 *No Recent History*\n\nNo posts in the last 7 days.",
-                parse_mode="Markdown"
+                parse_mode="Markdown",
             )
             return
 
         lines = [f"📜 *Recent Posts* (last {len(recent)})\n"]
         for post in recent:
-            status_emoji = "✅" if post.status == "posted" else "⏭️" if post.status == "skipped" else "🚫"
+            status_emoji = (
+                "✅"
+                if post.status == "posted"
+                else "⏭️"
+                if post.status == "skipped"
+                else "🚫"
+            )
             time_str = post.posted_at.strftime("%b %d %H:%M") if post.posted_at else "?"
-            username = f"@{post.posted_by_telegram_username}" if post.posted_by_telegram_username else "system"
+            username = (
+                f"@{post.posted_by_telegram_username}"
+                if post.posted_by_telegram_username
+                else "system"
+            )
             lines.append(f"{status_emoji} {time_str} - {username}")
 
         await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
@@ -1850,7 +2080,7 @@ class TelegramService(BaseService):
         if not permanent:
             await update.message.reply_text(
                 "🔓 *No Permanent Locks*\n\nNo items have been permanently rejected.",
-                parse_mode="Markdown"
+                parse_mode="Markdown",
             )
             return
 
@@ -1881,14 +2111,15 @@ class TelegramService(BaseService):
 
         if pending_count == 0:
             await update.message.reply_text(
-                "📭 *Queue Already Empty*",
-                parse_mode="Markdown"
+                "📭 *Queue Already Empty*", parse_mode="Markdown"
             )
             return
 
         keyboard = [
             [
-                InlineKeyboardButton("✅ Yes, Clear All", callback_data="clear:confirm"),
+                InlineKeyboardButton(
+                    "✅ Yes, Clear All", callback_data="clear:confirm"
+                ),
                 InlineKeyboardButton("❌ Cancel", callback_data="clear:cancel"),
             ]
         ]
@@ -1899,7 +2130,7 @@ class TelegramService(BaseService):
             f"Media items will remain in the library.\n\n"
             f"This cannot be undone.",
             parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard),
         )
 
         self.interaction_service.log_command(
@@ -2145,13 +2376,30 @@ class TelegramService(BaseService):
         instagram_service = InstagramAPIService()
         cloud_service = CloudStorageService()
         try:
-            await self._do_autopost(queue_id, queue_item, media_item, user, query, instagram_service, cloud_service)
+            await self._do_autopost(
+                queue_id,
+                queue_item,
+                media_item,
+                user,
+                query,
+                instagram_service,
+                cloud_service,
+            )
         finally:
             # Ensure services are cleaned up to prevent connection pool exhaustion
             instagram_service.close()
             cloud_service.close()
 
-    async def _do_autopost(self, queue_id, queue_item, media_item, user, query, instagram_service, cloud_service):
+    async def _do_autopost(
+        self,
+        queue_id,
+        queue_item,
+        media_item,
+        user,
+        query,
+        instagram_service,
+        cloud_service,
+    ):
         """Internal method to perform auto-post with pre-created services."""
         chat_id = query.message.chat_id
 
@@ -2159,7 +2407,9 @@ class TelegramService(BaseService):
         chat_settings = self.settings_service.get_settings(chat_id)
 
         # Run comprehensive safety check
-        safety_result = instagram_service.safety_check_before_post(telegram_chat_id=chat_id)
+        safety_result = instagram_service.safety_check_before_post(
+            telegram_chat_id=chat_id
+        )
 
         if not safety_result["safe_to_post"]:
             error_list = "\n".join([f"• {e}" for e in safety_result["errors"]])
@@ -2178,8 +2428,7 @@ class TelegramService(BaseService):
         try:
             # Update message to show progress
             await query.edit_message_caption(
-                caption=f"⏳ *Uploading to Cloudinary...*",
-                parse_mode="Markdown"
+                caption="⏳ *Uploading to Cloudinary...*", parse_mode="Markdown"
             )
 
             # Step 1: Upload to Cloudinary (uses passed-in cloud_service)
@@ -2192,7 +2441,7 @@ class TelegramService(BaseService):
             cloud_public_id = upload_result.get("public_id")
 
             if not cloud_url:
-                raise Exception(f"Cloudinary upload failed: No URL returned")
+                raise Exception("Cloudinary upload failed: No URL returned")
 
             logger.info(f"Uploaded to Cloudinary: {cloud_public_id}")
 
@@ -2213,14 +2462,12 @@ class TelegramService(BaseService):
                 keyboard = [
                     [
                         InlineKeyboardButton(
-                            "🔄 Test Again",
-                            callback_data=f"autopost:{queue_id}"
+                            "🔄 Test Again", callback_data=f"autopost:{queue_id}"
                         ),
                     ],
                     [
                         InlineKeyboardButton(
-                            "↩️ Back to Queue Item",
-                            callback_data=f"back:{queue_id}"
+                            "↩️ Back to Queue Item", callback_data=f"back:{queue_id}"
                         ),
                     ],
                 ]
@@ -2229,14 +2476,20 @@ class TelegramService(BaseService):
                 escaped_filename = _escape_markdown(media_item.file_name)
 
                 # Fetch account username from API (cached)
-                account_info = await instagram_service.get_account_info(telegram_chat_id=chat_id)
+                account_info = await instagram_service.get_account_info(
+                    telegram_chat_id=chat_id
+                )
                 if account_info.get("username"):
                     account_display = f"@{account_info['username']}"
                 else:
                     account_display = "Unknown account"
 
                 # Apply the same transformation we'd use for Instagram
-                media_type = "VIDEO" if media_item.file_path.lower().endswith(('.mp4', '.mov')) else "IMAGE"
+                media_type = (
+                    "VIDEO"
+                    if media_item.file_path.lower().endswith((".mp4", ".mov"))
+                    else "IMAGE"
+                )
                 if media_type == "IMAGE":
                     preview_url = cloud_service.get_story_optimized_url(cloud_url)
                 else:
@@ -2277,7 +2530,9 @@ class TelegramService(BaseService):
                     telegram_message_id=query.message.message_id,
                 )
 
-                logger.info(f"[DRY RUN] Cloudinary upload complete, stopped before Instagram API. User: {self._get_display_name(user)}, File: {media_item.file_name}")
+                logger.info(
+                    f"[DRY RUN] Cloudinary upload complete, stopped before Instagram API. User: {self._get_display_name(user)}, File: {media_item.file_name}"
+                )
                 return
 
             # ============================================
@@ -2285,12 +2540,15 @@ class TelegramService(BaseService):
             # ============================================
             # Step 2: Post to Instagram
             await query.edit_message_caption(
-                caption=f"⏳ *Posting to Instagram...*",
-                parse_mode="Markdown"
+                caption="⏳ *Posting to Instagram...*", parse_mode="Markdown"
             )
 
             # Determine media type
-            media_type = "VIDEO" if media_item.file_path.lower().endswith(('.mp4', '.mov')) else "IMAGE"
+            media_type = (
+                "VIDEO"
+                if media_item.file_path.lower().endswith((".mp4", ".mov"))
+                else "IMAGE"
+            )
 
             # Apply 9:16 Story transformation (blurred background padding)
             if media_type == "IMAGE":
@@ -2340,10 +2598,16 @@ class TelegramService(BaseService):
             self.user_repo.increment_posts(str(user.id))
 
             # Success message - check verbose setting (chat_settings already loaded at start)
-            verbose = chat_settings.show_verbose_notifications if chat_settings.show_verbose_notifications is not None else True
+            verbose = (
+                chat_settings.show_verbose_notifications
+                if chat_settings.show_verbose_notifications is not None
+                else True
+            )
 
             # Fetch account username from API (cached)
-            account_info = await instagram_service.get_account_info(telegram_chat_id=chat_id)
+            account_info = await instagram_service.get_account_info(
+                telegram_chat_id=chat_id
+            )
             if account_info.get("username"):
                 account_display = f"@{account_info['username']}"
             else:
@@ -2395,7 +2659,9 @@ class TelegramService(BaseService):
                 telegram_message_id=query.message.message_id,
             )
 
-            logger.info(f"Auto-posted to Instagram by {self._get_display_name(user)}: {media_item.file_name} (story_id={story_id})")
+            logger.info(
+                f"Auto-posted to Instagram by {self._get_display_name(user)}: {media_item.file_name} (story_id={story_id})"
+            )
 
         except Exception as e:
             # Error handling
@@ -2411,29 +2677,40 @@ class TelegramService(BaseService):
             # Rebuild keyboard with all buttons
             keyboard = []
             if settings.ENABLE_INSTAGRAM_API:
-                keyboard.append([
-                    InlineKeyboardButton(
-                        "🔄 Retry Auto Post",
-                        callback_data=f"autopost:{queue_id}"
-                    ),
-                ])
-            keyboard.extend([
+                keyboard.append(
+                    [
+                        InlineKeyboardButton(
+                            "🔄 Retry Auto Post", callback_data=f"autopost:{queue_id}"
+                        ),
+                    ]
+                )
+            keyboard.extend(
                 [
-                    InlineKeyboardButton("✅ Posted", callback_data=f"posted:{queue_id}"),
-                    InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{queue_id}"),
-                ],
-                [
-                    InlineKeyboardButton("📱 Open Instagram", url="https://www.instagram.com/"),
-                ],
-                [
-                    InlineKeyboardButton("🚫 Reject", callback_data=f"reject:{queue_id}"),
+                    [
+                        InlineKeyboardButton(
+                            "✅ Posted", callback_data=f"posted:{queue_id}"
+                        ),
+                        InlineKeyboardButton(
+                            "⏭️ Skip", callback_data=f"skip:{queue_id}"
+                        ),
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            "📱 Open Instagram", url="https://www.instagram.com/"
+                        ),
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            "🚫 Reject", callback_data=f"reject:{queue_id}"
+                        ),
+                    ],
                 ]
-            ])
+            )
 
             await query.edit_message_caption(
                 caption=caption,
                 reply_markup=InlineKeyboardMarkup(keyboard),
-                parse_mode="Markdown"
+                parse_mode="Markdown",
             )
 
             # Log interaction (failure)
@@ -2472,28 +2749,37 @@ class TelegramService(BaseService):
         # Rebuild original keyboard (including Auto Post if enabled)
         keyboard = []
         if settings.ENABLE_INSTAGRAM_API:
-            keyboard.append([
-                InlineKeyboardButton(
-                    "🤖 Auto Post to Instagram",
-                    callback_data=f"autopost:{queue_id}"
-                ),
-            ])
-        keyboard.extend([
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        "🤖 Auto Post to Instagram",
+                        callback_data=f"autopost:{queue_id}",
+                    ),
+                ]
+            )
+        keyboard.extend(
             [
-                InlineKeyboardButton("✅ Posted", callback_data=f"posted:{queue_id}"),
-                InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{queue_id}"),
-            ],
-            [
-                InlineKeyboardButton("📱 Open Instagram", url="https://www.instagram.com/"),
-            ],
-            [
-                InlineKeyboardButton("🚫 Reject", callback_data=f"reject:{queue_id}"),
+                [
+                    InlineKeyboardButton(
+                        "✅ Posted", callback_data=f"posted:{queue_id}"
+                    ),
+                    InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{queue_id}"),
+                ],
+                [
+                    InlineKeyboardButton(
+                        "📱 Open Instagram", url="https://www.instagram.com/"
+                    ),
+                ],
+                [
+                    InlineKeyboardButton(
+                        "🚫 Reject", callback_data=f"reject:{queue_id}"
+                    ),
+                ],
             ]
-        ])
+        )
 
         await query.edit_message_caption(
-            caption=caption,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            caption=caption, reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
         logger.info(f"Returned to queue item by {self._get_display_name(user)}")
@@ -2513,8 +2799,12 @@ class TelegramService(BaseService):
         # Build confirmation keyboard (short labels - details in message above)
         keyboard = [
             [
-                InlineKeyboardButton("✅ Yes", callback_data=f"confirm_reject:{queue_id}"),
-                InlineKeyboardButton("❌ No", callback_data=f"cancel_reject:{queue_id}"),
+                InlineKeyboardButton(
+                    "✅ Yes", callback_data=f"confirm_reject:{queue_id}"
+                ),
+                InlineKeyboardButton(
+                    "❌ No", callback_data=f"cancel_reject:{queue_id}"
+                ),
             ]
         ]
 
@@ -2529,7 +2819,7 @@ class TelegramService(BaseService):
         await query.edit_message_caption(
             caption=caption,
             reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="Markdown"
+            parse_mode="Markdown",
         )
 
         # Log interaction (showing confirmation dialog)
@@ -2566,28 +2856,37 @@ class TelegramService(BaseService):
         # Rebuild original keyboard (including Auto Post if enabled)
         keyboard = []
         if settings.ENABLE_INSTAGRAM_API:
-            keyboard.append([
-                InlineKeyboardButton(
-                    "🤖 Auto Post to Instagram",
-                    callback_data=f"autopost:{queue_id}"
-                ),
-            ])
-        keyboard.extend([
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        "🤖 Auto Post to Instagram",
+                        callback_data=f"autopost:{queue_id}",
+                    ),
+                ]
+            )
+        keyboard.extend(
             [
-                InlineKeyboardButton("✅ Posted", callback_data=f"posted:{queue_id}"),
-                InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{queue_id}"),
-            ],
-            [
-                InlineKeyboardButton("📱 Open Instagram", url="https://www.instagram.com/"),
-            ],
-            [
-                InlineKeyboardButton("🚫 Reject", callback_data=f"reject:{queue_id}"),
+                [
+                    InlineKeyboardButton(
+                        "✅ Posted", callback_data=f"posted:{queue_id}"
+                    ),
+                    InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{queue_id}"),
+                ],
+                [
+                    InlineKeyboardButton(
+                        "📱 Open Instagram", url="https://www.instagram.com/"
+                    ),
+                ],
+                [
+                    InlineKeyboardButton(
+                        "🚫 Reject", callback_data=f"reject:{queue_id}"
+                    ),
+                ],
             ]
-        ])
+        )
 
         await query.edit_message_caption(
-            caption=caption,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            caption=caption, reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
         # Log interaction
@@ -2631,8 +2930,7 @@ class TelegramService(BaseService):
 
         # Create PERMANENT lock (infinite TTL)
         self.lock_service.create_permanent_lock(
-            str(queue_item.media_item_id),
-            created_by_user_id=str(user.id)
+            str(queue_item.media_item_id), created_by_user_id=str(user.id)
         )
 
         # Delete from queue
@@ -2673,7 +2971,9 @@ class TelegramService(BaseService):
             telegram_message_id=query.message.message_id,
         )
 
-        logger.info(f"Post permanently rejected by {self._get_display_name(user)}: {media_item.file_name if media_item else queue_item.media_item_id}")
+        logger.info(
+            f"Post permanently rejected by {self._get_display_name(user)}: {media_item.file_name if media_item else queue_item.media_item_id}"
+        )
 
     async def _handle_resume_callback(self, action: str, user, query):
         """Handle resume callback buttons (reschedule/clear/force)."""
@@ -2696,9 +2996,11 @@ class TelegramService(BaseService):
                 f"✅ *Posting Resumed*\n\n"
                 f"🔄 Rescheduled {rescheduled} overdue posts.\n"
                 f"First post in ~1 hour.",
-                parse_mode="Markdown"
+                parse_mode="Markdown",
             )
-            logger.info(f"Posting resumed by {self._get_display_name(user)}, rescheduled {rescheduled} overdue posts")
+            logger.info(
+                f"Posting resumed by {self._get_display_name(user)}, rescheduled {rescheduled} overdue posts"
+            )
 
         elif action == "clear":
             # Clear all overdue posts
@@ -2713,9 +3015,11 @@ class TelegramService(BaseService):
                 f"✅ *Posting Resumed*\n\n"
                 f"🗑️ Cleared {cleared} overdue posts.\n"
                 f"📊 {remaining} scheduled posts remaining.",
-                parse_mode="Markdown"
+                parse_mode="Markdown",
             )
-            logger.info(f"Posting resumed by {self._get_display_name(user)}, cleared {cleared} overdue posts")
+            logger.info(
+                f"Posting resumed by {self._get_display_name(user)}, cleared {cleared} overdue posts"
+            )
 
         elif action == "force":
             # Resume without handling overdue - they'll be processed immediately
@@ -2723,9 +3027,11 @@ class TelegramService(BaseService):
             await query.edit_message_text(
                 f"✅ *Posting Resumed*\n\n"
                 f"⚠️ {len(overdue)} overdue posts will be processed immediately.",
-                parse_mode="Markdown"
+                parse_mode="Markdown",
             )
-            logger.info(f"Posting resumed (force) by {self._get_display_name(user)}, {len(overdue)} overdue posts")
+            logger.info(
+                f"Posting resumed (force) by {self._get_display_name(user)}, {len(overdue)} overdue posts"
+            )
 
         # Log interaction
         self.interaction_service.log_callback(
@@ -2750,14 +3056,15 @@ class TelegramService(BaseService):
                 f"✅ *Queue Cleared*\n\n"
                 f"🗑️ Removed {cleared} pending posts.\n"
                 f"Media items remain in library.",
-                parse_mode="Markdown"
+                parse_mode="Markdown",
             )
-            logger.info(f"Queue cleared by {self._get_display_name(user)}: {cleared} posts removed")
+            logger.info(
+                f"Queue cleared by {self._get_display_name(user)}: {cleared} posts removed"
+            )
 
         elif action == "cancel":
             await query.edit_message_text(
-                f"❌ *Cancelled*\n\nQueue was not cleared.",
-                parse_mode="Markdown"
+                "❌ *Cancelled*\n\nQueue was not cleared.", parse_mode="Markdown"
             )
 
         # Log interaction
@@ -2840,7 +3147,7 @@ class TelegramService(BaseService):
             await self.bot.send_message(
                 chat_id=settings.ADMIN_TELEGRAM_CHAT_ID,
                 text=message,
-                parse_mode="Markdown"
+                parse_mode="Markdown",
             )
 
             logger.info("Startup notification sent to admin")
@@ -2848,7 +3155,9 @@ class TelegramService(BaseService):
         except Exception as e:
             logger.error(f"Failed to send startup notification: {e}")
 
-    async def send_shutdown_notification(self, uptime_seconds: int = 0, posts_sent: int = 0):
+    async def send_shutdown_notification(
+        self, uptime_seconds: int = 0, posts_sent: int = 0
+    ):
         """Send shutdown notification to admin with session summary."""
         if not settings.SEND_LIFECYCLE_NOTIFICATIONS:
             return
@@ -2873,7 +3182,7 @@ class TelegramService(BaseService):
             await self.bot.send_message(
                 chat_id=settings.ADMIN_TELEGRAM_CHAT_ID,
                 text=message,
-                parse_mode="Markdown"
+                parse_mode="Markdown",
             )
 
             logger.info("Shutdown notification sent to admin")

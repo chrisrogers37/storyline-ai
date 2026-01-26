@@ -1,8 +1,8 @@
 """Main application entry point - runs scheduler + Telegram bot."""
+
 import asyncio
 import signal
 import sys
-from datetime import datetime
 from time import time
 
 from src.config.settings import settings
@@ -126,10 +126,14 @@ async def main_async():
     ]
 
     logger.info("✓ All services started")
-    logger.info(f"✓ Phase: {'Hybrid (API + Telegram)' if settings.ENABLE_INSTAGRAM_API else 'Telegram-Only'}")
+    logger.info(
+        f"✓ Phase: {'Hybrid (API + Telegram)' if settings.ENABLE_INSTAGRAM_API else 'Telegram-Only'}"
+    )
     logger.info(f"✓ Dry run mode: {settings.DRY_RUN_MODE}")
     logger.info(f"✓ Posts per day: {settings.POSTS_PER_DAY}")
-    logger.info(f"✓ Posting hours: {settings.POSTING_HOURS_START}-{settings.POSTING_HOURS_END} UTC")
+    logger.info(
+        f"✓ Posting hours: {settings.POSTING_HOURS_START}-{settings.POSTING_HOURS_END} UTC"
+    )
     logger.info("=" * 60)
 
     # Setup signal handlers for graceful shutdown
@@ -151,8 +155,7 @@ async def main_async():
         # Send shutdown notification
         try:
             await telegram_service.send_shutdown_notification(
-                uptime_seconds=uptime,
-                posts_sent=session_posts_sent
+                uptime_seconds=uptime, posts_sent=session_posts_sent
             )
         except Exception as e:
             logger.warning(f"Failed to send shutdown notification: {e}")
@@ -173,8 +176,7 @@ async def main_async():
     loop = asyncio.get_event_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(
-            sig,
-            lambda s=sig: asyncio.create_task(shutdown_handler(s))
+            sig, lambda s=sig: asyncio.create_task(shutdown_handler(s))
         )
 
     # Wait for all tasks

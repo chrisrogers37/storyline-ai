@@ -1,5 +1,14 @@
 """Category post case mix model - Type 2 SCD for tracking posting ratio history."""
-from sqlalchemy import Column, String, Boolean, DateTime, Numeric, ForeignKey, CheckConstraint
+
+from sqlalchemy import (
+    Column,
+    String,
+    Boolean,
+    DateTime,
+    Numeric,
+    ForeignKey,
+    CheckConstraint,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 import uuid
@@ -44,4 +53,4 @@ class CategoryPostCaseMix(Base):
 
     def __repr__(self):
         status = "current" if self.is_current else f"expired {self.effective_to}"
-        return f"<CategoryPostCaseMix {self.category}={float(self.ratio)*100:.1f}% ({status})>"
+        return f"<CategoryPostCaseMix {self.category}={float(self.ratio) * 100:.1f}% ({status})>"

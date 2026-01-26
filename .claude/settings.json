@@ -34,7 +34,9 @@
       "Bash(ls*)",
       "Bash(mkdir*)",
       "Bash(cp*)",
-      "Bash(mv*)"
+      "Bash(mv*)",
+      "Write(documentation/**/*.md)",
+      "Edit(documentation/**/*.md)"
     ],
     "deny": [
       "Bash(storyline-cli process-queue*)",
@@ -52,7 +54,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [[ \"$CLAUDE_FILE_PATH\" == *.py ]]; then ruff format \"$CLAUDE_FILE_PATH\" 2>/dev/null || true; fi"
+            "command": "if [[ \"$CLAUDE_FILE_PATH\" == *.py ]]; then ruff check --fix \"$CLAUDE_FILE_PATH\" 2>/dev/null || true; ruff format \"$CLAUDE_FILE_PATH\" 2>/dev/null || true; fi"
           }
         ]
       }

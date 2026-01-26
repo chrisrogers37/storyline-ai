@@ -1,5 +1,14 @@
 """Posting queue model - active work items only."""
-from sqlalchemy import Column, String, BigInteger, Integer, DateTime, Text, CheckConstraint
+
+from sqlalchemy import (
+    Column,
+    String,
+    BigInteger,
+    Integer,
+    DateTime,
+    Text,
+    CheckConstraint,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy import ForeignKey
 from datetime import datetime
@@ -23,11 +32,13 @@ class PostingQueue(Base):
         UUID(as_uuid=True),
         ForeignKey("media_items.id", ondelete="CASCADE"),
         nullable=False,
-        index=True
+        index=True,
     )
 
     scheduled_for = Column(DateTime, nullable=False, index=True)
-    status = Column(String(50), default="pending", nullable=False, index=True)  # 'pending', 'processing', 'retrying'
+    status = Column(
+        String(50), default="pending", nullable=False, index=True
+    )  # 'pending', 'processing', 'retrying'
 
     # Temporary web-hosted URL (e.g., Cloudinary, S3, etc.)
     # Used during posting process, deleted after completion
@@ -49,8 +60,7 @@ class PostingQueue(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('pending', 'processing', 'retrying')",
-            name="check_status"
+            "status IN ('pending', 'processing', 'retrying')", name="check_status"
         ),
     )
 

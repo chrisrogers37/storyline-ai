@@ -1,4 +1,5 @@
 """Token repository - CRUD operations for API tokens."""
+
 from typing import Optional, List
 from datetime import datetime, timedelta
 
@@ -62,15 +63,21 @@ class TokenRepository(BaseRepository):
         Returns:
             ApiToken or None if not found
         """
-        result = self.db.query(ApiToken).filter(
-            ApiToken.service_name == "instagram",
-            ApiToken.token_type == token_type,
-            ApiToken.instagram_account_id == instagram_account_id,
-        ).first()
+        result = (
+            self.db.query(ApiToken)
+            .filter(
+                ApiToken.service_name == "instagram",
+                ApiToken.token_type == token_type,
+                ApiToken.instagram_account_id == instagram_account_id,
+            )
+            .first()
+        )
         self.end_read_transaction()
         return result
 
-    def get_all_instagram_tokens(self, token_type: str = "access_token") -> List[ApiToken]:
+    def get_all_instagram_tokens(
+        self, token_type: str = "access_token"
+    ) -> List[ApiToken]:
         """
         Get all Instagram tokens (for token refresh iteration).
 
@@ -80,19 +87,21 @@ class TokenRepository(BaseRepository):
         Returns:
             List of ApiToken for all Instagram accounts
         """
-        result = self.db.query(ApiToken).filter(
-            ApiToken.service_name == "instagram",
-            ApiToken.token_type == token_type,
-        ).all()
+        result = (
+            self.db.query(ApiToken)
+            .filter(
+                ApiToken.service_name == "instagram",
+                ApiToken.token_type == token_type,
+            )
+            .all()
+        )
         self.end_read_transaction()
         return result
 
     def get_all_for_service(self, service_name: str) -> List[ApiToken]:
         """Get all tokens for a service (access and refresh)."""
         return (
-            self.db.query(ApiToken)
-            .filter(ApiToken.service_name == service_name)
-            .all()
+            self.db.query(ApiToken).filter(ApiToken.service_name == service_name).all()
         )
 
     def create_or_update(

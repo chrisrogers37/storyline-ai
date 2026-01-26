@@ -1,4 +1,5 @@
 """Health check service - system health monitoring."""
+
 from datetime import datetime, timedelta
 from sqlalchemy import text
 
@@ -27,6 +28,7 @@ class HealthCheckService(BaseService):
         """Lazy-load token service."""
         if self._token_service is None:
             from src.services.integrations.token_refresh import TokenRefreshService
+
             self._token_service = TokenRefreshService()
         return self._token_service
 
@@ -35,6 +37,7 @@ class HealthCheckService(BaseService):
         """Lazy-load Instagram API service."""
         if self._instagram_service is None:
             from src.services.integrations.instagram_api import InstagramAPIService
+
             self._instagram_service = InstagramAPIService()
         return self._instagram_service
 
@@ -57,7 +60,11 @@ class HealthCheckService(BaseService):
         all_healthy = all(check["healthy"] for check in checks.values())
         overall_status = "healthy" if all_healthy else "unhealthy"
 
-        return {"status": overall_status, "checks": checks, "timestamp": datetime.utcnow().isoformat()}
+        return {
+            "status": overall_status,
+            "checks": checks,
+            "timestamp": datetime.utcnow().isoformat(),
+        }
 
     def _check_database(self) -> dict:
         """Check database connectivity."""
@@ -135,12 +142,16 @@ class HealthCheckService(BaseService):
                 response["token_expires_in_days"] = expires_in_days
 
             if token_health.get("needs_refresh"):
-                response["message"] = f"OK ({remaining}/{settings.INSTAGRAM_POSTS_PER_HOUR} posts), token refresh recommended"
+                response["message"] = (
+                    f"OK ({remaining}/{settings.INSTAGRAM_POSTS_PER_HOUR} posts), token refresh recommended"
+                )
             elif remaining == 0:
                 response["healthy"] = False
                 response["message"] = "Rate limit exhausted (0 posts remaining)"
             else:
-                response["message"] = f"OK ({remaining}/{settings.INSTAGRAM_POSTS_PER_HOUR} posts remaining)"
+                response["message"] = (
+                    f"OK ({remaining}/{settings.INSTAGRAM_POSTS_PER_HOUR} posts remaining)"
+                )
 
             return response
 
@@ -172,11 +183,15 @@ class HealthCheckService(BaseService):
                 if age > timedelta(hours=24):
                     return {
                         "healthy": False,
-                        "message": f"Oldest item pending for {age.total_seconds()/3600:.1f} hours",
+                        "message": f"Oldest item pending for {age.total_seconds() / 3600:.1f} hours",
                         "pending_count": pending_count,
                     }
 
-            return {"healthy": True, "message": f"Queue healthy ({pending_count} pending)", "pending_count": pending_count}
+            return {
+                "healthy": True,
+                "message": f"Queue healthy ({pending_count} pending)",
+                "pending_count": pending_count,
+            }
 
         except Exception as e:
             return {"healthy": False, "message": f"Queue check error: {str(e)}"}
@@ -187,7 +202,11 @@ class HealthCheckService(BaseService):
             recent_posts = self.history_repo.get_recent_posts(hours=48)
 
             if not recent_posts:
-                return {"healthy": False, "message": "No posts in last 48 hours", "recent_count": 0}
+                return {
+                    "healthy": False,
+                    "message": "No posts in last 48 hours",
+                    "recent_count": 0,
+                }
 
             successful_posts = [p for p in recent_posts if p.success]
 

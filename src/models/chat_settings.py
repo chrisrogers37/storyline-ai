@@ -1,5 +1,14 @@
 """Chat settings model - per-chat runtime configuration."""
-from sqlalchemy import Column, String, Integer, Boolean, BigInteger, DateTime, ForeignKey
+
+from sqlalchemy import (
+    Column,
+    String,
+    Integer,
+    Boolean,
+    BigInteger,
+    DateTime,
+    ForeignKey,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -43,7 +52,7 @@ class ChatSettings(Base):
     active_instagram_account_id = Column(
         UUID(as_uuid=True),
         ForeignKey("instagram_accounts.id"),
-        nullable=True  # NULL = no account selected yet
+        nullable=True,  # NULL = no account selected yet
     )
 
     # Timestamps

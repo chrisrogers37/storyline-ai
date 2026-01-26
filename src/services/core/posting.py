@@ -1,4 +1,5 @@
 """Posting service - orchestrate the posting process."""
+
 import asyncio
 from datetime import datetime
 from typing import Optional
@@ -12,7 +13,6 @@ from src.repositories.media_repository import MediaRepository
 from src.repositories.history_repository import HistoryRepository
 from src.config.settings import settings
 from src.utils.logger import logger
-from src.exceptions import InstagramAPIError, RateLimitError, TokenExpiredError
 
 
 class PostingService(BaseService):
@@ -36,6 +36,7 @@ class PostingService(BaseService):
         """Lazy-load Instagram API service."""
         if self._instagram_service is None:
             from src.services.integrations.instagram_api import InstagramAPIService
+
             self._instagram_service = InstagramAPIService()
         return self._instagram_service
 
@@ -44,6 +45,7 @@ class PostingService(BaseService):
         """Lazy-load cloud storage service."""
         if self._cloud_service is None:
             from src.services.integrations.cloud_storage import CloudStorageService
+
             self._cloud_service = CloudStorageService()
         return self._cloud_service
 
@@ -154,7 +156,9 @@ class PostingService(BaseService):
                         "error": None,
                     }
                 else:
-                    logger.error(f"Failed to send Telegram notification for {queue_item_id}")
+                    logger.error(
+                        f"Failed to send Telegram notification for {queue_item_id}"
+                    )
                     result = {
                         "success": False,
                         "queue_item_id": queue_item_id,
@@ -232,7 +236,13 @@ class PostingService(BaseService):
             # Check if posting is paused
             if self.telegram_service.is_paused:
                 logger.info("Posting is paused - skipping scheduled posts")
-                result = {"processed": 0, "telegram": 0, "automated": 0, "failed": 0, "paused": True}
+                result = {
+                    "processed": 0,
+                    "telegram": 0,
+                    "automated": 0,
+                    "failed": 0,
+                    "paused": True,
+                }
                 self.set_result_summary(run_id, result)
                 return result
 
@@ -249,10 +259,14 @@ class PostingService(BaseService):
             for queue_item in pending_items:
                 try:
                     # Get media item
-                    media_item = self.media_repo.get_by_id(str(queue_item.media_item_id))
+                    media_item = self.media_repo.get_by_id(
+                        str(queue_item.media_item_id)
+                    )
 
                     if not media_item:
-                        logger.error(f"Media item not found: {queue_item.media_item_id}")
+                        logger.error(
+                            f"Media item not found: {queue_item.media_item_id}"
+                        )
                         failed_count += 1
                         continue
 
@@ -299,7 +313,9 @@ class PostingService(BaseService):
         """
         chat_settings = self._get_chat_settings()
         if chat_settings.dry_run_mode:
-            logger.info(f"[DRY RUN] Would send Telegram notification for queue item {queue_item.id}")
+            logger.info(
+                f"[DRY RUN] Would send Telegram notification for queue item {queue_item.id}"
+            )
             return True
 
         try:
@@ -309,9 +325,13 @@ class PostingService(BaseService):
             if success:
                 # Update queue status to processing
                 self.queue_repo.update_status(str(queue_item.id), "processing")
-                logger.info(f"Sent Telegram notification for queue item {queue_item.id}")
+                logger.info(
+                    f"Sent Telegram notification for queue item {queue_item.id}"
+                )
             else:
-                logger.error(f"Failed to send Telegram notification for queue item {queue_item.id}")
+                logger.error(
+                    f"Failed to send Telegram notification for queue item {queue_item.id}"
+                )
 
             return success
 
@@ -359,7 +379,9 @@ class PostingService(BaseService):
 
         chat_settings = self._get_chat_settings()
         if chat_settings.dry_run_mode:
-            logger.info(f"[DRY RUN] Would post {media_item.file_name} via Instagram API")
+            logger.info(
+                f"[DRY RUN] Would post {media_item.file_name} via Instagram API"
+            )
             return {"success": True, "dry_run": True}
 
         # Ensure media is in cloud storage
@@ -424,14 +446,20 @@ class PostingService(BaseService):
             # Delete from queue
             self.queue_repo.delete(queue_item_id)
 
-            logger.info(f"Posted {media_item.file_name} to Instagram (story_id: {result.get('story_id')})")
+            logger.info(
+                f"Posted {media_item.file_name} to Instagram (story_id: {result.get('story_id')})"
+            )
 
             # Schedule cloud cleanup (don't await)
-            asyncio.create_task(self._cleanup_cloud_media(media_item_id, cloud_public_id))
+            asyncio.create_task(
+                self._cleanup_cloud_media(media_item_id, cloud_public_id)
+            )
 
         return result
 
-    async def _cleanup_cloud_media(self, media_item_id: str, cloud_public_id: str) -> None:
+    async def _cleanup_cloud_media(
+        self, media_item_id: str, cloud_public_id: str
+    ) -> None:
         """
         Clean up cloud storage after successful post.
 
@@ -454,7 +482,9 @@ class PostingService(BaseService):
                 )
                 logger.info(f"Cleaned up cloud storage for media {media_item_id}")
             else:
-                logger.warning(f"Failed to clean up cloud storage for media {media_item_id}")
+                logger.warning(
+                    f"Failed to clean up cloud storage for media {media_item_id}"
+                )
 
         except Exception as e:
             logger.error(f"Error cleaning up cloud storage: {e}")
@@ -510,4 +540,6 @@ class PostingService(BaseService):
         # Delete from queue
         self.queue_repo.delete(queue_item_id)
 
-        logger.info(f"Completed processing for queue item {queue_item_id} (success={success})")
+        logger.info(
+            f"Completed processing for queue item {queue_item_id} (success={success})"
+        )

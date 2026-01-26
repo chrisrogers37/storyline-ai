@@ -1,4 +1,5 @@
 """Settings service - runtime configuration management."""
+
 from typing import Optional, Any, Dict
 
 from src.services.base_service import BaseService
@@ -9,7 +10,12 @@ from src.utils.logger import logger
 
 
 # Allowed settings that can be toggled/changed
-TOGGLEABLE_SETTINGS = {"dry_run_mode", "enable_instagram_api", "is_paused", "show_verbose_notifications"}
+TOGGLEABLE_SETTINGS = {
+    "dry_run_mode",
+    "enable_instagram_api",
+    "is_paused",
+    "show_verbose_notifications",
+}
 NUMERIC_SETTINGS = {"posts_per_day", "posting_hours_start", "posting_hours_end"}
 
 
@@ -41,10 +47,7 @@ class SettingsService(BaseService):
         return self.settings_repo.get_or_create(telegram_chat_id)
 
     def toggle_setting(
-        self,
-        telegram_chat_id: int,
-        setting_name: str,
-        user: Optional[User] = None
+        self, telegram_chat_id: int, setting_name: str, user: Optional[User] = None
     ) -> bool:
         """
         Toggle a boolean setting.
@@ -67,7 +70,7 @@ class SettingsService(BaseService):
             "toggle_setting",
             user_id=user.id if user else None,
             triggered_by="user",
-            input_params={"setting_name": setting_name}
+            input_params={"setting_name": setting_name},
         ) as run_id:
             settings = self.settings_repo.get_or_create(telegram_chat_id)
             old_value = getattr(settings, setting_name)
@@ -75,19 +78,20 @@ class SettingsService(BaseService):
 
             if setting_name == "is_paused":
                 self.settings_repo.set_paused(
-                    telegram_chat_id,
-                    new_value,
-                    str(user.id) if user else None
+                    telegram_chat_id, new_value, str(user.id) if user else None
                 )
             else:
                 self.settings_repo.update(telegram_chat_id, **{setting_name: new_value})
 
-            self.set_result_summary(run_id, {
-                "setting": setting_name,
-                "old_value": old_value,
-                "new_value": new_value,
-                "changed_by": user.telegram_username if user else "system"
-            })
+            self.set_result_summary(
+                run_id,
+                {
+                    "setting": setting_name,
+                    "old_value": old_value,
+                    "new_value": new_value,
+                    "changed_by": user.telegram_username if user else "system",
+                },
+            )
 
             logger.info(
                 f"Setting '{setting_name}' toggled: {old_value} -> {new_value} "
@@ -101,7 +105,7 @@ class SettingsService(BaseService):
         telegram_chat_id: int,
         setting_name: str,
         value: Any,
-        user: Optional[User] = None
+        user: Optional[User] = None,
     ) -> ChatSettings:
         """
         Update a setting value.
@@ -125,7 +129,7 @@ class SettingsService(BaseService):
             "update_setting",
             user_id=user.id if user else None,
             triggered_by="user",
-            input_params={"setting_name": setting_name, "value": value}
+            input_params={"setting_name": setting_name, "value": value},
         ) as run_id:
             settings = self.settings_repo.get_or_create(telegram_chat_id)
             old_value = getattr(settings, setting_name)
@@ -140,14 +144,19 @@ class SettingsService(BaseService):
                 if not 0 <= value <= 23:
                     raise ValueError("Hour must be between 0 and 23")
 
-            updated = self.settings_repo.update(telegram_chat_id, **{setting_name: value})
+            updated = self.settings_repo.update(
+                telegram_chat_id, **{setting_name: value}
+            )
 
-            self.set_result_summary(run_id, {
-                "setting": setting_name,
-                "old_value": old_value,
-                "new_value": value,
-                "changed_by": user.telegram_username if user else "system"
-            })
+            self.set_result_summary(
+                run_id,
+                {
+                    "setting": setting_name,
+                    "old_value": old_value,
+                    "new_value": value,
+                    "changed_by": user.telegram_username if user else "system",
+                },
+            )
 
             logger.info(
                 f"Setting '{setting_name}' updated: {old_value} -> {value} "

@@ -1,4 +1,5 @@
 """User interaction model - tracks all bot interactions."""
+
 from sqlalchemy import Column, String, BigInteger, DateTime, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy import ForeignKey
@@ -29,12 +30,16 @@ class UserInteraction(Base):
         UUID(as_uuid=True),
         ForeignKey("users.id"),
         nullable=True,  # Allow NULL for bot_response entries
-        index=True
+        index=True,
     )
 
     # What type of interaction
-    interaction_type = Column(String(50), nullable=False, index=True)  # 'command', 'callback', 'message', 'bot_response'
-    interaction_name = Column(String(100), nullable=False, index=True)  # '/queue', 'posted', 'photo_notification', etc.
+    interaction_type = Column(
+        String(50), nullable=False, index=True
+    )  # 'command', 'callback', 'message', 'bot_response'
+    interaction_name = Column(
+        String(100), nullable=False, index=True
+    )  # '/queue', 'posted', 'photo_notification', etc.
 
     # Flexible context data
     context = Column(JSONB)  # {queue_item_id, media_id, caption, buttons, etc.}
@@ -49,7 +54,7 @@ class UserInteraction(Base):
     __table_args__ = (
         CheckConstraint(
             "interaction_type IN ('command', 'callback', 'message', 'bot_response')",
-            name="check_interaction_type"
+            name="check_interaction_type",
         ),
     )
 

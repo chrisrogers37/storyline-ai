@@ -1,6 +1,27 @@
 """CLI main entry point."""
+
 import click
 from rich.console import Console
+
+from cli.commands.health import check_health
+from cli.commands.instagram import (
+    add_instagram_account,
+    deactivate_instagram_account,
+    instagram_auth,
+    instagram_status,
+    list_instagram_accounts,
+    reactivate_instagram_account,
+)
+from cli.commands.media import (
+    category_mix_history,
+    index,
+    list_categories,
+    list_media,
+    update_category_mix,
+    validate,
+)
+from cli.commands.queue import clear_queue, create_schedule, list_queue, process_queue
+from cli.commands.users import list_users, promote_user
 
 console = Console()
 
@@ -11,27 +32,6 @@ def cli():
     """Storyline AI - Instagram Story Automation System"""
     pass
 
-
-# Import commands
-from cli.commands.media import (
-    index,
-    list_media,
-    validate,
-    list_categories,
-    update_category_mix,
-    category_mix_history,
-)
-from cli.commands.queue import create_schedule, process_queue, list_queue, clear_queue
-from cli.commands.users import list_users, promote_user
-from cli.commands.health import check_health
-from cli.commands.instagram import (
-    instagram_auth,
-    instagram_status,
-    add_instagram_account,
-    list_instagram_accounts,
-    deactivate_instagram_account,
-    reactivate_instagram_account,
-)
 
 # Add commands to CLI
 cli.add_command(index)

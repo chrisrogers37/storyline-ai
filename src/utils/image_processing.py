@@ -1,4 +1,5 @@
 """Image validation and optimization for Instagram Stories."""
+
 from PIL import Image
 from pathlib import Path
 from typing import Optional
@@ -50,14 +51,21 @@ class ImageProcessor:
 
                 # Check format
                 if img_format not in self.SUPPORTED_FORMATS:
-                    errors.append(f"Unsupported format: {img_format}. Must be JPG, PNG, or GIF")
+                    errors.append(
+                        f"Unsupported format: {img_format}. Must be JPG, PNG, or GIF"
+                    )
 
                 # Check file size
                 if file_size_mb > self.MAX_FILE_SIZE_MB:
-                    errors.append(f"File too large: {file_size_mb:.1f}MB (max {self.MAX_FILE_SIZE_MB}MB)")
+                    errors.append(
+                        f"File too large: {file_size_mb:.1f}MB (max {self.MAX_FILE_SIZE_MB}MB)"
+                    )
 
                 # Check aspect ratio
-                if aspect_ratio < self.MAX_ASPECT_RATIO or aspect_ratio > self.MIN_ASPECT_RATIO:
+                if (
+                    aspect_ratio < self.MAX_ASPECT_RATIO
+                    or aspect_ratio > self.MIN_ASPECT_RATIO
+                ):
                     warnings.append(
                         f"Non-ideal aspect ratio: {aspect_ratio:.2f}. "
                         f"Instagram prefers 9:16 ({self.IDEAL_ASPECT_RATIO:.2f})"
@@ -65,7 +73,9 @@ class ImageProcessor:
 
                 # Check resolution
                 if width < 720 or height < 1280:
-                    warnings.append(f"Low resolution: {width}x{height}. Minimum recommended: 720x1280")
+                    warnings.append(
+                        f"Low resolution: {width}x{height}. Minimum recommended: 720x1280"
+                    )
                 elif width != self.IDEAL_WIDTH or height != self.IDEAL_HEIGHT:
                     warnings.append(
                         f"Non-optimal resolution: {width}x{height}. Instagram ideal: {self.IDEAL_WIDTH}x{self.IDEAL_HEIGHT}"
@@ -96,7 +106,9 @@ class ImageProcessor:
                 format="unknown",
             )
 
-    def optimize_for_instagram(self, file_path: Path, output_path: Optional[Path] = None) -> Path:
+    def optimize_for_instagram(
+        self, file_path: Path, output_path: Optional[Path] = None
+    ) -> Path:
         """
         Resize/convert image to Instagram specs.
 
@@ -122,7 +134,9 @@ class ImageProcessor:
                 # Image is correct or too tall, resize to 1080x1920
                 target_width = self.IDEAL_WIDTH
                 target_height = self.IDEAL_HEIGHT
-                processed_img = img.resize((target_width, target_height), Image.Resampling.LANCZOS)
+                processed_img = img.resize(
+                    (target_width, target_height), Image.Resampling.LANCZOS
+                )
 
             # Convert RGBA to RGB if needed (PNG with transparency)
             if processed_img.mode == "RGBA":

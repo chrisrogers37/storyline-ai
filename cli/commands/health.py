@@ -1,4 +1,5 @@
 """Health check CLI command."""
+
 import click
 from rich.console import Console
 from rich.table import Table
@@ -32,6 +33,8 @@ def check_health():
         status = "✓" if check["healthy"] else "✗"
         status_color = "green" if check["healthy"] else "red"
 
-        table.add_row(name.title(), f"[{status_color}]{status}[/{status_color}]", check["message"])
+        table.add_row(
+            name.title(), f"[{status_color}]{status}[/{status_color}]", check["message"]
+        )
 
     console.print(table)

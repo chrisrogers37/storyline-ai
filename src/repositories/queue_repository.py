@@ -1,4 +1,5 @@
 """Posting queue repository - CRUD operations for posting queue."""
+
 from typing import Optional, List
 from datetime import datetime, timedelta
 from sqlalchemy import and_
@@ -19,14 +20,24 @@ class QueueRepository(BaseRepository):
 
     def get_by_media_id(self, media_id: str) -> Optional[PostingQueue]:
         """Get queue item by media ID."""
-        return self.db.query(PostingQueue).filter(PostingQueue.media_item_id == media_id).first()
+        return (
+            self.db.query(PostingQueue)
+            .filter(PostingQueue.media_item_id == media_id)
+            .first()
+        )
 
     def get_pending(self, limit: Optional[int] = None) -> List[PostingQueue]:
         """Get all pending queue items ready to process."""
         now = datetime.utcnow()
-        query = self.db.query(PostingQueue).filter(
-            and_(PostingQueue.status == "pending", PostingQueue.scheduled_for <= now)
-        ).order_by(PostingQueue.scheduled_for.asc())
+        query = (
+            self.db.query(PostingQueue)
+            .filter(
+                and_(
+                    PostingQueue.status == "pending", PostingQueue.scheduled_for <= now
+                )
+            )
+            .order_by(PostingQueue.scheduled_for.asc())
+        )
 
         if limit:
             query = query.limit(limit)
@@ -44,7 +55,9 @@ class QueueRepository(BaseRepository):
 
     def count_pending(self) -> int:
         """Count number of pending items."""
-        return self.db.query(PostingQueue).filter(PostingQueue.status == "pending").count()
+        return (
+            self.db.query(PostingQueue).filter(PostingQueue.status == "pending").count()
+        )
 
     def get_oldest_pending(self) -> Optional[PostingQueue]:
         """Get the oldest pending item."""
@@ -57,7 +70,9 @@ class QueueRepository(BaseRepository):
 
     def create(self, media_item_id: str, scheduled_for: datetime) -> PostingQueue:
         """Create a new queue item."""
-        queue_item = PostingQueue(media_item_id=media_item_id, scheduled_for=scheduled_for)
+        queue_item = PostingQueue(
+            media_item_id=media_item_id, scheduled_for=scheduled_for
+        )
         self.db.add(queue_item)
         self.db.commit()
         self.db.refresh(queue_item)
@@ -72,7 +87,9 @@ class QueueRepository(BaseRepository):
             self.db.refresh(queue_item)
         return queue_item
 
-    def update_scheduled_time(self, queue_id: str, scheduled_for: datetime) -> PostingQueue:
+    def update_scheduled_time(
+        self, queue_id: str, scheduled_for: datetime
+    ) -> PostingQueue:
         """Update queue item scheduled time."""
         queue_item = self.get_by_id(queue_id)
         if queue_item:
@@ -81,7 +98,9 @@ class QueueRepository(BaseRepository):
             self.db.refresh(queue_item)
         return queue_item
 
-    def set_telegram_message(self, queue_id: str, message_id: int, chat_id: int) -> PostingQueue:
+    def set_telegram_message(
+        self, queue_id: str, message_id: int, chat_id: int
+    ) -> PostingQueue:
         """Set Telegram message ID for tracking."""
         queue_item = self.get_by_id(queue_id)
         if queue_item:
@@ -91,7 +110,9 @@ class QueueRepository(BaseRepository):
             self.db.refresh(queue_item)
         return queue_item
 
-    def schedule_retry(self, queue_id: str, error_message: str, retry_delay_minutes: int = 5) -> PostingQueue:
+    def schedule_retry(
+        self, queue_id: str, error_message: str, retry_delay_minutes: int = 5
+    ) -> PostingQueue:
         """Schedule a retry for failed queue item."""
         queue_item = self.get_by_id(queue_id)
         if queue_item:
@@ -100,7 +121,9 @@ class QueueRepository(BaseRepository):
 
             if queue_item.retry_count < queue_item.max_retries:
                 queue_item.status = "retrying"
-                queue_item.next_retry_at = datetime.utcnow() + timedelta(minutes=retry_delay_minutes)
+                queue_item.next_retry_at = datetime.utcnow() + timedelta(
+                    minutes=retry_delay_minutes
+                )
             else:
                 queue_item.status = "failed"
 
@@ -119,7 +142,11 @@ class QueueRepository(BaseRepository):
 
     def delete_all_pending(self) -> int:
         """Delete all pending queue items. Returns count of deleted items."""
-        count = self.db.query(PostingQueue).filter(PostingQueue.status == "pending").delete()
+        count = (
+            self.db.query(PostingQueue)
+            .filter(PostingQueue.status == "pending")
+            .delete()
+        )
         self.db.commit()
         return count
 
@@ -162,7 +189,7 @@ class QueueRepository(BaseRepository):
             return 0
 
         # Get items AFTER the force-posted one
-        items_to_shift = pending_items[from_index + 1:]
+        items_to_shift = pending_items[from_index + 1 :]
 
         if not items_to_shift:
             logger.info("No items to shift (force-posted item is last in queue)")

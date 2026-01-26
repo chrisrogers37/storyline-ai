@@ -1,4 +1,5 @@
 """User repository - CRUD operations for users."""
+
 from typing import Optional
 from datetime import datetime
 
@@ -18,7 +19,11 @@ class UserRepository(BaseRepository):
 
     def get_by_telegram_id(self, telegram_user_id: int) -> Optional[User]:
         """Get user by Telegram user ID."""
-        return self.db.query(User).filter(User.telegram_user_id == telegram_user_id).first()
+        return (
+            self.db.query(User)
+            .filter(User.telegram_user_id == telegram_user_id)
+            .first()
+        )
 
     def get_all(self, is_active: Optional[bool] = None) -> list[User]:
         """Get all users, optionally filtered by active status."""

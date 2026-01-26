@@ -1,6 +1,7 @@
 """Token refresh service for managing OAuth tokens."""
+
 from datetime import datetime, timedelta
-from typing import Optional, List
+from typing import Optional
 
 import httpx
 
@@ -55,7 +56,9 @@ class TokenRefreshService(BaseService):
             self._encryption = TokenEncryption()
         return self._encryption
 
-    def get_token(self, service: str, token_type: str = "access_token") -> Optional[str]:
+    def get_token(
+        self, service: str, token_type: str = "access_token"
+    ) -> Optional[str]:
         """
         Get current valid token for a service.
 
@@ -131,7 +134,9 @@ class TokenRefreshService(BaseService):
 
             if not env_token:
                 logger.warning(f"No .env token found for {service}")
-                self.set_result_summary(run_id, {"success": False, "reason": "no_env_token"})
+                self.set_result_summary(
+                    run_id, {"success": False, "reason": "no_env_token"}
+                )
                 return False
 
             # Encrypt the token
@@ -160,8 +165,7 @@ class TokenRefreshService(BaseService):
             return True
 
     async def refresh_instagram_token(
-        self,
-        instagram_account_id: Optional[str] = None
+        self, instagram_account_id: Optional[str] = None
     ) -> bool:
         """
         Refresh Instagram long-lived access token.
@@ -186,20 +190,21 @@ class TokenRefreshService(BaseService):
 
         with self.track_execution(
             method_name="refresh_instagram_token",
-            input_params={"account_id": account_label}
+            input_params={"account_id": account_label},
         ) as run_id:
             # Get current token
             if instagram_account_id:
                 db_token = self.token_repo.get_token_for_account(
-                    instagram_account_id,
-                    token_type="access_token"
+                    instagram_account_id, token_type="access_token"
                 )
             else:
                 db_token = self.token_repo.get_token("instagram", "access_token")
 
             if not db_token:
                 logger.error(f"No Instagram token found to refresh for {account_label}")
-                self.set_result_summary(run_id, {"success": False, "reason": "no_token"})
+                self.set_result_summary(
+                    run_id, {"success": False, "reason": "no_token"}
+                )
                 return False
 
             current_token = self.encryption.decrypt(db_token.token_value)
@@ -217,21 +222,32 @@ class TokenRefreshService(BaseService):
 
                     if response.status_code != 200:
                         error_data = response.json()
-                        logger.error(f"Instagram token refresh failed for {account_label}: {error_data}")
-                        self.set_result_summary(run_id, {
-                            "success": False,
-                            "status_code": response.status_code,
-                            "error": error_data,
-                        })
+                        logger.error(
+                            f"Instagram token refresh failed for {account_label}: {error_data}"
+                        )
+                        self.set_result_summary(
+                            run_id,
+                            {
+                                "success": False,
+                                "status_code": response.status_code,
+                                "error": error_data,
+                            },
+                        )
                         return False
 
                     data = response.json()
                     new_token = data.get("access_token")
-                    expires_in = data.get("expires_in", 5184000)  # Default 60 days in seconds
+                    expires_in = data.get(
+                        "expires_in", 5184000
+                    )  # Default 60 days in seconds
 
                     if not new_token:
-                        logger.error(f"No access_token in refresh response for {account_label}")
-                        self.set_result_summary(run_id, {"success": False, "reason": "no_token_in_response"})
+                        logger.error(
+                            f"No access_token in refresh response for {account_label}"
+                        )
+                        self.set_result_summary(
+                            run_id, {"success": False, "reason": "no_token_in_response"}
+                        )
                         return False
 
                     # Store the new token
@@ -258,16 +274,21 @@ class TokenRefreshService(BaseService):
                         f"New expiry: {expires_at.isoformat()}"
                     )
 
-                    self.set_result_summary(run_id, {
-                        "success": True,
-                        "account": account_label,
-                        "expires_at": expires_at.isoformat(),
-                        "expires_in_days": expires_in // 86400,
-                    })
+                    self.set_result_summary(
+                        run_id,
+                        {
+                            "success": True,
+                            "account": account_label,
+                            "expires_at": expires_at.isoformat(),
+                            "expires_in_days": expires_in // 86400,
+                        },
+                    )
                     return True
 
             except httpx.RequestError as e:
-                logger.error(f"Network error refreshing Instagram token for {account_label}: {e}")
+                logger.error(
+                    f"Network error refreshing Instagram token for {account_label}: {e}"
+                )
                 self.set_result_summary(run_id, {"success": False, "error": str(e)})
                 return False
 
@@ -297,7 +318,11 @@ class TokenRefreshService(BaseService):
             all_tokens = self.token_repo.get_all_instagram_tokens()
 
             for token in all_tokens:
-                account_id = str(token.instagram_account_id) if token.instagram_account_id else None
+                account_id = (
+                    str(token.instagram_account_id)
+                    if token.instagram_account_id
+                    else None
+                )
                 account_label = account_id or "legacy"
 
                 # Check if needs refresh
@@ -309,28 +334,36 @@ class TokenRefreshService(BaseService):
 
                 if not needs_refresh:
                     results["skipped"] += 1
-                    results["details"].append({
-                        "account": account_label,
-                        "status": "skipped",
-                        "reason": f"Not expiring soon ({int(hours_until_expiry or 0)}h remaining)",
-                    })
+                    results["details"].append(
+                        {
+                            "account": account_label,
+                            "status": "skipped",
+                            "reason": f"Not expiring soon ({int(hours_until_expiry or 0)}h remaining)",
+                        }
+                    )
                     continue
 
                 # Refresh this token
-                success = await self.refresh_instagram_token(instagram_account_id=account_id)
+                success = await self.refresh_instagram_token(
+                    instagram_account_id=account_id
+                )
 
                 if success:
                     results["refreshed"] += 1
-                    results["details"].append({
-                        "account": account_label,
-                        "status": "refreshed",
-                    })
+                    results["details"].append(
+                        {
+                            "account": account_label,
+                            "status": "refreshed",
+                        }
+                    )
                 else:
                     results["failed"] += 1
-                    results["details"].append({
-                        "account": account_label,
-                        "status": "failed",
-                    })
+                    results["details"].append(
+                        {
+                            "account": account_label,
+                            "status": "failed",
+                        }
+                    )
 
             logger.info(
                 f"Token refresh complete: {results['refreshed']} refreshed, "
@@ -404,4 +437,6 @@ class TokenRefreshService(BaseService):
 
     def get_tokens_needing_refresh(self) -> list:
         """Get all tokens that need to be refreshed soon."""
-        return self.token_repo.get_expiring_tokens(hours_until_expiry=self.REFRESH_BUFFER_HOURS)
+        return self.token_repo.get_expiring_tokens(
+            hours_until_expiry=self.REFRESH_BUFFER_HOURS
+        )

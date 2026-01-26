@@ -1,5 +1,6 @@
 """Posting history model - permanent audit log."""
-from sqlalchemy import Column, String, BigInteger, Integer, DateTime, Text, Boolean, CheckConstraint
+
+from sqlalchemy import Column, String, Integer, DateTime, Text, Boolean, CheckConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy import ForeignKey
 from datetime import datetime
@@ -20,17 +21,20 @@ class PostingHistory(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     media_item_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("media_items.id"),
-        nullable=False,
-        index=True
+        UUID(as_uuid=True), ForeignKey("media_items.id"), nullable=False, index=True
     )
-    queue_item_id = Column(UUID(as_uuid=True))  # Link back to queue (nullable after queue cleanup)
+    queue_item_id = Column(
+        UUID(as_uuid=True)
+    )  # Link back to queue (nullable after queue cleanup)
 
     # Queue lifecycle timestamps (preserved from posting_queue)
     queue_created_at = Column(DateTime, nullable=False)  # When item was added to queue
-    queue_deleted_at = Column(DateTime, nullable=False)  # When item was removed from queue
-    scheduled_for = Column(DateTime, nullable=False, index=True)  # Original scheduled time
+    queue_deleted_at = Column(
+        DateTime, nullable=False
+    )  # When item was removed from queue
+    scheduled_for = Column(
+        DateTime, nullable=False, index=True
+    )  # Original scheduled time
 
     # Media metadata snapshot (at posting time)
     # Alternative to Type 2 SCD for media_items
@@ -38,7 +42,9 @@ class PostingHistory(Base):
 
     # Posting outcome
     posted_at = Column(DateTime, nullable=False, index=True)
-    status = Column(String(50), nullable=False)  # 'posted', 'failed', 'skipped', 'rejected'
+    status = Column(
+        String(50), nullable=False
+    )  # 'posted', 'failed', 'skipped', 'rejected'
     success = Column(Boolean, nullable=False)
 
     # Instagram result (if successful)
@@ -47,7 +53,9 @@ class PostingHistory(Base):
     instagram_story_id = Column(Text)  # Story ID from Meta Graph API
 
     # Posting method tracking (Phase 2)
-    posting_method = Column(String(20), default="telegram_manual")  # 'instagram_api' or 'telegram_manual'
+    posting_method = Column(
+        String(20), default="telegram_manual"
+    )  # 'instagram_api' or 'telegram_manual'
 
     # User tracking
     posted_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
@@ -63,7 +71,7 @@ class PostingHistory(Base):
     __table_args__ = (
         CheckConstraint(
             "status IN ('posted', 'failed', 'skipped', 'rejected')",
-            name="check_history_status"
+            name="check_history_status",
         ),
     )
 

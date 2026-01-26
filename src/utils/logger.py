@@ -1,4 +1,5 @@
 """Logging configuration."""
+
 import logging
 import sys
 from pathlib import Path
@@ -7,9 +8,7 @@ from src.config.settings import settings
 
 
 def setup_logger(
-    name: str = "storyline-ai",
-    level: int = None,
-    log_file: Optional[str] = None
+    name: str = "storyline-ai", level: int = None, log_file: Optional[str] = None
 ) -> logging.Logger:
     """
     Setup and configure a logger.
@@ -43,7 +42,7 @@ def setup_logger(
     console_handler.setLevel(level)
     console_format = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
     console_handler.setFormatter(console_format)
 
@@ -58,7 +57,7 @@ def setup_logger(
     file_handler.setLevel(logging.INFO)
     file_format = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
     file_handler.setFormatter(file_format)
 

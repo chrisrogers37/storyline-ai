@@ -1,4 +1,5 @@
 """Chat settings repository - CRUD operations for runtime settings."""
+
 from typing import Optional
 from datetime import datetime
 
@@ -17,9 +18,11 @@ class ChatSettingsRepository(BaseRepository):
 
     def get_by_chat_id(self, telegram_chat_id: int) -> Optional[ChatSettings]:
         """Get settings for a specific chat."""
-        result = self.db.query(ChatSettings).filter(
-            ChatSettings.telegram_chat_id == telegram_chat_id
-        ).first()
+        result = (
+            self.db.query(ChatSettings)
+            .filter(ChatSettings.telegram_chat_id == telegram_chat_id)
+            .first()
+        )
         self.end_read_transaction()
         return result
 
@@ -29,9 +32,11 @@ class ChatSettingsRepository(BaseRepository):
 
         This is the primary access method - ensures a record always exists.
         """
-        existing = self.db.query(ChatSettings).filter(
-            ChatSettings.telegram_chat_id == telegram_chat_id
-        ).first()
+        existing = (
+            self.db.query(ChatSettings)
+            .filter(ChatSettings.telegram_chat_id == telegram_chat_id)
+            .first()
+        )
 
         if existing:
             self.end_read_transaction()
@@ -53,11 +58,7 @@ class ChatSettingsRepository(BaseRepository):
         self.db.refresh(chat_settings)
         return chat_settings
 
-    def update(
-        self,
-        telegram_chat_id: int,
-        **kwargs
-    ) -> ChatSettings:
+    def update(self, telegram_chat_id: int, **kwargs) -> ChatSettings:
         """
         Update settings for a chat.
 
@@ -80,10 +81,7 @@ class ChatSettingsRepository(BaseRepository):
         return chat_settings
 
     def set_paused(
-        self,
-        telegram_chat_id: int,
-        is_paused: bool,
-        user_id: Optional[str] = None
+        self, telegram_chat_id: int, is_paused: bool, user_id: Optional[str] = None
     ) -> ChatSettings:
         """
         Set pause state with tracking.

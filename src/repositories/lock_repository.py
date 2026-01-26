@@ -1,4 +1,5 @@
 """Media lock repository - CRUD operations for media locks."""
+
 from typing import Optional, List
 from datetime import datetime, timedelta
 
@@ -14,7 +15,11 @@ class LockRepository(BaseRepository):
 
     def get_by_id(self, lock_id: str) -> Optional[MediaPostingLock]:
         """Get lock by ID."""
-        return self.db.query(MediaPostingLock).filter(MediaPostingLock.id == lock_id).first()
+        return (
+            self.db.query(MediaPostingLock)
+            .filter(MediaPostingLock.id == lock_id)
+            .first()
+        )
 
     def get_active_lock(self, media_id: str) -> Optional[MediaPostingLock]:
         """Get active lock for media item (if any)."""
@@ -24,7 +29,8 @@ class LockRepository(BaseRepository):
             .filter(
                 MediaPostingLock.media_item_id == media_id,
                 # Lock is active if: locked_until is NULL (permanent) OR locked_until > now
-                (MediaPostingLock.locked_until.is_(None)) | (MediaPostingLock.locked_until > now)
+                (MediaPostingLock.locked_until.is_(None))
+                | (MediaPostingLock.locked_until > now),
             )
             .first()
         )
@@ -39,7 +45,8 @@ class LockRepository(BaseRepository):
         return (
             self.db.query(MediaPostingLock)
             .filter(
-                (MediaPostingLock.locked_until.is_(None)) | (MediaPostingLock.locked_until > now)
+                (MediaPostingLock.locked_until.is_(None))
+                | (MediaPostingLock.locked_until > now)
             )
             .order_by(MediaPostingLock.locked_until.asc().nulls_last())
             .all()
@@ -93,8 +100,10 @@ class LockRepository(BaseRepository):
         count = (
             self.db.query(MediaPostingLock)
             .filter(
-                MediaPostingLock.locked_until.isnot(None),  # Don't delete permanent locks
-                MediaPostingLock.locked_until <= now
+                MediaPostingLock.locked_until.isnot(
+                    None
+                ),  # Don't delete permanent locks
+                MediaPostingLock.locked_until <= now,
             )
             .delete()
         )
