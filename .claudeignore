@@ -1,3 +1,10 @@
-# Ignore Markdown files in archive documentation directory
-documentation/*.md
-documentation/**/*.md
+# Ignore large archive documentation (historical, rarely needed)
+documentation/archive/**/*.md
+
+# Ignore verbose planning docs (use CLAUDE.md for architecture overview)
+documentation/planning/phases/**/*.md
+
+# Keep accessible:
+# - documentation/README.md (index)
+# - documentation/guides/*.md (how-tos)
+# - documentation/planning/*.md (current plans)
