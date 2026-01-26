@@ -9,6 +9,7 @@ from src.repositories.token_repository import TokenRepository
 from src.models.instagram_account import InstagramAccount
 from src.models.user import User
 from src.utils.logger import logger
+from src.utils.encryption import TokenEncryption
 
 
 class InstagramAccountService(BaseService):
@@ -32,6 +33,7 @@ class InstagramAccountService(BaseService):
         self.account_repo = InstagramAccountRepository()
         self.settings_repo = ChatSettingsRepository()
         self.token_repo = TokenRepository()
+        self.encryption = TokenEncryption()
 
     def list_accounts(self, include_inactive: bool = False) -> List[InstagramAccount]:
         """
@@ -187,11 +189,12 @@ class InstagramAccountService(BaseService):
                 instagram_username=instagram_username,
             )
 
-            # Store token linked to this account
+            # Encrypt and store token linked to this account
+            encrypted_token = self.encryption.encrypt(access_token)
             self.token_repo.create_or_update(
                 service_name="instagram",
                 token_type="access_token",
-                token_value=access_token,
+                token_value=encrypted_token,
                 expires_at=token_expires_at,
                 instagram_account_id=str(account.id),
                 metadata={
@@ -314,11 +317,12 @@ class InstagramAccountService(BaseService):
                     instagram_username=instagram_username
                 )
 
-            # Update/create token
+            # Encrypt and update/create token
+            encrypted_token = self.encryption.encrypt(access_token)
             self.token_repo.create_or_update(
                 service_name="instagram",
                 token_type="access_token",
-                token_value=access_token,
+                token_value=encrypted_token,
                 expires_at=token_expires_at,
                 instagram_account_id=str(account.id),
                 metadata={
