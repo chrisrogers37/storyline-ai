@@ -534,6 +534,12 @@ class TelegramService(BaseService):
             if handled:
                 return
 
+        # Check for settings edit conversation
+        if "settings_edit_state" in context.user_data:
+            handled = await self._handle_settings_edit_message(update, context)
+            if handled:
+                return
+
         # Message not part of any conversation - ignore silently
 
     async def _handle_dryrun(self, update, context):
@@ -653,18 +659,18 @@ class TelegramService(BaseService):
                     callback_data="settings_accounts:select"
                 ),
             ],
-            # Row 5: Info display (non-interactive)
+            # Row 5: Posts per day (editable)
             [
                 InlineKeyboardButton(
                     f"📊 Posts/Day: {settings_data['posts_per_day']}",
-                    callback_data="settings_info:posts_per_day"
+                    callback_data="settings_edit:posts_per_day"
                 ),
             ],
-            # Row 6: Posting hours
+            # Row 6: Posting hours (editable)
             [
                 InlineKeyboardButton(
                     f"🕐 Hours: {settings_data['posting_hours_start']}:00-{settings_data['posting_hours_end']}:00 UTC",
-                    callback_data="settings_info:hours"
+                    callback_data="settings_edit:hours"
                 ),
             ],
             # Row 7: Verbose notifications toggle
@@ -748,11 +754,11 @@ class TelegramService(BaseService):
             )],
             [InlineKeyboardButton(
                 f"📊 Posts/Day: {settings_data['posts_per_day']}",
-                callback_data="settings_info:posts_per_day"
+                callback_data="settings_edit:posts_per_day"
             )],
             [InlineKeyboardButton(
                 f"🕐 Hours: {settings_data['posting_hours_start']}:00-{settings_data['posting_hours_end']}:00 UTC",
-                callback_data="settings_info:hours"
+                callback_data="settings_edit:hours"
             )],
             [InlineKeyboardButton(
                 f"📝 Verbose: {'ON' if settings_data['show_verbose_notifications'] else 'OFF'}",
@@ -780,6 +786,238 @@ class TelegramService(BaseService):
         except Exception as e:
             logger.warning(f"Could not delete settings message: {e}")
             await query.answer("Could not close menu")
+
+    async def _handle_settings_edit_start(self, setting_name: str, user, query, context):
+        """Start editing a numeric setting (posts_per_day or hours)."""
+        chat_id = query.message.chat_id
+        chat_settings = self.settings_service.get_settings(chat_id)
+
+        if setting_name == "posts_per_day":
+            context.user_data["settings_edit_state"] = "awaiting_posts_per_day"
+            context.user_data["settings_edit_chat_id"] = chat_id
+            context.user_data["settings_edit_message_id"] = query.message.message_id
+
+            keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="settings_edit_cancel")]]
+
+            await query.edit_message_text(
+                f"📊 *Edit Posts Per Day*\n\n"
+                f"Current value: *{chat_settings.posts_per_day}*\n\n"
+                f"Enter a number between 1 and 50:",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+
+        elif setting_name == "hours":
+            context.user_data["settings_edit_state"] = "awaiting_hours_start"
+            context.user_data["settings_edit_chat_id"] = chat_id
+            context.user_data["settings_edit_message_id"] = query.message.message_id
+
+            keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="settings_edit_cancel")]]
+
+            await query.edit_message_text(
+                f"🕐 *Edit Posting Hours*\n\n"
+                f"Current window: *{chat_settings.posting_hours_start}:00 - {chat_settings.posting_hours_end}:00 UTC*\n\n"
+                f"Enter the *start hour* (0-23 UTC):",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+
+    async def _handle_settings_edit_message(self, update, context):
+        """Handle user input for editing settings."""
+        if "settings_edit_state" not in context.user_data:
+            return False
+
+        state = context.user_data["settings_edit_state"]
+        chat_id = context.user_data.get("settings_edit_chat_id")
+        message_text = update.message.text.strip()
+        user = self._get_or_create_user(update.effective_user)
+
+        # Delete user's message to keep chat clean
+        try:
+            await update.message.delete()
+        except Exception:
+            pass
+
+        if state == "awaiting_posts_per_day":
+            try:
+                value = int(message_text)
+                if not 1 <= value <= 50:
+                    raise ValueError("Out of range")
+
+                # Update the setting
+                self.settings_service.update_setting(chat_id, "posts_per_day", value, user)
+
+                # Clear state and refresh settings
+                context.user_data.pop("settings_edit_state", None)
+                context.user_data.pop("settings_edit_chat_id", None)
+
+                # Rebuild settings message
+                await self._send_settings_message_by_chat_id(chat_id, context)
+
+                logger.info(f"User {self._get_display_name(user)} updated posts_per_day to {value}")
+
+            except ValueError:
+                # Show error, keep waiting for valid input
+                keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="settings_edit_cancel")]]
+                await context.bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=context.user_data.get("settings_edit_message_id"),
+                    text=(
+                        f"📊 *Edit Posts Per Day*\n\n"
+                        f"❌ Invalid input. Please enter a number between 1 and 50:"
+                    ),
+                    parse_mode="Markdown",
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+
+            return True
+
+        elif state == "awaiting_hours_start":
+            try:
+                value = int(message_text)
+                if not 0 <= value <= 23:
+                    raise ValueError("Out of range")
+
+                # Store start hour, ask for end hour
+                context.user_data["settings_edit_hours_start"] = value
+                context.user_data["settings_edit_state"] = "awaiting_hours_end"
+
+                keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="settings_edit_cancel")]]
+                await context.bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=context.user_data.get("settings_edit_message_id"),
+                    text=(
+                        f"🕐 *Edit Posting Hours*\n\n"
+                        f"Start hour: *{value}:00 UTC*\n\n"
+                        f"Enter the *end hour* (0-23 UTC):"
+                    ),
+                    parse_mode="Markdown",
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+
+            except ValueError:
+                keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="settings_edit_cancel")]]
+                await context.bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=context.user_data.get("settings_edit_message_id"),
+                    text=(
+                        f"🕐 *Edit Posting Hours*\n\n"
+                        f"❌ Invalid input. Please enter a number between 0 and 23:"
+                    ),
+                    parse_mode="Markdown",
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+
+            return True
+
+        elif state == "awaiting_hours_end":
+            try:
+                value = int(message_text)
+                if not 0 <= value <= 23:
+                    raise ValueError("Out of range")
+
+                start_hour = context.user_data.get("settings_edit_hours_start")
+
+                # Update both settings
+                self.settings_service.update_setting(chat_id, "posting_hours_start", start_hour, user)
+                self.settings_service.update_setting(chat_id, "posting_hours_end", value, user)
+
+                # Clear state
+                context.user_data.pop("settings_edit_state", None)
+                context.user_data.pop("settings_edit_chat_id", None)
+                context.user_data.pop("settings_edit_hours_start", None)
+                context.user_data.pop("settings_edit_message_id", None)
+
+                # Rebuild settings message
+                await self._send_settings_message_by_chat_id(chat_id, context)
+
+                logger.info(f"User {self._get_display_name(user)} updated posting hours to {start_hour}:00-{value}:00 UTC")
+
+            except ValueError:
+                keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="settings_edit_cancel")]]
+                await context.bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=context.user_data.get("settings_edit_message_id"),
+                    text=(
+                        f"🕐 *Edit Posting Hours*\n\n"
+                        f"Start hour: *{context.user_data.get('settings_edit_hours_start')}:00 UTC*\n\n"
+                        f"❌ Invalid input. Please enter a number between 0 and 23:"
+                    ),
+                    parse_mode="Markdown",
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+
+            return True
+
+        return False
+
+    async def _handle_settings_edit_cancel(self, query, context):
+        """Cancel settings edit and return to settings menu."""
+        chat_id = query.message.chat_id
+
+        # Clear edit state
+        context.user_data.pop("settings_edit_state", None)
+        context.user_data.pop("settings_edit_chat_id", None)
+        context.user_data.pop("settings_edit_hours_start", None)
+        context.user_data.pop("settings_edit_message_id", None)
+
+        # Refresh settings message
+        await self._refresh_settings_message(query, show_answer=False)
+        await query.answer("Cancelled")
+
+    async def _send_settings_message_by_chat_id(self, chat_id: int, context):
+        """Send a fresh settings message to a chat (used after editing)."""
+        settings_data = self.settings_service.get_settings_display(chat_id)
+        account_data = self.ig_account_service.get_accounts_for_display(chat_id)
+
+        message = (
+            "⚙️ *Bot Settings*\n\n"
+            "_Regenerate: Clears queue, creates new schedule_\n"
+            "_+7 Days: Extends existing queue_"
+        )
+
+        keyboard = [
+            [InlineKeyboardButton(
+                "✅ Dry Run" if settings_data["dry_run_mode"] else "Dry Run",
+                callback_data="settings_toggle:dry_run_mode"
+            )],
+            [InlineKeyboardButton(
+                "✅ Instagram API" if settings_data["enable_instagram_api"] else "Instagram API",
+                callback_data="settings_toggle:enable_instagram_api"
+            )],
+            [InlineKeyboardButton(
+                "⏸️ Paused" if settings_data["is_paused"] else "▶️ Active",
+                callback_data="settings_toggle:is_paused"
+            )],
+            [InlineKeyboardButton(
+                f"📸 @{account_data['active_account_username']}" if account_data["active_account_username"] else "📸 Configure Accounts",
+                callback_data="settings_accounts:select"
+            )],
+            [InlineKeyboardButton(
+                f"📊 Posts/Day: {settings_data['posts_per_day']}",
+                callback_data="settings_edit:posts_per_day"
+            )],
+            [InlineKeyboardButton(
+                f"🕐 Hours: {settings_data['posting_hours_start']}:00-{settings_data['posting_hours_end']}:00 UTC",
+                callback_data="settings_edit:hours"
+            )],
+            [InlineKeyboardButton(
+                f"📝 Verbose: {'ON' if settings_data['show_verbose_notifications'] else 'OFF'}",
+                callback_data="settings_toggle:show_verbose_notifications"
+            )],
+            [
+                InlineKeyboardButton("🔄 Regenerate", callback_data="schedule_action:regenerate"),
+                InlineKeyboardButton("📅 +7 Days", callback_data="schedule_action:extend"),
+            ],
+            [InlineKeyboardButton("❌ Close", callback_data="settings_close")],
+        ]
+
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=message,
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
     async def _handle_schedule_action(self, action: str, user, query):
         """Handle schedule management actions (regenerate/extend)."""
@@ -1712,9 +1950,10 @@ class TelegramService(BaseService):
                 await self._handle_settings_toggle(data, user, query)
             elif action == "settings_refresh":
                 await self._refresh_settings_message(query)
-            elif action == "settings_info":
-                # Info buttons are non-interactive, just acknowledge
-                await query.answer("Use CLI to change this setting")
+            elif action == "settings_edit":
+                await self._handle_settings_edit_start(data, user, query, context)
+            elif action == "settings_edit_cancel":
+                await self._handle_settings_edit_cancel(query, context)
             elif action == "settings_close":
                 await self._handle_settings_close(query)
             # Schedule management callbacks
