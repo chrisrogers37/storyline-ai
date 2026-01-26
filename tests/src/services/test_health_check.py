@@ -14,10 +14,11 @@ class TestHealthCheckService:
     @pytest.fixture
     def health_service(self):
         """Create HealthCheckService with mocked dependencies."""
-        service = HealthCheckService()
-        service.queue_repo = Mock()
-        service.history_repo = Mock()
-        return service
+        with patch("src.services.base_service.ServiceRunRepository"):
+            service = HealthCheckService()
+            service.queue_repo = Mock()
+            service.history_repo = Mock()
+            yield service
 
     @patch("src.services.core.health_check.get_db")
     def test_check_database_healthy(self, mock_get_db, health_service):
@@ -163,10 +164,16 @@ class TestHealthCheckService:
         mock_get_db.return_value = iter([mock_db])
         mock_settings.TELEGRAM_BOT_TOKEN = "123456:ABC"
         mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
+        mock_settings.ENABLE_INSTAGRAM_API = False  # Disable Instagram API check
         health_service.queue_repo.count_pending.return_value = 5
         health_service.queue_repo.get_oldest_pending.return_value = None
         mock_post = Mock(success=True)
         health_service.history_repo.get_recent_posts.return_value = [mock_post]
+
+        # Mock the Instagram API check to avoid database connection
+        health_service._check_instagram_api = Mock(
+            return_value={"healthy": True, "message": "Instagram API mocked"}
+        )
 
         result = health_service.check_all()
 

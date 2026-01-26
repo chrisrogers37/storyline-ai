@@ -15,6 +15,7 @@ from src.repositories.media_repository import MediaRepository
 def mock_telegram_service():
     """Create TelegramService with mocked dependencies."""
     with (
+        patch("src.services.base_service.ServiceRunRepository"),
         patch("src.services.core.telegram_service.settings") as mock_settings,
         patch(
             "src.services.core.telegram_service.UserRepository"
@@ -37,6 +38,12 @@ def mock_telegram_service():
         patch(
             "src.services.core.telegram_service.InteractionService"
         ) as mock_interaction_service_class,
+        patch(
+            "src.services.core.telegram_service.SettingsService"
+        ) as mock_settings_service_class,
+        patch(
+            "src.services.core.telegram_service.InstagramAccountService"
+        ) as mock_ig_account_service_class,
     ):
         mock_settings.TELEGRAM_BOT_TOKEN = "123456:ABC-DEF1234ghIkl"
         mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
@@ -53,6 +60,8 @@ def mock_telegram_service():
         service.lock_repo = mock_lock_repo_class.return_value
         service.lock_service = mock_lock_service_class.return_value
         service.interaction_service = mock_interaction_service_class.return_value
+        service.settings_service = mock_settings_service_class.return_value
+        service.ig_account_service = mock_ig_account_service_class.return_value
 
         yield service
 
@@ -730,6 +739,7 @@ class TestQueueCommand:
 
         mock_media = Mock()
         mock_media.file_name = "test.jpg"
+        mock_media.category = "memes"
         mock_telegram_service.media_repo.get_by_id.return_value = mock_media
 
         mock_update = Mock()
@@ -802,6 +812,7 @@ class TestQueueCommand:
 
         mock_media = Mock()
         mock_media.file_name = "test.jpg"
+        mock_media.category = "memes"
         mock_telegram_service.media_repo.get_by_id.return_value = mock_media
 
         mock_update = Mock()
@@ -825,9 +836,12 @@ class TestQueueCommand:
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestNextCommand:
-    """Tests for /next command - force send next post."""
+    """Tests for /next command - force send next post.
 
-    async def test_next_sends_earliest_scheduled_post(self, mock_telegram_service):
+    Note: These tests require database connectivity as they create PostingService internally.
+    """
+
+    async def test_next_sends_earliest_scheduled_post(self, mock_telegram_service, requires_db):
         """Test /next sends the earliest scheduled post."""
         mock_user = Mock()
         mock_user.id = uuid4()
@@ -847,6 +861,7 @@ class TestNextCommand:
 
         mock_media = Mock()
         mock_media.file_name = "next_post.jpg"
+        mock_media.category = "memes"
         mock_telegram_service.media_repo.get_by_id.return_value = mock_media
 
         # Mock send_notification
@@ -880,7 +895,7 @@ class TestNextCommand:
         # Should NOT send any extra messages on success (no clutter)
         mock_update.message.reply_text.assert_not_called()
 
-    async def test_next_empty_queue(self, mock_telegram_service):
+    async def test_next_empty_queue(self, mock_telegram_service, requires_db):
         """Test /next shows error when queue is empty."""
         mock_user = Mock()
         mock_user.id = uuid4()
@@ -907,7 +922,7 @@ class TestNextCommand:
         assert "Queue Empty" in message_text
         assert "No posts to send" in message_text
 
-    async def test_next_media_not_found(self, mock_telegram_service):
+    async def test_next_media_not_found(self, mock_telegram_service, requires_db):
         """Test /next handles missing media gracefully."""
         mock_user = Mock()
         mock_user.id = uuid4()
@@ -941,7 +956,7 @@ class TestNextCommand:
         assert "Error" in message_text
         assert "Media item not found" in message_text
 
-    async def test_next_notification_failure(self, mock_telegram_service):
+    async def test_next_notification_failure(self, mock_telegram_service, requires_db):
         """Test /next handles notification failure gracefully."""
         mock_user = Mock()
         mock_user.id = uuid4()
@@ -958,6 +973,7 @@ class TestNextCommand:
 
         mock_media = Mock()
         mock_media.file_name = "fail_post.jpg"
+        mock_media.category = "memes"
         mock_telegram_service.media_repo.get_by_id.return_value = mock_media
 
         # Mock send_notification to fail
@@ -983,7 +999,7 @@ class TestNextCommand:
         call_args = mock_update.message.reply_text.call_args
         assert "Failed to send" in call_args.args[0]
 
-    async def test_next_logs_interaction(self, mock_telegram_service):
+    async def test_next_logs_interaction(self, mock_telegram_service, requires_db):
         """Test /next logs the interaction."""
         mock_user = Mock()
         mock_user.id = uuid4()
@@ -1003,6 +1019,7 @@ class TestNextCommand:
 
         mock_media = Mock()
         mock_media.file_name = "logged_post.jpg"
+        mock_media.category = "memes"
         mock_telegram_service.media_repo.get_by_id.return_value = mock_media
 
         mock_telegram_service.send_notification = AsyncMock(return_value=True)
@@ -1039,7 +1056,7 @@ class TestNextCommand:
 class TestPauseCommand:
     """Tests for /pause command."""
 
-    async def test_pause_when_not_paused(self, mock_telegram_service):
+    async def test_pause_when_not_paused(self, mock_telegram_service, requires_db):
         """Test /pause pauses posting when not already paused."""
         mock_user = Mock()
         mock_user.id = uuid4()
@@ -1105,7 +1122,7 @@ class TestPauseCommand:
 class TestResumeCommand:
     """Tests for /resume command."""
 
-    async def test_resume_when_not_paused(self, mock_telegram_service):
+    async def test_resume_when_not_paused(self, mock_telegram_service, requires_db):
         """Test /resume shows already running message."""
         mock_user = Mock()
         mock_user.id = uuid4()
@@ -1172,7 +1189,7 @@ class TestResumeCommand:
         # Should have reply_markup with options
         assert call_args.kwargs.get("reply_markup") is not None
 
-    async def test_resume_no_overdue(self, mock_telegram_service):
+    async def test_resume_no_overdue(self, mock_telegram_service, requires_db):
         """Test /resume immediately resumes when no overdue posts."""
         mock_user = Mock()
         mock_user.id = uuid4()
@@ -1212,7 +1229,7 @@ class TestResumeCommand:
 class TestScheduleCommand:
     """Tests for /schedule command."""
 
-    async def test_schedule_creates_schedule(self, mock_telegram_service):
+    async def test_schedule_creates_schedule(self, mock_telegram_service, requires_db):
         """Test /schedule creates a posting schedule."""
         mock_user = Mock()
         mock_user.id = uuid4()
@@ -1428,6 +1445,7 @@ class TestLocksCommand:
 
         mock_media = Mock()
         mock_media.file_name = "locked_image.jpg"
+        mock_media.category = "memes"
         mock_telegram_service.media_repo.get_by_id.return_value = mock_media
 
         mock_update = Mock()
@@ -1537,7 +1555,7 @@ class TestClearCommand:
 class TestResumeCallbacks:
     """Tests for resume callback handlers."""
 
-    async def test_resume_reschedule(self, mock_telegram_service):
+    async def test_resume_reschedule(self, mock_telegram_service, requires_db):
         """Test resume:reschedule reschedules overdue posts."""
         mock_user = Mock()
         mock_user.id = uuid4()
@@ -1570,7 +1588,7 @@ class TestResumeCallbacks:
         call_args = mock_query.edit_message_text.call_args
         assert "Rescheduled 1 overdue posts" in call_args.args[0]
 
-    async def test_resume_clear(self, mock_telegram_service):
+    async def test_resume_clear(self, mock_telegram_service, requires_db):
         """Test resume:clear clears overdue posts."""
         mock_user = Mock()
         mock_user.id = uuid4()
@@ -1612,7 +1630,7 @@ class TestResumeCallbacks:
         assert "Cleared 1 overdue posts" in call_args.args[0]
         assert "1 scheduled posts remaining" in call_args.args[0]
 
-    async def test_resume_force(self, mock_telegram_service):
+    async def test_resume_force(self, mock_telegram_service, requires_db):
         """Test resume:force resumes without handling overdue."""
         mock_user = Mock()
         mock_user.id = uuid4()
@@ -1698,9 +1716,12 @@ class TestClearCallbacks:
 
 @pytest.mark.unit
 class TestPauseIntegration:
-    """Tests for pause integration with PostingService."""
+    """Tests for pause integration with PostingService.
 
-    def test_posting_service_respects_pause(self):
+    Note: This test requires database connectivity to instantiate PostingService.
+    """
+
+    def test_posting_service_respects_pause(self, requires_db):
         """Test that PostingService checks pause state."""
         from src.services.core.posting import PostingService
 

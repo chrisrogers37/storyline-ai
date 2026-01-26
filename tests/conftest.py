@@ -154,3 +154,15 @@ def sample_media_item():
         "file_size_bytes": 1024000,
         "mime_type": "image/jpeg",
     }
+
+
+@pytest.fixture
+def requires_db(setup_test_database):
+    """
+    Fixture that skips the test if database is not available.
+
+    Use this for unit tests that need to create services with database connections.
+    """
+    if setup_test_database is None:
+        pytest.skip("Database not available - skipping test that requires database")
+    return setup_test_database

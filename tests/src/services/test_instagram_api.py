@@ -27,21 +27,31 @@ class TestInstagramAPIService:
     @pytest.fixture
     def instagram_service(self):
         """Create InstagramAPIService with mocked dependencies."""
-        with patch("src.services.integrations.instagram_api.TokenRefreshService"):
-            with patch("src.services.integrations.instagram_api.CloudStorageService"):
-                with patch("src.services.integrations.instagram_api.HistoryRepository"):
-                    with patch("src.services.base_service.ServiceRunRepository"):
-                        from src.services.integrations.instagram_api import (
-                            InstagramAPIService,
-                        )
+        with (
+            patch("src.services.base_service.ServiceRunRepository"),
+            patch("src.services.integrations.instagram_api.TokenRefreshService"),
+            patch("src.services.integrations.instagram_api.CloudStorageService"),
+            patch("src.services.integrations.instagram_api.HistoryRepository"),
+            patch("src.services.integrations.instagram_api.InstagramAccountService"),
+            patch("src.services.integrations.instagram_api.TokenRepository"),
+            patch("src.services.integrations.instagram_api.TokenEncryption"),
+            patch("src.services.integrations.instagram_api.SettingsService"),
+        ):
+            from src.services.integrations.instagram_api import (
+                InstagramAPIService,
+            )
 
-                        service = InstagramAPIService()
-                        service.token_service = Mock()
-                        service.cloud_service = Mock()
-                        service.history_repo = Mock()
-                        service.track_execution = mock_track_execution
-                        service.set_result_summary = Mock()
-                        yield service
+            service = InstagramAPIService()
+            service.token_service = Mock()
+            service.cloud_service = Mock()
+            service.history_repo = Mock()
+            service.account_service = Mock()
+            service.token_repo = Mock()
+            service.encryption = Mock()
+            service.settings_service = Mock()
+            service.track_execution = mock_track_execution
+            service.set_result_summary = Mock()
+            yield service
 
     # ==================== get_rate_limit_remaining Tests ====================
 
@@ -144,10 +154,14 @@ class TestInstagramAPIService:
 
     @patch("src.services.integrations.instagram_api.settings")
     def test_is_configured_missing_account_id(self, mock_settings, instagram_service):
-        """Test is_configured returns False when account ID missing."""
+        """Test is_configured returns False when account ID missing (legacy mode)."""
         mock_settings.ENABLE_INSTAGRAM_API = True
         mock_settings.INSTAGRAM_ACCOUNT_ID = None
         mock_settings.FACEBOOK_APP_ID = "67890"
+        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
+
+        # No active account, so should fallback to checking INSTAGRAM_ACCOUNT_ID
+        instagram_service.account_service.get_active_account.return_value = None
 
         assert instagram_service.is_configured() is False
 
@@ -262,15 +276,21 @@ class TestInstagramAPIService:
 
     @pytest.mark.asyncio
     @patch("src.services.integrations.instagram_api.settings")
-    async def test_post_story_no_account_id(self, mock_settings, instagram_service):
-        """Test post_story raises error when account ID not configured."""
+    async def test_post_story_no_account_credentials(self, mock_settings, instagram_service):
+        """Test post_story raises error when no account credentials available."""
         mock_settings.INSTAGRAM_POSTS_PER_HOUR = 25
         mock_settings.INSTAGRAM_ACCOUNT_ID = None
+        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
         instagram_service.history_repo.count_by_method.return_value = 0
-        instagram_service.token_service.get_token.return_value = "valid_token"
 
+        # No active account in multi-account mode
+        instagram_service.account_service.get_active_account.return_value = None
+        # No legacy token available
+        instagram_service.token_service.get_token.return_value = None
+
+        # Should raise TokenExpiredError when no credentials available
         with pytest.raises(
-            InstagramAPIError, match="INSTAGRAM_ACCOUNT_ID not configured"
+            TokenExpiredError, match="No valid Instagram token available"
         ):
             await instagram_service.post_story("https://example.com/image.jpg")
 

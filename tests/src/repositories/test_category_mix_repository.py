@@ -21,10 +21,10 @@ class TestCategoryMixRepository:
     @pytest.fixture
     def mix_repo(self, mock_db):
         """Create CategoryMixRepository with mocked database."""
-        with patch("src.repositories.category_mix_repository.get_db") as mock_get_db:
+        with patch("src.repositories.base_repository.get_db") as mock_get_db:
             mock_get_db.return_value = iter([mock_db])
             repo = CategoryMixRepository()
-            repo.db = mock_db
+            repo._db = mock_db
             return repo
 
     def test_validate_ratios_success(self, mix_repo):

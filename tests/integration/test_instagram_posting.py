@@ -15,7 +15,19 @@ from pathlib import Path
 
 @pytest.mark.integration
 class TestInstagramPostingWorkflow:
-    """Integration tests for the Instagram posting workflow."""
+    """Integration tests for the Instagram posting workflow.
+
+    Note: These tests require a full environment setup including database
+    connectivity for proper mocking and behavior testing.
+    """
+
+    @pytest.fixture(autouse=True)
+    def skip_without_db(self, request):
+        """Skip integration tests when database is not available."""
+        # Check if database is available by looking at setup_test_database
+        db_fixture = request.getfixturevalue("setup_test_database")
+        if db_fixture is None:
+            pytest.skip("Database not available - skipping integration test")
 
     @pytest.fixture
     def mock_settings(self):
@@ -520,7 +532,17 @@ class TestInstagramPostingWorkflow:
 
 @pytest.mark.integration
 class TestHistoryRepositoryIntegration:
-    """Integration tests for history repository rate limit queries."""
+    """Integration tests for history repository rate limit queries.
+
+    Note: These tests require proper database setup to avoid cleanup errors.
+    """
+
+    @pytest.fixture(autouse=True)
+    def skip_without_db(self, request):
+        """Skip integration tests when database is not available."""
+        db_fixture = request.getfixturevalue("setup_test_database")
+        if db_fixture is None:
+            pytest.skip("Database not available - skipping integration test")
 
     def test_count_by_method_instagram_api(self):
         """Test counting Instagram API posts in time window."""
