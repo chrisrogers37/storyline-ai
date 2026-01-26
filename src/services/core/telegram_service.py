@@ -1111,16 +1111,34 @@ class TelegramService(BaseService):
                     if not username:
                         raise ValueError("Could not fetch username from Instagram API")
 
-                # Create the account with fetched username
-                account = self.ig_account_service.add_account(
-                    display_name=data["display_name"],
-                    instagram_account_id=data["account_id"],
-                    instagram_username=username,
-                    access_token=access_token,
-                    user=user,
-                    set_as_active=True,
-                    telegram_chat_id=chat_id
+                # Check if account already exists
+                existing_account = self.ig_account_service.get_account_by_instagram_id(
+                    data["account_id"]
                 )
+
+                if existing_account:
+                    # Update the existing account's token
+                    account = self.ig_account_service.update_account_token(
+                        instagram_account_id=data["account_id"],
+                        access_token=access_token,
+                        instagram_username=username,
+                        user=user,
+                        set_as_active=True,
+                        telegram_chat_id=chat_id
+                    )
+                    was_update = True
+                else:
+                    # Create the account with fetched username
+                    account = self.ig_account_service.add_account(
+                        display_name=data["display_name"],
+                        instagram_account_id=data["account_id"],
+                        instagram_username=username,
+                        access_token=access_token,
+                        user=user,
+                        set_as_active=True,
+                        telegram_chat_id=chat_id
+                    )
+                    was_update = False
 
                 # Delete verifying message
                 try:
@@ -1145,18 +1163,20 @@ class TelegramService(BaseService):
                 # Log interaction
                 self.interaction_service.log_callback(
                     user_id=str(user.id),
-                    callback_name="add_account",
+                    callback_name="update_account_token" if was_update else "add_account",
                     context={
                         "account_id": str(account.id),
                         "display_name": account.display_name,
-                        "username": account.instagram_username
+                        "username": account.instagram_username,
+                        "was_update": was_update
                     },
                     telegram_chat_id=chat_id,
                     telegram_message_id=update.message.message_id,
                 )
 
+                action = "updated token for" if was_update else "added"
                 logger.info(
-                    f"User {self._get_display_name(user)} added Instagram account: "
+                    f"User {self._get_display_name(user)} {action} Instagram account: "
                     f"{account.display_name} (@{account.instagram_username})"
                 )
 
@@ -1187,11 +1207,20 @@ class TelegramService(BaseService):
                     InlineKeyboardButton("↩️ Back to Settings", callback_data="settings_accounts:back")
                 ])
 
+                # Build success message with security warning
+                if was_update:
+                    action_msg = f"✅ *Updated token for @{account.instagram_username}*"
+                else:
+                    action_msg = f"✅ *Added @{account.instagram_username}*"
+
                 await context.bot.send_message(
                     chat_id=chat_id,
                     text=(
-                        f"✅ *Added @{account.instagram_username}*\n\n"
-                        f"📸 *Configure Instagram Accounts*\n\n"
+                        f"{action_msg}\n\n"
+                        "⚠️ *Security Note:* Please delete your messages above "
+                        "that contain the Account ID and Access Token. "
+                        "Bots cannot delete user messages in private chats.\n\n"
+                        "📸 *Configure Instagram Accounts*\n\n"
                         "Select an account to make it active, or add/remove accounts."
                     ),
                     parse_mode="Markdown",
@@ -1230,7 +1259,11 @@ class TelegramService(BaseService):
 
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text=f"❌ *Failed to add account*\n\n{error_msg}",
+                    text=(
+                        f"❌ *Failed to add account*\n\n{error_msg}\n\n"
+                        "⚠️ *Security Note:* Please delete your messages above "
+                        "that contain sensitive data (Account ID, Access Token)."
+                    ),
                     parse_mode="Markdown",
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )

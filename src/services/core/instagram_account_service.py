@@ -265,6 +265,100 @@ class InstagramAccountService(BaseService):
 
             return account
 
+    def update_account_token(
+        self,
+        instagram_account_id: str,
+        access_token: str,
+        instagram_username: Optional[str] = None,
+        token_expires_at: Optional[datetime] = None,
+        user: Optional[User] = None,
+        set_as_active: bool = False,
+        telegram_chat_id: Optional[int] = None
+    ) -> InstagramAccount:
+        """
+        Update the token for an existing Instagram account.
+
+        Use this when re-adding an account that already exists
+        (e.g., token expired and user is re-authenticating).
+
+        Args:
+            instagram_account_id: Meta's account ID (numeric string)
+            access_token: New OAuth access token
+            instagram_username: Update username if changed (optional)
+            token_expires_at: When new token expires
+            user: User performing the update
+            set_as_active: If True, set this as the active account
+            telegram_chat_id: Required if set_as_active is True
+
+        Returns:
+            Updated InstagramAccount
+
+        Raises:
+            ValueError: If account not found
+        """
+        with self.track_execution(
+            "update_account_token",
+            user_id=user.id if user else None,
+            triggered_by="user",
+            input_params={"instagram_account_id": instagram_account_id}
+        ) as run_id:
+            # Find existing account
+            account = self.account_repo.get_by_instagram_id(instagram_account_id)
+            if not account:
+                raise ValueError(f"Account with ID {instagram_account_id} not found")
+
+            # Update username if provided
+            if instagram_username and instagram_username != account.instagram_username:
+                account = self.account_repo.update(
+                    str(account.id),
+                    instagram_username=instagram_username
+                )
+
+            # Update/create token
+            self.token_repo.create_or_update(
+                service_name="instagram",
+                token_type="access_token",
+                token_value=access_token,
+                expires_at=token_expires_at,
+                instagram_account_id=str(account.id),
+                metadata={
+                    "account_id": instagram_account_id,
+                    "username": account.instagram_username
+                }
+            )
+
+            # Reactivate if was deactivated
+            if not account.is_active:
+                account = self.account_repo.activate(str(account.id))
+                logger.info(f"Reactivated Instagram account: {account.display_name}")
+
+            # Optionally set as active
+            if set_as_active:
+                if not telegram_chat_id:
+                    raise ValueError("telegram_chat_id required when set_as_active=True")
+                self.settings_repo.update(
+                    telegram_chat_id,
+                    active_instagram_account_id=str(account.id)
+                )
+
+            self.set_result_summary(run_id, {
+                "account_id": str(account.id),
+                "display_name": account.display_name,
+                "username": account.instagram_username,
+                "token_updated": True
+            })
+
+            logger.info(
+                f"Updated token for Instagram account: "
+                f"{account.display_name} (@{account.instagram_username})"
+            )
+
+            return account
+
+    def get_account_by_instagram_id(self, instagram_account_id: str) -> Optional[InstagramAccount]:
+        """Get account by Instagram's numeric ID."""
+        return self.account_repo.get_by_instagram_id(instagram_account_id)
+
     def deactivate_account(
         self,
         account_id: str,
