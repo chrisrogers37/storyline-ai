@@ -98,18 +98,38 @@ documentation/
 
 ## 🛠 Operations & Maintenance
 
-Coming soon:
-- Monitoring and alerting setup
-- Backup and restore procedures
-- Troubleshooting runbooks
-- Performance tuning
-- Security hardening
+### Monitoring & Alerting
+**[operations/monitoring.md](operations/monitoring.md)**
+- Service health checks
+- Key metrics to monitor (queue, posting rate, tokens)
+- Alerting thresholds
+- Log analysis
+
+### Backup & Restore
+**[operations/backup-restore.md](operations/backup-restore.md)**
+- Database backup procedures (manual & automated)
+- Media files backup
+- Configuration backup
+- Disaster recovery steps
+
+### Troubleshooting
+**[operations/troubleshooting.md](operations/troubleshooting.md)**
+- Common issues and fixes
+- Service won't start
+- Posts not going out
+- Telegram bot not responding
+- Token refresh failures
+- Emergency procedures
 
 ---
 
 ## 🔄 Project Updates
 
 ### Feature Updates
+**[2026-01-11-force-posting-queue-shift.md](updates/2026-01-11-force-posting-queue-shift.md)**
+- Force posting implementation
+- Queue shift behavior on manual posts
+
 **[2026-01-10-category-scheduling.md](updates/2026-01-10-category-scheduling.md)**
 - Category-based media organization (folder → category extraction)
 - Configurable posting ratios per category (Type 2 SCD)
@@ -121,6 +141,11 @@ Coming soon:
 - 4 critical bugs fixed (service run metadata, scheduler date mutation, health check, lock creation)
 - All bugs identified during code review and deployment testing
 - Production verified and tested
+
+### Handoffs
+**[HANDOFF-2026-01-05.md](updates/HANDOFF-2026-01-05.md)**
+- Phase 1.5 implementation handoff for v1.2.0
+- Database schema changes documentation
 
 *Note: Updates folder contains dated documents for bug fixes, patches, and significant changes.*
 
@@ -145,12 +170,11 @@ Completed and historical documents:
 - Phase 1 completion checklist and delivered components
 - Deployment verification results
 
-**[archive/HANDOFF-2026-01-05.md](archive/HANDOFF-2026-01-05.md)** - ✅ Merged
-- Phase 1.5 implementation handoff for v1.2.0
-- Database schema changes documentation
-
 **[archive/upcoming_build_notes.md](archive/upcoming_build_notes.md)** - ✅ Implemented
 - Original feature ideas (all implemented in Phase 1.5)
+
+**[archive/instagram_automation_plan.md](archive/instagram_automation_plan.md)** - 📋 Reference
+- Original planning document (superseded by planning/ versions)
 
 ---
 
@@ -229,9 +253,9 @@ Current documentation status:
 | **Planning** | ✅ Complete | 4 files | Phase 1.6 complete |
 | **Getting Started** | ✅ Complete | 4 guides | All setup guides |
 | **Testing** | ✅ Complete | 2 guides | 268 tests documented |
-| **Updates** | ✅ Current | 2 files | v1.4.0 category scheduling |
+| **Updates** | ✅ Current | 4 files | Bugfixes, features, handoffs |
 | **Archive** | ✅ Organized | 3 files | Historical docs preserved |
-| **Operations** | 🚧 Planned | 0 files | Future: monitoring, backups |
+| **Operations** | ✅ Complete | 3 files | Monitoring, backup, troubleshooting |
 | **API Docs** | ⏳ Phase 5 | 0 files | Future: REST API |
 
 ### Document Status Legend

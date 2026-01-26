@@ -1,0 +1,73 @@
+name: Deploy to Pi
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+
+jobs:
+  deploy:
+    name: Deploy to Raspberry Pi
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PI_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.PI_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy code
+        run: |
+          ssh ${{ secrets.PI_USER }}@${{ secrets.PI_HOST }} << 'EOF'
+            cd ~/storyline-ai
+
+            # Pull latest code
+            git fetch origin main
+            git reset --hard origin/main
+
+            # Update dependencies
+            source venv/bin/activate
+            pip install -r requirements.txt
+            pip install -e .
+
+            # Run migrations (if any new ones)
+            for migration in scripts/migrations/*.sql; do
+              if [ -f "$migration" ]; then
+                echo "Checking migration: $migration"
+                psql -U storyline_user -d storyline_ai -f "$migration" 2>/dev/null || true
+              fi
+            done
+
+            # Restart service
+            sudo systemctl restart storyline-ai
+
+            # Verify service started
+            sleep 5
+            systemctl is-active storyline-ai
+          EOF
+
+      - name: Verify deployment
+        run: |
+          ssh ${{ secrets.PI_USER }}@${{ secrets.PI_HOST }} << 'EOF'
+            cd ~/storyline-ai
+            source venv/bin/activate
+            storyline-cli check-health
+          EOF
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "Deployment failed! Check logs for details."
+          # Add notification (Telegram, Slack, etc.) here if desired
