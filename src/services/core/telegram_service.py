@@ -133,8 +133,8 @@ class TelegramService(BaseService):
         # Layout: Auto Post (if enabled) → Manual workflow → Reject
         keyboard = []
 
-        # Add Auto Post button if Instagram API is enabled
-        if settings.ENABLE_INSTAGRAM_API:
+        # Add Auto Post button if Instagram API is enabled (from database settings)
+        if chat_settings.enable_instagram_api:
             keyboard.append([
                 InlineKeyboardButton(
                     "🤖 Auto Post to Instagram",
@@ -546,20 +546,25 @@ class TelegramService(BaseService):
             /dryrun off - Disable dry run mode
         """
         user = self._get_or_create_user(update.effective_user)
+        chat_id = update.effective_chat.id
+
+        # Get current setting from database
+        chat_settings = self.settings_service.get_settings(chat_id)
 
         # Check if user provided an argument
         args = context.args if context.args else []
 
         if len(args) == 0:
-            # No argument - show current status
-            status = "ON" if settings.DRY_RUN_MODE else "OFF"
-            emoji = "🧪" if settings.DRY_RUN_MODE else "🚀"
+            # No argument - show current status from database
+            status = "ON" if chat_settings.dry_run_mode else "OFF"
+            emoji = "🧪" if chat_settings.dry_run_mode else "🚀"
             await update.message.reply_text(
                 f"{emoji} Dry Run Mode: {status}\n\n"
                 f"Use /dryrun on or /dryrun off to change."
             )
         elif args[0].lower() == "on":
-            settings.DRY_RUN_MODE = True
+            # Update database setting
+            self.settings_service.update_setting(chat_id, "dry_run_mode", True, user)
             await update.message.reply_text(
                 "🧪 Dry Run Mode: ON\n\n"
                 "• Auto Post will upload to Cloudinary but NOT post to Instagram\n"
@@ -568,7 +573,8 @@ class TelegramService(BaseService):
             )
             logger.info(f"Dry run mode ENABLED by {self._get_display_name(user)}")
         elif args[0].lower() == "off":
-            settings.DRY_RUN_MODE = False
+            # Update database setting
+            self.settings_service.update_setting(chat_id, "dry_run_mode", False, user)
             await update.message.reply_text(
                 "🚀 Dry Run Mode: OFF\n\n"
                 "• Auto Post will now post to Instagram for real\n"
@@ -1059,7 +1065,8 @@ class TelegramService(BaseService):
                 "*Step 3 of 3: Access Token*\n\n"
                 f"Display name: `{context.user_data['add_account_data']['display_name']}`\n"
                 f"Account ID: `{message_text}`\n\n"
-                "⚠️ *Security*: Your token message will be deleted immediately.\n\n"
+                "⚠️ *Security*: Delete your token message after submitting.\n"
+                "(Bots cannot delete user messages in private chats)\n\n"
                 "Paste your Instagram Graph API access token:",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup(keyboard)
@@ -1907,9 +1914,13 @@ class TelegramService(BaseService):
 
     async def _do_autopost(self, queue_id, queue_item, media_item, user, query, instagram_service, cloud_service):
         """Internal method to perform auto-post with pre-created services."""
+        chat_id = query.message.chat_id
+
+        # Get settings from database (not .env)
+        chat_settings = self.settings_service.get_settings(chat_id)
 
         # Run comprehensive safety check
-        safety_result = instagram_service.safety_check_before_post()
+        safety_result = instagram_service.safety_check_before_post(telegram_chat_id=chat_id)
 
         if not safety_result["safe_to_post"]:
             error_list = "\n".join([f"• {e}" for e in safety_result["errors"]])
@@ -1957,7 +1968,7 @@ class TelegramService(BaseService):
             # ============================================
             # DRY RUN MODE - Stop before Instagram API
             # ============================================
-            if settings.DRY_RUN_MODE:
+            if chat_settings.dry_run_mode:
                 # Dry run: only show Test Again and Back buttons
                 # Don't show Posted/Skip/Reject to prevent accidental marking
                 keyboard = [
@@ -1979,11 +1990,11 @@ class TelegramService(BaseService):
                 escaped_filename = _escape_markdown(media_item.file_name)
 
                 # Fetch account username from API (cached)
-                account_info = await instagram_service.get_account_info()
+                account_info = await instagram_service.get_account_info(telegram_chat_id=chat_id)
                 if account_info.get("username"):
                     account_display = f"@{account_info['username']}"
                 else:
-                    account_display = f"ID: {settings.INSTAGRAM_ACCOUNT_ID}"
+                    account_display = "Unknown account"
 
                 # Apply the same transformation we'd use for Instagram
                 media_type = "VIDEO" if media_item.file_path.lower().endswith(('.mp4', '.mov')) else "IMAGE"
@@ -2052,6 +2063,7 @@ class TelegramService(BaseService):
             post_result = await instagram_service.post_story(
                 media_url=story_url,
                 media_type=media_type,
+                telegram_chat_id=chat_id,
             )
 
             story_id = post_result.get("story_id")
@@ -2088,16 +2100,15 @@ class TelegramService(BaseService):
             # Update user stats
             self.user_repo.increment_posts(str(user.id))
 
-            # Success message - check verbose setting
-            chat_settings = self.settings_service.get_settings(query.message.chat_id)
+            # Success message - check verbose setting (chat_settings already loaded at start)
             verbose = chat_settings.show_verbose_notifications if chat_settings.show_verbose_notifications is not None else True
 
             # Fetch account username from API (cached)
-            account_info = await instagram_service.get_account_info()
+            account_info = await instagram_service.get_account_info(telegram_chat_id=chat_id)
             if account_info.get("username"):
                 account_display = f"@{account_info['username']}"
             else:
-                account_display = f"ID: {settings.INSTAGRAM_ACCOUNT_ID}"
+                account_display = "Unknown account"
 
             if verbose:
                 # Verbose ON: Show detailed info

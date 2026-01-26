@@ -9,6 +9,7 @@ from src.services.base_service import BaseService
 from src.services.integrations.token_refresh import TokenRefreshService
 from src.services.integrations.cloud_storage import CloudStorageService
 from src.services.core.instagram_account_service import InstagramAccountService
+from src.services.core.settings_service import SettingsService
 from src.repositories.history_repository import HistoryRepository
 from src.repositories.token_repository import TokenRepository
 from src.utils.encryption import TokenEncryption
@@ -55,6 +56,7 @@ class InstagramAPIService(BaseService):
         self.account_service = InstagramAccountService()
         self.token_repo = TokenRepository()
         self.encryption = TokenEncryption()
+        self.settings_service = SettingsService()
 
     def _get_active_account_credentials(
         self,
@@ -606,14 +608,17 @@ class InstagramAPIService(BaseService):
         if telegram_chat_id is None:
             telegram_chat_id = settings.ADMIN_TELEGRAM_CHAT_ID
 
+        # Get settings from database (not .env)
+        chat_settings = self.settings_service.get_settings(telegram_chat_id)
+
         checks = {}
         errors = []
         account_info = None
 
-        # Check 1: Instagram API enabled
-        checks["instagram_api_enabled"] = settings.ENABLE_INSTAGRAM_API
-        if not settings.ENABLE_INSTAGRAM_API:
-            errors.append("ENABLE_INSTAGRAM_API is False")
+        # Check 1: Instagram API enabled (from database)
+        checks["instagram_api_enabled"] = chat_settings.enable_instagram_api
+        if not chat_settings.enable_instagram_api:
+            errors.append("Instagram API is disabled in settings")
 
         # Check 2: Get active account credentials (multi-account or legacy)
         token, account_id, username = self._get_active_account_credentials(telegram_chat_id)
@@ -636,15 +641,15 @@ class InstagramAPIService(BaseService):
         elif account_id:
             account_info = f"ID: {account_id}"
 
-        # Check 3: DRY_RUN_MODE check (not an error, just informational)
-        checks["dry_run_mode"] = settings.DRY_RUN_MODE
+        # Check 3: DRY_RUN_MODE check (not an error, just informational) - from database
+        checks["dry_run_mode"] = chat_settings.dry_run_mode
 
         # Log the safety check
         safe_to_post = len(errors) == 0
         if safe_to_post:
             logger.info(
                 f"✅ SAFETY CHECK PASSED: Ready to post to Instagram "
-                f"(Account: {account_info}, DRY_RUN: {settings.DRY_RUN_MODE})"
+                f"(Account: {account_info}, DRY_RUN: {chat_settings.dry_run_mode})"
             )
         else:
             logger.error(f"❌ SAFETY CHECK FAILED: {errors}")
@@ -653,6 +658,6 @@ class InstagramAPIService(BaseService):
             "safe_to_post": safe_to_post,
             "checks": checks,
             "errors": errors,
-            "dry_run_mode": settings.DRY_RUN_MODE,
+            "dry_run_mode": chat_settings.dry_run_mode,
             "account": account_info,
         }
