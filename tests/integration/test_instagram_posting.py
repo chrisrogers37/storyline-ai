@@ -84,6 +84,7 @@ class TestInstagramPostingWorkflow:
                 service.history_repo = Mock()
                 service.lock_service = Mock()
                 service.telegram_service = Mock()
+                service.settings_service = Mock()
                 service._post_via_telegram = AsyncMock(return_value=True)
                 service._instagram_service = None
                 service._cloud_service = None
@@ -107,6 +108,7 @@ class TestInstagramPostingWorkflow:
             service.history_repo = Mock()
             service.lock_service = Mock()
             service.telegram_service = Mock()
+            service.settings_service = Mock()
             service._post_via_telegram = AsyncMock(return_value=True)
             service._instagram_service = None
             service._cloud_service = None
@@ -129,6 +131,7 @@ class TestInstagramPostingWorkflow:
             service.history_repo = Mock()
             service.lock_service = Mock()
             service.telegram_service = Mock()
+            service.settings_service = Mock()
             service._post_via_telegram = AsyncMock(return_value=True)
 
             # Mock Instagram service with exhausted rate limit
@@ -155,6 +158,7 @@ class TestInstagramPostingWorkflow:
             service.history_repo = Mock()
             service.lock_service = Mock()
             service.telegram_service = Mock()
+            service.settings_service = Mock()
 
             # Mock healthy Instagram service
             mock_instagram = Mock()

@@ -452,7 +452,7 @@ class TelegramService(BaseService):
                 )
             else:
                 await update.message.reply_text(
-                    f"❌ *Failed to send*\n\nCheck logs for details.",
+                    "❌ *Failed to send*\n\nCheck logs for details.",
                     parse_mode="Markdown"
                 )
             return

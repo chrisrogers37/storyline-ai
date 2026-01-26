@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+#### Code Quality and CI
+- **Ruff Linting Errors** - Fixed all 48 linting errors preventing CI from passing
+  - Removed 8 unused imports (urlencode, datetime, BigInteger, Dict, Decimal, Path, Optional, List)
+  - Fixed 18 unnecessary f-strings without placeholders
+  - Fixed 7 boolean comparison patterns (`== True` → direct checks, `== False` → `~` operator)
+  - Reorganized imports in cli/main.py to be at top of file
+  - Removed 1 unused variable in telegram_service.py
+
+### Changed
+
+#### Developer Experience Improvements
+- **Claude Code Hooks** - Updated PostToolUse hooks to auto-fix linting errors on file save
+  - Added `ruff check --fix` before `ruff format` in hooks
+  - Automatically fixes unused imports, f-strings, and other linting issues
+- **Pre-Push Linting Script** - New `scripts/lint.sh` to catch CI failures locally
+  - Runs `ruff check --fix` and `ruff format` on all code
+  - Prevents CI failures by validating before push
+- **Documentation Permissions** - Added markdown write permissions for documentation/ folder
+  - Enables frictionless documentation updates via Claude Code
+- **Documentation Organization** - Moved SECURITY_REVIEW.md to documentation/ folder
+
+#### Planning
+- **Phase 1.7 Feature Plan** - Added inline account selector planning document
+  - Comprehensive UX enhancement plan for Instagram account switching
+  - Includes implementation strategy, testing plan, and rollout phases
+  - Ready for development kickoff
+
 ### Added - Telegram /settings Menu Improvements
 
 #### New Settings Menu Features
