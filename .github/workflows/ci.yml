@@ -11,9 +11,9 @@ name: CI
 
 on:
   push:
-    branches: [main, develop, 'feature/*']
+    branches: ['**']  # Run on all branch pushes
   pull_request:
-    branches: [main, develop]
+    branches: ['**']  # Run on PRs to any branch
 
 jobs:
   lint:
