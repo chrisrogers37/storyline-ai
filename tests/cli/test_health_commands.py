@@ -1,4 +1,5 @@
 """Tests for health CLI commands."""
+
 import pytest
 from click.testing import CliRunner
 

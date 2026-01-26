@@ -5,8 +5,9 @@ These tests verify the end-to-end Instagram posting flow:
 2. CloudStorageService → InstagramAPIService pipeline
 3. Fallback to Telegram behavior
 """
+
 import pytest
-from unittest.mock import Mock, patch, AsyncMock, MagicMock
+from unittest.mock import Mock, patch, AsyncMock
 from datetime import datetime, timedelta
 import tempfile
 from pathlib import Path
@@ -69,7 +70,9 @@ class TestInstagramPostingWorkflow:
     # ==================== Routing Decision Tests ====================
 
     @pytest.mark.asyncio
-    async def test_routing_instagram_disabled_goes_to_telegram(self, mock_queue_item, mock_media_item_auto):
+    async def test_routing_instagram_disabled_goes_to_telegram(
+        self, mock_queue_item, mock_media_item_auto
+    ):
         """Test all posts go to Telegram when Instagram API disabled."""
         with patch("src.services.core.posting.settings") as mock_settings:
             mock_settings.ENABLE_INSTAGRAM_API = False
@@ -91,13 +94,17 @@ class TestInstagramPostingWorkflow:
 
                 # Import settings mock into the method
                 with patch("src.services.core.posting.settings", mock_settings):
-                    result = await service._route_post(mock_queue_item, mock_media_item_auto)
+                    result = await service._route_post(
+                        mock_queue_item, mock_media_item_auto
+                    )
 
         assert result["method"] == "telegram_manual"
         assert result["success"] is True
 
     @pytest.mark.asyncio
-    async def test_routing_requires_interaction_goes_to_telegram(self, mock_settings, mock_queue_item, mock_media_item_manual):
+    async def test_routing_requires_interaction_goes_to_telegram(
+        self, mock_settings, mock_queue_item, mock_media_item_manual
+    ):
         """Test posts requiring interaction go to Telegram."""
         from src.services.core.posting import PostingService
 
@@ -114,13 +121,17 @@ class TestInstagramPostingWorkflow:
             service._cloud_service = None
 
             with patch("src.services.core.posting.settings", mock_settings):
-                result = await service._route_post(mock_queue_item, mock_media_item_manual)
+                result = await service._route_post(
+                    mock_queue_item, mock_media_item_manual
+                )
 
         assert result["method"] == "telegram_manual"
         assert result["success"] is True
 
     @pytest.mark.asyncio
-    async def test_routing_rate_limit_exhausted_goes_to_telegram(self, mock_settings, mock_queue_item, mock_media_item_auto):
+    async def test_routing_rate_limit_exhausted_goes_to_telegram(
+        self, mock_settings, mock_queue_item, mock_media_item_auto
+    ):
         """Test posts fallback to Telegram when rate limit exhausted."""
         from src.services.core.posting import PostingService
 
@@ -141,13 +152,17 @@ class TestInstagramPostingWorkflow:
             service._cloud_service = Mock()
 
             with patch("src.services.core.posting.settings", mock_settings):
-                result = await service._route_post(mock_queue_item, mock_media_item_auto)
+                result = await service._route_post(
+                    mock_queue_item, mock_media_item_auto
+                )
 
         assert result["method"] == "telegram_manual"
         assert result["success"] is True
 
     @pytest.mark.asyncio
-    async def test_routing_healthy_instagram_selected(self, mock_settings, mock_queue_item, mock_media_item_auto):
+    async def test_routing_healthy_instagram_selected(
+        self, mock_settings, mock_queue_item, mock_media_item_auto
+    ):
         """Test posts go to Instagram API when healthy."""
         from src.services.core.posting import PostingService
 
@@ -163,7 +178,9 @@ class TestInstagramPostingWorkflow:
             # Mock healthy Instagram service
             mock_instagram = Mock()
             mock_instagram.get_rate_limit_remaining.return_value = 20
-            mock_instagram.post_story = AsyncMock(return_value={"success": True, "story_id": "123"})
+            mock_instagram.post_story = AsyncMock(
+                return_value={"success": True, "story_id": "123"}
+            )
             service._instagram_service = mock_instagram
 
             # Mock cloud service
@@ -177,10 +194,14 @@ class TestInstagramPostingWorkflow:
             service._cloud_service = mock_cloud
 
             # Mock _post_via_instagram to return success
-            service._post_via_instagram = AsyncMock(return_value={"success": True, "story_id": "123"})
+            service._post_via_instagram = AsyncMock(
+                return_value={"success": True, "story_id": "123"}
+            )
 
             with patch("src.services.core.posting.settings", mock_settings):
-                result = await service._route_post(mock_queue_item, mock_media_item_auto)
+                result = await service._route_post(
+                    mock_queue_item, mock_media_item_auto
+                )
 
         assert result["method"] == "instagram_api"
         assert result["success"] is True
@@ -188,13 +209,15 @@ class TestInstagramPostingWorkflow:
     # ==================== End-to-End Posting Flow Tests ====================
 
     @pytest.mark.asyncio
-    async def test_instagram_posting_full_flow(self, mock_settings, mock_queue_item, mock_media_item_auto):
+    async def test_instagram_posting_full_flow(
+        self, mock_settings, mock_queue_item, mock_media_item_auto
+    ):
         """Test complete Instagram posting flow: upload → post → cleanup."""
         from src.services.core.posting import PostingService
 
         # Create temp file for upload simulation
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
-            f.write(b'\xff\xd8\xff\xe0\x00\x10JFIF\x00')
+            f.write(b"\xff\xd8\xff\xe0\x00\x10JFIF\x00")
             mock_media_item_auto.file_path = f.name
 
         try:
@@ -220,16 +243,20 @@ class TestInstagramPostingWorkflow:
                 # Mock Instagram service
                 mock_instagram = Mock()
                 mock_instagram.get_rate_limit_remaining.return_value = 20
-                mock_instagram.post_story = AsyncMock(return_value={
-                    "success": True,
-                    "story_id": "17841234567890123",
-                    "container_id": "container_456",
-                    "timestamp": datetime.utcnow(),
-                })
+                mock_instagram.post_story = AsyncMock(
+                    return_value={
+                        "success": True,
+                        "story_id": "17841234567890123",
+                        "container_id": "container_456",
+                        "timestamp": datetime.utcnow(),
+                    }
+                )
                 service._instagram_service = mock_instagram
 
                 with patch("src.services.core.posting.settings", mock_settings):
-                    result = await service._post_via_instagram(mock_queue_item, mock_media_item_auto)
+                    result = await service._post_via_instagram(
+                        mock_queue_item, mock_media_item_auto
+                    )
 
             # Verify the flow
             assert result["success"] is True
@@ -248,13 +275,15 @@ class TestInstagramPostingWorkflow:
             Path(f.name).unlink(missing_ok=True)
 
     @pytest.mark.asyncio
-    async def test_instagram_posting_upload_failure_fallback(self, mock_settings, mock_queue_item, mock_media_item_auto):
+    async def test_instagram_posting_upload_failure_fallback(
+        self, mock_settings, mock_queue_item, mock_media_item_auto
+    ):
         """Test fallback to Telegram when cloud upload fails."""
         from src.services.core.posting import PostingService
         from src.exceptions import MediaUploadError
 
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
-            f.write(b'\xff\xd8\xff\xe0\x00\x10JFIF\x00')
+            f.write(b"\xff\xd8\xff\xe0\x00\x10JFIF\x00")
             mock_media_item_auto.file_path = f.name
 
         try:
@@ -277,7 +306,9 @@ class TestInstagramPostingWorkflow:
 
                 with patch("src.services.core.posting.settings", mock_settings):
                     with pytest.raises(MediaUploadError):
-                        await service._post_via_instagram(mock_queue_item, mock_media_item_auto)
+                        await service._post_via_instagram(
+                            mock_queue_item, mock_media_item_auto
+                        )
 
                 # Instagram should not have been called
                 mock_instagram.post_story.assert_not_called()
@@ -286,13 +317,15 @@ class TestInstagramPostingWorkflow:
             Path(f.name).unlink(missing_ok=True)
 
     @pytest.mark.asyncio
-    async def test_instagram_posting_api_failure_cleanup(self, mock_settings, mock_queue_item, mock_media_item_auto):
+    async def test_instagram_posting_api_failure_cleanup(
+        self, mock_settings, mock_queue_item, mock_media_item_auto
+    ):
         """Test cloud media cleanup when Instagram API fails."""
         from src.services.core.posting import PostingService
         from src.exceptions import InstagramAPIError
 
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
-            f.write(b'\xff\xd8\xff\xe0\x00\x10JFIF\x00')
+            f.write(b"\xff\xd8\xff\xe0\x00\x10JFIF\x00")
             mock_media_item_auto.file_path = f.name
 
         try:
@@ -318,12 +351,16 @@ class TestInstagramPostingWorkflow:
                 # Mock Instagram service to fail
                 mock_instagram = Mock()
                 mock_instagram.get_rate_limit_remaining.return_value = 20
-                mock_instagram.post_story = AsyncMock(side_effect=InstagramAPIError("API Error"))
+                mock_instagram.post_story = AsyncMock(
+                    side_effect=InstagramAPIError("API Error")
+                )
                 service._instagram_service = mock_instagram
 
                 with patch("src.services.core.posting.settings", mock_settings):
                     with pytest.raises(InstagramAPIError):
-                        await service._post_via_instagram(mock_queue_item, mock_media_item_auto)
+                        await service._post_via_instagram(
+                            mock_queue_item, mock_media_item_auto
+                        )
 
                 # Cloud media should be cleaned up after failure
                 # Note: cleanup happens in the outer process_pending_posts handler
@@ -334,7 +371,9 @@ class TestInstagramPostingWorkflow:
     # ==================== Cloud Cleanup Tests ====================
 
     @pytest.mark.asyncio
-    async def test_cloud_cleanup_after_successful_post(self, mock_settings, mock_media_item_auto):
+    async def test_cloud_cleanup_after_successful_post(
+        self, mock_settings, mock_media_item_auto
+    ):
         """Test cloud media is cleaned up after successful Instagram post."""
         from src.services.core.posting import PostingService
 
@@ -350,7 +389,9 @@ class TestInstagramPostingWorkflow:
 
             with patch("src.services.core.posting.settings", mock_settings):
                 with patch("asyncio.sleep", new_callable=AsyncMock):
-                    await service._cleanup_cloud_media(mock_media_item_auto.id, "storyline/story_123")
+                    await service._cleanup_cloud_media(
+                        mock_media_item_auto.id, "storyline/story_123"
+                    )
 
         # Verify deletion was called
         mock_cloud.delete_media.assert_called_once_with("storyline/story_123")
@@ -365,7 +406,9 @@ class TestInstagramPostingWorkflow:
         )
 
     @pytest.mark.asyncio
-    async def test_cloud_cleanup_handles_delete_failure(self, mock_settings, mock_media_item_auto):
+    async def test_cloud_cleanup_handles_delete_failure(
+        self, mock_settings, mock_media_item_auto
+    ):
         """Test cleanup handles deletion failure gracefully."""
         from src.services.core.posting import PostingService
 
@@ -380,7 +423,9 @@ class TestInstagramPostingWorkflow:
             with patch("src.services.core.posting.settings", mock_settings):
                 with patch("asyncio.sleep", new_callable=AsyncMock):
                     # Should not raise
-                    await service._cleanup_cloud_media(mock_media_item_auto.id, "storyline/story_123")
+                    await service._cleanup_cloud_media(
+                        mock_media_item_auto.id, "storyline/story_123"
+                    )
 
         # Verify deletion was attempted
         mock_cloud.delete_media.assert_called_once_with("storyline/story_123")
@@ -440,7 +485,9 @@ class TestInstagramPostingWorkflow:
 
             assert result["healthy"] is True
             assert result["enabled"] is True
-            assert "20/25" in result["message"] or "remaining" in result["message"].lower()
+            assert (
+                "20/25" in result["message"] or "remaining" in result["message"].lower()
+            )
 
     def test_health_check_instagram_api_expired_token(self):
         """Test health check reports expired token."""
@@ -466,7 +513,9 @@ class TestInstagramPostingWorkflow:
                 result = service._check_instagram_api()
 
             assert result["healthy"] is False
-            assert "Token" in result["message"] or "invalid" in result["message"].lower()
+            assert (
+                "Token" in result["message"] or "invalid" in result["message"].lower()
+            )
 
 
 @pytest.mark.integration

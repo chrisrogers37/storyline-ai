@@ -1,4 +1,5 @@
 """Tests for queue CLI commands."""
+
 import pytest
 from click.testing import CliRunner
 from datetime import datetime
@@ -24,10 +25,10 @@ class TestQueueCommands:
             file_name="schedule_cmd.jpg",
             file_hash="schedule_cmd_hash",
             file_size_bytes=100000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
-        user = user_repo.create(telegram_user_id=2000001)
+        user_repo.create(telegram_user_id=2000001)
 
         runner = CliRunner()
         result = runner.invoke(create_schedule, ["--days", "1", "--posts-per-day", "2"])
@@ -58,7 +59,7 @@ class TestQueueCommands:
             file_name="queue_list.jpg",
             file_hash="queue_list_hash",
             file_size_bytes=95000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         user = user_repo.create(telegram_user_id=2000002)
@@ -66,7 +67,7 @@ class TestQueueCommands:
         queue_repo.create(
             media_id=media.id,
             scheduled_user_id=user.id,
-            scheduled_time=datetime.utcnow()
+            scheduled_time=datetime.utcnow(),
         )
 
         runner = CliRunner()
@@ -86,15 +87,15 @@ class TestQueueCommands:
             file_name="status_filter.jpg",
             file_hash="status_filter_hash",
             file_size_bytes=90000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         user = user_repo.create(telegram_user_id=2000003)
 
-        queue_item = queue_repo.create(
+        queue_repo.create(
             media_id=media.id,
             scheduled_user_id=user.id,
-            scheduled_time=datetime.utcnow()
+            scheduled_time=datetime.utcnow(),
         )
 
         runner = CliRunner()
@@ -114,7 +115,7 @@ class TestQueueCommands:
             file_name="process.jpg",
             file_hash="process_hash",
             file_size_bytes=85000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         user = user_repo.create(telegram_user_id=2000004)
@@ -122,7 +123,7 @@ class TestQueueCommands:
         queue_repo.create(
             media_id=media.id,
             scheduled_user_id=user.id,
-            scheduled_time=datetime.utcnow()
+            scheduled_time=datetime.utcnow(),
         )
 
         runner = CliRunner()

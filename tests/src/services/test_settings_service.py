@@ -7,20 +7,25 @@ Test Categories:
 4. .env fallback behavior tests
 5. Multi-chat isolation tests
 """
+
 import pytest
 from unittest.mock import Mock, MagicMock, patch
-from datetime import datetime, timedelta
+from datetime import datetime
 from uuid import uuid4
 
-from src.services.core.settings_service import SettingsService, TOGGLEABLE_SETTINGS, NUMERIC_SETTINGS
+from src.services.core.settings_service import (
+    SettingsService,
+    TOGGLEABLE_SETTINGS,
+    NUMERIC_SETTINGS,
+)
 from src.repositories.chat_settings_repository import ChatSettingsRepository
 from src.models.chat_settings import ChatSettings
-from src.models.user import User
 
 
 # =============================================================================
 # UNIT TESTS (Mocked - No Database Required)
 # =============================================================================
+
 
 @pytest.mark.unit
 class TestSettingsServiceUnit:
@@ -95,7 +100,7 @@ class TestSettingsServiceUnit:
         service.service_run_repo.create_run.return_value = str(uuid4())
 
         # Toggle
-        result = service.toggle_setting(-100, "dry_run_mode", None)
+        service.toggle_setting(-100, "dry_run_mode", None)
 
         # Should have called update with opposite value
         mock_repo.update.assert_called_once()
@@ -199,9 +204,15 @@ class TestSettingsServiceUnit:
         display = service.get_settings_display(-100)
 
         expected_keys = [
-            "dry_run_mode", "enable_instagram_api", "is_paused",
-            "paused_at", "paused_by_user_id", "posts_per_day",
-            "posting_hours_start", "posting_hours_end", "updated_at"
+            "dry_run_mode",
+            "enable_instagram_api",
+            "is_paused",
+            "paused_at",
+            "paused_by_user_id",
+            "posts_per_day",
+            "posting_hours_start",
+            "posting_hours_end",
+            "updated_at",
         ]
         for key in expected_keys:
             assert key in display, f"Missing key: {key}"
@@ -211,6 +222,7 @@ class TestSettingsServiceUnit:
 # ARCHITECTURE VALIDATION TESTS
 # =============================================================================
 
+
 @pytest.mark.unit
 class TestSettingsArchitecture:
     """Tests validating architectural decisions."""
@@ -218,11 +230,13 @@ class TestSettingsArchitecture:
     def test_chat_settings_model_has_chat_id(self):
         """ChatSettings model should have telegram_chat_id for multi-tenancy."""
         from src.models.chat_settings import ChatSettings
+
         assert hasattr(ChatSettings, "telegram_chat_id")
 
     def test_settings_service_accepts_chat_id(self):
         """All SettingsService methods should accept chat_id parameter."""
         import inspect
+
         service = SettingsService()
 
         # get_settings
@@ -243,15 +257,15 @@ class TestSettingsArchitecture:
 
     def test_settings_service_does_not_hardcode_chat_id(self):
         """SettingsService should not import or use ADMIN_TELEGRAM_CHAT_ID."""
-        import ast
         from pathlib import Path
 
         service_path = Path("src/services/core/settings_service.py")
         content = service_path.read_text()
 
         # Should not reference ADMIN_TELEGRAM_CHAT_ID
-        assert "ADMIN_TELEGRAM_CHAT_ID" not in content, \
+        assert "ADMIN_TELEGRAM_CHAT_ID" not in content, (
             "SettingsService should not hardcode ADMIN_TELEGRAM_CHAT_ID"
+        )
 
     def test_repository_uses_chat_id_for_lookup(self):
         """Repository should use chat_id for unique lookups."""
@@ -272,6 +286,7 @@ class TestSettingsArchitecture:
 # =============================================================================
 # .ENV FALLBACK BEHAVIOR TESTS
 # =============================================================================
+
 
 @pytest.mark.unit
 class TestEnvFallback:
@@ -298,27 +313,30 @@ class TestEnvFallback:
 
         # Mock db.add to capture the created object
         created_settings = None
+
         def capture_add(obj):
             nonlocal created_settings
             created_settings = obj
+
         mock_db.add.side_effect = capture_add
 
         # Mock refresh to do nothing
         mock_db.refresh = MagicMock()
 
         # This should create from .env
-        result = repo.get_or_create(-1001234567890)
+        repo.get_or_create(-1001234567890)
 
         # Verify .env values were used
         mock_db.add.assert_called_once()
-        assert created_settings.dry_run_mode == True
-        assert created_settings.enable_instagram_api == False
+        assert created_settings.dry_run_mode
+        assert not created_settings.enable_instagram_api
         assert created_settings.posts_per_day == 5
 
 
 # =============================================================================
 # MULTI-CHAT ISOLATION TESTS
 # =============================================================================
+
 
 @pytest.mark.unit
 class TestMultiChatIsolation:
@@ -385,6 +403,7 @@ class TestMultiChatIsolation:
 # INTEGRATION TESTS (Require Database)
 # =============================================================================
 
+
 @pytest.mark.integration
 class TestSettingsServiceIntegration:
     """Integration tests requiring database connection."""
@@ -445,6 +464,7 @@ class TestSettingsServiceIntegration:
         chat_id = -1001234567896
 
         from src.repositories.user_repository import UserRepository
+
         user_repo = UserRepository()
         user_repo._db = test_db
 
@@ -477,6 +497,7 @@ class TestSettingsServiceIntegration:
         chat_id = -1001234567897
 
         from src.repositories.user_repository import UserRepository
+
         user_repo = UserRepository()
         user_repo._db = test_db
 
@@ -528,6 +549,7 @@ class TestSettingsServiceIntegration:
 # TELEGRAM SERVICE INTEGRATION TESTS
 # =============================================================================
 
+
 @pytest.mark.unit
 class TestTelegramSettingsIntegration:
     """Tests for TelegramService settings integration."""
@@ -538,6 +560,7 @@ class TestTelegramSettingsIntegration:
 
         # Check the class has the initialization
         import inspect
+
         source = inspect.getsource(TelegramService.__init__)
         assert "settings_service" in source or "SettingsService" in source
 
@@ -551,12 +574,15 @@ class TestTelegramSettingsIntegration:
 
         # Should reference settings_service, not _paused class variable
         assert "settings_service" in source or "get_settings" in source
-        assert "_paused" not in source or "is_paused" in source  # is_paused from DB, not _paused
+        assert (
+            "_paused" not in source or "is_paused" in source
+        )  # is_paused from DB, not _paused
 
 
 # =============================================================================
 # POSTING/SCHEDULER SERVICE ARCHITECTURE TESTS
 # =============================================================================
+
 
 @pytest.mark.unit
 class TestServiceSettingsUsage:
@@ -593,6 +619,7 @@ class TestServiceSettingsUsage:
 # =============================================================================
 # DEPLOYMENT MODEL DOCUMENTATION TEST
 # =============================================================================
+
 
 @pytest.mark.unit
 class TestDeploymentModel:
@@ -651,6 +678,7 @@ class TestDeploymentModel:
 
         # Verify it's indexed (for performance)
         from sqlalchemy import inspect as sa_inspect
+
         mapper = sa_inspect(ChatSettings)
 
         # Find the telegram_chat_id column

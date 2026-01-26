@@ -1,4 +1,5 @@
 """Tests for MediaLockService."""
+
 import pytest
 from datetime import datetime, timedelta
 
@@ -20,15 +21,13 @@ class TestMediaLockService:
             file_name="lock_test.jpg",
             file_hash="lock_test789",
             file_size_bytes=100000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         service = MediaLockService(db=test_db)
 
         lock = service.create_lock(
-            media_id=media.id,
-            reason="test_lock",
-            lock_duration_days=30
+            media_id=media.id, reason="test_lock", lock_duration_days=30
         )
 
         assert lock is not None
@@ -38,14 +37,14 @@ class TestMediaLockService:
     def test_is_locked(self, test_db):
         """Test checking if media is locked."""
         media_repo = MediaRepository(test_db)
-        lock_repo = LockRepository(test_db)
+        LockRepository(test_db)
 
         media = media_repo.create(
             file_path="/test/is_locked.jpg",
             file_name="is_locked.jpg",
             file_hash="is_locked789",
             file_size_bytes=95000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         service = MediaLockService(db=test_db)
@@ -69,14 +68,14 @@ class TestMediaLockService:
             file_name="cleanup.jpg",
             file_hash="cleanup789",
             file_size_bytes=90000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         # Create expired lock
         lock_repo.create(
             media_id=media.id,
             reason="expired",
-            expires_at=datetime.utcnow() - timedelta(days=1)
+            expires_at=datetime.utcnow() - timedelta(days=1),
         )
 
         service = MediaLockService(db=test_db)
@@ -94,7 +93,7 @@ class TestMediaLockService:
             file_name="remove_lock.jpg",
             file_hash="remove789",
             file_size_bytes=85000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         service = MediaLockService(db=test_db)
@@ -117,7 +116,7 @@ class TestMediaLockService:
             file_name="active_locks.jpg",
             file_hash="active789",
             file_size_bytes=80000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         service = MediaLockService(db=test_db)
@@ -138,7 +137,7 @@ class TestMediaLockService:
             file_name="post_lock.jpg",
             file_hash="postlock789",
             file_size_bytes=75000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         service = MediaLockService(db=test_db)

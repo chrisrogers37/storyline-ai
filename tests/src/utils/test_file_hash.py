@@ -1,4 +1,5 @@
 """Tests for file_hash utility."""
+
 import pytest
 from pathlib import Path
 import tempfile

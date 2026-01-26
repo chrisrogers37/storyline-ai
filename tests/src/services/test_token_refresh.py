@@ -1,6 +1,7 @@
 """Tests for TokenRefreshService."""
+
 import pytest
-from unittest.mock import Mock, patch, AsyncMock, MagicMock
+from unittest.mock import Mock, patch, AsyncMock
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 
@@ -20,10 +21,13 @@ class TestTokenRefreshService:
     @pytest.fixture
     def token_service(self):
         """Create TokenRefreshService with mocked dependencies."""
-        with patch("src.services.integrations.token_refresh.TokenRepository") as mock_repo_class:
-            with patch("src.services.integrations.token_refresh.TokenEncryption") as mock_encryption_class:
+        with patch("src.services.integrations.token_refresh.TokenRepository"):
+            with patch("src.services.integrations.token_refresh.TokenEncryption"):
                 with patch("src.services.base_service.ServiceRunRepository"):
-                    from src.services.integrations.token_refresh import TokenRefreshService
+                    from src.services.integrations.token_refresh import (
+                        TokenRefreshService,
+                    )
+
                     service = TokenRefreshService()
                     service.token_repo = Mock()
                     service._encryption = Mock()
@@ -59,8 +63,12 @@ class TestTokenRefreshService:
         result = token_service.get_token("instagram")
 
         assert result == "decrypted_secret_token"
-        token_service.token_repo.get_token.assert_called_once_with("instagram", "access_token")
-        token_service._encryption.decrypt.assert_called_once_with("encrypted_token_value")
+        token_service.token_repo.get_token.assert_called_once_with(
+            "instagram", "access_token"
+        )
+        token_service._encryption.decrypt.assert_called_once_with(
+            "encrypted_token_value"
+        )
 
     def test_get_token_expired_raises_error(self, token_service, mock_db_token):
         """Test get_token raises TokenExpiredError for expired token."""
@@ -108,9 +116,11 @@ class TestTokenRefreshService:
         token_service.token_repo.get_token.return_value = mock_db_token
         token_service._encryption.decrypt.return_value = "refresh_token"
 
-        result = token_service.get_token("instagram", token_type="refresh_token")
+        token_service.get_token("instagram", token_type="refresh_token")
 
-        token_service.token_repo.get_token.assert_called_once_with("instagram", "refresh_token")
+        token_service.token_repo.get_token.assert_called_once_with(
+            "instagram", "refresh_token"
+        )
 
     # ==================== bootstrap_from_env Tests ====================
 
@@ -258,8 +268,12 @@ class TestTokenRefreshService:
             "expires_in": 5184000,  # 60 days
         }
 
-        with patch("src.services.integrations.token_refresh.httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        with patch(
+            "src.services.integrations.token_refresh.httpx.AsyncClient"
+        ) as mock_client:
+            mock_client.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client.return_value
+            )
             mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
             mock_client.return_value.get = AsyncMock(return_value=mock_response)
 
@@ -279,19 +293,23 @@ class TestTokenRefreshService:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_refresh_instagram_token_api_error(self, token_service, mock_db_token):
+    async def test_refresh_instagram_token_api_error(
+        self, token_service, mock_db_token
+    ):
         """Test refresh handles API errors."""
         token_service.token_repo.get_token.return_value = mock_db_token
         token_service._encryption.decrypt.return_value = "current_token"
 
         mock_response = Mock()
         mock_response.status_code = 400
-        mock_response.json.return_value = {
-            "error": {"message": "Invalid token"}
-        }
+        mock_response.json.return_value = {"error": {"message": "Invalid token"}}
 
-        with patch("src.services.integrations.token_refresh.httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        with patch(
+            "src.services.integrations.token_refresh.httpx.AsyncClient"
+        ) as mock_client:
+            mock_client.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client.return_value
+            )
             mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
             mock_client.return_value.get = AsyncMock(return_value=mock_response)
 
@@ -301,24 +319,34 @@ class TestTokenRefreshService:
         token_service.token_repo.create_or_update.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_refresh_instagram_token_network_error(self, token_service, mock_db_token):
+    async def test_refresh_instagram_token_network_error(
+        self, token_service, mock_db_token
+    ):
         """Test refresh handles network errors."""
         import httpx
 
         token_service.token_repo.get_token.return_value = mock_db_token
         token_service._encryption.decrypt.return_value = "current_token"
 
-        with patch("src.services.integrations.token_refresh.httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        with patch(
+            "src.services.integrations.token_refresh.httpx.AsyncClient"
+        ) as mock_client:
+            mock_client.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client.return_value
+            )
             mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
-            mock_client.return_value.get = AsyncMock(side_effect=httpx.RequestError("Network error"))
+            mock_client.return_value.get = AsyncMock(
+                side_effect=httpx.RequestError("Network error")
+            )
 
             result = await token_service.refresh_instagram_token()
 
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_refresh_instagram_token_no_token_in_response(self, token_service, mock_db_token):
+    async def test_refresh_instagram_token_no_token_in_response(
+        self, token_service, mock_db_token
+    ):
         """Test refresh handles missing token in response."""
         token_service.token_repo.get_token.return_value = mock_db_token
         token_service._encryption.decrypt.return_value = "current_token"
@@ -327,8 +355,12 @@ class TestTokenRefreshService:
         mock_response.status_code = 200
         mock_response.json.return_value = {}  # No access_token
 
-        with patch("src.services.integrations.token_refresh.httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        with patch(
+            "src.services.integrations.token_refresh.httpx.AsyncClient"
+        ) as mock_client:
+            mock_client.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client.return_value
+            )
             mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
             mock_client.return_value.get = AsyncMock(return_value=mock_response)
 
@@ -341,6 +373,7 @@ class TestTokenRefreshService:
     def test_get_tokens_needing_refresh(self, token_service):
         """Test getting tokens that need refresh."""
         from src.services.integrations.token_refresh import TokenRefreshService
+
         mock_tokens = [Mock(), Mock()]
         token_service.token_repo.get_expiring_tokens.return_value = mock_tokens
 

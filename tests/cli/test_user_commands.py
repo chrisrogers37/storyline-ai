@@ -1,4 +1,5 @@
 """Tests for user CLI commands."""
+
 import pytest
 from click.testing import CliRunner
 
@@ -19,14 +20,14 @@ class TestUserCommands:
             telegram_user_id=3000001,
             telegram_username="user1",
             first_name="Test",
-            last_name="User1"
+            last_name="User1",
         )
 
         user_repo.create(
             telegram_user_id=3000002,
             telegram_username="user2",
             first_name="Test",
-            last_name="User2"
+            last_name="User2",
         )
 
         runner = CliRunner()
@@ -35,7 +36,11 @@ class TestUserCommands:
         # Command should execute successfully
         assert result.exit_code == 0
         # Should show user information
-        assert "user1" in result.output or "User1" in result.output or result.exit_code == 0
+        assert (
+            "user1" in result.output
+            or "User1" in result.output
+            or result.exit_code == 0
+        )
 
     def test_list_users_empty_database(self, test_db):
         """Test list-users with no users."""
@@ -51,15 +56,14 @@ class TestUserCommands:
         user_repo = UserRepository(test_db)
 
         # Create test user
-        user = user_repo.create(
-            telegram_user_id=3000003,
-            telegram_username="promoteme"
-        )
+        user = user_repo.create(telegram_user_id=3000003, telegram_username="promoteme")
 
         assert user.role == "member"
 
         runner = CliRunner()
-        result = runner.invoke(promote_user, [str(user.telegram_user_id), "--role", "admin"])
+        result = runner.invoke(
+            promote_user, [str(user.telegram_user_id), "--role", "admin"]
+        )
 
         # Command should execute successfully
         assert result.exit_code == 0
@@ -84,7 +88,9 @@ class TestUserCommands:
         user = user_repo.create(telegram_user_id=3000004)
 
         runner = CliRunner()
-        result = runner.invoke(promote_user, [str(user.telegram_user_id), "--role", "superadmin"])
+        result = runner.invoke(
+            promote_user, [str(user.telegram_user_id), "--role", "superadmin"]
+        )
 
         # Should reject invalid role
         assert result.exit_code != 0 or "invalid" in result.output.lower()

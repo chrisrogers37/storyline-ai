@@ -1,4 +1,5 @@
 """Tests for CloudStorageService."""
+
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 from contextlib import contextmanager
@@ -23,14 +24,19 @@ class TestCloudStorageService:
     def cloud_service(self):
         """Create CloudStorageService with mocked dependencies."""
         with patch("src.services.integrations.cloud_storage.cloudinary"):
-            with patch("src.services.integrations.cloud_storage.settings") as mock_settings:
+            with patch(
+                "src.services.integrations.cloud_storage.settings"
+            ) as mock_settings:
                 with patch("src.services.base_service.ServiceRunRepository"):
                     mock_settings.CLOUDINARY_CLOUD_NAME = "test_cloud"
                     mock_settings.CLOUDINARY_API_KEY = "test_key"
                     mock_settings.CLOUDINARY_API_SECRET = "test_secret"
                     mock_settings.CLOUD_UPLOAD_RETENTION_HOURS = 24
 
-                    from src.services.integrations.cloud_storage import CloudStorageService
+                    from src.services.integrations.cloud_storage import (
+                        CloudStorageService,
+                    )
+
                     service = CloudStorageService()
                     service.track_execution = mock_track_execution
                     service.set_result_summary = Mock()
@@ -41,7 +47,7 @@ class TestCloudStorageService:
         """Create a temporary image file for testing."""
         with tempfile.NamedTemporaryFile(mode="wb", suffix=".jpg", delete=False) as f:
             # Write minimal JPEG header
-            f.write(b'\xff\xd8\xff\xe0\x00\x10JFIF\x00')
+            f.write(b"\xff\xd8\xff\xe0\x00\x10JFIF\x00")
             temp_path = Path(f.name)
 
         yield temp_path
@@ -54,7 +60,7 @@ class TestCloudStorageService:
     def temp_video_file(self):
         """Create a temporary video file for testing."""
         with tempfile.NamedTemporaryFile(mode="wb", suffix=".mp4", delete=False) as f:
-            f.write(b'\x00\x00\x00\x1c\x66\x74\x79\x70')  # MP4 header bytes
+            f.write(b"\x00\x00\x00\x1c\x66\x74\x79\x70")  # MP4 header bytes
             temp_path = Path(f.name)
 
         yield temp_path
@@ -75,6 +81,7 @@ class TestCloudStorageService:
 
         with patch("src.services.integrations.cloud_storage.cloudinary"):
             from src.services.integrations.cloud_storage import CloudStorageService
+
             service = CloudStorageService()
             assert service.is_configured() is True
 
@@ -88,6 +95,7 @@ class TestCloudStorageService:
 
         with patch("src.services.integrations.cloud_storage.cloudinary"):
             from src.services.integrations.cloud_storage import CloudStorageService
+
             service = CloudStorageService()
             assert service.is_configured() is False
 
@@ -101,6 +109,7 @@ class TestCloudStorageService:
 
         with patch("src.services.integrations.cloud_storage.cloudinary"):
             from src.services.integrations.cloud_storage import CloudStorageService
+
             service = CloudStorageService()
             assert service.is_configured() is False
 
@@ -114,13 +123,16 @@ class TestCloudStorageService:
 
         with patch("src.services.integrations.cloud_storage.cloudinary"):
             from src.services.integrations.cloud_storage import CloudStorageService
+
             service = CloudStorageService()
             assert service.is_configured() is False
 
     # ==================== upload_media Tests ====================
 
     @patch("src.services.integrations.cloud_storage.cloudinary")
-    def test_upload_media_success(self, mock_cloudinary, cloud_service, temp_image_file):
+    def test_upload_media_success(
+        self, mock_cloudinary, cloud_service, temp_image_file
+    ):
         """Test successful media upload."""
         mock_cloudinary.uploader.upload.return_value = {
             "secure_url": "https://res.cloudinary.com/test/image/upload/test_image.jpg",
@@ -133,7 +145,10 @@ class TestCloudStorageService:
 
         result = cloud_service.upload_media(str(temp_image_file))
 
-        assert result["url"] == "https://res.cloudinary.com/test/image/upload/test_image.jpg"
+        assert (
+            result["url"]
+            == "https://res.cloudinary.com/test/image/upload/test_image.jpg"
+        )
         assert result["public_id"] == "storyline/test_image"
         assert result["size_bytes"] == 12345
         assert result["format"] == "jpg"
@@ -142,7 +157,9 @@ class TestCloudStorageService:
         assert result["expires_at"] > result["uploaded_at"]
 
     @patch("src.services.integrations.cloud_storage.cloudinary")
-    def test_upload_media_custom_folder(self, mock_cloudinary, cloud_service, temp_image_file):
+    def test_upload_media_custom_folder(
+        self, mock_cloudinary, cloud_service, temp_image_file
+    ):
         """Test upload with custom folder."""
         mock_cloudinary.uploader.upload.return_value = {
             "secure_url": "https://res.cloudinary.com/test/image/upload/custom/image.jpg",
@@ -158,7 +175,9 @@ class TestCloudStorageService:
         assert call_kwargs["folder"] == "custom"
 
     @patch("src.services.integrations.cloud_storage.cloudinary")
-    def test_upload_media_custom_public_id(self, mock_cloudinary, cloud_service, temp_image_file):
+    def test_upload_media_custom_public_id(
+        self, mock_cloudinary, cloud_service, temp_image_file
+    ):
         """Test upload with custom public_id."""
         mock_cloudinary.uploader.upload.return_value = {
             "secure_url": "https://example.com/image.jpg",
@@ -173,7 +192,9 @@ class TestCloudStorageService:
         assert call_kwargs["public_id"] == "my_custom_id"
 
     @patch("src.services.integrations.cloud_storage.cloudinary")
-    def test_upload_media_video_resource_type(self, mock_cloudinary, cloud_service, temp_video_file):
+    def test_upload_media_video_resource_type(
+        self, mock_cloudinary, cloud_service, temp_video_file
+    ):
         """Test that video files use video resource type."""
         mock_cloudinary.uploader.upload.return_value = {
             "secure_url": "https://example.com/video.mp4",
@@ -198,7 +219,9 @@ class TestCloudStorageService:
             cloud_service.upload_media(str(tmp_path))
 
     @patch("src.services.integrations.cloud_storage.cloudinary")
-    def test_upload_media_cloudinary_error(self, mock_cloudinary, cloud_service, temp_image_file):
+    def test_upload_media_cloudinary_error(
+        self, mock_cloudinary, cloud_service, temp_image_file
+    ):
         """Test upload handles Cloudinary errors."""
         # Create a mock exception class
         mock_cloudinary.exceptions = MagicMock()
@@ -279,12 +302,18 @@ class TestCloudStorageService:
     # ==================== cleanup_expired Tests ====================
 
     @patch("src.services.integrations.cloud_storage.cloudinary")
-    def test_cleanup_expired_deletes_old_resources(self, mock_cloudinary, cloud_service):
+    def test_cleanup_expired_deletes_old_resources(
+        self, mock_cloudinary, cloud_service
+    ):
         """Test cleanup deletes resources older than retention period."""
         # Old resource (48 hours ago)
-        old_date = (datetime.utcnow() - timedelta(hours=48)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        old_date = (datetime.utcnow() - timedelta(hours=48)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
         # New resource (1 hour ago)
-        new_date = (datetime.utcnow() - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        new_date = (datetime.utcnow() - timedelta(hours=1)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
 
         mock_cloudinary.api.resources.return_value = {
             "resources": [
@@ -303,7 +332,9 @@ class TestCloudStorageService:
     @patch("src.services.integrations.cloud_storage.cloudinary")
     def test_cleanup_expired_no_old_resources(self, mock_cloudinary, cloud_service):
         """Test cleanup returns 0 when no old resources."""
-        recent_date = (datetime.utcnow() - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        recent_date = (datetime.utcnow() - timedelta(hours=1)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
 
         mock_cloudinary.api.resources.return_value = {
             "resources": [

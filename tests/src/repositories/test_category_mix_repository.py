@@ -1,8 +1,9 @@
 """Tests for CategoryMixRepository."""
+
 import pytest
 from unittest.mock import Mock, MagicMock, patch
 from decimal import Decimal
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from src.repositories.category_mix_repository import CategoryMixRepository
 from src.models.category_mix import CategoryPostCaseMix
@@ -84,9 +85,7 @@ class TestCategoryMixRepository:
             Mock(category="memes", ratio=Decimal("0.7"), is_current=True),
             Mock(category="merch", ratio=Decimal("0.3"), is_current=True),
         ]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = (
-            mock_records
-        )
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = mock_records
 
         result = mix_repo.get_current_mix()
 
@@ -99,9 +98,7 @@ class TestCategoryMixRepository:
             Mock(category="memes", ratio=Decimal("0.7"), is_current=True),
             Mock(category="merch", ratio=Decimal("0.3"), is_current=True),
         ]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = (
-            mock_records
-        )
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = mock_records
 
         result = mix_repo.get_current_mix_as_dict()
 
@@ -127,9 +124,7 @@ class TestCategoryMixRepository:
         """Test finding categories without defined ratios."""
         # Current mix only has "memes"
         mock_records = [Mock(category="memes", ratio=Decimal("1.0"))]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = (
-            mock_records
-        )
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = mock_records
 
         result = mix_repo.get_categories_without_ratio(["memes", "merch", "misc"])
 

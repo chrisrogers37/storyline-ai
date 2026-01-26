@@ -53,13 +53,13 @@ def init_db():
     Call this after importing all models.
     """
     # Import all models here to ensure they're registered
-    from src.models import (
+    from src.models import (  # noqa: F401
         user,
         media_item,
         posting_queue,
         posting_history,
         media_lock,
         service_run,
-    )  # noqa
+    )
 
     Base.metadata.create_all(bind=engine)
