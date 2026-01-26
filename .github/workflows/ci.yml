@@ -1,3 +1,12 @@
+# CONTINUOUS INTEGRATION (Optional)
+# This workflow runs lint, tests, and security checks on every push/PR.
+# Can run on:
+# - GitHub's cloud runners (ubuntu-latest) - default below
+# - Self-hosted runner on Pi (change runs-on: self-hosted)
+# - Disabled completely (delete this file if using manual deployment only)
+#
+# See: documentation/guides/deployment-options.md
+
 name: CI
 
 on:

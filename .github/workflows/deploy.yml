@@ -1,4 +1,17 @@
-name: Deploy to Pi
+# DEPLOYMENT OPTION 3: Tailscale VPN
+# This workflow uses GitHub's cloud runners + Tailscale VPN to deploy.
+# Setup required: See documentation/guides/github-actions-tailscale.md
+#
+# Alternative options:
+# - Option 1 (Manual): Run ./scripts/deploy.sh from your Mac
+# - Option 2 (Self-hosted): Install GitHub Actions runner on Pi
+#
+# To enable this workflow:
+# 1. Set up Tailscale on Pi
+# 2. Add GitHub secrets: PI_SSH_KEY, PI_TAILSCALE_IP, PI_USER, TS_OAUTH_CLIENT_ID, TS_OAUTH_SECRET
+# 3. Remove this comment block and the workflow will be active
+
+name: Deploy to Pi (Tailscale - DISABLED BY DEFAULT)
 
 on:
   workflow_dispatch:
