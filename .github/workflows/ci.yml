@@ -85,7 +85,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: test_token
           TELEGRAM_CHANNEL_ID: -1001234567890
           ADMIN_TELEGRAM_CHAT_ID: -1001234567890
-          ENCRYPTION_KEY: dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcw==
+          ENCRYPTION_KEY: OLbIEf-hG6dmGoRz9r-rY2FyR6Tastf8oaqdqP2L24E=
           DRY_RUN_MODE: "true"
           LOG_LEVEL: DEBUG
         run: |
