@@ -26,14 +26,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Instagram Account Configuration via Telegram
 - **Renamed "Select Account" to "Configure Accounts"** - Now a full account management menu
-- **Add Account Flow** - 4-step conversation to add new Instagram accounts:
-  1. Display name
-  2. Instagram username
-  3. Instagram Account ID (from Meta Business Suite)
-  4. Access token (message deleted immediately for security)
+- **Add Account Flow** - 3-step conversation to add new Instagram accounts:
+  1. Display name (friendly name for the account)
+  2. Instagram Account ID (from Meta Business Suite)
+  3. Access token (bot attempts to delete immediately for security)
+  - Auto-fetches username from Instagram API to validate credentials
+  - If account already exists, updates the token instead of erroring
 - **Remove Account** - Deactivate accounts directly from Telegram with confirmation
 - **Account Selection** - Select active account from the same menu
-- **Security**: Token messages are deleted immediately after processing
+- **Security Notes**:
+  - Bot messages with prompts are deleted after flow completes
+  - Security warning reminds users to delete their own messages (bots cannot delete user messages in private chats due to Telegram API limitation)
+  - Token validation via Instagram API before account creation
 
 #### SchedulerService Enhancement
 - **`extend_schedule()` method** - Add days to existing schedule without clearing
@@ -69,6 +73,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `src/services/core/scheduler.py` - Added `extend_schedule()` method
 - `src/services/core/telegram_service.py` - New buttons, handlers, verbose caption logic
 - `src/repositories/chat_settings_repository.py` - Updated get_or_create defaults
+
+### Fixed
+
+- **Add Account Flow - Existing Account Handling** - When adding an account that already exists (e.g., after a previous failed attempt), the token is now updated instead of showing "Account already exists" error
+- **Add Account Flow - Security Warning** - Added warning message after flow completion reminding users to delete their own messages containing sensitive data (Account ID, Access Token), since Telegram bots cannot delete user messages in private chats
+- **InstagramAccountService** - Added `update_account_token()` method for updating tokens on existing accounts and `get_account_by_instagram_id()` convenience method
 
 ---
 
