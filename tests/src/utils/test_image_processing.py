@@ -1,4 +1,5 @@
 """Tests for image_processing utility."""
+
 import pytest
 from pathlib import Path
 from PIL import Image

@@ -1,4 +1,5 @@
 """Tests for LockRepository."""
+
 import pytest
 from datetime import datetime, timedelta
 
@@ -21,15 +22,13 @@ class TestLockRepository:
             file_name="locked.jpg",
             file_hash="locked123",
             file_size_bytes=100000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         # Create lock
         expires_at = datetime.utcnow() + timedelta(days=30)
         lock = lock_repo.create(
-            media_id=media.id,
-            reason="recent_post",
-            expires_at=expires_at
+            media_id=media.id, reason="recent_post", expires_at=expires_at
         )
 
         assert lock.id is not None
@@ -47,14 +46,14 @@ class TestLockRepository:
             file_name="active_lock.jpg",
             file_hash="active123",
             file_size_bytes=90000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         # Create active lock (expires in future)
         lock_repo.create(
             media_id=media.id,
             reason="recent_post",
-            expires_at=datetime.utcnow() + timedelta(days=10)
+            expires_at=datetime.utcnow() + timedelta(days=10),
         )
 
         is_locked = lock_repo.is_locked(media.id)
@@ -71,14 +70,14 @@ class TestLockRepository:
             file_name="expired_lock.jpg",
             file_hash="expired123",
             file_size_bytes=85000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         # Create expired lock (expires in past)
         lock_repo.create(
             media_id=media.id,
             reason="recent_post",
-            expires_at=datetime.utcnow() - timedelta(days=1)
+            expires_at=datetime.utcnow() - timedelta(days=1),
         )
 
         is_locked = lock_repo.is_locked(media.id)
@@ -95,7 +94,7 @@ class TestLockRepository:
             file_name="no_lock.jpg",
             file_hash="nolock123",
             file_size_bytes=80000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         is_locked = lock_repo.is_locked(media.id)
@@ -112,14 +111,14 @@ class TestLockRepository:
             file_name="active.jpg",
             file_hash="active456",
             file_size_bytes=75000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         # Create active lock
         lock_repo.create(
             media_id=media.id,
             reason="recent_post",
-            expires_at=datetime.utcnow() + timedelta(days=5)
+            expires_at=datetime.utcnow() + timedelta(days=5),
         )
 
         active_locks = lock_repo.get_active_locks()
@@ -136,14 +135,14 @@ class TestLockRepository:
             file_name="cleanup.jpg",
             file_hash="cleanup123",
             file_size_bytes=70000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         # Create expired lock
         expired_lock = lock_repo.create(
             media_id=media.id,
             reason="recent_post",
-            expires_at=datetime.utcnow() - timedelta(hours=1)
+            expires_at=datetime.utcnow() - timedelta(hours=1),
         )
 
         # Cleanup
@@ -165,13 +164,13 @@ class TestLockRepository:
             file_name="delete_lock.jpg",
             file_hash="dellock123",
             file_size_bytes=65000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         lock = lock_repo.create(
             media_id=media.id,
             reason="manual_hold",
-            expires_at=datetime.utcnow() + timedelta(days=7)
+            expires_at=datetime.utcnow() + timedelta(days=7),
         )
 
         lock_id = lock.id
@@ -193,13 +192,13 @@ class TestLockRepository:
             file_name="by_media_lock.jpg",
             file_hash="bymedia123",
             file_size_bytes=60000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         lock_repo.create(
             media_id=media.id,
             reason="seasonal",
-            expires_at=datetime.utcnow() + timedelta(days=90)
+            expires_at=datetime.utcnow() + timedelta(days=90),
         )
 
         locks = lock_repo.get_by_media_id(media.id)

@@ -1,6 +1,7 @@
 """Tests for InteractionService."""
+
 import pytest
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock
 from uuid import uuid4
 
 from src.services.core.interaction_service import InteractionService
@@ -158,13 +159,17 @@ class TestAnalytics:
             "posts_rejected": 1,
             "commands_used": {"/status": 1},
         }
-        interaction_service.interaction_repo.get_user_stats.return_value = expected_stats
+        interaction_service.interaction_repo.get_user_stats.return_value = (
+            expected_stats
+        )
         user_id = str(uuid4())
 
         result = interaction_service.get_user_stats(user_id, days=30)
 
         assert result == expected_stats
-        interaction_service.interaction_repo.get_user_stats.assert_called_once_with(user_id, 30)
+        interaction_service.interaction_repo.get_user_stats.assert_called_once_with(
+            user_id, 30
+        )
 
     def test_get_team_activity(self, interaction_service):
         """Test getting team activity stats."""
@@ -174,12 +179,16 @@ class TestAnalytics:
             "interactions_by_type": {"command": 10, "callback": 40},
             "interactions_by_name": {"posted": 30, "skip": 8, "/status": 10},
         }
-        interaction_service.interaction_repo.get_team_activity.return_value = expected_activity
+        interaction_service.interaction_repo.get_team_activity.return_value = (
+            expected_activity
+        )
 
         result = interaction_service.get_team_activity(days=7)
 
         assert result == expected_activity
-        interaction_service.interaction_repo.get_team_activity.assert_called_once_with(7)
+        interaction_service.interaction_repo.get_team_activity.assert_called_once_with(
+            7
+        )
 
     def test_get_content_decisions(self, interaction_service):
         """Test getting content decision breakdown."""
@@ -192,12 +201,16 @@ class TestAnalytics:
             "skip_percentage": 20.0,
             "rejection_rate": 5.0,
         }
-        interaction_service.interaction_repo.get_content_decisions.return_value = expected_decisions
+        interaction_service.interaction_repo.get_content_decisions.return_value = (
+            expected_decisions
+        )
 
         result = interaction_service.get_content_decisions(days=30)
 
         assert result == expected_decisions
-        interaction_service.interaction_repo.get_content_decisions.assert_called_once_with(30)
+        interaction_service.interaction_repo.get_content_decisions.assert_called_once_with(
+            30
+        )
 
     def test_get_recent_interactions(self, interaction_service):
         """Test getting recent interactions."""
@@ -207,7 +220,9 @@ class TestAnalytics:
         result = interaction_service.get_recent_interactions(days=7, limit=100)
 
         assert result == mock_interactions
-        interaction_service.interaction_repo.get_recent.assert_called_once_with(days=7, limit=100)
+        interaction_service.interaction_repo.get_recent.assert_called_once_with(
+            days=7, limit=100
+        )
 
 
 class TestLogMessage:

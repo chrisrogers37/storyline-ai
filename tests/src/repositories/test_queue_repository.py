@@ -1,4 +1,5 @@
 """Tests for QueueRepository."""
+
 import pytest
 from datetime import datetime, timedelta
 from uuid import uuid4
@@ -24,7 +25,7 @@ class TestQueueRepository:
             file_name="queue.jpg",
             file_hash="queue123",
             file_size_bytes=100000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         user = user_repo.create(telegram_user_id=300001)
@@ -32,9 +33,7 @@ class TestQueueRepository:
         # Create queue item
         scheduled_time = datetime.utcnow() + timedelta(hours=1)
         queue_item = queue_repo.create(
-            media_id=media.id,
-            scheduled_user_id=user.id,
-            scheduled_time=scheduled_time
+            media_id=media.id, scheduled_user_id=user.id, scheduled_time=scheduled_time
         )
 
         assert queue_item.id is not None
@@ -54,7 +53,7 @@ class TestQueueRepository:
             file_name="pending.jpg",
             file_hash="pending123",
             file_size_bytes=90000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         user = user_repo.create(telegram_user_id=300002)
@@ -63,7 +62,7 @@ class TestQueueRepository:
         queue_repo.create(
             media_id=media.id,
             scheduled_user_id=user.id,
-            scheduled_time=datetime.utcnow() - timedelta(minutes=5)
+            scheduled_time=datetime.utcnow() - timedelta(minutes=5),
         )
 
         pending_items = queue_repo.get_pending()
@@ -81,7 +80,7 @@ class TestQueueRepository:
             file_name="status.jpg",
             file_hash="status123",
             file_size_bytes=85000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         user = user_repo.create(telegram_user_id=300003)
@@ -89,16 +88,14 @@ class TestQueueRepository:
         queue_item = queue_repo.create(
             media_id=media.id,
             scheduled_user_id=user.id,
-            scheduled_time=datetime.utcnow()
+            scheduled_time=datetime.utcnow(),
         )
 
         assert queue_item.status == "pending"
 
         # Update status
         updated_item = queue_repo.update_status(
-            queue_item.id,
-            "posted",
-            telegram_message_id=12345
+            queue_item.id, "posted", telegram_message_id=12345
         )
 
         assert updated_item.status == "posted"
@@ -115,7 +112,7 @@ class TestQueueRepository:
             file_name="retry.jpg",
             file_hash="retry123",
             file_size_bytes=95000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         user = user_repo.create(telegram_user_id=300004)
@@ -123,7 +120,7 @@ class TestQueueRepository:
         queue_item = queue_repo.create(
             media_id=media.id,
             scheduled_user_id=user.id,
-            scheduled_time=datetime.utcnow()
+            scheduled_time=datetime.utcnow(),
         )
 
         # Mark as failed
@@ -147,7 +144,7 @@ class TestQueueRepository:
             file_name="delete.jpg",
             file_hash="delete123",
             file_size_bytes=70000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         user = user_repo.create(telegram_user_id=300005)
@@ -155,7 +152,7 @@ class TestQueueRepository:
         queue_item = queue_repo.create(
             media_id=media.id,
             scheduled_user_id=user.id,
-            scheduled_time=datetime.utcnow()
+            scheduled_time=datetime.utcnow(),
         )
 
         item_id = queue_item.id
@@ -178,7 +175,7 @@ class TestQueueRepository:
             file_name="list.jpg",
             file_hash="list123",
             file_size_bytes=60000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         user = user_repo.create(telegram_user_id=300006)
@@ -187,7 +184,7 @@ class TestQueueRepository:
         queue_repo.create(
             media_id=media.id,
             scheduled_user_id=user.id,
-            scheduled_time=datetime.utcnow()
+            scheduled_time=datetime.utcnow(),
         )
 
         all_items = queue_repo.list_all(limit=10)
@@ -205,15 +202,15 @@ class TestQueueRepository:
             file_name="by_media.jpg",
             file_hash="by_media123",
             file_size_bytes=65000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         user = user_repo.create(telegram_user_id=300007)
 
-        queue_item = queue_repo.create(
+        queue_repo.create(
             media_id=media.id,
             scheduled_user_id=user.id,
-            scheduled_time=datetime.utcnow()
+            scheduled_time=datetime.utcnow(),
         )
 
         items = queue_repo.get_by_media_id(media.id)
@@ -249,10 +246,10 @@ class TestShiftSlotsForward:
         # Create queue items with specific times
         base_time = datetime(2026, 1, 15, 10, 0, 0)
         times = [
-            base_time,                          # A: 10:00
-            base_time + timedelta(hours=4),     # B: 14:00
-            base_time + timedelta(hours=8),     # C: 18:00
-            base_time + timedelta(hours=12),    # D: 22:00
+            base_time,  # A: 10:00
+            base_time + timedelta(hours=4),  # B: 14:00
+            base_time + timedelta(hours=8),  # C: 18:00
+            base_time + timedelta(hours=12),  # D: 22:00
         ]
 
         queue_items = []

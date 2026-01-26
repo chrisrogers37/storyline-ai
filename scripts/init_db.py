@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Initialize database using SQLAlchemy models."""
+
 from src.config.database import init_db
 from src.utils.logger import logger
 

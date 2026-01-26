@@ -1,4 +1,5 @@
 """Tests for SchedulerService."""
+
 import pytest
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -22,12 +23,12 @@ class TestSchedulerService:
         queue_repo = QueueRepository(test_db)
 
         # Create test data
-        media = media_repo.create(
+        media_repo.create(
             file_path="/test/schedule1.jpg",
             file_name="schedule1.jpg",
             file_hash="schedule1",
             file_size_bytes=100000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         user = user_repo.create(telegram_user_id=600001)
@@ -48,12 +49,12 @@ class TestSchedulerService:
         media_repo = MediaRepository(test_db)
 
         # Create never-posted media
-        never_posted = media_repo.create(
+        media_repo.create(
             file_path="/test/never.jpg",
             file_name="never.jpg",
             file_hash="never789",
             file_size_bytes=90000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         # Create posted media
@@ -62,7 +63,7 @@ class TestSchedulerService:
             file_name="posted.jpg",
             file_hash="posted789",
             file_size_bytes=95000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
         media_repo.increment_times_posted(posted.id)
 
@@ -85,7 +86,7 @@ class TestSchedulerService:
             file_name="locked_sched.jpg",
             file_hash="locked_s789",
             file_size_bytes=85000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         # Create unlocked media
@@ -94,14 +95,14 @@ class TestSchedulerService:
             file_name="unlocked_sched.jpg",
             file_hash="unlocked_s789",
             file_size_bytes=80000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         # Lock first media
         lock_repo.create(
             media_id=locked_media.id,
             reason="recent_post",
-            expires_at=datetime.utcnow() + timedelta(days=10)
+            expires_at=datetime.utcnow() + timedelta(days=10),
         )
 
         service = SchedulerService(db=test_db)
@@ -124,7 +125,7 @@ class TestSchedulerService:
             file_name="queued.jpg",
             file_hash="queued789",
             file_size_bytes=75000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         available_media = media_repo.create(
@@ -132,7 +133,7 @@ class TestSchedulerService:
             file_name="available.jpg",
             file_hash="available789",
             file_size_bytes=70000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         user = user_repo.create(telegram_user_id=600002)
@@ -141,7 +142,7 @@ class TestSchedulerService:
         queue_repo.create(
             media_id=queued_media.id,
             scheduled_user_id=user.id,
-            scheduled_time=datetime.utcnow() + timedelta(hours=1)
+            scheduled_time=datetime.utcnow() + timedelta(hours=1),
         )
 
         service = SchedulerService(db=test_db)
@@ -158,9 +159,7 @@ class TestSchedulerService:
 
         start_time = datetime.utcnow()
         time_slots = service._generate_time_slots(
-            days=2,
-            posts_per_day=3,
-            start_time=start_time
+            days=2, posts_per_day=3, start_time=start_time
         )
 
         # Should generate 6 slots (2 days * 3 posts)
@@ -174,19 +173,19 @@ class TestSchedulerService:
     def test_create_schedule_respects_posting_hours(self, mock_settings, test_db):
         """Test that schedule respects posting hours configuration."""
         mock_settings.POSTING_HOURS_START = 9  # 9 AM
-        mock_settings.POSTING_HOURS_END = 17   # 5 PM
+        mock_settings.POSTING_HOURS_END = 17  # 5 PM
         mock_settings.POSTS_PER_DAY = 2
 
         media_repo = MediaRepository(test_db)
         user_repo = UserRepository(test_db)
 
         # Create test media
-        media = media_repo.create(
+        media_repo.create(
             file_path="/test/hours.jpg",
             file_name="hours.jpg",
             file_hash="hours789",
             file_size_bytes=65000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         user = user_repo.create(telegram_user_id=600003)
@@ -194,7 +193,7 @@ class TestSchedulerService:
         service = SchedulerService(db=test_db)
 
         # Create schedule
-        result = service.create_schedule(days=1, posts_per_day=2, user_id=user.id)
+        service.create_schedule(days=1, posts_per_day=2, user_id=user.id)
 
         # Verify time slots are within posting hours
         queue_repo = QueueRepository(test_db)
@@ -225,8 +224,12 @@ class TestSchedulerCategoryAllocation:
                             service.category_mix_repo = Mock()
                             # Mock track_execution
                             service.track_execution = MagicMock()
-                            service.track_execution.return_value.__enter__ = Mock(return_value="run-123")
-                            service.track_execution.return_value.__exit__ = Mock(return_value=False)
+                            service.track_execution.return_value.__enter__ = Mock(
+                                return_value="run-123"
+                            )
+                            service.track_execution.return_value.__exit__ = Mock(
+                                return_value=False
+                            )
                             service.set_result_summary = Mock()
                             return service
 
@@ -308,7 +311,7 @@ class TestSchedulerCategoryAllocation:
 
         assert memes == 5  # 50%
         assert merch == 3  # 30%
-        assert misc == 2   # 20%
+        assert misc == 2  # 20%
 
     def test_summarize_allocation(self, scheduler_service):
         """Test allocation summary string."""

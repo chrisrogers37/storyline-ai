@@ -1,9 +1,9 @@
 """Tests for UserRepository."""
+
 import pytest
 from uuid import UUID
 
 from src.repositories.user_repository import UserRepository
-from src.models.user import User
 
 
 @pytest.mark.unit
@@ -18,7 +18,7 @@ class TestUserRepository:
             telegram_user_id=123456789,
             telegram_username="testuser",
             first_name="Test",
-            last_name="User"
+            last_name="User",
         )
 
         assert user.id is not None
@@ -36,8 +36,7 @@ class TestUserRepository:
 
         # Create user
         created_user = repo.create(
-            telegram_user_id=987654321,
-            telegram_username="findme"
+            telegram_user_id=987654321, telegram_username="findme"
         )
 
         # Retrieve user
@@ -61,14 +60,12 @@ class TestUserRepository:
 
         # Create user
         original_user = repo.create(
-            telegram_user_id=111222333,
-            telegram_username="existing"
+            telegram_user_id=111222333, telegram_username="existing"
         )
 
         # Get or create should return existing user
         user, created = repo.get_or_create(
-            telegram_user_id=111222333,
-            telegram_username="existing"
+            telegram_user_id=111222333, telegram_username="existing"
         )
 
         assert not created
@@ -79,8 +76,7 @@ class TestUserRepository:
         repo = UserRepository(test_db)
 
         user, created = repo.get_or_create(
-            telegram_user_id=444555666,
-            telegram_username="newuser"
+            telegram_user_id=444555666, telegram_username="newuser"
         )
 
         assert created
@@ -144,7 +140,7 @@ class TestUserRepository:
             telegram_user_id=300001,
             telegram_username="oldname",
             telegram_first_name="Old",
-            telegram_last_name="Name"
+            telegram_last_name="Name",
         )
 
         assert user.telegram_username == "oldname"
@@ -155,7 +151,7 @@ class TestUserRepository:
             str(user.id),
             telegram_username="newname",
             telegram_first_name="New",
-            telegram_last_name="Person"
+            telegram_last_name="Person",
         )
 
         assert updated_user.telegram_username == "newname"
@@ -171,7 +167,7 @@ class TestUserRepository:
         user = repo.create(
             telegram_user_id=300002,
             telegram_username=None,
-            telegram_first_name="NoUsername"
+            telegram_first_name="NoUsername",
         )
 
         assert user.telegram_username is None
@@ -181,7 +177,7 @@ class TestUserRepository:
             str(user.id),
             telegram_username="newlyaddedusername",
             telegram_first_name="NoUsername",
-            telegram_last_name=None
+            telegram_last_name=None,
         )
 
         assert updated_user.telegram_username == "newlyaddedusername"
@@ -194,7 +190,7 @@ class TestUserRepository:
         user = repo.create(
             telegram_user_id=300003,
             telegram_username="hasusername",
-            telegram_first_name="Has"
+            telegram_first_name="Has",
         )
 
         assert user.telegram_username == "hasusername"
@@ -204,7 +200,7 @@ class TestUserRepository:
             str(user.id),
             telegram_username=None,
             telegram_first_name="Has",
-            telegram_last_name=None
+            telegram_last_name=None,
         )
 
         assert updated_user.telegram_username is None
@@ -217,7 +213,7 @@ class TestUserRepository:
             "00000000-0000-0000-0000-000000000000",
             telegram_username="nobody",
             telegram_first_name="Nobody",
-            telegram_last_name=None
+            telegram_last_name=None,
         )
 
         assert result is None
@@ -225,7 +221,6 @@ class TestUserRepository:
     def test_update_profile_updates_last_seen(self, test_db):
         """Test that update_profile also updates last_seen_at timestamp."""
         repo = UserRepository(test_db)
-        from datetime import datetime, timedelta
 
         user = repo.create(telegram_user_id=300004)
 
@@ -234,6 +229,7 @@ class TestUserRepository:
 
         # Small delay to ensure timestamp difference
         import time
+
         time.sleep(0.1)
 
         # Update profile
@@ -241,7 +237,7 @@ class TestUserRepository:
             str(user.id),
             telegram_username="updated",
             telegram_first_name="Updated",
-            telegram_last_name=None
+            telegram_last_name=None,
         )
 
         # last_seen should be updated

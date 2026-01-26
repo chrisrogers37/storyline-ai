@@ -1,7 +1,7 @@
 """Tests for validators utility."""
+
 import pytest
 from unittest.mock import patch, MagicMock
-from pathlib import Path
 
 from src.utils.validators import ConfigValidator
 
@@ -110,7 +110,9 @@ class TestConfigValidator:
 
     @patch("src.utils.validators.settings")
     @patch("src.utils.validators.Path")
-    def test_validate_all_invalid_posts_per_day_too_high(self, mock_path, mock_settings):
+    def test_validate_all_invalid_posts_per_day_too_high(
+        self, mock_path, mock_settings
+    ):
         """Test validation fails with posts per day > 10."""
         mock_settings.POSTS_PER_DAY = 15  # Invalid (> 10)
         mock_settings.POSTING_HOURS_START = 14

@@ -1,8 +1,9 @@
 """Tests for InstagramAPIService."""
+
 import pytest
-from unittest.mock import Mock, patch, AsyncMock, MagicMock
+from unittest.mock import Mock, patch, AsyncMock
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import httpx
 
@@ -26,11 +27,14 @@ class TestInstagramAPIService:
     @pytest.fixture
     def instagram_service(self):
         """Create InstagramAPIService with mocked dependencies."""
-        with patch("src.services.integrations.instagram_api.TokenRefreshService") as mock_token_class:
-            with patch("src.services.integrations.instagram_api.CloudStorageService") as mock_cloud_class:
-                with patch("src.services.integrations.instagram_api.HistoryRepository") as mock_history_class:
+        with patch("src.services.integrations.instagram_api.TokenRefreshService"):
+            with patch("src.services.integrations.instagram_api.CloudStorageService"):
+                with patch("src.services.integrations.instagram_api.HistoryRepository"):
                     with patch("src.services.base_service.ServiceRunRepository"):
-                        from src.services.integrations.instagram_api import InstagramAPIService
+                        from src.services.integrations.instagram_api import (
+                            InstagramAPIService,
+                        )
+
                         service = InstagramAPIService()
                         service.token_service = Mock()
                         service.cloud_service = Mock()
@@ -42,7 +46,9 @@ class TestInstagramAPIService:
     # ==================== get_rate_limit_remaining Tests ====================
 
     @patch("src.services.integrations.instagram_api.settings")
-    def test_get_rate_limit_remaining_no_recent_posts(self, mock_settings, instagram_service):
+    def test_get_rate_limit_remaining_no_recent_posts(
+        self, mock_settings, instagram_service
+    ):
         """Test rate limit shows full capacity when no recent posts."""
         mock_settings.INSTAGRAM_POSTS_PER_HOUR = 25
         instagram_service.history_repo.count_by_method.return_value = 0
@@ -52,7 +58,9 @@ class TestInstagramAPIService:
         assert result == 25
 
     @patch("src.services.integrations.instagram_api.settings")
-    def test_get_rate_limit_remaining_some_posts(self, mock_settings, instagram_service):
+    def test_get_rate_limit_remaining_some_posts(
+        self, mock_settings, instagram_service
+    ):
         """Test rate limit calculation with recent posts."""
         mock_settings.INSTAGRAM_POSTS_PER_HOUR = 25
         instagram_service.history_repo.count_by_method.return_value = 10
@@ -72,7 +80,9 @@ class TestInstagramAPIService:
         assert result == 0
 
     @patch("src.services.integrations.instagram_api.settings")
-    def test_get_rate_limit_remaining_over_limit(self, mock_settings, instagram_service):
+    def test_get_rate_limit_remaining_over_limit(
+        self, mock_settings, instagram_service
+    ):
         """Test rate limit doesn't go negative."""
         mock_settings.INSTAGRAM_POSTS_PER_HOUR = 25
         instagram_service.history_repo.count_by_method.return_value = 30
@@ -165,10 +175,7 @@ class TestInstagramAPIService:
         mock_response = Mock()
         mock_response.status_code = 400
         mock_response.json.return_value = {
-            "error": {
-                "code": 4,
-                "message": "Rate limit exceeded"
-            }
+            "error": {"code": 4, "message": "Rate limit exceeded"}
         }
 
         with pytest.raises(RateLimitError, match="Rate limit exceeded"):
@@ -179,10 +186,7 @@ class TestInstagramAPIService:
         mock_response = Mock()
         mock_response.status_code = 400
         mock_response.json.return_value = {
-            "error": {
-                "code": 17,
-                "message": "User request limit reached"
-            }
+            "error": {"code": 17, "message": "User request limit reached"}
         }
 
         with pytest.raises(RateLimitError):
@@ -193,10 +197,7 @@ class TestInstagramAPIService:
         mock_response = Mock()
         mock_response.status_code = 401
         mock_response.json.return_value = {
-            "error": {
-                "code": 190,
-                "message": "Invalid OAuth access token"
-            }
+            "error": {"code": 190, "message": "Invalid OAuth access token"}
         }
 
         with pytest.raises(TokenExpiredError):
@@ -207,10 +208,7 @@ class TestInstagramAPIService:
         mock_response = Mock()
         mock_response.status_code = 400
         mock_response.json.return_value = {
-            "error": {
-                "code": 102,
-                "message": "OAuth session expired"
-            }
+            "error": {"code": 102, "message": "OAuth session expired"}
         }
 
         with pytest.raises(TokenExpiredError, match="OAuth error"):
@@ -221,10 +219,7 @@ class TestInstagramAPIService:
         mock_response = Mock()
         mock_response.status_code = 500
         mock_response.json.return_value = {
-            "error": {
-                "code": 1,
-                "message": "Internal server error"
-            }
+            "error": {"code": 1, "message": "Internal server error"}
         }
 
         with pytest.raises(InstagramAPIError, match="Internal server error"):
@@ -244,7 +239,9 @@ class TestInstagramAPIService:
 
     @pytest.mark.asyncio
     @patch("src.services.integrations.instagram_api.settings")
-    async def test_post_story_rate_limit_exhausted(self, mock_settings, instagram_service):
+    async def test_post_story_rate_limit_exhausted(
+        self, mock_settings, instagram_service
+    ):
         """Test post_story raises RateLimitError when exhausted."""
         mock_settings.INSTAGRAM_POSTS_PER_HOUR = 25
         instagram_service.history_repo.count_by_method.return_value = 25
@@ -272,7 +269,9 @@ class TestInstagramAPIService:
         instagram_service.history_repo.count_by_method.return_value = 0
         instagram_service.token_service.get_token.return_value = "valid_token"
 
-        with pytest.raises(InstagramAPIError, match="INSTAGRAM_ACCOUNT_ID not configured"):
+        with pytest.raises(
+            InstagramAPIError, match="INSTAGRAM_ACCOUNT_ID not configured"
+        ):
             await instagram_service.post_story("https://example.com/image.jpg")
 
     @pytest.mark.asyncio
@@ -299,11 +298,15 @@ class TestInstagramAPIService:
         publish_response.status_code = 200
         publish_response.json.return_value = {"id": "story_456"}
 
-        with patch("src.services.integrations.instagram_api.httpx.AsyncClient") as mock_client:
+        with patch(
+            "src.services.integrations.instagram_api.httpx.AsyncClient"
+        ) as mock_client:
             mock_instance = mock_client.return_value
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
             mock_instance.__aexit__ = AsyncMock(return_value=False)
-            mock_instance.post = AsyncMock(side_effect=[create_response, publish_response])
+            mock_instance.post = AsyncMock(
+                side_effect=[create_response, publish_response]
+            )
             mock_instance.get = AsyncMock(return_value=status_response)
 
             result = await instagram_service.post_story("https://example.com/image.jpg")
@@ -322,11 +325,15 @@ class TestInstagramAPIService:
         instagram_service.history_repo.count_by_method.return_value = 0
         instagram_service.token_service.get_token.return_value = "valid_token"
 
-        with patch("src.services.integrations.instagram_api.httpx.AsyncClient") as mock_client:
+        with patch(
+            "src.services.integrations.instagram_api.httpx.AsyncClient"
+        ) as mock_client:
             mock_instance = mock_client.return_value
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
             mock_instance.__aexit__ = AsyncMock(return_value=False)
-            mock_instance.post = AsyncMock(side_effect=httpx.RequestError("Connection failed"))
+            mock_instance.post = AsyncMock(
+                side_effect=httpx.RequestError("Connection failed")
+            )
 
             with pytest.raises(InstagramAPIError, match="Network error"):
                 await instagram_service.post_story("https://example.com/image.jpg")
@@ -340,7 +347,9 @@ class TestInstagramAPIService:
         mock_response.status_code = 200
         mock_response.json.return_value = {"id": "container_123"}
 
-        with patch("src.services.integrations.instagram_api.httpx.AsyncClient") as mock_client:
+        with patch(
+            "src.services.integrations.instagram_api.httpx.AsyncClient"
+        ) as mock_client:
             mock_instance = mock_client.return_value
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
             mock_instance.__aexit__ = AsyncMock(return_value=False)
@@ -366,7 +375,9 @@ class TestInstagramAPIService:
         mock_response.status_code = 200
         mock_response.json.return_value = {"id": "container_456"}
 
-        with patch("src.services.integrations.instagram_api.httpx.AsyncClient") as mock_client:
+        with patch(
+            "src.services.integrations.instagram_api.httpx.AsyncClient"
+        ) as mock_client:
             mock_instance = mock_client.return_value
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
             mock_instance.__aexit__ = AsyncMock(return_value=False)
@@ -392,7 +403,9 @@ class TestInstagramAPIService:
         mock_response.status_code = 200
         mock_response.json.return_value = {}  # No "id"
 
-        with patch("src.services.integrations.instagram_api.httpx.AsyncClient") as mock_client:
+        with patch(
+            "src.services.integrations.instagram_api.httpx.AsyncClient"
+        ) as mock_client:
             mock_instance = mock_client.return_value
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
             mock_instance.__aexit__ = AsyncMock(return_value=False)
@@ -415,7 +428,9 @@ class TestInstagramAPIService:
         mock_response.status_code = 200
         mock_response.json.return_value = {"status_code": "FINISHED"}
 
-        with patch("src.services.integrations.instagram_api.httpx.AsyncClient") as mock_client:
+        with patch(
+            "src.services.integrations.instagram_api.httpx.AsyncClient"
+        ) as mock_client:
             mock_instance = mock_client.return_value
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
             mock_instance.__aexit__ = AsyncMock(return_value=False)
@@ -431,17 +446,21 @@ class TestInstagramAPIService:
         mock_response.status_code = 200
         mock_response.json.return_value = {
             "status_code": "ERROR",
-            "status": "Media processing failed"
+            "status": "Media processing failed",
         }
 
-        with patch("src.services.integrations.instagram_api.httpx.AsyncClient") as mock_client:
+        with patch(
+            "src.services.integrations.instagram_api.httpx.AsyncClient"
+        ) as mock_client:
             mock_instance = mock_client.return_value
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
             mock_instance.__aexit__ = AsyncMock(return_value=False)
             mock_instance.get = AsyncMock(return_value=mock_response)
 
             with pytest.raises(InstagramAPIError, match="Media container failed"):
-                await instagram_service._wait_for_container_ready("token", "container_123")
+                await instagram_service._wait_for_container_ready(
+                    "token", "container_123"
+                )
 
     @pytest.mark.asyncio
     async def test_wait_for_container_ready_expired_status(self, instagram_service):
@@ -450,34 +469,49 @@ class TestInstagramAPIService:
         mock_response.status_code = 200
         mock_response.json.return_value = {"status_code": "EXPIRED"}
 
-        with patch("src.services.integrations.instagram_api.httpx.AsyncClient") as mock_client:
+        with patch(
+            "src.services.integrations.instagram_api.httpx.AsyncClient"
+        ) as mock_client:
             mock_instance = mock_client.return_value
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
             mock_instance.__aexit__ = AsyncMock(return_value=False)
             mock_instance.get = AsyncMock(return_value=mock_response)
 
             with pytest.raises(InstagramAPIError, match="expired before publishing"):
-                await instagram_service._wait_for_container_ready("token", "container_123")
+                await instagram_service._wait_for_container_ready(
+                    "token", "container_123"
+                )
 
     @pytest.mark.asyncio
-    @patch("src.services.integrations.instagram_api.asyncio.sleep", new_callable=AsyncMock)
-    async def test_wait_for_container_ready_timeout(self, mock_sleep, instagram_service):
+    @patch(
+        "src.services.integrations.instagram_api.asyncio.sleep", new_callable=AsyncMock
+    )
+    async def test_wait_for_container_ready_timeout(
+        self, mock_sleep, instagram_service
+    ):
         """Test container polling times out."""
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"status_code": "IN_PROGRESS"}
 
-        with patch("src.services.integrations.instagram_api.httpx.AsyncClient") as mock_client:
+        with patch(
+            "src.services.integrations.instagram_api.httpx.AsyncClient"
+        ) as mock_client:
             mock_instance = mock_client.return_value
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
             mock_instance.__aexit__ = AsyncMock(return_value=False)
             mock_instance.get = AsyncMock(return_value=mock_response)
 
             with pytest.raises(InstagramAPIError, match="did not finish"):
-                await instagram_service._wait_for_container_ready("token", "container_123")
+                await instagram_service._wait_for_container_ready(
+                    "token", "container_123"
+                )
 
         # Verify it polled the maximum number of times
-        assert mock_instance.get.await_count == instagram_service.CONTAINER_STATUS_MAX_POLLS
+        assert (
+            mock_instance.get.await_count
+            == instagram_service.CONTAINER_STATUS_MAX_POLLS
+        )
 
     # ==================== _publish_container Tests ====================
 
@@ -488,7 +522,9 @@ class TestInstagramAPIService:
         mock_response.status_code = 200
         mock_response.json.return_value = {"id": "story_789"}
 
-        with patch("src.services.integrations.instagram_api.httpx.AsyncClient") as mock_client:
+        with patch(
+            "src.services.integrations.instagram_api.httpx.AsyncClient"
+        ) as mock_client:
             mock_instance = mock_client.return_value
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
             mock_instance.__aexit__ = AsyncMock(return_value=False)
@@ -509,7 +545,9 @@ class TestInstagramAPIService:
         mock_response.status_code = 200
         mock_response.json.return_value = {}  # No "id"
 
-        with patch("src.services.integrations.instagram_api.httpx.AsyncClient") as mock_client:
+        with patch(
+            "src.services.integrations.instagram_api.httpx.AsyncClient"
+        ) as mock_client:
             mock_instance = mock_client.return_value
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
             mock_instance.__aexit__ = AsyncMock(return_value=False)
@@ -531,16 +569,20 @@ class TestInstagramAPIService:
         mock_response.status_code = 200
         mock_response.headers = {
             "content-type": "image/jpeg",
-            "content-length": "123456"
+            "content-length": "123456",
         }
 
-        with patch("src.services.integrations.instagram_api.httpx.AsyncClient") as mock_client:
+        with patch(
+            "src.services.integrations.instagram_api.httpx.AsyncClient"
+        ) as mock_client:
             mock_instance = mock_client.return_value
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
             mock_instance.__aexit__ = AsyncMock(return_value=False)
             mock_instance.head = AsyncMock(return_value=mock_response)
 
-            result = await instagram_service.validate_media_url("https://example.com/image.jpg")
+            result = await instagram_service.validate_media_url(
+                "https://example.com/image.jpg"
+            )
 
         assert result["valid"] is True
         assert result["content_type"] == "image/jpeg"
@@ -552,13 +594,17 @@ class TestInstagramAPIService:
         mock_response = Mock()
         mock_response.status_code = 404
 
-        with patch("src.services.integrations.instagram_api.httpx.AsyncClient") as mock_client:
+        with patch(
+            "src.services.integrations.instagram_api.httpx.AsyncClient"
+        ) as mock_client:
             mock_instance = mock_client.return_value
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
             mock_instance.__aexit__ = AsyncMock(return_value=False)
             mock_instance.head = AsyncMock(return_value=mock_response)
 
-            result = await instagram_service.validate_media_url("https://example.com/missing.jpg")
+            result = await instagram_service.validate_media_url(
+                "https://example.com/missing.jpg"
+            )
 
         assert result["valid"] is False
         assert "404" in result["error"]
@@ -566,13 +612,17 @@ class TestInstagramAPIService:
     @pytest.mark.asyncio
     async def test_validate_media_url_network_error(self, instagram_service):
         """Test URL validation handles network errors."""
-        with patch("src.services.integrations.instagram_api.httpx.AsyncClient") as mock_client:
+        with patch(
+            "src.services.integrations.instagram_api.httpx.AsyncClient"
+        ) as mock_client:
             mock_instance = mock_client.return_value
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
             mock_instance.__aexit__ = AsyncMock(return_value=False)
             mock_instance.head = AsyncMock(side_effect=httpx.RequestError("DNS error"))
 
-            result = await instagram_service.validate_media_url("https://example.com/image.jpg")
+            result = await instagram_service.validate_media_url(
+                "https://example.com/image.jpg"
+            )
 
         assert result["valid"] is False
         assert "DNS error" in result["error"]
@@ -584,13 +634,17 @@ class TestInstagramAPIService:
         mock_response.status_code = 200
         mock_response.headers = {"content-type": "image/png"}
 
-        with patch("src.services.integrations.instagram_api.httpx.AsyncClient") as mock_client:
+        with patch(
+            "src.services.integrations.instagram_api.httpx.AsyncClient"
+        ) as mock_client:
             mock_instance = mock_client.return_value
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
             mock_instance.__aexit__ = AsyncMock(return_value=False)
             mock_instance.head = AsyncMock(return_value=mock_response)
 
-            result = await instagram_service.validate_media_url("https://example.com/image.png")
+            result = await instagram_service.validate_media_url(
+                "https://example.com/image.png"
+            )
 
         assert result["valid"] is True
         assert result["size_bytes"] is None

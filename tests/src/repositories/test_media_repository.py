@@ -1,9 +1,9 @@
 """Tests for MediaRepository."""
+
 import pytest
 from uuid import UUID
 
 from src.repositories.media_repository import MediaRepository
-from src.models.media_item import MediaItem
 
 
 @pytest.mark.unit
@@ -19,7 +19,7 @@ class TestMediaRepository:
             file_name="image.jpg",
             file_hash="abc123",
             file_size_bytes=102400,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         assert media.id is not None
@@ -37,7 +37,7 @@ class TestMediaRepository:
             file_name="unique.jpg",
             file_hash="unique123",
             file_size_bytes=50000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         found_media = repo.get_by_path("/test/unique.jpg")
@@ -49,12 +49,12 @@ class TestMediaRepository:
         """Test retrieving media by file hash."""
         repo = MediaRepository(test_db)
 
-        created_media = repo.create(
+        repo.create(
             file_path="/test/hashed.jpg",
             file_name="hashed.jpg",
             file_hash="hash999",
             file_size_bytes=75000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         found_media = repo.get_by_hash("hash999")
@@ -72,7 +72,7 @@ class TestMediaRepository:
             file_name="original.jpg",
             file_hash="duplicate_hash",
             file_size_bytes=100000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         # Create duplicate (different path, same hash)
@@ -81,7 +81,7 @@ class TestMediaRepository:
             file_name="copy.jpg",
             file_hash="duplicate_hash",
             file_size_bytes=100000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         duplicates = repo.get_duplicates()
@@ -99,7 +99,7 @@ class TestMediaRepository:
             file_name="post.jpg",
             file_hash="post123",
             file_size_bytes=80000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         assert media.times_posted == 0
@@ -120,16 +120,16 @@ class TestMediaRepository:
             file_hash="filter1",
             file_size_bytes=50000,
             mime_type="image/jpeg",
-            requires_interaction=True
+            requires_interaction=True,
         )
 
-        media2 = repo.create(
+        repo.create(
             file_path="/test/filter2.jpg",
             file_name="filter2.jpg",
             file_hash="filter2",
             file_size_bytes=60000,
             mime_type="image/jpeg",
-            requires_interaction=False
+            requires_interaction=False,
         )
 
         # List all
@@ -151,7 +151,7 @@ class TestMediaRepository:
             file_name="never.jpg",
             file_hash="never123",
             file_size_bytes=45000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         # Create posted media
@@ -160,7 +160,7 @@ class TestMediaRepository:
             file_name="posted.jpg",
             file_hash="posted123",
             file_size_bytes=55000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
         repo.increment_times_posted(posted.id)
 
@@ -180,7 +180,7 @@ class TestMediaRepository:
             file_name="least1.jpg",
             file_hash="least1",
             file_size_bytes=40000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         media2 = repo.create(
@@ -188,7 +188,7 @@ class TestMediaRepository:
             file_name="least2.jpg",
             file_hash="least2",
             file_size_bytes=41000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         # Post media2 multiple times
@@ -200,7 +200,15 @@ class TestMediaRepository:
         # media1 (0 posts) should appear before media2 (2 posts)
         least_posted_ids = [m.id for m in least_posted]
         if len(least_posted_ids) >= 2:
-            media1_index = least_posted_ids.index(media1.id) if media1.id in least_posted_ids else -1
-            media2_index = least_posted_ids.index(media2.id) if media2.id in least_posted_ids else -1
+            media1_index = (
+                least_posted_ids.index(media1.id)
+                if media1.id in least_posted_ids
+                else -1
+            )
+            media2_index = (
+                least_posted_ids.index(media2.id)
+                if media2.id in least_posted_ids
+                else -1
+            )
             if media1_index >= 0 and media2_index >= 0:
                 assert media1_index < media2_index

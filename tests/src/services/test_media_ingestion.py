@@ -1,4 +1,5 @@
 """Tests for MediaIngestionService."""
+
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 from pathlib import Path
@@ -22,7 +23,9 @@ class TestMediaIngestionService:
                 service.image_processor = Mock()
                 # Mock the track_execution context manager
                 service.track_execution = MagicMock()
-                service.track_execution.return_value.__enter__ = Mock(return_value="run-123")
+                service.track_execution.return_value.__enter__ = Mock(
+                    return_value="run-123"
+                )
                 service.track_execution.return_value.__exit__ = Mock(return_value=False)
                 service.set_result_summary = Mock()
                 return service
@@ -57,7 +60,9 @@ class TestMediaIngestionService:
             mock_validation = Mock()
             mock_validation.is_valid = True
             mock_validation.warnings = []
-            ingestion_service.image_processor.validate_image.return_value = mock_validation
+            ingestion_service.image_processor.validate_image.return_value = (
+                mock_validation
+            )
 
             result = ingestion_service.scan_directory(temp_dir)
 
@@ -76,7 +81,9 @@ class TestMediaIngestionService:
             ingestion_service.media_repo.get_by_path.return_value = None
             ingestion_service.media_repo.get_by_hash.return_value = []
             mock_validation = Mock(is_valid=True, warnings=[])
-            ingestion_service.image_processor.validate_image.return_value = mock_validation
+            ingestion_service.image_processor.validate_image.return_value = (
+                mock_validation
+            )
 
             result = ingestion_service.scan_directory(temp_dir)
 
@@ -84,7 +91,10 @@ class TestMediaIngestionService:
             assert "skipped" in result
             assert "errors" in result
             assert "total_files" in result
-            assert result["total_files"] == result["indexed"] + result["skipped"] + result["errors"]
+            assert (
+                result["total_files"]
+                == result["indexed"] + result["skipped"] + result["errors"]
+            )
 
     def test_scan_directory_recursive(self, ingestion_service):
         """Test that recursive scan finds files in subdirectories."""
@@ -98,7 +108,9 @@ class TestMediaIngestionService:
             ingestion_service.media_repo.get_by_path.return_value = None
             ingestion_service.media_repo.get_by_hash.return_value = []
             mock_validation = Mock(is_valid=True, warnings=[])
-            ingestion_service.image_processor.validate_image.return_value = mock_validation
+            ingestion_service.image_processor.validate_image.return_value = (
+                mock_validation
+            )
 
             result = ingestion_service.scan_directory(temp_dir, recursive=True)
 
@@ -179,7 +191,9 @@ class TestMediaIngestionService:
         """Test that _index_file detects duplicate content."""
         mock_hash.return_value = "duplicate_hash"
         ingestion_service.media_repo.get_by_path.return_value = None
-        ingestion_service.media_repo.get_by_hash.return_value = [Mock()]  # Has duplicate
+        ingestion_service.media_repo.get_by_hash.return_value = [
+            Mock()
+        ]  # Has duplicate
         mock_validation = Mock(is_valid=True, warnings=[])
         ingestion_service.image_processor.validate_image.return_value = mock_validation
 
@@ -258,7 +272,9 @@ class TestMediaIngestionService:
             ingestion_service.media_repo.get_by_path.return_value = None
             ingestion_service.media_repo.get_by_hash.return_value = []
             mock_validation = Mock(is_valid=True, warnings=[])
-            ingestion_service.image_processor.validate_image.return_value = mock_validation
+            ingestion_service.image_processor.validate_image.return_value = (
+                mock_validation
+            )
 
             result = ingestion_service.scan_directory(temp_dir)
 
@@ -277,17 +293,19 @@ class TestMediaIngestionService:
             ingestion_service.media_repo.get_by_path.return_value = None
             ingestion_service.media_repo.get_by_hash.return_value = []
             mock_validation = Mock(is_valid=True, warnings=[])
-            ingestion_service.image_processor.validate_image.return_value = mock_validation
-
-            result = ingestion_service.scan_directory(
-                temp_dir, extract_category=False
+            ingestion_service.image_processor.validate_image.return_value = (
+                mock_validation
             )
+
+            result = ingestion_service.scan_directory(temp_dir, extract_category=False)
 
             # Categories should be empty when extraction is disabled
             assert result["categories"] == []
 
     @patch("src.services.core.media_ingestion.calculate_file_hash")
-    def test_index_file_passes_category_to_repository(self, mock_hash, ingestion_service):
+    def test_index_file_passes_category_to_repository(
+        self, mock_hash, ingestion_service
+    ):
         """Test that _index_file passes category to repository create."""
         mock_hash.return_value = "abc123hash"
         ingestion_service.media_repo.get_by_path.return_value = None

@@ -1,6 +1,7 @@
 """Tests for token encryption utility."""
+
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from cryptography.fernet import Fernet
 
@@ -14,6 +15,7 @@ class TestTokenEncryption:
         """Reset the singleton instance before each test."""
         # Import here to avoid import errors before patching
         from src.utils.encryption import TokenEncryption
+
         TokenEncryption.reset()
         yield
         TokenEncryption.reset()
@@ -178,7 +180,7 @@ class TestTokenEncryption:
 
         from src.utils.encryption import TokenEncryption
 
-        instance1 = TokenEncryption()
+        TokenEncryption()  # Create an instance that will be reset
         TokenEncryption.reset()
 
         # After reset, new instance should work but be different

@@ -1,4 +1,5 @@
 """Tests for media CLI commands."""
+
 import pytest
 from click.testing import CliRunner
 from pathlib import Path
@@ -25,7 +26,9 @@ class TestMediaCommands:
 
             # Command should execute successfully
             assert result.exit_code == 0
-            assert "indexed" in result.output.lower() or "added" in result.output.lower()
+            assert (
+                "indexed" in result.output.lower() or "added" in result.output.lower()
+            )
 
     def test_index_media_nonexistent_directory(self, test_db):
         """Test index-media with non-existent directory."""
@@ -35,7 +38,10 @@ class TestMediaCommands:
 
         # Should fail with error
         assert result.exit_code != 0
-        assert "does not exist" in result.output.lower() or "not found" in result.output.lower()
+        assert (
+            "does not exist" in result.output.lower()
+            or "not found" in result.output.lower()
+        )
 
     def test_list_media_command(self, test_db):
         """Test list-media CLI command."""
@@ -47,7 +53,7 @@ class TestMediaCommands:
             file_name="list1.jpg",
             file_hash="list1_hash",
             file_size_bytes=100000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         runner = CliRunner()
@@ -67,7 +73,7 @@ class TestMediaCommands:
             file_hash="interactive_hash",
             file_size_bytes=95000,
             mime_type="image/jpeg",
-            requires_interaction=True
+            requires_interaction=True,
         )
 
         runner = CliRunner()
@@ -82,6 +88,7 @@ class TestMediaCommands:
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create a valid 9:16 image
             from PIL import Image
+
             test_file = Path(temp_dir) / "valid.jpg"
             img = Image.new("RGB", (1080, 1920), color="red")
             img.save(test_file, "JPEG")
@@ -97,6 +104,7 @@ class TestMediaCommands:
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create invalid image (wrong aspect ratio)
             from PIL import Image
+
             test_file = Path(temp_dir) / "invalid.jpg"
             img = Image.new("RGB", (1920, 1080), color="blue")
             img.save(test_file, "JPEG")
@@ -104,7 +112,11 @@ class TestMediaCommands:
             result = runner.invoke(validate, [str(test_file)])
 
             # May still exit 0 but show validation errors in output
-            assert "aspect ratio" in result.output.lower() or "resolution" in result.output.lower() or result.exit_code == 0
+            assert (
+                "aspect ratio" in result.output.lower()
+                or "resolution" in result.output.lower()
+                or result.exit_code == 0
+            )
 
     def test_validate_image_nonexistent(self):
         """Test validate-image with non-existent file."""
@@ -113,4 +125,8 @@ class TestMediaCommands:
         result = runner.invoke(validate, ["/nonexistent/image.jpg"])
 
         # Should handle gracefully
-        assert "not found" in result.output.lower() or "does not exist" in result.output.lower() or result.exit_code != 0
+        assert (
+            "not found" in result.output.lower()
+            or "does not exist" in result.output.lower()
+            or result.exit_code != 0
+        )

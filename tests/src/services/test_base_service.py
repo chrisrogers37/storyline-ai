@@ -1,7 +1,6 @@
 """Tests for BaseService."""
+
 import pytest
-from unittest.mock import Mock
-from uuid import UUID
 
 from src.services.base_service import BaseService
 from src.repositories.service_run_repository import ServiceRunRepository
@@ -133,7 +132,9 @@ class TestBaseService:
 
         result_summary = {"items_processed": 10, "items_skipped": 2}
 
-        with service.track_execution("test_with_summary", result_summary=result_summary):
+        with service.track_execution(
+            "test_with_summary", result_summary=result_summary
+        ):
             pass
 
         # Verify result summary was recorded
