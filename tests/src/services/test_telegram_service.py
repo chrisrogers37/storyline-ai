@@ -160,7 +160,7 @@ class TestProfileSync:
         telegram_user.first_name = "New"
         telegram_user.last_name = "User"
 
-        result = mock_telegram_service._get_or_create_user(telegram_user)
+        mock_telegram_service._get_or_create_user(telegram_user)
 
         mock_telegram_service.user_repo.create.assert_called_once_with(
             telegram_user_id=123456,
@@ -186,7 +186,7 @@ class TestProfileSync:
         telegram_user.first_name = "Updated"
         telegram_user.last_name = "Name"
 
-        result = mock_telegram_service._get_or_create_user(telegram_user)
+        mock_telegram_service._get_or_create_user(telegram_user)
 
         # Should call update_profile, not just update_last_seen
         mock_telegram_service.user_repo.update_profile.assert_called_once_with(
@@ -209,7 +209,7 @@ class TestProfileSync:
         telegram_user.first_name = "NoUsername"
         telegram_user.last_name = None
 
-        result = mock_telegram_service._get_or_create_user(telegram_user)
+        mock_telegram_service._get_or_create_user(telegram_user)
 
         mock_telegram_service.user_repo.update_profile.assert_called_once_with(
             str(existing_user.id),
@@ -442,7 +442,6 @@ class TestTelegramService:
 
     def test_get_or_create_user_new_user(self, test_db):
         """Test creating a new user from Telegram update."""
-        user_repo = UserRepository(test_db)
         service = TelegramService(db=test_db)
 
         # Mock Telegram user
