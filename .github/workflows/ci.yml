@@ -84,7 +84,8 @@ jobs:
           DATABASE_URL: postgresql://test_user:test_password@localhost:5432/storyline_test
           TELEGRAM_BOT_TOKEN: test_token
           TELEGRAM_CHANNEL_ID: -1001234567890
-          ENCRYPTION_KEY: dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcw==
+          ADMIN_TELEGRAM_CHAT_ID: -1001234567890
+          ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
           DRY_RUN_MODE: "true"
           LOG_LEVEL: DEBUG
         run: |

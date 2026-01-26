@@ -1,8 +1,8 @@
 """Pytest configuration and fixtures."""
-import os
+
 import pytest
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
@@ -10,8 +10,8 @@ from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 # Load test environment variables before importing any application code
 load_dotenv(".env.test", override=True)
 
-from src.config.database import Base
-from src.config.settings import settings
+from src.config.database import Base  # noqa: E402
+from src.config.settings import settings  # noqa: E402
 
 # Global flag to track if database is available
 _database_available = None
@@ -26,15 +26,14 @@ def create_test_database():
         port=settings.DB_PORT,
         user=settings.DB_USER,
         password=settings.DB_PASSWORD,
-        database="postgres"
+        database="postgres",
     )
     conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
     cursor = conn.cursor()
 
     # Check if test database exists
     cursor.execute(
-        "SELECT 1 FROM pg_database WHERE datname = %s",
-        (settings.TEST_DB_NAME,)
+        "SELECT 1 FROM pg_database WHERE datname = %s", (settings.TEST_DB_NAME,)
     )
     exists = cursor.fetchone()
 
@@ -56,7 +55,7 @@ def drop_test_database():
         port=settings.DB_PORT,
         user=settings.DB_USER,
         password=settings.DB_PASSWORD,
-        database="postgres"
+        database="postgres",
     )
     conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
     cursor = conn.cursor()
@@ -99,7 +98,7 @@ def setup_test_database():
         # Create engine and tables
         engine = create_engine(settings.test_database_url)
         Base.metadata.create_all(engine)
-        print(f"✓ Created all tables in test database")
+        print("✓ Created all tables in test database")
 
         _database_available = True
         _test_engine = engine

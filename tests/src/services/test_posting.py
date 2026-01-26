@@ -1,7 +1,7 @@
 """Tests for PostingService."""
+
 import pytest
 from datetime import datetime
-from unittest.mock import Mock, patch, AsyncMock
 
 from src.services.core.posting import PostingService
 from src.repositories.media_repository import MediaRepository
@@ -35,7 +35,7 @@ class TestPostingService:
             file_name="posted.jpg",
             file_hash="posted890",
             file_size_bytes=100000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         user = user_repo.create(telegram_user_id=700001)
@@ -43,15 +43,14 @@ class TestPostingService:
         queue_item = queue_repo.create(
             media_id=media.id,
             scheduled_user_id=user.id,
-            scheduled_time=datetime.utcnow()
+            scheduled_time=datetime.utcnow(),
         )
 
         service = PostingService(db=test_db)
 
         # Mark as posted
         result = service.mark_as_posted(
-            queue_id=queue_item.id,
-            posted_by_user_id=user.id
+            queue_id=queue_item.id, posted_by_user_id=user.id
         )
 
         assert result["status"] == "posted"
@@ -81,7 +80,7 @@ class TestPostingService:
             file_name="skipped.jpg",
             file_hash="skipped890",
             file_size_bytes=95000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         user = user_repo.create(telegram_user_id=700002)
@@ -89,7 +88,7 @@ class TestPostingService:
         queue_item = queue_repo.create(
             media_id=media.id,
             scheduled_user_id=user.id,
-            scheduled_time=datetime.utcnow()
+            scheduled_time=datetime.utcnow(),
         )
 
         service = PostingService(db=test_db)
@@ -98,7 +97,7 @@ class TestPostingService:
         result = service.mark_as_skipped(
             queue_id=queue_item.id,
             skipped_by_user_id=user.id,
-            reason="Not relevant today"
+            reason="Not relevant today",
         )
 
         assert result["status"] == "skipped"
@@ -127,7 +126,7 @@ class TestPostingService:
             file_name="details.jpg",
             file_hash="details890",
             file_size_bytes=90000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         user = user_repo.create(telegram_user_id=700003)
@@ -135,7 +134,7 @@ class TestPostingService:
         queue_item = queue_repo.create(
             media_id=media.id,
             scheduled_user_id=user.id,
-            scheduled_time=datetime.utcnow()
+            scheduled_time=datetime.utcnow(),
         )
 
         service = PostingService(db=test_db)
@@ -157,7 +156,7 @@ class TestPostingService:
             file_name="retry.jpg",
             file_hash="retry890",
             file_size_bytes=85000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         user = user_repo.create(telegram_user_id=700004)
@@ -165,7 +164,7 @@ class TestPostingService:
         queue_item = queue_repo.create(
             media_id=media.id,
             scheduled_user_id=user.id,
-            scheduled_time=datetime.utcnow()
+            scheduled_time=datetime.utcnow(),
         )
 
         # Mark as failed

@@ -41,6 +41,28 @@ class InstagramAccountRepository(BaseRepository):
         self.end_read_transaction()
         return result
 
+    def get_by_id_prefix(self, id_prefix: str) -> Optional[InstagramAccount]:
+        """Get account by ID prefix (for shortened callback data).
+
+        Used when Telegram callback data is too long and we need to use
+        shortened UUIDs. Returns the first matching account.
+
+        Args:
+            id_prefix: First N characters of a UUID (typically 8)
+
+        Returns:
+            InstagramAccount or None if not found
+        """
+        from sqlalchemy import cast, String
+
+        result = (
+            self.db.query(InstagramAccount)
+            .filter(cast(InstagramAccount.id, String).like(f"{id_prefix}%"))
+            .first()
+        )
+        self.end_read_transaction()
+        return result
+
     def get_by_instagram_id(
         self, instagram_account_id: str
     ) -> Optional[InstagramAccount]:

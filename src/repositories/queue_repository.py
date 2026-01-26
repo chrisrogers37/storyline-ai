@@ -18,6 +18,26 @@ class QueueRepository(BaseRepository):
         """Get queue item by ID."""
         return self.db.query(PostingQueue).filter(PostingQueue.id == queue_id).first()
 
+    def get_by_id_prefix(self, id_prefix: str) -> Optional[PostingQueue]:
+        """Get queue item by ID prefix (for shortened callback data).
+
+        Used when Telegram callback data is too long and we need to use
+        shortened UUIDs. Returns the first matching item.
+
+        Args:
+            id_prefix: First N characters of a UUID (typically 8)
+
+        Returns:
+            PostingQueue item or None if not found
+        """
+        from sqlalchemy import cast, String
+
+        return (
+            self.db.query(PostingQueue)
+            .filter(cast(PostingQueue.id, String).like(f"{id_prefix}%"))
+            .first()
+        )
+
     def get_by_media_id(self, media_id: str) -> Optional[PostingQueue]:
         """Get queue item by media ID."""
         return (

@@ -1,8 +1,8 @@
 """Tests for logger utility."""
+
 import pytest
 import logging
 import tempfile
-import os
 from pathlib import Path
 
 from src.utils.logger import setup_logger, get_logger
@@ -30,7 +30,7 @@ class TestLogger:
         with tempfile.TemporaryDirectory() as temp_dir:
             log_file = Path(temp_dir) / "test_logs" / "test.log"
 
-            logger = setup_logger("test_dir", log_file=str(log_file))
+            setup_logger("test_dir", log_file=str(log_file))
 
             assert log_file.parent.exists()
 
@@ -57,9 +57,7 @@ class TestLogger:
             log_file = Path(temp_dir) / "test.log"
 
             logger = setup_logger(
-                "file_logger",
-                level=logging.INFO,
-                log_file=str(log_file)
+                "file_logger", level=logging.INFO, log_file=str(log_file)
             )
 
             test_message = "Test log message"
@@ -77,9 +75,7 @@ class TestLogger:
             log_file = Path(temp_dir) / "level_test.log"
 
             logger = setup_logger(
-                "level_logger",
-                level=logging.WARNING,
-                log_file=str(log_file)
+                "level_logger", level=logging.WARNING, log_file=str(log_file)
             )
 
             # Log at different levels
@@ -105,10 +101,7 @@ class TestLogger:
         with tempfile.TemporaryDirectory() as temp_dir:
             log_file = Path(temp_dir) / "timestamp_test.log"
 
-            logger = setup_logger(
-                "timestamp_logger",
-                log_file=str(log_file)
-            )
+            logger = setup_logger("timestamp_logger", log_file=str(log_file))
 
             logger.info("Timestamped message")
 
@@ -118,6 +111,7 @@ class TestLogger:
 
                 # Check for timestamp pattern (YYYY-MM-DD HH:MM:SS)
                 import re
+
                 timestamp_pattern = r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}"
                 assert re.search(timestamp_pattern, content) is not None
 
@@ -126,10 +120,7 @@ class TestLogger:
         with tempfile.TemporaryDirectory() as temp_dir:
             log_file = Path(temp_dir) / "level_name_test.log"
 
-            logger = setup_logger(
-                "level_name_logger",
-                log_file=str(log_file)
-            )
+            logger = setup_logger("level_name_logger", log_file=str(log_file))
 
             logger.warning("Test warning")
 

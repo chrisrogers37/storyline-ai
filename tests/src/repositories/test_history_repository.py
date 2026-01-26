@@ -1,6 +1,6 @@
 """Tests for HistoryRepository."""
+
 import pytest
-from datetime import datetime, timedelta
 
 from src.repositories.history_repository import HistoryRepository
 from src.repositories.media_repository import MediaRepository
@@ -23,7 +23,7 @@ class TestHistoryRepository:
             file_name="history.jpg",
             file_hash="history123",
             file_size_bytes=100000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         user = user_repo.create(telegram_user_id=400001)
@@ -33,7 +33,7 @@ class TestHistoryRepository:
             media_id=media.id,
             posted_by_user_id=user.id,
             status="posted",
-            media_snapshot={"file_name": "history.jpg"}
+            media_snapshot={"file_name": "history.jpg"},
         )
 
         assert history.id is not None
@@ -52,16 +52,14 @@ class TestHistoryRepository:
             file_name="history2.jpg",
             file_hash="history234",
             file_size_bytes=90000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         user = user_repo.create(telegram_user_id=400002)
 
         # Create multiple history records
         history_repo.create(
-            media_id=media.id,
-            posted_by_user_id=user.id,
-            status="posted"
+            media_id=media.id, posted_by_user_id=user.id, status="posted"
         )
 
         records = history_repo.get_by_media_id(media.id)
@@ -80,15 +78,13 @@ class TestHistoryRepository:
             file_name="history3.jpg",
             file_hash="history345",
             file_size_bytes=85000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         user = user_repo.create(telegram_user_id=400003)
 
         history_repo.create(
-            media_id=media.id,
-            posted_by_user_id=user.id,
-            status="posted"
+            media_id=media.id, posted_by_user_id=user.id, status="posted"
         )
 
         records = history_repo.get_by_user_id(user.id)
@@ -107,16 +103,14 @@ class TestHistoryRepository:
             file_name="stats.jpg",
             file_hash="stats123",
             file_size_bytes=95000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         user = user_repo.create(telegram_user_id=400004)
 
         # Create posted record
         history_repo.create(
-            media_id=media.id,
-            posted_by_user_id=user.id,
-            status="posted"
+            media_id=media.id, posted_by_user_id=user.id, status="posted"
         )
 
         stats = history_repo.get_stats()
@@ -135,15 +129,13 @@ class TestHistoryRepository:
             file_name="recent.jpg",
             file_hash="recent123",
             file_size_bytes=80000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         user = user_repo.create(telegram_user_id=400005)
 
         history_repo.create(
-            media_id=media.id,
-            posted_by_user_id=user.id,
-            status="posted"
+            media_id=media.id, posted_by_user_id=user.id, status="posted"
         )
 
         recent = history_repo.get_recent(days=7, limit=10)
@@ -161,7 +153,7 @@ class TestHistoryRepository:
             file_name="filter_posted.jpg",
             file_hash="filter_p123",
             file_size_bytes=70000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         media2 = media_repo.create(
@@ -169,21 +161,17 @@ class TestHistoryRepository:
             file_name="filter_skipped.jpg",
             file_hash="filter_s123",
             file_size_bytes=75000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         user = user_repo.create(telegram_user_id=400006)
 
         history_repo.create(
-            media_id=media1.id,
-            posted_by_user_id=user.id,
-            status="posted"
+            media_id=media1.id, posted_by_user_id=user.id, status="posted"
         )
 
         history_repo.create(
-            media_id=media2.id,
-            posted_by_user_id=user.id,
-            status="skipped"
+            media_id=media2.id, posted_by_user_id=user.id, status="skipped"
         )
 
         # Filter by status

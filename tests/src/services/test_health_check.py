@@ -1,6 +1,7 @@
 """Tests for HealthCheckService."""
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from datetime import datetime, timedelta
 
 from src.services.core.health_check import HealthCheckService
@@ -121,7 +122,11 @@ class TestHealthCheckService:
         mock_post1 = Mock(success=True)
         mock_post2 = Mock(success=True)
         mock_post3 = Mock(success=False)
-        health_service.history_repo.get_recent_posts.return_value = [mock_post1, mock_post2, mock_post3]
+        health_service.history_repo.get_recent_posts.return_value = [
+            mock_post1,
+            mock_post2,
+            mock_post3,
+        ]
 
         result = health_service._check_recent_posts()
 
@@ -201,8 +206,10 @@ class TestHealthCheckService:
     def test_check_all_returns_timestamp(self, health_service):
         """Test check_all includes ISO timestamp."""
         # Mock all dependencies to avoid real checks
-        with patch("src.services.core.health_check.get_db") as mock_get_db, \
-             patch("src.services.core.health_check.settings") as mock_settings:
+        with (
+            patch("src.services.core.health_check.get_db") as mock_get_db,
+            patch("src.services.core.health_check.settings") as mock_settings,
+        ):
             mock_db = Mock()
             mock_get_db.return_value = iter([mock_db])
             mock_settings.TELEGRAM_BOT_TOKEN = "token"

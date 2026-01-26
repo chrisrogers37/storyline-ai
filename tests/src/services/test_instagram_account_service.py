@@ -1,6 +1,7 @@
 """Unit tests for InstagramAccountService."""
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from contextlib import contextmanager
 from datetime import datetime
 import uuid
@@ -35,10 +36,17 @@ def mock_token_repo():
 @pytest.fixture
 def service(mock_account_repo, mock_settings_repo, mock_token_repo):
     """Create InstagramAccountService with mocked dependencies."""
-    with patch('src.services.core.instagram_account_service.InstagramAccountRepository') as MockAccountRepo, \
-         patch('src.services.core.instagram_account_service.ChatSettingsRepository') as MockSettingsRepo, \
-         patch('src.services.core.instagram_account_service.TokenRepository') as MockTokenRepo:
-
+    with (
+        patch(
+            "src.services.core.instagram_account_service.InstagramAccountRepository"
+        ) as MockAccountRepo,
+        patch(
+            "src.services.core.instagram_account_service.ChatSettingsRepository"
+        ) as MockSettingsRepo,
+        patch(
+            "src.services.core.instagram_account_service.TokenRepository"
+        ) as MockTokenRepo,
+    ):
         MockAccountRepo.return_value = mock_account_repo
         MockSettingsRepo.return_value = mock_settings_repo
         MockTokenRepo.return_value = mock_token_repo
@@ -82,7 +90,9 @@ def sample_settings():
 class TestListAccounts:
     """Tests for list_accounts method."""
 
-    def test_list_active_accounts_only(self, service, mock_account_repo, sample_account):
+    def test_list_active_accounts_only(
+        self, service, mock_account_repo, sample_account
+    ):
         """Should return only active accounts by default."""
         mock_account_repo.get_all_active.return_value = [sample_account]
 
@@ -92,7 +102,9 @@ class TestListAccounts:
         assert result[0] == sample_account
         mock_account_repo.get_all_active.assert_called_once()
 
-    def test_list_all_accounts_including_inactive(self, service, mock_account_repo, sample_account):
+    def test_list_all_accounts_including_inactive(
+        self, service, mock_account_repo, sample_account
+    ):
         """Should return all accounts when include_inactive=True."""
         inactive_account = Mock()
         inactive_account.is_active = False
@@ -107,7 +119,14 @@ class TestListAccounts:
 class TestGetActiveAccount:
     """Tests for get_active_account method."""
 
-    def test_returns_active_account_when_set(self, service, mock_account_repo, mock_settings_repo, sample_account, sample_settings):
+    def test_returns_active_account_when_set(
+        self,
+        service,
+        mock_account_repo,
+        mock_settings_repo,
+        sample_account,
+        sample_settings,
+    ):
         """Should return the active account when one is set."""
         sample_settings.active_instagram_account_id = sample_account.id
         mock_settings_repo.get_or_create.return_value = sample_settings
@@ -119,7 +138,9 @@ class TestGetActiveAccount:
         mock_settings_repo.get_or_create.assert_called_once_with(-1001234567890)
         mock_account_repo.get_by_id.assert_called_once_with(str(sample_account.id))
 
-    def test_returns_none_when_no_account_selected(self, service, mock_settings_repo, sample_settings):
+    def test_returns_none_when_no_account_selected(
+        self, service, mock_settings_repo, sample_settings
+    ):
         """Should return None when no active account is set."""
         sample_settings.active_instagram_account_id = None
         mock_settings_repo.get_or_create.return_value = sample_settings
@@ -132,7 +153,14 @@ class TestGetActiveAccount:
 class TestSwitchAccount:
     """Tests for switch_account method."""
 
-    def test_switch_to_valid_account(self, service, mock_account_repo, mock_settings_repo, sample_account, sample_settings):
+    def test_switch_to_valid_account(
+        self,
+        service,
+        mock_account_repo,
+        mock_settings_repo,
+        sample_account,
+        sample_settings,
+    ):
         """Should switch to a valid active account."""
         mock_account_repo.get_by_id.return_value = sample_account
         mock_settings_repo.get_or_create.return_value = sample_settings
@@ -143,14 +171,18 @@ class TestSwitchAccount:
         assert result == sample_account
         mock_settings_repo.update.assert_called_once()
 
-    def test_switch_to_nonexistent_account_raises_error(self, service, mock_account_repo):
+    def test_switch_to_nonexistent_account_raises_error(
+        self, service, mock_account_repo
+    ):
         """Should raise ValueError when account doesn't exist."""
         mock_account_repo.get_by_id.return_value = None
 
         with pytest.raises(ValueError, match="not found"):
             service.switch_account(-1001234567890, "nonexistent-id")
 
-    def test_switch_to_inactive_account_raises_error(self, service, mock_account_repo, sample_account):
+    def test_switch_to_inactive_account_raises_error(
+        self, service, mock_account_repo, sample_account
+    ):
         """Should raise ValueError when trying to switch to inactive account."""
         sample_account.is_active = False
         mock_account_repo.get_by_id.return_value = sample_account
@@ -162,7 +194,9 @@ class TestSwitchAccount:
 class TestAddAccount:
     """Tests for add_account method."""
 
-    def test_add_new_account_successfully(self, service, mock_account_repo, mock_token_repo, sample_account):
+    def test_add_new_account_successfully(
+        self, service, mock_account_repo, mock_token_repo, sample_account
+    ):
         """Should create account and store token."""
         mock_account_repo.get_by_instagram_id.return_value = None
         mock_account_repo.get_by_username.return_value = None
@@ -172,14 +206,16 @@ class TestAddAccount:
             display_name="Main Brand",
             instagram_account_id="17841234567890",
             instagram_username="brand_main",
-            access_token="encrypted_token_value"
+            access_token="encrypted_token_value",
         )
 
         assert result == sample_account
         mock_account_repo.create.assert_called_once()
         mock_token_repo.create_or_update.assert_called_once()
 
-    def test_add_duplicate_account_by_id_raises_error(self, service, mock_account_repo, sample_account):
+    def test_add_duplicate_account_by_id_raises_error(
+        self, service, mock_account_repo, sample_account
+    ):
         """Should raise ValueError when account ID already exists."""
         mock_account_repo.get_by_instagram_id.return_value = sample_account
 
@@ -188,10 +224,12 @@ class TestAddAccount:
                 display_name="Duplicate",
                 instagram_account_id="17841234567890",
                 instagram_username="different_user",
-                access_token="token"
+                access_token="token",
             )
 
-    def test_add_duplicate_account_by_username_raises_error(self, service, mock_account_repo, sample_account):
+    def test_add_duplicate_account_by_username_raises_error(
+        self, service, mock_account_repo, sample_account
+    ):
         """Should raise ValueError when username already exists."""
         mock_account_repo.get_by_instagram_id.return_value = None
         mock_account_repo.get_by_username.return_value = sample_account
@@ -201,10 +239,18 @@ class TestAddAccount:
                 display_name="Duplicate",
                 instagram_account_id="999999999",
                 instagram_username="brand_main",
-                access_token="token"
+                access_token="token",
             )
 
-    def test_add_account_and_set_as_active(self, service, mock_account_repo, mock_token_repo, mock_settings_repo, sample_account, sample_settings):
+    def test_add_account_and_set_as_active(
+        self,
+        service,
+        mock_account_repo,
+        mock_token_repo,
+        mock_settings_repo,
+        sample_account,
+        sample_settings,
+    ):
         """Should set account as active when set_as_active=True."""
         mock_account_repo.get_by_instagram_id.return_value = None
         mock_account_repo.get_by_username.return_value = None
@@ -217,7 +263,7 @@ class TestAddAccount:
             instagram_username="brand_main",
             access_token="token",
             set_as_active=True,
-            telegram_chat_id=-1001234567890
+            telegram_chat_id=-1001234567890,
         )
 
         mock_settings_repo.update.assert_called_once()
@@ -226,7 +272,9 @@ class TestAddAccount:
 class TestDeactivateAccount:
     """Tests for deactivate_account method."""
 
-    def test_deactivate_active_account(self, service, mock_account_repo, sample_account):
+    def test_deactivate_active_account(
+        self, service, mock_account_repo, sample_account
+    ):
         """Should soft-delete account by marking inactive."""
         deactivated = Mock()
         deactivated.is_active = False
@@ -241,7 +289,9 @@ class TestDeactivateAccount:
 class TestReactivateAccount:
     """Tests for reactivate_account method."""
 
-    def test_reactivate_inactive_account(self, service, mock_account_repo, sample_account):
+    def test_reactivate_inactive_account(
+        self, service, mock_account_repo, sample_account
+    ):
         """Should reactivate a previously deactivated account."""
         sample_account.is_active = False
         reactivated = Mock()
@@ -257,7 +307,14 @@ class TestReactivateAccount:
 class TestGetAccountsForDisplay:
     """Tests for get_accounts_for_display method."""
 
-    def test_formats_accounts_for_telegram_display(self, service, mock_account_repo, mock_settings_repo, sample_account, sample_settings):
+    def test_formats_accounts_for_telegram_display(
+        self,
+        service,
+        mock_account_repo,
+        mock_settings_repo,
+        sample_account,
+        sample_settings,
+    ):
         """Should return properly formatted account data for Telegram UI."""
         mock_account_repo.get_all_active.return_value = [sample_account]
         sample_settings.active_instagram_account_id = sample_account.id
@@ -274,7 +331,14 @@ class TestGetAccountsForDisplay:
         assert result["active_account_name"] == "Main Brand"
         assert result["active_account_username"] == "brand_main"
 
-    def test_handles_no_active_account(self, service, mock_account_repo, mock_settings_repo, sample_account, sample_settings):
+    def test_handles_no_active_account(
+        self,
+        service,
+        mock_account_repo,
+        mock_settings_repo,
+        sample_account,
+        sample_settings,
+    ):
         """Should handle case when no account is selected."""
         mock_account_repo.get_all_active.return_value = [sample_account]
         sample_settings.active_instagram_account_id = None
@@ -290,7 +354,15 @@ class TestGetAccountsForDisplay:
 class TestGetTokenForActiveAccount:
     """Tests for get_token_for_active_account method."""
 
-    def test_returns_token_for_active_account(self, service, mock_account_repo, mock_settings_repo, mock_token_repo, sample_account, sample_settings):
+    def test_returns_token_for_active_account(
+        self,
+        service,
+        mock_account_repo,
+        mock_settings_repo,
+        mock_token_repo,
+        sample_account,
+        sample_settings,
+    ):
         """Should return access token for the currently active account."""
         sample_settings.active_instagram_account_id = sample_account.id
         mock_settings_repo.get_or_create.return_value = sample_settings
@@ -304,7 +376,9 @@ class TestGetTokenForActiveAccount:
 
         assert result == "encrypted_access_token"
 
-    def test_returns_none_when_no_active_account(self, service, mock_settings_repo, sample_settings):
+    def test_returns_none_when_no_active_account(
+        self, service, mock_settings_repo, sample_settings
+    ):
         """Should return None when no active account is set."""
         sample_settings.active_instagram_account_id = None
         mock_settings_repo.get_or_create.return_value = sample_settings
@@ -317,7 +391,14 @@ class TestGetTokenForActiveAccount:
 class TestAutoSelectAccount:
     """Tests for auto_select_account_if_single method."""
 
-    def test_auto_selects_when_single_account_and_none_selected(self, service, mock_account_repo, mock_settings_repo, sample_account, sample_settings):
+    def test_auto_selects_when_single_account_and_none_selected(
+        self,
+        service,
+        mock_account_repo,
+        mock_settings_repo,
+        sample_account,
+        sample_settings,
+    ):
         """Should auto-select when exactly one account exists and none is selected."""
         sample_settings.active_instagram_account_id = None
         mock_settings_repo.get_or_create.return_value = sample_settings
@@ -329,7 +410,14 @@ class TestAutoSelectAccount:
         assert result == sample_account
         mock_settings_repo.update.assert_called_once()
 
-    def test_does_not_auto_select_when_account_already_selected(self, service, mock_account_repo, mock_settings_repo, sample_account, sample_settings):
+    def test_does_not_auto_select_when_account_already_selected(
+        self,
+        service,
+        mock_account_repo,
+        mock_settings_repo,
+        sample_account,
+        sample_settings,
+    ):
         """Should not auto-select when an account is already selected."""
         sample_settings.active_instagram_account_id = sample_account.id
         mock_settings_repo.get_or_create.return_value = sample_settings
@@ -339,7 +427,14 @@ class TestAutoSelectAccount:
 
         assert result is None
 
-    def test_does_not_auto_select_when_multiple_accounts(self, service, mock_account_repo, mock_settings_repo, sample_account, sample_settings):
+    def test_does_not_auto_select_when_multiple_accounts(
+        self,
+        service,
+        mock_account_repo,
+        mock_settings_repo,
+        sample_account,
+        sample_settings,
+    ):
         """Should not auto-select when multiple accounts exist."""
         sample_settings.active_instagram_account_id = None
         mock_settings_repo.get_or_create.return_value = sample_settings
@@ -358,18 +453,23 @@ class TestSeparationOfConcerns:
 
     def test_service_uses_correct_repositories(self):
         """Service should use separate repos for accounts, settings, and tokens."""
-        with patch('src.services.core.instagram_account_service.InstagramAccountRepository'), \
-             patch('src.services.core.instagram_account_service.ChatSettingsRepository'), \
-             patch('src.services.core.instagram_account_service.TokenRepository'):
-
+        with (
+            patch(
+                "src.services.core.instagram_account_service.InstagramAccountRepository"
+            ),
+            patch("src.services.core.instagram_account_service.ChatSettingsRepository"),
+            patch("src.services.core.instagram_account_service.TokenRepository"),
+        ):
             service = InstagramAccountService()
 
             # Verify all three repos are initialized
-            assert hasattr(service, 'account_repo')
-            assert hasattr(service, 'settings_repo')
-            assert hasattr(service, 'token_repo')
+            assert hasattr(service, "account_repo")
+            assert hasattr(service, "settings_repo")
+            assert hasattr(service, "token_repo")
 
-    def test_account_identity_separate_from_credentials(self, service, mock_account_repo, mock_token_repo, sample_account):
+    def test_account_identity_separate_from_credentials(
+        self, service, mock_account_repo, mock_token_repo, sample_account
+    ):
         """Account creation should create both account (identity) and token (credentials) separately."""
         mock_account_repo.get_by_instagram_id.return_value = None
         mock_account_repo.get_by_username.return_value = None
@@ -379,7 +479,7 @@ class TestSeparationOfConcerns:
             display_name="Test",
             instagram_account_id="123",
             instagram_username="test",
-            access_token="token"
+            access_token="token",
         )
 
         # Account repo handles identity
@@ -388,7 +488,7 @@ class TestSeparationOfConcerns:
         # Token repo handles credentials (with FK link)
         mock_token_repo.create_or_update.assert_called_once()
         call_args = mock_token_repo.create_or_update.call_args
-        assert call_args.kwargs['instagram_account_id'] == str(sample_account.id)
+        assert call_args.kwargs["instagram_account_id"] == str(sample_account.id)
 
 
 class TestMultiAccountScenarios:
@@ -410,7 +510,9 @@ class TestMultiAccountScenarios:
 
         assert len(result) == 2
 
-    def test_different_chats_can_have_different_active_accounts(self, service, mock_account_repo, mock_settings_repo):
+    def test_different_chats_can_have_different_active_accounts(
+        self, service, mock_account_repo, mock_settings_repo
+    ):
         """Different chats could theoretically have different active accounts."""
         # This tests the architecture supports per-chat account selection
         settings1 = Mock()

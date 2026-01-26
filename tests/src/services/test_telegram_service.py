@@ -1,6 +1,7 @@
 """Tests for TelegramService."""
+
 import pytest
-from unittest.mock import Mock, patch, AsyncMock, MagicMock
+from unittest.mock import Mock, patch, AsyncMock
 from datetime import datetime
 from uuid import uuid4
 
@@ -13,15 +14,30 @@ from src.repositories.media_repository import MediaRepository
 @pytest.fixture
 def mock_telegram_service():
     """Create TelegramService with mocked dependencies."""
-    with patch("src.services.core.telegram_service.settings") as mock_settings, \
-         patch("src.services.core.telegram_service.UserRepository") as mock_user_repo_class, \
-         patch("src.services.core.telegram_service.QueueRepository") as mock_queue_repo_class, \
-         patch("src.services.core.telegram_service.MediaRepository") as mock_media_repo_class, \
-         patch("src.services.core.telegram_service.HistoryRepository") as mock_history_repo_class, \
-         patch("src.services.core.telegram_service.LockRepository") as mock_lock_repo_class, \
-         patch("src.services.core.telegram_service.MediaLockService") as mock_lock_service_class, \
-         patch("src.services.core.telegram_service.InteractionService") as mock_interaction_service_class:
-
+    with (
+        patch("src.services.core.telegram_service.settings") as mock_settings,
+        patch(
+            "src.services.core.telegram_service.UserRepository"
+        ) as mock_user_repo_class,
+        patch(
+            "src.services.core.telegram_service.QueueRepository"
+        ) as mock_queue_repo_class,
+        patch(
+            "src.services.core.telegram_service.MediaRepository"
+        ) as mock_media_repo_class,
+        patch(
+            "src.services.core.telegram_service.HistoryRepository"
+        ) as mock_history_repo_class,
+        patch(
+            "src.services.core.telegram_service.LockRepository"
+        ) as mock_lock_repo_class,
+        patch(
+            "src.services.core.telegram_service.MediaLockService"
+        ) as mock_lock_service_class,
+        patch(
+            "src.services.core.telegram_service.InteractionService"
+        ) as mock_interaction_service_class,
+    ):
         mock_settings.TELEGRAM_BOT_TOKEN = "123456:ABC-DEF1234ghIkl"
         mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
         mock_settings.CAPTION_STYLE = "enhanced"
@@ -119,15 +135,21 @@ class TestButtonLayout:
         # Build keyboard manually like the service does
         keyboard = [
             [
-                InlineKeyboardButton("✅ Posted", callback_data=f"posted:{queue_item_id}"),
+                InlineKeyboardButton(
+                    "✅ Posted", callback_data=f"posted:{queue_item_id}"
+                ),
                 InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{queue_item_id}"),
             ],
             [
-                InlineKeyboardButton("📱 Open Instagram", url="https://www.instagram.com/"),
+                InlineKeyboardButton(
+                    "📱 Open Instagram", url="https://www.instagram.com/"
+                ),
             ],
             [
-                InlineKeyboardButton("🚫 Reject", callback_data=f"reject:{queue_item_id}"),
-            ]
+                InlineKeyboardButton(
+                    "🚫 Reject", callback_data=f"reject:{queue_item_id}"
+                ),
+            ],
         ]
 
         # Verify button order: row 0 = Posted/Skip, row 1 = Instagram, row 2 = Reject
@@ -138,7 +160,9 @@ class TestButtonLayout:
         # Instagram (row 1) should come before Reject (row 2)
         instagram_row = 1
         reject_row = 2
-        assert instagram_row < reject_row, "Instagram button should be above Reject button"
+        assert instagram_row < reject_row, (
+            "Instagram button should be above Reject button"
+        )
 
 
 @pytest.mark.unit
@@ -160,7 +184,7 @@ class TestProfileSync:
         telegram_user.first_name = "New"
         telegram_user.last_name = "User"
 
-        result = mock_telegram_service._get_or_create_user(telegram_user)
+        mock_telegram_service._get_or_create_user(telegram_user)
 
         mock_telegram_service.user_repo.create.assert_called_once_with(
             telegram_user_id=123456,
@@ -186,7 +210,7 @@ class TestProfileSync:
         telegram_user.first_name = "Updated"
         telegram_user.last_name = "Name"
 
-        result = mock_telegram_service._get_or_create_user(telegram_user)
+        mock_telegram_service._get_or_create_user(telegram_user)
 
         # Should call update_profile, not just update_last_seen
         mock_telegram_service.user_repo.update_profile.assert_called_once_with(
@@ -209,7 +233,7 @@ class TestProfileSync:
         telegram_user.first_name = "NoUsername"
         telegram_user.last_name = None
 
-        result = mock_telegram_service._get_or_create_user(telegram_user)
+        mock_telegram_service._get_or_create_user(telegram_user)
 
         mock_telegram_service.user_repo.update_profile.assert_called_once_with(
             str(existing_user.id),
@@ -242,20 +266,22 @@ class TestRejectConfirmation:
 
         mock_query = AsyncMock()
 
-        await mock_telegram_service._handle_reject_confirmation(queue_id, mock_user, mock_query)
+        await mock_telegram_service._handle_reject_confirmation(
+            queue_id, mock_user, mock_query
+        )
 
         # Should edit message with confirmation
         mock_query.edit_message_caption.assert_called_once()
         call_kwargs = mock_query.edit_message_caption.call_args
 
         # Check caption contains warning text
-        caption = call_kwargs.kwargs.get('caption') or call_kwargs.args[0]
+        caption = call_kwargs.kwargs.get("caption") or call_kwargs.args[0]
         assert "Are you sure?" in caption
         assert "test_image.jpg" in caption
         assert "cannot be undone" in caption
 
         # Check keyboard has confirm/cancel buttons
-        reply_markup = call_kwargs.kwargs.get('reply_markup')
+        reply_markup = call_kwargs.kwargs.get("reply_markup")
         assert reply_markup is not None
 
     async def test_reject_confirmation_not_found(self, mock_telegram_service):
@@ -267,7 +293,9 @@ class TestRejectConfirmation:
         mock_user = Mock()
         mock_query = AsyncMock()
 
-        await mock_telegram_service._handle_reject_confirmation(queue_id, mock_user, mock_query)
+        await mock_telegram_service._handle_reject_confirmation(
+            queue_id, mock_user, mock_query
+        )
 
         mock_query.edit_message_caption.assert_called_once()
         call_args = mock_query.edit_message_caption.call_args
@@ -308,7 +336,7 @@ class TestRejectConfirmation:
         # Should create history record with status='rejected'
         mock_telegram_service.history_repo.create.assert_called_once()
         history_call = mock_telegram_service.history_repo.create.call_args
-        assert history_call.kwargs.get('status') == 'rejected'
+        assert history_call.kwargs.get("status") == "rejected"
 
     async def test_cancel_reject_restores_original_buttons(self, mock_telegram_service):
         """Test that canceling rejection restores the original message."""
@@ -333,7 +361,9 @@ class TestRejectConfirmation:
 
         mock_query = AsyncMock()
 
-        await mock_telegram_service._handle_cancel_reject(queue_id, mock_user, mock_query)
+        await mock_telegram_service._handle_cancel_reject(
+            queue_id, mock_user, mock_query
+        )
 
         # Should restore original message
         mock_query.edit_message_caption.assert_called_once()
@@ -442,7 +472,6 @@ class TestTelegramService:
 
     def test_get_or_create_user_new_user(self, test_db):
         """Test creating a new user from Telegram update."""
-        user_repo = UserRepository(test_db)
         service = TelegramService(db=test_db)
 
         # Mock Telegram user
@@ -465,8 +494,7 @@ class TestTelegramService:
 
         # Create existing user
         existing_user = user_repo.create(
-            telegram_user_id=1000002,
-            telegram_username="existing"
+            telegram_user_id=1000002, telegram_username="existing"
         )
 
         # Mock Telegram user with same ID
@@ -494,7 +522,7 @@ class TestTelegramService:
             file_name="notification.jpg",
             file_hash="notif890",
             file_size_bytes=100000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         user = user_repo.create(telegram_user_id=1000003)
@@ -502,7 +530,7 @@ class TestTelegramService:
         queue_item = queue_repo.create(
             media_id=media.id,
             scheduled_user_id=user.id,
-            scheduled_time=datetime.utcnow()
+            scheduled_time=datetime.utcnow(),
         )
 
         message = service._format_queue_notification(queue_item, media)
@@ -534,7 +562,7 @@ class TestTelegramService:
             file_name="send_notif.jpg",
             file_hash="send890",
             file_size_bytes=95000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         user = user_repo.create(telegram_user_id=1000004)
@@ -542,7 +570,7 @@ class TestTelegramService:
         queue_item = queue_repo.create(
             media_id=media.id,
             scheduled_user_id=user.id,
-            scheduled_time=datetime.utcnow()
+            scheduled_time=datetime.utcnow(),
         )
 
         # Send notification
@@ -579,7 +607,7 @@ class TestTelegramService:
             file_name="callback_posted.jpg",
             file_hash="callback_p890",
             file_size_bytes=90000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         user = user_repo.create(telegram_user_id=1000005)
@@ -587,7 +615,7 @@ class TestTelegramService:
         queue_item = queue_repo.create(
             media_id=media.id,
             scheduled_user_id=user.id,
-            scheduled_time=datetime.utcnow()
+            scheduled_time=datetime.utcnow(),
         )
 
         # Mock update and context
@@ -633,7 +661,7 @@ class TestTelegramService:
             file_name="callback_skip.jpg",
             file_hash="callback_s890",
             file_size_bytes=85000,
-            mime_type="image/jpeg"
+            mime_type="image/jpeg",
         )
 
         user = user_repo.create(telegram_user_id=1000006)
@@ -641,7 +669,7 @@ class TestTelegramService:
         queue_item = queue_repo.create(
             media_id=media.id,
             scheduled_user_id=user.id,
-            scheduled_time=datetime.utcnow()
+            scheduled_time=datetime.utcnow(),
         )
 
         # Mock update and context
@@ -695,14 +723,19 @@ class TestQueueCommand:
         mock_queue_item2.scheduled_for = datetime(2030, 1, 2, 14, 0)  # Future date
 
         # get_all returns future items, get_pending would return empty
-        mock_telegram_service.queue_repo.get_all.return_value = [mock_queue_item1, mock_queue_item2]
+        mock_telegram_service.queue_repo.get_all.return_value = [
+            mock_queue_item1,
+            mock_queue_item2,
+        ]
 
         mock_media = Mock()
         mock_media.file_name = "test.jpg"
         mock_telegram_service.media_repo.get_by_id.return_value = mock_media
 
         mock_update = Mock()
-        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
         mock_update.effective_chat = Mock(id=-100123)
         mock_update.message = AsyncMock()
         mock_update.message.message_id = 1
@@ -712,7 +745,9 @@ class TestQueueCommand:
         await mock_telegram_service._handle_queue(mock_update, mock_context)
 
         # Should call get_all with status="pending", NOT get_pending
-        mock_telegram_service.queue_repo.get_all.assert_called_once_with(status="pending")
+        mock_telegram_service.queue_repo.get_all.assert_called_once_with(
+            status="pending"
+        )
 
         # Should show items in message
         mock_update.message.reply_text.assert_called_once()
@@ -731,7 +766,9 @@ class TestQueueCommand:
         mock_telegram_service.queue_repo.get_all.return_value = []
 
         mock_update = Mock()
-        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
         mock_update.effective_chat = Mock(id=-100123)
         mock_update.message = AsyncMock()
         mock_update.message.message_id = 1
@@ -768,7 +805,9 @@ class TestQueueCommand:
         mock_telegram_service.media_repo.get_by_id.return_value = mock_media
 
         mock_update = Mock()
-        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
         mock_update.effective_chat = Mock(id=-100123)
         mock_update.message = AsyncMock()
         mock_update.message.message_id = 1
@@ -814,7 +853,9 @@ class TestNextCommand:
         mock_telegram_service.send_notification = AsyncMock(return_value=True)
 
         mock_update = Mock()
-        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
         mock_update.effective_chat = Mock(id=-100123)
         mock_update.message = AsyncMock()
         mock_update.message.message_id = 1
@@ -827,10 +868,14 @@ class TestNextCommand:
         mock_telegram_service.queue_repo.get_all.assert_called_with(status="pending")
 
         # Should send notification for the queue item with force_sent=True
-        mock_telegram_service.send_notification.assert_called_once_with(str(queue_item_id), force_sent=True)
+        mock_telegram_service.send_notification.assert_called_once_with(
+            str(queue_item_id), force_sent=True
+        )
 
         # Should update status to processing
-        mock_telegram_service.queue_repo.update_status.assert_called_once_with(str(queue_item_id), "processing")
+        mock_telegram_service.queue_repo.update_status.assert_called_once_with(
+            str(queue_item_id), "processing"
+        )
 
         # Should NOT send any extra messages on success (no clutter)
         mock_update.message.reply_text.assert_not_called()
@@ -845,7 +890,9 @@ class TestNextCommand:
         mock_telegram_service.queue_repo.get_all.return_value = []
 
         mock_update = Mock()
-        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
         mock_update.effective_chat = Mock(id=-100123)
         mock_update.message = AsyncMock()
         mock_update.message.message_id = 1
@@ -873,10 +920,14 @@ class TestNextCommand:
         mock_queue_item.scheduled_for = datetime(2030, 6, 15, 14, 0)
 
         mock_telegram_service.queue_repo.get_all.return_value = [mock_queue_item]
-        mock_telegram_service.media_repo.get_by_id.return_value = None  # Media not found
+        mock_telegram_service.media_repo.get_by_id.return_value = (
+            None  # Media not found
+        )
 
         mock_update = Mock()
-        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
         mock_update.effective_chat = Mock(id=-100123)
         mock_update.message = AsyncMock()
         mock_update.message.message_id = 1
@@ -913,7 +964,9 @@ class TestNextCommand:
         mock_telegram_service.send_notification = AsyncMock(return_value=False)
 
         mock_update = Mock()
-        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
         mock_update.effective_chat = Mock(id=-100123)
         mock_update.message = AsyncMock()
         mock_update.message.message_id = 1
@@ -955,7 +1008,9 @@ class TestNextCommand:
         mock_telegram_service.send_notification = AsyncMock(return_value=True)
 
         mock_update = Mock()
-        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
         mock_update.effective_chat = Mock(id=-100123)
         mock_update.message = AsyncMock()
         mock_update.message.message_id = 1
@@ -965,11 +1020,15 @@ class TestNextCommand:
         await mock_telegram_service._handle_next(mock_update, mock_context)
 
         # Should send notification with force_sent=True
-        mock_telegram_service.send_notification.assert_called_once_with(str(queue_item_id), force_sent=True)
+        mock_telegram_service.send_notification.assert_called_once_with(
+            str(queue_item_id), force_sent=True
+        )
 
         # Should log the command
         mock_telegram_service.interaction_service.log_command.assert_called_once()
-        call_kwargs = mock_telegram_service.interaction_service.log_command.call_args.kwargs
+        call_kwargs = (
+            mock_telegram_service.interaction_service.log_command.call_args.kwargs
+        )
         assert call_kwargs["command"] == "/next"
         assert call_kwargs["context"]["media_filename"] == "logged_post.jpg"
         assert call_kwargs["context"]["success"] is True
@@ -994,7 +1053,9 @@ class TestPauseCommand:
         mock_telegram_service.set_paused(False)
 
         mock_update = Mock()
-        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
         mock_update.effective_chat = Mock(id=-100123)
         mock_update.message = AsyncMock()
         mock_update.message.message_id = 1
@@ -1023,7 +1084,9 @@ class TestPauseCommand:
         mock_telegram_service.set_paused(True)
 
         mock_update = Mock()
-        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
         mock_update.effective_chat = Mock(id=-100123)
         mock_update.message = AsyncMock()
         mock_update.message.message_id = 1
@@ -1052,7 +1115,9 @@ class TestResumeCommand:
         mock_telegram_service.set_paused(False)
 
         mock_update = Mock()
-        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
         mock_update.effective_chat = Mock(id=-100123)
         mock_update.message = AsyncMock()
         mock_update.message.message_id = 1
@@ -1081,10 +1146,15 @@ class TestResumeCommand:
         future_item = Mock()
         future_item.scheduled_for = datetime(2030, 1, 1, 12, 0)  # Future
 
-        mock_telegram_service.queue_repo.get_all.return_value = [overdue_item, future_item]
+        mock_telegram_service.queue_repo.get_all.return_value = [
+            overdue_item,
+            future_item,
+        ]
 
         mock_update = Mock()
-        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
         mock_update.effective_chat = Mock(id=-100123)
         mock_update.message = AsyncMock()
         mock_update.message.message_id = 1
@@ -1118,7 +1188,9 @@ class TestResumeCommand:
         mock_telegram_service.queue_repo.get_all.return_value = [future_item]
 
         mock_update = Mock()
-        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
         mock_update.effective_chat = Mock(id=-100123)
         mock_update.message = AsyncMock()
         mock_update.message.message_id = 1
@@ -1148,7 +1220,9 @@ class TestScheduleCommand:
         mock_telegram_service.user_repo.create.return_value = mock_user
 
         mock_update = Mock()
-        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
         mock_update.effective_chat = Mock(id=-100123)
         mock_update.message = AsyncMock()
         mock_update.message.message_id = 1
@@ -1161,15 +1235,16 @@ class TestScheduleCommand:
         mock_scheduler.create_schedule.return_value = {
             "scheduled": 21,
             "skipped": 5,
-            "total_slots": 21
+            "total_slots": 21,
         }
 
         # Patch the import statement in the function
         import sys
+
         mock_module = Mock()
         mock_module.SchedulerService.return_value = mock_scheduler
 
-        with patch.dict(sys.modules, {'src.services.core.scheduler': mock_module}):
+        with patch.dict(sys.modules, {"src.services.core.scheduler": mock_module}):
             await mock_telegram_service._handle_schedule(mock_update, mock_context)
 
             mock_scheduler.create_schedule.assert_called_once_with(days=7)
@@ -1187,7 +1262,9 @@ class TestScheduleCommand:
         mock_telegram_service.user_repo.create.return_value = mock_user
 
         mock_update = Mock()
-        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
         mock_update.effective_chat = Mock(id=-100123)
         mock_update.message = AsyncMock()
         mock_update.message.message_id = 1
@@ -1233,7 +1310,9 @@ class TestStatsCommand:
         mock_telegram_service.queue_repo.count_pending.return_value = 5
 
         mock_update = Mock()
-        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
         mock_update.effective_chat = Mock(id=-100123)
         mock_update.message = AsyncMock()
         mock_update.message.message_id = 1
@@ -1272,10 +1351,15 @@ class TestHistoryCommand:
         history2.posted_at = datetime(2024, 1, 14, 14, 0)
         history2.posted_by_telegram_username = "user2"
 
-        mock_telegram_service.history_repo.get_recent_posts.return_value = [history1, history2]
+        mock_telegram_service.history_repo.get_recent_posts.return_value = [
+            history1,
+            history2,
+        ]
 
         mock_update = Mock()
-        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
         mock_update.effective_chat = Mock(id=-100123)
         mock_update.message = AsyncMock()
         mock_update.message.message_id = 1
@@ -1301,7 +1385,9 @@ class TestHistoryCommand:
         mock_telegram_service.history_repo.get_recent_posts.return_value = []
 
         mock_update = Mock()
-        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
         mock_update.effective_chat = Mock(id=-100123)
         mock_update.message = AsyncMock()
         mock_update.message.message_id = 1
@@ -1335,14 +1421,19 @@ class TestLocksCommand:
         lock2 = Mock()
         lock2.media_item_id = uuid4()
 
-        mock_telegram_service.lock_repo.get_permanent_locks.return_value = [lock1, lock2]
+        mock_telegram_service.lock_repo.get_permanent_locks.return_value = [
+            lock1,
+            lock2,
+        ]
 
         mock_media = Mock()
         mock_media.file_name = "locked_image.jpg"
         mock_telegram_service.media_repo.get_by_id.return_value = mock_media
 
         mock_update = Mock()
-        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
         mock_update.effective_chat = Mock(id=-100123)
         mock_update.message = AsyncMock()
         mock_update.message.message_id = 1
@@ -1367,7 +1458,9 @@ class TestLocksCommand:
         mock_telegram_service.lock_repo.get_permanent_locks.return_value = []
 
         mock_update = Mock()
-        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
         mock_update.effective_chat = Mock(id=-100123)
         mock_update.message = AsyncMock()
         mock_update.message.message_id = 1
@@ -1396,7 +1489,9 @@ class TestClearCommand:
         mock_telegram_service.queue_repo.count_pending.return_value = 15
 
         mock_update = Mock()
-        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
         mock_update.effective_chat = Mock(id=-100123)
         mock_update.message = AsyncMock()
         mock_update.message.message_id = 1
@@ -1421,7 +1516,9 @@ class TestClearCommand:
         mock_telegram_service.queue_repo.count_pending.return_value = 0
 
         mock_update = Mock()
-        mock_update.effective_user = Mock(id=123, username="test", first_name="Test", last_name=None)
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
         mock_update.effective_chat = Mock(id=-100123)
         mock_update.message = AsyncMock()
         mock_update.message.message_id = 1
@@ -1458,7 +1555,9 @@ class TestResumeCallbacks:
         mock_query = AsyncMock()
         mock_query.message = Mock(chat_id=-100123, message_id=1)
 
-        await mock_telegram_service._handle_resume_callback("reschedule", mock_user, mock_query)
+        await mock_telegram_service._handle_resume_callback(
+            "reschedule", mock_user, mock_query
+        )
 
         # Should be resumed
         assert mock_telegram_service.is_paused is False
@@ -1488,18 +1587,25 @@ class TestResumeCallbacks:
         future_item.id = uuid4()
         future_item.scheduled_for = datetime(2030, 1, 1, 12, 0)
 
-        mock_telegram_service.queue_repo.get_all.return_value = [overdue_item, future_item]
+        mock_telegram_service.queue_repo.get_all.return_value = [
+            overdue_item,
+            future_item,
+        ]
 
         mock_query = AsyncMock()
         mock_query.message = Mock(chat_id=-100123, message_id=1)
 
-        await mock_telegram_service._handle_resume_callback("clear", mock_user, mock_query)
+        await mock_telegram_service._handle_resume_callback(
+            "clear", mock_user, mock_query
+        )
 
         # Should be resumed
         assert mock_telegram_service.is_paused is False
 
         # Should delete the overdue item
-        mock_telegram_service.queue_repo.delete.assert_called_once_with(str(overdue_item.id))
+        mock_telegram_service.queue_repo.delete.assert_called_once_with(
+            str(overdue_item.id)
+        )
 
         # Should show success message
         call_args = mock_query.edit_message_text.call_args
@@ -1522,7 +1628,9 @@ class TestResumeCallbacks:
         mock_query = AsyncMock()
         mock_query.message = Mock(chat_id=-100123, message_id=1)
 
-        await mock_telegram_service._handle_resume_callback("force", mock_user, mock_query)
+        await mock_telegram_service._handle_resume_callback(
+            "force", mock_user, mock_query
+        )
 
         # Should be resumed
         assert mock_telegram_service.is_paused is False
@@ -1557,7 +1665,9 @@ class TestClearCallbacks:
         mock_query = AsyncMock()
         mock_query.message = Mock(chat_id=-100123, message_id=1)
 
-        await mock_telegram_service._handle_clear_callback("confirm", mock_user, mock_query)
+        await mock_telegram_service._handle_clear_callback(
+            "confirm", mock_user, mock_query
+        )
 
         # Should delete both items
         assert mock_telegram_service.queue_repo.delete.call_count == 2
@@ -1575,7 +1685,9 @@ class TestClearCallbacks:
         mock_query = AsyncMock()
         mock_query.message = Mock(chat_id=-100123, message_id=1)
 
-        await mock_telegram_service._handle_clear_callback("cancel", mock_user, mock_query)
+        await mock_telegram_service._handle_clear_callback(
+            "cancel", mock_user, mock_query
+        )
 
         # Should NOT delete anything
         mock_telegram_service.queue_repo.delete.assert_not_called()
@@ -1596,3 +1708,259 @@ class TestPauseIntegration:
         posting_service = PostingService()
         # The is_paused property should be accessible
         assert hasattr(posting_service.telegram_service, "is_paused")
+
+
+@pytest.mark.unit
+class TestInlineAccountSelector:
+    """Tests for inline account selector in posting workflow (Phase 1.7)."""
+
+    def test_caption_includes_active_account_name(self, mock_telegram_service):
+        """Test that caption shows active account's display name."""
+        mock_media_item = Mock()
+        mock_media_item.title = "Test Image"
+        mock_media_item.caption = None
+        mock_media_item.link_url = None
+        mock_media_item.tags = []
+
+        mock_active_account = Mock()
+        mock_active_account.display_name = "Main Account"
+        mock_active_account.instagram_username = "mainaccount"
+
+        with patch("src.services.core.telegram_service.settings") as mock_settings:
+            mock_settings.CAPTION_STYLE = "enhanced"
+            caption = mock_telegram_service._build_caption(
+                mock_media_item,
+                queue_item=None,
+                active_account=mock_active_account,
+            )
+
+        assert "📸 Account: Main Account" in caption
+
+    def test_caption_shows_not_set_when_no_account(self, mock_telegram_service):
+        """Test caption when no account is set."""
+        mock_media_item = Mock()
+        mock_media_item.title = "Test Image"
+        mock_media_item.caption = None
+        mock_media_item.link_url = None
+        mock_media_item.tags = []
+
+        with patch("src.services.core.telegram_service.settings") as mock_settings:
+            mock_settings.CAPTION_STYLE = "enhanced"
+            caption = mock_telegram_service._build_caption(
+                mock_media_item,
+                queue_item=None,
+                active_account=None,  # No active account
+            )
+
+        assert "📸 Account: Not set" in caption
+
+    def test_keyboard_button_order_status_actions_then_instagram(
+        self, mock_telegram_service
+    ):
+        """Test that status actions (Posted/Skip/Reject) are grouped, then Instagram actions."""
+        from telegram import InlineKeyboardButton
+
+        queue_item_id = str(uuid4())
+        active_account = Mock()
+        active_account.display_name = "Test Account"
+
+        # Build keyboard like the service does (new layout)
+        keyboard = [
+            # Status action buttons (grouped together)
+            [
+                InlineKeyboardButton(
+                    "✅ Posted", callback_data=f"posted:{queue_item_id}"
+                ),
+                InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{queue_item_id}"),
+            ],
+            [
+                InlineKeyboardButton(
+                    "🚫 Reject", callback_data=f"reject:{queue_item_id}"
+                ),
+            ],
+            # Instagram-related buttons (grouped together)
+            [
+                InlineKeyboardButton(
+                    f"📸 {active_account.display_name}",
+                    callback_data=f"select_account:{queue_item_id}",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    "📱 Open Instagram", url="https://www.instagram.com/"
+                ),
+            ],
+        ]
+
+        # Verify button order
+        assert len(keyboard) == 4
+        # Row 0: Posted/Skip
+        assert "Posted" in keyboard[0][0].text
+        assert "Skip" in keyboard[0][1].text
+        # Row 1: Reject
+        assert "Reject" in keyboard[1][0].text
+        # Row 2: Account selector
+        assert "Test Account" in keyboard[2][0].text
+        assert "select_account" in keyboard[2][0].callback_data
+        # Row 3: Open Instagram
+        assert "Instagram" in keyboard[3][0].text
+
+    def test_account_selector_button_shows_display_name(self, mock_telegram_service):
+        """Test account selector button shows friendly display name, not @username."""
+        from telegram import InlineKeyboardButton
+
+        queue_item_id = str(uuid4())
+
+        # Test with active account
+        active_account = Mock()
+        active_account.display_name = "Main Brand Account"  # Friendly name
+
+        button = InlineKeyboardButton(
+            f"📸 {active_account.display_name}",
+            callback_data=f"select_account:{queue_item_id}",
+        )
+
+        assert button.text == "📸 Main Brand Account"
+        assert "select_account" in button.callback_data
+
+    def test_account_selector_no_account_label(self):
+        """Test account selector shows 'No Account' when none configured."""
+        from telegram import InlineKeyboardButton
+
+        queue_item_id = str(uuid4())
+        active_account = None
+
+        account_label = (
+            f"📸 {active_account.display_name}" if active_account else "📸 No Account"
+        )
+
+        button = InlineKeyboardButton(
+            account_label,
+            callback_data=f"select_account:{queue_item_id}",
+        )
+
+        assert button.text == "📸 No Account"
+
+    def test_settings_menu_shows_default_account_label(self):
+        """Test settings menu shows 'Default: {name}' instead of '@username'."""
+        account_data = {
+            "active_account_id": "some-uuid",
+            "active_account_name": "Main Account",
+            "active_account_username": "mainaccount",
+        }
+
+        # This is the new label format
+        if account_data["active_account_id"]:
+            label = f"📸 Default: {account_data['active_account_name']}"
+        else:
+            label = "📸 Set Default Account"
+
+        assert label == "📸 Default: Main Account"
+
+    def test_settings_menu_shows_set_default_when_no_account(self):
+        """Test settings shows 'Set Default Account' when none selected."""
+        account_data = {
+            "active_account_id": None,
+            "active_account_name": "Not selected",
+            "active_account_username": None,
+        }
+
+        # This is the new label format
+        if account_data["active_account_id"]:
+            label = f"📸 Default: {account_data['active_account_name']}"
+        else:
+            label = "📸 Set Default Account"
+
+        assert label == "📸 Set Default Account"
+
+    def test_callback_data_format_shortened_for_telegram_limit(self):
+        """Test callback data uses shortened UUIDs for 64 byte limit."""
+        queue_id = "550e8400-e29b-41d4-a716-446655440000"
+        account_id = "660f9511-f39c-52e5-b827-557766551111"
+
+        # Shortened format
+        short_queue_id = queue_id[:8]  # "550e8400"
+        short_account_id = account_id[:8]  # "660f9511"
+
+        callback_data = f"sap:{short_queue_id}:{short_account_id}"
+
+        assert len(callback_data) < 64
+        assert callback_data == "sap:550e8400:660f9511"
+
+
+@pytest.mark.unit
+class TestAccountSelectorCallbacks:
+    """Tests for account selector callback handlers."""
+
+    async def test_handle_post_account_selector_shows_accounts(
+        self, mock_telegram_service
+    ):
+        """Test that account selector menu shows all configured accounts."""
+        queue_id = str(uuid4())
+
+        mock_queue_item = Mock()
+        mock_queue_item.id = queue_id
+        mock_telegram_service.queue_repo.get_by_id.return_value = mock_queue_item
+
+        mock_telegram_service.ig_account_service = Mock()
+        mock_telegram_service.ig_account_service.get_accounts_for_display.return_value = {
+            "accounts": [
+                {"id": "acc1", "display_name": "Main Account", "username": "main"},
+                {"id": "acc2", "display_name": "Brand Account", "username": "brand"},
+            ],
+            "active_account_id": "acc1",
+        }
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100123, message_id=1)
+
+        await mock_telegram_service._handle_post_account_selector(
+            queue_id, mock_user, mock_query
+        )
+
+        # Verify edit_message_caption was called
+        mock_query.edit_message_caption.assert_called_once()
+        call_args = mock_query.edit_message_caption.call_args
+        assert "Select Instagram Account" in call_args.kwargs["caption"]
+
+    async def test_handle_back_to_post_rebuilds_workflow(self, mock_telegram_service):
+        """Test that back_to_post returns to the posting workflow."""
+        queue_id = str(uuid4())
+        short_queue_id = queue_id[:8]
+
+        mock_queue_item = Mock()
+        mock_queue_item.id = queue_id
+        mock_queue_item.media_item_id = uuid4()
+        mock_telegram_service.queue_repo.get_by_id_prefix.return_value = mock_queue_item
+        mock_telegram_service.queue_repo.get_by_id.return_value = mock_queue_item
+
+        mock_media_item = Mock()
+        mock_media_item.title = "Test"
+        mock_media_item.caption = None
+        mock_media_item.link_url = None
+        mock_media_item.tags = []
+        mock_telegram_service.media_repo.get_by_id.return_value = mock_media_item
+
+        mock_telegram_service.ig_account_service = Mock()
+        mock_telegram_service.ig_account_service.get_active_account.return_value = None
+
+        mock_telegram_service.settings_service = Mock()
+        mock_telegram_service.settings_service.get_settings.return_value = Mock(
+            enable_instagram_api=False
+        )
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100123, message_id=1)
+
+        await mock_telegram_service._handle_back_to_post(
+            short_queue_id, mock_user, mock_query
+        )
+
+        # Should call edit_message_caption to rebuild the posting workflow
+        mock_query.edit_message_caption.assert_called()

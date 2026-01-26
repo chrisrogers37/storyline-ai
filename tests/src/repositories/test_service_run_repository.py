@@ -1,7 +1,6 @@
 """Tests for ServiceRunRepository."""
+
 import pytest
-from datetime import datetime, timedelta
-from uuid import uuid4
 
 from src.repositories.service_run_repository import ServiceRunRepository
 from src.repositories.user_repository import UserRepository
@@ -18,7 +17,7 @@ class TestServiceRunRepository:
         run = run_repo.create_run(
             service_name="TestService",
             method_name="test_method",
-            parameters={"param1": "value1"}
+            parameters={"param1": "value1"},
         )
 
         assert run.id is not None
@@ -31,15 +30,12 @@ class TestServiceRunRepository:
         run_repo = ServiceRunRepository(test_db)
 
         run = run_repo.create_run(
-            service_name="TestService",
-            method_name="success_method"
+            service_name="TestService", method_name="success_method"
         )
 
         # Complete successfully
         completed_run = run_repo.complete_run(
-            run.id,
-            status="success",
-            result_summary={"items_processed": 10}
+            run.id, status="success", result_summary={"items_processed": 10}
         )
 
         assert completed_run.status == "success"
@@ -52,8 +48,7 @@ class TestServiceRunRepository:
         run_repo = ServiceRunRepository(test_db)
 
         run = run_repo.create_run(
-            service_name="TestService",
-            method_name="failing_method"
+            service_name="TestService", method_name="failing_method"
         )
 
         # Complete with failure
@@ -61,7 +56,7 @@ class TestServiceRunRepository:
             run.id,
             status="failed",
             error_message="Something went wrong",
-            error_traceback="Traceback (most recent call last)..."
+            error_traceback="Traceback (most recent call last)...",
         )
 
         assert completed_run.status == "failed"
@@ -86,8 +81,7 @@ class TestServiceRunRepository:
 
         # Create and fail a run
         run = run_repo.create_run(
-            service_name="FailingService",
-            method_name="bad_method"
+            service_name="FailingService", method_name="bad_method"
         )
         run_repo.complete_run(run.id, status="failed", error_message="Test failure")
 
@@ -120,7 +114,7 @@ class TestServiceRunRepository:
         run_repo.create_run(
             service_name="UserService",
             method_name="user_method",
-            triggered_by_user_id=user.id
+            triggered_by_user_id=user.id,
         )
 
         user_runs = run_repo.get_runs_by_user(user.id, limit=10)
@@ -133,12 +127,12 @@ class TestServiceRunRepository:
         run_repo = ServiceRunRepository(test_db)
 
         run = run_repo.create_run(
-            service_name="TimedService",
-            method_name="timed_method"
+            service_name="TimedService", method_name="timed_method"
         )
 
         # Simulate some processing time
         import time
+
         time.sleep(0.1)
 
         # Complete the run
