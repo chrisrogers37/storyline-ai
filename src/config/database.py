@@ -52,14 +52,25 @@ def init_db():
 
     Call this after importing all models.
     """
-    # Import all models here to ensure they're registered
+    # Import all models here to ensure they're registered with SQLAlchemy
     from src.models import (
-        user,  # noqa: F401
-        media_item,  # noqa: F401
-        posting_queue,  # noqa: F401
-        posting_history,  # noqa: F401
-        media_lock,  # noqa: F401
-        service_run,  # noqa: F401
+        user,
+        media_item,
+        posting_queue,
+        posting_history,
+        media_lock,
+        service_run,
     )
+
+    # Reference imports to satisfy linter (these are imported for SQLAlchemy model registration)
+    __all_models__ = [
+        user,
+        media_item,
+        posting_queue,
+        posting_history,
+        media_lock,
+        service_run,
+    ]
+    del __all_models__  # Clean up after registration
 
     Base.metadata.create_all(bind=engine)
