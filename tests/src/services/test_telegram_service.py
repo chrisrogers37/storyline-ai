@@ -860,7 +860,6 @@ class TestNextCommand:
         mock_telegram_service.user_repo.create.return_value = mock_user
 
         queue_item_id = uuid4()
-        media_id = uuid4()
 
         mock_media = Mock()
         mock_media.file_name = "next_post.jpg"
