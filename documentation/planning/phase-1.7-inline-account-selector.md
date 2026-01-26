@@ -102,18 +102,17 @@ This document outlines a UX enhancement to the posting workflow that adds inline
 │                                      │
 │  [🤖 Auto Post to Instagram]        │  (if enabled)
 │                                      │
-│  [✅ Posted]  [⏭️ Skip]             │
+│  [✅ Posted]  [⏭️ Skip]             │  ← Status actions grouped
+│  [🚫 Reject]                        │  ← Status actions grouped
 │                                      │
-│  [📸 Main Account]                  │  ← NEW: Account selector (shows friendly name)
-│                                      │
-│  [📱 Open Instagram]                │
-│                                      │
-│  [🚫 Reject]                        │
+│  [📸 Main Account]                  │  ← Instagram-related (account selector)
+│  [📱 Open Instagram]                │  ← Instagram-related (deep link)
 └─────────────────────────────────────┘
 ```
 
 **Design Considerations:**
-- Account selector placed between manual actions and Open Instagram ✅
+- Status actions grouped together: Posted, Skip, Reject
+- Instagram-related actions grouped together: Account selector, Open Instagram
 - Shows current account in caption (read-only indicator, friendly name)
 - Button label shows friendly name: "📸 Main Account"
 - Clicking opens simplified account selector (no add/remove)
@@ -161,12 +160,10 @@ User clicks a different account, sees immediate feedback:
 │  [🤖 Auto Post to Instagram]        │
 │                                      │
 │  [✅ Posted]  [⏭️ Skip]             │
+│  [🚫 Reject]                        │
 │                                      │
 │  [📸 Brand Account]                 │  ← Updated button label
-│                                      │
 │  [📱 Open Instagram]                │
-│                                      │
-│  [🚫 Reject]                        │
 └─────────────────────────────────────┘
 
 ✅ Switched to Brand Account
@@ -295,13 +292,20 @@ def send_notification(self, media_item, queue_item_id=None, force_sent=False):
             ),
         ])
 
-    # Manual workflow buttons
+    # Status action buttons (grouped together)
     keyboard.extend([
         [
             InlineKeyboardButton("✅ Posted", callback_data=f"posted:{queue_item_id}"),
             InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{queue_item_id}"),
         ],
-        # NEW: Account selector button (shows friendly name)
+        [
+            InlineKeyboardButton("🚫 Reject", callback_data=f"reject:{queue_item_id}"),
+        ],
+    ])
+
+    # Instagram-related buttons (grouped together)
+    keyboard.extend([
+        # Account selector button (shows friendly name)
         [
             InlineKeyboardButton(
                 f"📸 {active_account.display_name}" if active_account else "📸 No Account",
@@ -311,9 +315,6 @@ def send_notification(self, media_item, queue_item_id=None, force_sent=False):
         [
             InlineKeyboardButton("📱 Open Instagram", url="https://www.instagram.com/"),
         ],
-        [
-            InlineKeyboardButton("🚫 Reject", callback_data=f"reject:{queue_item_id}"),
-        ]
     ])
 
     # ... rest of method
@@ -481,11 +482,19 @@ async def _rebuild_posting_workflow(self, queue_id: str, query):
             ),
         ])
 
+    # Status action buttons (grouped together)
     keyboard.extend([
         [
             InlineKeyboardButton("✅ Posted", callback_data=f"posted:{queue_id}"),
             InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{queue_id}"),
         ],
+        [
+            InlineKeyboardButton("🚫 Reject", callback_data=f"reject:{queue_id}"),
+        ],
+    ])
+
+    # Instagram-related buttons (grouped together)
+    keyboard.extend([
         [
             InlineKeyboardButton(
                 "📸 Switch Account",
@@ -495,9 +504,6 @@ async def _rebuild_posting_workflow(self, queue_id: str, query):
         [
             InlineKeyboardButton("📱 Open Instagram", url="https://www.instagram.com/"),
         ],
-        [
-            InlineKeyboardButton("🚫 Reject", callback_data=f"reject:{queue_id}"),
-        ]
     ])
 
     await query.edit_message_caption(
