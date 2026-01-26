@@ -1,84 +1,124 @@
 # GitHub Workflows
 
-This directory contains optional GitHub Actions workflows for CI/CD.
+This directory contains GitHub Actions workflows for CI.
 
-## Current Setup: Manual Deployment (Option 1)
+---
 
-The simplest deployment method is already configured:
+## Current Setup
+
+### ✅ Continuous Integration (Automated)
+
+**File**: `ci.yml`
+
+Runs automatically on every push and pull request:
+- **Lint** - Code style checks with ruff
+- **Test** - Unit and integration tests with pytest
+- **Security** - Vulnerability scanning with pip-audit and bandit
+- **Changelog** - Verify CHANGELOG.md is updated
+
+All jobs run on **GitHub's cloud runners** (`ubuntu-latest`) - safe for public repositories.
+
+### ⚠️ Deployment (Manual Only)
+
+**File**: `deploy.yml` - Disabled by default (requires Tailscale setup)
+
+For security reasons, deployment is **manual**:
 
 ```bash
 ./scripts/deploy.sh
 ```
 
-This script:
-- Runs tests locally
-- Pushes to GitHub
-- SSHs to your Pi and deploys
-- Restarts the service
-
-**No GitHub Actions setup required.**
+This ensures your Pi and credentials remain secure.
 
 ---
 
-## Optional: Automated CI/CD
+## Why Manual Deployment?
 
-If you want automated testing and deployment on every push, see:
+**Public repositories cannot safely use self-hosted runners.**
 
-**[documentation/guides/deployment-options.md](../documentation/guides/deployment-options.md)**
+Malicious users can:
+- Submit PRs with harmful code
+- Execute code on your Pi through workflows
+- Steal secrets and access your local network
 
-### Available Workflows
-
-| Workflow | Purpose | Status | Setup Required |
-|----------|---------|--------|----------------|
-| **ci.yml** | Lint, test, security scan | ⚠️ Will fail without setup | Setup Python service on GitHub runners OR use self-hosted runner |
-| **deploy.yml** | Deploy to Pi via Tailscale | 🔒 Disabled by default | Requires Tailscale + secrets |
+See: [GitHub's security documentation](https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/about-self-hosted-runners#self-hosted-runner-security)
 
 ---
 
-## Quick Setup Options
+## Deployment Options
 
-### Option 2: Self-Hosted Runner (Recommended)
-
-Run GitHub Actions on your Pi:
+### Option 1: Manual Deployment (Current - Recommended)
 
 ```bash
-# On Pi
-mkdir -p ~/actions-runner && cd ~/actions-runner
-# Follow instructions from: https://github.com/chrisrogers37/storyline-ai/settings/actions/runners
+./scripts/deploy.sh
 ```
 
-See: [documentation/guides/github-actions-self-hosted.md](../documentation/guides/github-actions-self-hosted.md)
+- ✅ Safe for public repos
+- ✅ Simple and fast
+- ✅ No external dependencies
+- ⚠️ Requires SSH access to Pi
 
-### Option 3: Tailscale VPN
+### Option 2: Tailscale VPN (Advanced)
 
-Use GitHub's cloud runners with secure VPN:
+For automated deployment with security:
 
 See: [documentation/guides/github-actions-tailscale.md](../documentation/guides/github-actions-tailscale.md)
 
+- ✅ Safe for public repos
+- ✅ Automated on every push
+- ⚠️ Requires Tailscale account and setup
+
 ---
 
-## Disabling Workflows
+## CI Failures
 
-If you prefer manual deployment only:
+If CI is failing, common issues:
+
+### Lint Errors
+```bash
+# Fix automatically
+ruff format src/ cli/
+
+# Check for issues
+ruff check src/ cli/
+```
+
+### Test Failures
+```bash
+# Run tests locally
+pytest tests/ -v
+
+# Run specific test
+pytest tests/path/to/test.py::test_name -v
+```
+
+### Missing CHANGELOG Update
+Every PR should update `CHANGELOG.md` under `## [Unreleased]`
+
+---
+
+## Disabling CI
+
+If you don't want CI to run:
 
 ```bash
-# Disable CI/CD (workflows won't run)
-rm -rf .github/workflows/
-
-# Or just disable specific workflows
+# Disable CI workflow
 mv .github/workflows/ci.yml .github/workflows/ci.yml.disabled
+```
+
+To re-enable:
+```bash
+mv .github/workflows/ci.yml.disabled .github/workflows/ci.yml
 ```
 
 ---
 
-## Current Recommendation
+## For Contributors
 
-For a solo developer project: **Use manual deployment (Option 1)**
-- Already set up
-- Fast and simple
-- No additional configuration needed
+When submitting a PR:
+1. ✅ Update `CHANGELOG.md`
+2. ✅ Ensure tests pass: `pytest tests/ -v`
+3. ✅ Format code: `ruff format src/ cli/`
+4. ✅ Check linting: `ruff check src/ cli/`
 
-Upgrade to automated CI/CD when:
-- You add team members
-- You want tests to run on every push
-- You need deployment automation
+CI will verify these automatically when you open a PR.
