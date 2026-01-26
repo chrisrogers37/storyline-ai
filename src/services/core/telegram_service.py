@@ -138,13 +138,20 @@ class TelegramService(BaseService):
             else True
         )
 
+        # Get active Instagram account for display
+        active_account = self.ig_account_service.get_active_account(self.channel_id)
+
         # Build caption (pass queue_item for enhanced mode)
         caption = self._build_caption(
-            media_item, queue_item, force_sent=force_sent, verbose=verbose
+            media_item,
+            queue_item,
+            force_sent=force_sent,
+            verbose=verbose,
+            active_account=active_account,
         )
 
         # Build inline keyboard
-        # Layout: Auto Post (if enabled) → Manual workflow → Reject
+        # Layout: Auto Post (if enabled) → Status actions → Instagram actions
         keyboard = []
 
         # Add Auto Post button if Instagram API is enabled (from database settings)
@@ -158,7 +165,7 @@ class TelegramService(BaseService):
                 ]
             )
 
-        # Manual workflow buttons
+        # Status action buttons (grouped together)
         keyboard.extend(
             [
                 [
@@ -171,12 +178,27 @@ class TelegramService(BaseService):
                 ],
                 [
                     InlineKeyboardButton(
-                        "📱 Open Instagram", url="https://www.instagram.com/"
+                        "🚫 Reject", callback_data=f"reject:{queue_item_id}"
+                    ),
+                ],
+            ]
+        )
+
+        # Instagram-related buttons (grouped together)
+        account_label = (
+            f"📸 {active_account.display_name}" if active_account else "📸 No Account"
+        )
+        keyboard.extend(
+            [
+                [
+                    InlineKeyboardButton(
+                        account_label,
+                        callback_data=f"select_account:{queue_item_id}",
                     ),
                 ],
                 [
                     InlineKeyboardButton(
-                        "🚫 Reject", callback_data=f"reject:{queue_item_id}"
+                        "📱 Open Instagram", url="https://www.instagram.com/"
                     ),
                 ],
             ]
@@ -225,12 +247,17 @@ class TelegramService(BaseService):
         queue_item=None,
         force_sent: bool = False,
         verbose: bool = True,
+        active_account=None,
     ) -> str:
         """Build caption for Telegram message with enhanced or simple formatting."""
 
         if settings.CAPTION_STYLE == "enhanced":
             return self._build_enhanced_caption(
-                media_item, queue_item, force_sent=force_sent, verbose=verbose
+                media_item,
+                queue_item,
+                force_sent=force_sent,
+                verbose=verbose,
+                active_account=active_account,
             )
         else:
             return self._build_simple_caption(media_item, force_sent=force_sent)
@@ -267,6 +294,7 @@ class TelegramService(BaseService):
         queue_item=None,
         force_sent: bool = False,
         verbose: bool = True,
+        active_account=None,
     ) -> str:
         """Build enhanced caption with better formatting."""
         lines = []
@@ -278,6 +306,12 @@ class TelegramService(BaseService):
         # Title and metadata
         if media_item.title:
             lines.append(f"📸 {media_item.title}")
+
+        # Active account indicator (for multi-account awareness)
+        if active_account:
+            lines.append(f"📸 Account: {active_account.display_name}")
+        else:
+            lines.append("📸 Account: Not set")
 
         # Caption
         if media_item.caption:
@@ -703,9 +737,9 @@ class TelegramService(BaseService):
             # Row 4: Instagram Account config
             [
                 InlineKeyboardButton(
-                    f"📸 @{account_data['active_account_username']}"
-                    if account_data["active_account_username"]
-                    else "📸 Configure Accounts",
+                    f"📸 Default: {account_data['active_account_name']}"
+                    if account_data["active_account_id"]
+                    else "📸 Set Default Account",
                     callback_data="settings_accounts:select",
                 ),
             ],
@@ -812,9 +846,9 @@ class TelegramService(BaseService):
             ],
             [
                 InlineKeyboardButton(
-                    f"📸 @{account_data['active_account_username']}"
-                    if account_data["active_account_username"]
-                    else "📸 Configure Accounts",
+                    f"📸 Default: {account_data['active_account_name']}"
+                    if account_data["active_account_id"]
+                    else "📸 Set Default Account",
                     callback_data="settings_accounts:select",
                 )
             ],
@@ -1121,9 +1155,9 @@ class TelegramService(BaseService):
             ],
             [
                 InlineKeyboardButton(
-                    f"📸 @{account_data['active_account_username']}"
-                    if account_data["active_account_username"]
-                    else "📸 Configure Accounts",
+                    f"📸 Default: {account_data['active_account_name']}"
+                    if account_data["active_account_id"]
+                    else "📸 Set Default Account",
                     callback_data="settings_accounts:select",
                 )
             ],
@@ -1346,8 +1380,8 @@ class TelegramService(BaseService):
         )
 
         await query.edit_message_text(
-            "📸 *Configure Instagram Accounts*\n\n"
-            "Select an account to make it active, or add/remove accounts.",
+            "📸 *Choose Default Account*\n\n"
+            "Select an account to set as default, or add/remove accounts.",
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup(keyboard),
         )
@@ -2214,6 +2248,13 @@ class TelegramService(BaseService):
                 await self._handle_account_remove_execute(data, user, query)
             elif action == "account_add_cancel":
                 await self._handle_add_account_cancel(user, query, context)
+            # Inline account selection from posting workflow (Phase 1.7)
+            elif action == "select_account":
+                await self._handle_post_account_selector(data, user, query)
+            elif action == "sap":  # switch_account_post (shortened for callback limit)
+                await self._handle_post_account_switch(data, user, query)
+            elif action == "btp":  # back_to_post (shortened for callback limit)
+                await self._handle_back_to_post(data, user, query)
         finally:
             # Clean up open transactions to prevent "idle in transaction"
             self.cleanup_transactions()
@@ -2850,12 +2891,22 @@ class TelegramService(BaseService):
             await query.edit_message_caption(caption="⚠️ Media item not found")
             return
 
+        chat_id = query.message.chat_id
+
+        # Get active account for caption and button
+        active_account = self.ig_account_service.get_active_account(chat_id)
+
         # Rebuild original caption
-        caption = self._build_caption(media_item, queue_item)
+        caption = self._build_caption(
+            media_item, queue_item, active_account=active_account
+        )
+
+        # Get chat settings for enable_instagram_api check (use DB, not env var)
+        chat_settings = self.settings_service.get_settings(chat_id)
 
         # Rebuild original keyboard (including Auto Post if enabled)
         keyboard = []
-        if settings.ENABLE_INSTAGRAM_API:
+        if chat_settings.enable_instagram_api:
             keyboard.append(
                 [
                     InlineKeyboardButton(
@@ -2864,6 +2915,8 @@ class TelegramService(BaseService):
                     ),
                 ]
             )
+
+        # Status action buttons (grouped together)
         keyboard.extend(
             [
                 [
@@ -2874,12 +2927,27 @@ class TelegramService(BaseService):
                 ],
                 [
                     InlineKeyboardButton(
-                        "📱 Open Instagram", url="https://www.instagram.com/"
+                        "🚫 Reject", callback_data=f"reject:{queue_id}"
+                    ),
+                ],
+            ]
+        )
+
+        # Instagram-related buttons (grouped together)
+        account_label = (
+            f"📸 {active_account.display_name}" if active_account else "📸 No Account"
+        )
+        keyboard.extend(
+            [
+                [
+                    InlineKeyboardButton(
+                        account_label,
+                        callback_data=f"select_account:{queue_id}",
                     ),
                 ],
                 [
                     InlineKeyboardButton(
-                        "🚫 Reject", callback_data=f"reject:{queue_id}"
+                        "📱 Open Instagram", url="https://www.instagram.com/"
                     ),
                 ],
             ]
@@ -2902,6 +2970,234 @@ class TelegramService(BaseService):
         )
 
         logger.info(f"Reject cancelled by {self._get_display_name(user)}")
+
+    # =========================================================================
+    # Inline Account Selection from Posting Workflow (Phase 1.7)
+    # =========================================================================
+
+    async def _handle_post_account_selector(self, queue_id: str, user, query):
+        """Show account selector submenu for a specific post.
+
+        This is a simplified account selector that only allows switching -
+        no add/remove options. For full account management, use /settings.
+        """
+        chat_id = query.message.chat_id
+
+        # Get queue item to preserve context
+        queue_item = self.queue_repo.get_by_id(queue_id)
+        if not queue_item:
+            await query.edit_message_caption(caption="⚠️ Queue item not found")
+            return
+
+        # Get all accounts
+        account_data = self.ig_account_service.get_accounts_for_display(chat_id)
+
+        # Build keyboard with all accounts (simplified - no add/remove)
+        keyboard = []
+        for acc in account_data["accounts"]:
+            is_active = acc["id"] == account_data["active_account_id"]
+            # Show friendly name AND @username for clarity
+            label = f"{'✅ ' if is_active else '   '}{acc['display_name']}"
+            if acc["username"]:
+                label += f" (@{acc['username']})"
+            # Use shortened callback format: sap:{queue_id}:{account_id}
+            # Using first 8 chars of UUIDs to stay within 64 byte limit
+            short_queue_id = queue_id[:8] if len(queue_id) > 8 else queue_id
+            short_account_id = acc["id"][:8] if len(acc["id"]) > 8 else acc["id"]
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        label,
+                        callback_data=f"sap:{short_queue_id}:{short_account_id}",
+                    )
+                ]
+            )
+
+        if not account_data["accounts"]:
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        "No accounts configured",
+                        callback_data=f"btp:{queue_id[:8]}",
+                    )
+                ]
+            )
+
+        # Back button (no Add/Remove options in posting workflow)
+        short_queue_id = queue_id[:8] if len(queue_id) > 8 else queue_id
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    "↩️ Back to Post",
+                    callback_data=f"btp:{short_queue_id}",
+                )
+            ]
+        )
+
+        await query.edit_message_caption(
+            caption=(
+                "📸 *Select Instagram Account*\n\n"
+                "Which account should this post be attributed to?"
+            ),
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+
+        # Log interaction
+        self.interaction_service.log_callback(
+            user_id=str(user.id),
+            callback_name="select_account",
+            context={
+                "queue_item_id": queue_id,
+            },
+            telegram_chat_id=chat_id,
+            telegram_message_id=query.message.message_id,
+        )
+
+    async def _handle_post_account_switch(self, data: str, user, query):
+        """Handle account switch from posting workflow.
+
+        Callback data format: "sap:{short_queue_id}:{short_account_id}"
+        Uses shortened IDs to stay within Telegram's 64 byte callback limit.
+        """
+        parts = data.split(":")
+        if len(parts) != 2:
+            await query.answer("Invalid data", show_alert=True)
+            return
+
+        short_queue_id = parts[0]
+        short_account_id = parts[1]
+        chat_id = query.message.chat_id
+
+        # Find full queue_id by prefix match
+        queue_item = self.queue_repo.get_by_id_prefix(short_queue_id)
+        if not queue_item:
+            await query.edit_message_caption(caption="⚠️ Queue item not found")
+            return
+
+        # Find full account_id by prefix match
+        account = self.ig_account_service.get_account_by_id_prefix(short_account_id)
+        if not account:
+            await query.answer("Account not found", show_alert=True)
+            return
+
+        try:
+            # Switch account
+            switched_account = self.ig_account_service.switch_account(
+                chat_id, str(account.id), user
+            )
+
+            # Log interaction
+            self.interaction_service.log_callback(
+                user_id=str(user.id),
+                callback_name="switch_account_from_post",
+                context={
+                    "queue_item_id": str(queue_item.id),
+                    "account_id": str(account.id),
+                    "account_username": switched_account.instagram_username,
+                },
+                telegram_chat_id=chat_id,
+                telegram_message_id=query.message.message_id,
+            )
+
+            # Show success toast (friendly name)
+            await query.answer(f"✅ Switched to {switched_account.display_name}")
+
+            # Rebuild posting workflow with new account
+            await self._rebuild_posting_workflow(str(queue_item.id), query)
+
+        except ValueError as e:
+            await query.answer(f"Error: {e}", show_alert=True)
+
+    async def _handle_back_to_post(self, short_queue_id: str, user, query):
+        """Return to posting workflow without changing account."""
+        # Find full queue_id by prefix match
+        queue_item = self.queue_repo.get_by_id_prefix(short_queue_id)
+        if not queue_item:
+            await query.edit_message_caption(caption="⚠️ Queue item not found")
+            return
+
+        await self._rebuild_posting_workflow(str(queue_item.id), query)
+
+    async def _rebuild_posting_workflow(self, queue_id: str, query):
+        """Rebuild the original posting workflow message.
+
+        Used after account selection or when returning from submenu.
+        """
+        queue_item = self.queue_repo.get_by_id(queue_id)
+        if not queue_item:
+            await query.edit_message_caption(caption="⚠️ Queue item not found")
+            return
+
+        media_item = self.media_repo.get_by_id(str(queue_item.media_item_id))
+        if not media_item:
+            await query.edit_message_caption(caption="⚠️ Media item not found")
+            return
+
+        chat_id = query.message.chat_id
+
+        # Get active account for caption and button
+        active_account = self.ig_account_service.get_active_account(chat_id)
+
+        # Rebuild caption with current account
+        caption = self._build_caption(
+            media_item, queue_item, active_account=active_account
+        )
+
+        # Rebuild keyboard with account selector
+        chat_settings = self.settings_service.get_settings(chat_id)
+        keyboard = []
+
+        if chat_settings.enable_instagram_api:
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        "🤖 Auto Post to Instagram",
+                        callback_data=f"autopost:{queue_id}",
+                    ),
+                ]
+            )
+
+        # Status action buttons (grouped together)
+        keyboard.extend(
+            [
+                [
+                    InlineKeyboardButton(
+                        "✅ Posted", callback_data=f"posted:{queue_id}"
+                    ),
+                    InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{queue_id}"),
+                ],
+                [
+                    InlineKeyboardButton(
+                        "🚫 Reject", callback_data=f"reject:{queue_id}"
+                    ),
+                ],
+            ]
+        )
+
+        # Instagram-related buttons (grouped together)
+        account_label = (
+            f"📸 {active_account.display_name}" if active_account else "📸 No Account"
+        )
+        keyboard.extend(
+            [
+                [
+                    InlineKeyboardButton(
+                        account_label,
+                        callback_data=f"select_account:{queue_id}",
+                    ),
+                ],
+                [
+                    InlineKeyboardButton(
+                        "📱 Open Instagram", url="https://www.instagram.com/"
+                    ),
+                ],
+            ]
+        )
+
+        await query.edit_message_caption(
+            caption=caption, reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
     async def _handle_rejected(self, queue_id: str, user, query):
         """Handle confirmed rejection - permanently blocks media."""

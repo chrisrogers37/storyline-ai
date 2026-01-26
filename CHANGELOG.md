@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Inline Account Selector (Phase 1.7)
+
+#### Posting Workflow Enhancements
+- **Account Indicator in Caption** - Posting notifications now show which Instagram account is active
+  - Format: "📸 Account: {display_name}" (shows friendly name, not @username)
+  - Shows "📸 Account: Not set" when no account is configured
+- **Account Selector Button** - Switch accounts without leaving the posting workflow
+  - New "📸 {account_name}" button in posting notifications
+  - Click to see simplified account selector (no add/remove, just switch)
+  - Immediate feedback with toast notification on switch
+  - Automatically returns to posting workflow with updated caption
+
+#### Button Layout Reorganization
+- **Status Actions Grouped** - Posted, Skip, and Reject buttons now grouped together
+- **Instagram Actions Grouped** - Account selector and Open Instagram buttons grouped below
+- **New Button Order**:
+  1. Auto Post to Instagram (if enabled)
+  2. Posted / Skip (same row)
+  3. Reject
+  4. Account Selector
+  5. Open Instagram
+
+#### Settings Menu Improvements
+- **Renamed Account Button** - Changed from "@username" to "Default: {friendly_name}"
+- **Clearer Language** - "Configure Accounts" → "Choose Default Account"
+- **Default Account Concept** - Settings sets the default; posting workflow allows override
+
+#### Technical Implementation
+- **Shortened Callback Data** - Uses 8-char UUID prefixes to stay within Telegram's 64-byte limit
+  - `select_account:{queue_id}` for showing selector
+  - `sap:{short_queue_id}:{short_account_id}` for switching
+  - `btp:{short_queue_id}` for returning to post
+- **New Repository Methods**:
+  - `QueueRepository.get_by_id_prefix()` - Find queue items by UUID prefix
+  - `InstagramAccountRepository.get_by_id_prefix()` - Find accounts by UUID prefix
+- **Bug Fix** - `_handle_cancel_reject` now uses `chat_settings.enable_instagram_api` (database) instead of `settings.ENABLE_INSTAGRAM_API` (env var)
+
+#### Files Changed
+- `src/services/core/telegram_service.py` - Caption builder, keyboard builder, callback handlers
+- `src/repositories/queue_repository.py` - Added `get_by_id_prefix()`
+- `src/repositories/instagram_account_repository.py` - Added `get_by_id_prefix()`
+- `src/services/core/instagram_account_service.py` - Added `get_account_by_id_prefix()`
+- `tests/src/services/test_telegram_service.py` - Added tests for inline account selector
+- `documentation/planning/phase-1.7-inline-account-selector.md` - Updated button order in plan
+
 ### Fixed
 
 #### Code Quality and CI

@@ -54,6 +54,20 @@ class InstagramAccountService(BaseService):
         """Get account by UUID."""
         return self.account_repo.get_by_id(account_id)
 
+    def get_account_by_id_prefix(self, id_prefix: str) -> Optional[InstagramAccount]:
+        """Get account by ID prefix (for shortened callback data).
+
+        Used when Telegram callback data is too long and we need to use
+        shortened UUIDs. Returns the first matching account.
+
+        Args:
+            id_prefix: First N characters of a UUID (typically 8)
+
+        Returns:
+            InstagramAccount or None if not found
+        """
+        return self.account_repo.get_by_id_prefix(id_prefix)
+
     def get_account_by_username(self, username: str) -> Optional[InstagramAccount]:
         """Get account by Instagram username."""
         return self.account_repo.get_by_username(username)
