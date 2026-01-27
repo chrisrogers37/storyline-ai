@@ -2179,12 +2179,18 @@ class TelegramService(BaseService):
         """Handle inline button callbacks."""
         try:
             query = update.callback_query
+
+            # Debug: Log ALL callback data to diagnose routing issues
+            logger.info(f"📞 Callback received: {query.data}")
+
             await query.answer()
 
             # Parse callback data
             parts = query.data.split(":")
             action = parts[0]
             data = parts[1] if len(parts) > 1 else None
+
+            logger.info(f"📞 Parsed action='{action}', data='{data}'")
 
             # Get user info
             user = self._get_or_create_user(query.from_user)
