@@ -81,13 +81,23 @@ jobs:
 
       - name: Run tests with coverage
         env:
-          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/storyline_test
+          # Database configuration (individual components for Settings class)
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USER: test_user
+          DB_PASSWORD: test_password
+          DB_NAME: storyline_ai
+          TEST_DB_NAME: storyline_test
+          # Required Telegram settings
           TELEGRAM_BOT_TOKEN: test_token
           TELEGRAM_CHANNEL_ID: -1001234567890
           ADMIN_TELEGRAM_CHAT_ID: -1001234567890
+          # Security
           ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+          # Development
           DRY_RUN_MODE: "true"
           LOG_LEVEL: DEBUG
+          MEDIA_DIR: /tmp/test-media
         run: |
           pytest tests/ -v --cov=src --cov-report=xml --cov-report=term-missing
 

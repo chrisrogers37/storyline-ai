@@ -163,6 +163,7 @@ class TestHealthCheckService:
         mock_get_db.return_value = iter([mock_db])
         mock_settings.TELEGRAM_BOT_TOKEN = "123456:ABC"
         mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
+        mock_settings.ENABLE_INSTAGRAM_API = False  # Disable Instagram API check
         health_service.queue_repo.count_pending.return_value = 5
         health_service.queue_repo.get_oldest_pending.return_value = None
         mock_post = Mock(success=True)
@@ -173,6 +174,7 @@ class TestHealthCheckService:
         assert result["status"] == "healthy"
         assert "database" in result["checks"]
         assert "telegram" in result["checks"]
+        assert "instagram_api" in result["checks"]
         assert "queue" in result["checks"]
         assert "recent_posts" in result["checks"]
         assert "timestamp" in result

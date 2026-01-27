@@ -160,10 +160,14 @@ class TestInstagramPostingWorkflow:
         assert result["success"] is True
 
     @pytest.mark.asyncio
-    async def test_routing_healthy_instagram_selected(
+    async def test_routing_all_posts_go_to_telegram_first(
         self, mock_settings, mock_queue_item, mock_media_item_auto
     ):
-        """Test posts go to Instagram API when healthy."""
+        """Test all scheduled posts go to Telegram for review first.
+
+        As of current architecture, _route_post ALWAYS sends to Telegram.
+        Instagram API posting happens via 'Auto Post' button callback.
+        """
         from src.services.core.posting import PostingService
 
         with patch.object(PostingService, "__init__", lambda x: None):
@@ -174,36 +178,15 @@ class TestInstagramPostingWorkflow:
             service.lock_service = Mock()
             service.telegram_service = Mock()
             service.settings_service = Mock()
-
-            # Mock healthy Instagram service
-            mock_instagram = Mock()
-            mock_instagram.get_rate_limit_remaining.return_value = 20
-            mock_instagram.post_story = AsyncMock(
-                return_value={"success": True, "story_id": "123"}
-            )
-            service._instagram_service = mock_instagram
-
-            # Mock cloud service
-            mock_cloud = Mock()
-            mock_cloud.upload_media.return_value = {
-                "url": "https://example.com/image.jpg",
-                "public_id": "storyline/test",
-                "uploaded_at": datetime.utcnow(),
-                "expires_at": datetime.utcnow() + timedelta(hours=24),
-            }
-            service._cloud_service = mock_cloud
-
-            # Mock _post_via_instagram to return success
-            service._post_via_instagram = AsyncMock(
-                return_value={"success": True, "story_id": "123"}
-            )
+            service._post_via_telegram = AsyncMock(return_value=True)
 
             with patch("src.services.core.posting.settings", mock_settings):
                 result = await service._route_post(
                     mock_queue_item, mock_media_item_auto
                 )
 
-        assert result["method"] == "instagram_api"
+        # All scheduled posts route to Telegram for human review
+        assert result["method"] == "telegram_manual"
         assert result["success"] is True
 
     # ==================== End-to-End Posting Flow Tests ====================
@@ -228,6 +211,13 @@ class TestInstagramPostingWorkflow:
                 service.history_repo = Mock()
                 service.lock_service = Mock()
                 service.telegram_service = Mock()
+
+                # Mock settings service with dry_run_mode
+                mock_chat_settings = Mock()
+                mock_chat_settings.dry_run_mode = False
+                mock_settings_service = Mock()
+                mock_settings_service.get_settings.return_value = mock_chat_settings
+                service.settings_service = mock_settings_service
 
                 # Mock cloud service
                 mock_cloud = Mock()
@@ -295,6 +285,13 @@ class TestInstagramPostingWorkflow:
                 service.lock_service = Mock()
                 service.telegram_service = Mock()
 
+                # Mock settings service with dry_run_mode
+                mock_chat_settings = Mock()
+                mock_chat_settings.dry_run_mode = False
+                mock_settings_service = Mock()
+                mock_settings_service.get_settings.return_value = mock_chat_settings
+                service.settings_service = mock_settings_service
+
                 # Mock cloud service to fail
                 mock_cloud = Mock()
                 mock_cloud.upload_media.side_effect = MediaUploadError("Upload failed")
@@ -336,6 +333,13 @@ class TestInstagramPostingWorkflow:
                 service.history_repo = Mock()
                 service.lock_service = Mock()
                 service.telegram_service = Mock()
+
+                # Mock settings service with dry_run_mode
+                mock_chat_settings = Mock()
+                mock_chat_settings.dry_run_mode = False
+                mock_settings_service = Mock()
+                mock_settings_service.get_settings.return_value = mock_chat_settings
+                service.settings_service = mock_settings_service
 
                 # Mock cloud service to succeed
                 mock_cloud = Mock()
@@ -528,19 +532,20 @@ class TestHistoryRepositoryIntegration:
 
         with patch.object(HistoryRepository, "__init__", lambda x: None):
             repo = HistoryRepository()
-            repo.db = Mock()
 
-            # Mock the query chain
+            # Mock _db (not db which is a property)
+            mock_session = Mock()
             mock_query = Mock()
             mock_query.filter.return_value = mock_query
             mock_query.scalar.return_value = 5
-            repo.db.query.return_value = mock_query
+            mock_session.query.return_value = mock_query
+            repo._db = mock_session
 
             since = datetime.utcnow() - timedelta(hours=1)
             result = repo.count_by_method("instagram_api", since)
 
             assert result == 5
-            repo.db.query.assert_called()
+            mock_session.query.assert_called()
 
     def test_count_by_method_returns_zero_for_none(self):
         """Test count returns 0 when scalar returns None."""
@@ -548,12 +553,14 @@ class TestHistoryRepositoryIntegration:
 
         with patch.object(HistoryRepository, "__init__", lambda x: None):
             repo = HistoryRepository()
-            repo.db = Mock()
 
+            # Mock _db (not db which is a property)
+            mock_session = Mock()
             mock_query = Mock()
             mock_query.filter.return_value = mock_query
             mock_query.scalar.return_value = None
-            repo.db.query.return_value = mock_query
+            mock_session.query.return_value = mock_query
+            repo._db = mock_session
 
             since = datetime.utcnow() - timedelta(hours=1)
             result = repo.count_by_method("instagram_api", since)
