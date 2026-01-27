@@ -36,6 +36,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - All skipped tests marked with TODO comments for future conversion to unit tests or relocation to integration/
   - **Final Test Results**: ✅ **310 passed, 141 skipped, 0 failed** - CI is now green!
 
+- **Account Switching from Posting Workflow** (2026-01-27) - Fixed critical bug preventing account switching
+  - **Bug**: Clicking account buttons (GT, TL) in inline selector showed loading popup but didn't switch accounts or update checkmarks
+  - **Root Cause 1**: Callback data parsing split on ALL colons instead of just the first one
+    - Callback format: `sap:queue_id:account_id` (3 parts)
+    - Old parsing: `split(':')` → only captured `queue_id`, discarded `account_id`
+    - New parsing: `split(':', 1)` → captures `queue_id:account_id` together
+  - **Root Cause 2**: Debug logging tried to slice UUID objects directly without converting to string
+    - Old: `account.id[:8]` → TypeError: 'UUID' object is not subscriptable
+    - New: `str(account.id)[:8]` → Works correctly
+  - **Impact**: Account switching now works end-to-end:
+    - ✅ Database updates: `chat_settings.active_instagram_account_id` changes
+    - ✅ UI updates: Checkmark moves to selected account
+    - ✅ API calls: Future posts use selected account's Instagram access token
+    - ✅ Attribution: Posts are attributed to the correct account in history
+
 ### Added - Inline Account Selector (Phase 1.7)
 
 #### Posting Workflow Enhancements
