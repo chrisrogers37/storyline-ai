@@ -3091,7 +3091,7 @@ class TelegramService(BaseService):
         try:
             logger.info(
                 f"Switching account for chat {chat_id}: {account.display_name} "
-                f"(ID: {account.id[:8]}...)"
+                f"(ID: {str(account.id)[:8]}...)"
             )
 
             # Switch account
@@ -3120,7 +3120,7 @@ class TelegramService(BaseService):
             # Show success toast (friendly name)
             await query.answer(f"✅ Switched to {switched_account.display_name}")
 
-            logger.info(f"Rebuilding account selector menu for queue {queue_item.id[:8]}...")
+            logger.info(f"Rebuilding account selector menu for queue {str(queue_item.id)[:8]}...")
 
             # Stay in account selection menu to show updated checkmark
             # User can click "Back to Post" to return to posting workflow
