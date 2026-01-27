@@ -2186,7 +2186,8 @@ class TelegramService(BaseService):
             await query.answer()
 
             # Parse callback data
-            parts = query.data.split(":")
+            # Split on FIRST colon only, so data can contain multiple colons (e.g., sap:queue_id:account_id)
+            parts = query.data.split(":", 1)
             action = parts[0]
             data = parts[1] if len(parts) > 1 else None
 
