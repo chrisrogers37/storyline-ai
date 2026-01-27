@@ -3103,8 +3103,9 @@ class TelegramService(BaseService):
             # Show success toast (friendly name)
             await query.answer(f"✅ Switched to {switched_account.display_name}")
 
-            # Rebuild posting workflow with new account
-            await self._rebuild_posting_workflow(str(queue_item.id), query)
+            # Stay in account selection menu to show updated checkmark
+            # User can click "Back to Post" to return to posting workflow
+            await self._handle_post_account_selector(str(queue_item.id), user, query)
 
         except ValueError as e:
             await query.answer(f"Error: {e}", show_alert=True)

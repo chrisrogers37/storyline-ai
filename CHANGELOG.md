@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Account Selector UX** - Clicking an account in the posting workflow now stays in the account selection menu to show the updated checkmark, rather than immediately returning to the posting workflow. This provides visual confirmation that the account was switched. User can then click "Back to Post" to return.
+
 ### Added - Inline Account Selector (Phase 1.7)
 
 #### Posting Workflow Enhancements
