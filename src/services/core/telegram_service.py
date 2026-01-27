@@ -3082,9 +3082,19 @@ class TelegramService(BaseService):
             return
 
         try:
+            logger.info(
+                f"Switching account for chat {chat_id}: {account.display_name} "
+                f"(ID: {account.id[:8]}...)"
+            )
+
             # Switch account
             switched_account = self.ig_account_service.switch_account(
                 chat_id, str(account.id), user
+            )
+
+            logger.info(
+                f"Successfully switched to {switched_account.display_name} "
+                f"for chat {chat_id}"
             )
 
             # Log interaction
@@ -3103,12 +3113,27 @@ class TelegramService(BaseService):
             # Show success toast (friendly name)
             await query.answer(f"✅ Switched to {switched_account.display_name}")
 
+            logger.info(f"Rebuilding account selector menu for queue {queue_item.id[:8]}...")
+
             # Stay in account selection menu to show updated checkmark
             # User can click "Back to Post" to return to posting workflow
             await self._handle_post_account_selector(str(queue_item.id), user, query)
 
+            logger.info("Successfully rebuilt account selector menu")
+
         except ValueError as e:
+            logger.error(f"ValueError during account switch: {e}", exc_info=True)
             await query.answer(f"Error: {e}", show_alert=True)
+        except Exception as e:
+            # Catch all other exceptions (DB errors, Telegram errors, etc.)
+            logger.error(
+                f"Unexpected error during account switch: {e}",
+                exc_info=True
+            )
+            await query.answer(
+                f"⚠️ Error switching account: {str(e)[:50]}",
+                show_alert=True
+            )
 
     async def _handle_back_to_post(self, short_queue_id: str, user, query):
         """Return to posting workflow without changing account."""
