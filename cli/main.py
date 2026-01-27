@@ -20,7 +20,7 @@ from cli.commands.media import (
     update_category_mix,
     validate,
 )
-from cli.commands.queue import clear_queue, create_schedule, list_queue, process_queue
+from cli.commands.queue import reset_queue, create_schedule, list_queue, process_queue
 from cli.commands.users import list_users, promote_user
 
 console = Console()
@@ -43,7 +43,7 @@ cli.add_command(validate)
 cli.add_command(create_schedule)
 cli.add_command(process_queue)
 cli.add_command(list_queue)
-cli.add_command(clear_queue)
+cli.add_command(reset_queue)
 cli.add_command(list_users)
 cli.add_command(promote_user)
 cli.add_command(check_health)

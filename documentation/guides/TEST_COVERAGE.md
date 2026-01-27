@@ -217,9 +217,9 @@
 - ✅ Locks shows permanent locks
 - ✅ Locks empty message
 
-**Clear Command Tests (2 tests)** - **Added 2026-01-08**:
-- ✅ Clear shows confirmation
-- ✅ Clear empty queue
+**Reset Command Tests (2 tests)** - **Added 2026-01-08**:
+- ✅ Reset shows confirmation
+- ✅ Reset empty queue
 
 **Resume Callback Tests (3 tests)** - **Added 2026-01-08**:
 - ✅ Resume reschedule

@@ -1378,8 +1378,8 @@ class TestLocksCommand:
 class TestClearCommand:
     """Tests for /clear command."""
 
-    async def test_clear_shows_confirmation(self, mock_telegram_service):
-        """Test /clear shows confirmation dialog."""
+    async def test_reset_shows_confirmation(self, mock_telegram_service):
+        """Test /reset shows confirmation dialog."""
         mock_user = Mock()
         mock_user.id = uuid4()
         mock_telegram_service.user_repo.get_by_telegram_id.return_value = None
@@ -1397,7 +1397,7 @@ class TestClearCommand:
 
         mock_context = Mock()
 
-        await mock_telegram_service._handle_clear(mock_update, mock_context)
+        await mock_telegram_service._handle_reset(mock_update, mock_context)
 
         call_args = mock_update.message.reply_text.call_args
         message_text = call_args.args[0]
@@ -1405,8 +1405,8 @@ class TestClearCommand:
         assert "15 pending posts" in message_text
         assert call_args.kwargs.get("reply_markup") is not None
 
-    async def test_clear_empty_queue(self, mock_telegram_service):
-        """Test /clear shows already empty message."""
+    async def test_reset_empty_queue(self, mock_telegram_service):
+        """Test /reset shows already empty message."""
         mock_user = Mock()
         mock_user.id = uuid4()
         mock_telegram_service.user_repo.get_by_telegram_id.return_value = None
@@ -1424,7 +1424,7 @@ class TestClearCommand:
 
         mock_context = Mock()
 
-        await mock_telegram_service._handle_clear(mock_update, mock_context)
+        await mock_telegram_service._handle_reset(mock_update, mock_context)
 
         call_args = mock_update.message.reply_text.call_args
         message_text = call_args.args[0]

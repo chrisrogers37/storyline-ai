@@ -71,7 +71,7 @@ Your repository is **secure** with no hardcoded credentials or leaked account in
 **Available Commands:**
 - `/pause` - Pauses automatic posting (any team member)
 - `/resume` - Resumes posting (any team member)
-- `/clear` - Clears entire queue with confirmation (any team member)
+- `/reset` - Resets entire queue with confirmation (any team member)
 - `/schedule` - Creates new posting schedule (any team member)
 - `/next` - Forces immediate post (any team member)
 - `/start`, `/status`, `/queue`, `/stats`, `/history`, `/locks`, `/help` - All team members
@@ -88,7 +88,7 @@ async def _handle_pause(self, update, context):
 **Security Model:**
 - ✅ **Channel Access Control**: Only team members added to the private Telegram channel can use the bot
 - ✅ **Audit Trail**: All actions are logged via `InteractionService` with user tracking
-- ✅ **Confirmation Dialogs**: Destructive actions like `/clear` require confirmation
+- ✅ **Confirmation Dialogs**: Destructive actions like `/reset` require confirmation
 - ✅ **Team Collaboration**: Designed for trusted team members to work together
 
 **If You Need Admin-Only Commands Later:**
@@ -319,7 +319,7 @@ async def _handle_pause(self, update, context):
     # ... rest of existing code
 ```
 
-3. Apply to any commands you want to restrict: `/pause`, `/resume`, `/clear`, `/schedule`, `/next`
+3. Apply to any commands you want to restrict: `/pause`, `/resume`, `/reset`, `/schedule`, `/next`
 
 **Note**: Current design is intentionally open for team collaboration. Only add admin checks if you need them.
 

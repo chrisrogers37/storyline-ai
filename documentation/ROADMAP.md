@@ -1,8 +1,8 @@
 # Storyline AI - Product Roadmap
 
-**Last Updated**: 2026-01-11
-**Current Version**: v1.4.0
-**Current Phase**: Phase 1.6 (Category Scheduling) - ✅ COMPLETE
+**Last Updated**: 2026-01-27
+**Current Version**: v1.5.0 (Phase 2 Complete)
+**Next Version**: v1.6.0 (Phase 1.8 - Telegram UX Improvements)
 
 ---
 
@@ -78,7 +78,7 @@ Build a delightful Instagram Story automation system that:
 - ✅ **`/pause`** - Pause automatic posting
 - ✅ **`/resume`** - Resume with smart overdue handling (reschedule/clear/force)
 - ✅ **`/schedule [N]`** - Create N days of posting schedule from Telegram
-- ✅ **`/clear`** - Clear queue with confirmation dialog
+- ✅ **`/reset`** - Reset queue with confirmation dialog (originally `/clear`)
 
 **Priority 3** (Information Commands) - ✅ COMPLETE:
 - ✅ **`/stats`** - Media library statistics (active, posted, locked counts)
@@ -128,33 +128,75 @@ Build a delightful Instagram Story automation system that:
 
 ---
 
-## Phase 2: Instagram API Automation 📅 PLANNED
+## Phase 2: Instagram API Automation ✅ COMPLETE
 
-**Status**: 📅 Not Started
-**Estimated Start**: February 2026
-**Duration**: 3-4 weeks
-**Goal**: Fully automated posting via Instagram Graph API
+**Status**: ✅ Released v1.5.0+
+**Branch**: `main`
+**Duration**: January 2026
+**Goal**: Fully automated posting via Instagram Graph API with hybrid mode
 
-### Scope
-- Instagram Graph API integration
-- OAuth flow for account linking
-- Automated story publishing
-- Media hosting (Cloudinary or similar)
-- Fallback to manual mode if API fails
-- Error handling and retry logic
-- API rate limit management
+### Delivered Features
 
-### Prerequisites
-- Instagram Business Account
-- Facebook Developer App
-- Cloudinary account (or alternative CDN)
-- Graph API access tokens
+#### Core Instagram API Integration
+- ✅ **Instagram Graph API Service** - Story creation and publishing
+  - Media container status polling
+  - Rate limit tracking (25 posts/hour default)
+  - Error categorization and handling
+  - Multi-account support
 
-### Configuration
-- Add `ENABLE_INSTAGRAM_API=true` flag
-- Hybrid mode: Try API first, fallback to Telegram
+- ✅ **Cloudinary Integration** - Cloud media hosting
+  - Automatic upload with TTL expiration
+  - Public URL generation for Instagram API
+  - Cleanup of expired media
 
-**Target Completion**: March 2026
+- ✅ **Token Management** - OAuth token lifecycle
+  - Encrypted token storage in database
+  - Automatic token refresh (60-day expiry)
+  - Token health monitoring
+  - Per-account token management
+
+#### Multi-Account Support
+- ✅ **Instagram Accounts Table** - Multiple account identities
+  - Display name, Instagram ID, username per account
+  - Active/inactive status for soft deletion
+  - Separation: identity vs credentials vs selection
+
+- ✅ **Account Switching** - Per-chat active account selection
+  - Switch accounts via Telegram /settings menu
+  - Inline account selector in posting workflow
+  - Auto-select when only one account exists
+
+- ✅ **CLI Commands** - Account management
+  - `add-instagram-account` - Register new account with token
+  - `list-instagram-accounts` - Show all accounts
+  - `deactivate-instagram-account` / `reactivate-instagram-account`
+
+#### Hybrid Mode (Intelligent Routing)
+- ✅ **Automatic + Manual Workflow** - Best of both worlds
+  - `enable_instagram_api=true` enables API posting
+  - "🤖 Auto Post to Instagram" button in notifications
+  - Automatic fallback to Telegram on API errors
+  - Graceful handling of rate limits and token expiry
+
+- ✅ **Smart Fallback Logic**
+  - Try Instagram API first
+  - On error (RateLimitError, TokenExpiredError, InstagramAPIError) → Telegram
+  - Manual override always available
+  - All fallbacks logged for observability
+
+#### Configuration & Safety
+- ✅ **Feature Flags** - Per-chat settings in database
+  - `enable_instagram_api` toggle (database, not .env)
+  - `dry_run_mode` for testing without posting
+  - Settings persist across restarts
+
+- ✅ **Database Migrations**
+  - `007_instagram_accounts.sql` - Accounts table
+  - `008_api_tokens_account_fk.sql` - Token-account linking
+  - `009_chat_settings_active_account.sql` - Per-chat selection
+  - `004_instagram_api_phase2.sql` - API metadata columns
+
+**Completed**: January 2026
 
 ---
 
@@ -210,7 +252,7 @@ Build a delightful Instagram Story automation system that:
 ### Medium Priority
 - [ ] Web dashboard for queue management
 - [ ] Backup/restore automation
-- [ ] Multi-account support
+- [x] Multi-account support ✅ (Completed in Phase 2)
 - [ ] Content templates system
 - [ ] Bulk media import tools
 
@@ -232,16 +274,46 @@ Build a delightful Instagram Story automation system that:
 
 | Version | Date | Phase | Description |
 |---------|------|-------|-------------|
+| v1.6.0 | TBD | Phase 1.8 | Telegram command menu + /cleanup command |
+| v1.5.0 | 2026-01-24 | Phase 2 | Instagram API automation + Multi-account support |
 | v1.4.0 | 2026-01-10 | Phase 1.6 | Category-based scheduling with configurable ratios |
 | v1.3.0 | 2026-01-08 | Phase 1.5 | Bot management commands (/pause, /resume, /stats, etc.) |
 | v1.2.0 | 2026-01-05 | Phase 1.5 | Telegram workflow enhancements + Permanent Reject |
 | v1.0.1 | 2026-01-04 | Phase 1 | Production release with bug fixes |
 | v1.0.0 | 2025-12-XX | Phase 1 | Initial Telegram-only implementation |
-| v2.0.0 | TBD | Phase 2 | Instagram API automation |
 
 ---
 
 ## Decision Log
+
+### 2026-01-27: Telegram Command Menu Registration + /cleanup Command
+**Decision**: Implement native Telegram command autocomplete and bot message cleanup
+**Features Added**:
+- `set_my_commands()` registration for native "/" menu in Telegram
+- `/cleanup` command to delete recent bot messages (100-message cache)
+- Renamed `/clear` → `/reset` for semantic clarity
+**Rationale**:
+- Command discovery through native Telegram UI improves UX significantly
+- Users can clean up verbose bot messages (queue lists, status reports)
+- Clear semantic distinction: "reset" = start over, "cleanup" = tidy up
+- CLI aligned: `storyline-cli reset-queue` matches Telegram's `/reset`
+**Status**: ✅ COMPLETE - Ready for testing
+
+### 2026-01-24: Phase 2 Complete - Instagram API Automation + Multi-Account
+**Decision**: Fully implement Instagram Graph API automation with hybrid mode
+**Features Delivered**:
+- Instagram API service with rate limiting and error handling
+- Cloudinary integration for media hosting
+- Encrypted token management with auto-refresh
+- Multi-account support (add/switch/deactivate via Telegram)
+- Hybrid mode: auto-post via API with fallback to manual Telegram workflow
+- Per-chat settings (enable_instagram_api toggle in database)
+**Rationale**:
+- Reduces manual posting burden while maintaining quality control
+- Graceful fallback ensures posts never lost
+- Multi-account enables managing multiple Instagram business accounts
+- Database-driven settings enable per-chat configuration
+**Status**: ✅ COMPLETE - Phase 2 fully operational
 
 ### 2026-01-10: Category-Based Scheduling Added (Phase 1.6)
 **Decision**: Implement category-based media organization with configurable posting ratios
@@ -261,7 +333,7 @@ Build a delightful Instagram Story automation system that:
 **Decision**: Implement comprehensive Telegram bot commands for queue/system management
 **Features Added**:
 - `/pause` and `/resume` for operational control
-- `/schedule`, `/clear` for queue management
+- `/schedule`, `/reset` for queue management (originally `/clear`, renamed in v1.6.0)
 - `/stats`, `/history`, `/locks` for visibility
 **Rationale**:
 - Reduces need for SSH access to Raspberry Pi

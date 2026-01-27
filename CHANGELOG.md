@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Telegram Command Menu & Message Cleanup (Phase 1.8)
+
+#### Native Telegram Command Menu
+- **Command Autocomplete** - Commands now appear in Telegram's native "/" menu
+  - Uses `set_my_commands()` API for native integration
+  - All 15 commands registered with descriptions
+  - Improves command discoverability in Telegram UI
+  - Updates automatically when bot initializes
+
+#### New /cleanup Command
+- **Bot Message Cleanup** - Delete recent bot messages from chat
+  - Tracks last 100 sent messages in memory (deque with maxlen=100)
+  - Deletes messages on `/cleanup` command
+  - Gracefully handles 48-hour deletion limit (Telegram API restriction)
+  - Shows summary: deleted count and failed count
+  - Auto-deletes confirmation message after 5 seconds
+  - Clears cache after cleanup attempt
+
+#### Command Improvements
+- **Renamed /clear → /reset** - Clearer distinction from /cleanup
+  - `/reset` - Reset posting queue to empty
+  - `/cleanup` - Delete bot messages from chat
+  - Updated help text, command registration, and CLI
+  - Better semantic separation: "reset" = start over, "cleanup" = tidy up
+  - CLI: `storyline-cli reset-queue` (aligned with Telegram command)
+
+#### Message Tracking
+- **Automatic Message ID Tracking** - Bot now tracks sent message IDs for cleanup
+  - Tracks notification messages (photos with buttons)
+  - Tracks status and queue listing messages
+  - 100-message rolling cache (prevents memory bloat)
+  - Enables efficient message cleanup
+
 ### Fixed
 
 - **CI Test Failures** - Fixed ALL test failures in GitHub Actions CI (from 48 failures → 0 failures)

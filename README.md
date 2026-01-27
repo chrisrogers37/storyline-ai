@@ -122,8 +122,8 @@ storyline-cli process-queue --force
 # View queue
 storyline-cli list-queue
 
-# Clear all pending posts
-storyline-cli clear-queue
+# Reset queue (clear all pending posts)
+storyline-cli reset-queue
 ```
 
 ### Category Management
@@ -169,11 +169,12 @@ The bot responds to these commands in Telegram:
 - `/queue` - View pending scheduled posts
 - `/next` - Force-send next scheduled post immediately
 - `/schedule [N]` - Create N days of posting schedule (default: 7)
-- `/clear` - Clear all pending posts (with confirmation)
+- `/reset` - Reset posting queue to empty (with confirmation)
 
 ### Operational Control
 - `/pause` - Pause automatic posting
 - `/resume` - Resume posting (with smart overdue handling)
+- `/cleanup` - Delete recent bot messages from chat
 
 ### Information
 - `/stats` - Show media library statistics
@@ -195,7 +196,7 @@ The bot responds to these commands in Telegram:
 - ✅ Instagram deep links (one-tap Instagram app opening)
 - ✅ Enhanced captions with workflow instructions
 - ✅ 3-button layout: Posted, Skip, Reject
-- ✅ 7 new bot commands: `/pause`, `/resume`, `/schedule`, `/stats`, `/history`, `/locks`, `/clear`
+- ✅ 7 new bot commands: `/pause`, `/resume`, `/schedule`, `/stats`, `/history`, `/locks`, `/reset`
 - ✅ Smart overdue handling when resuming after pause
 
 **Phase 1.6** (Category Scheduling) - ✅ COMPLETE (v1.4.0):
@@ -206,11 +207,20 @@ The bot responds to these commands in Telegram:
 - ✅ Scheduler integration with category-aware slot allocation
 - ✅ 268 comprehensive tests
 
-**Phase 2** (Hybrid Mode - Optional):
-- 🔄 Enable Instagram API for simple stories
-- 🔄 Telegram workflow for interactive stories
-- 🔄 Requires Meta Developer setup + Cloudinary
-- 🔄 Activate with `ENABLE_INSTAGRAM_API=true`
+**Phase 2** (Instagram API Automation) - ✅ COMPLETE (v1.5.0):
+- ✅ Instagram Graph API integration with rate limiting
+- ✅ Cloudinary media hosting with TTL expiration
+- ✅ Encrypted token management with auto-refresh
+- ✅ Multi-account support (add/switch/deactivate via Telegram)
+- ✅ Hybrid mode: auto-post via API, fallback to Telegram on errors
+- ✅ Per-chat settings stored in database
+- ✅ "🤖 Auto Post to Instagram" button when API enabled
+
+**Phase 1.8** (Telegram UX Improvements) - ✅ COMPLETE (Current):
+- ✅ Native Telegram command menu (autocomplete with descriptions)
+- ✅ `/cleanup` command to delete recent bot messages
+- ✅ `/reset` command to clear posting queue (renamed from `/clear`)
+- ✅ Message tracking (100-message cache) for efficient cleanup
 
 ## Development
 

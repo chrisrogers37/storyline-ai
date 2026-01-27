@@ -17,7 +17,7 @@ python -m src.main
 
 # DANGEROUS - Modifies production schedule
 storyline-cli create-schedule
-storyline-cli clear-queue
+storyline-cli reset-queue
 
 # DANGEROUS - Modifies authentication
 storyline-cli instagram-auth
@@ -217,7 +217,7 @@ pytest -m integration           # Integration tests only
 pytest --cov=src --cov-report=html  # With coverage
 
 # Queue operations
-storyline-cli clear-queue        # Clear all pending posts
+storyline-cli reset-queue        # Reset queue (clear all pending posts)
 ```
 
 ## Core Services Reference

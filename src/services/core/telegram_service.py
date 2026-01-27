@@ -1,6 +1,6 @@
 """Telegram service - bot operations and callbacks."""
 
-from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Bot, BotCommand, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -22,6 +22,7 @@ from src.services.core.instagram_account_service import InstagramAccountService
 from src.config.settings import settings
 from src.utils.logger import logger
 from datetime import datetime, timedelta
+from collections import deque
 import re
 
 
@@ -60,6 +61,8 @@ class TelegramService(BaseService):
         self.ig_account_service = InstagramAccountService()
         self.bot = None
         self.application = None
+        # Track sent message IDs for cleanup (keep last 100 messages)
+        self.message_cache = deque(maxlen=100)
 
     @property
     def is_paused(self) -> bool:
@@ -88,7 +91,8 @@ class TelegramService(BaseService):
         self.application.add_handler(CommandHandler("stats", self._handle_stats))
         self.application.add_handler(CommandHandler("history", self._handle_history))
         self.application.add_handler(CommandHandler("locks", self._handle_locks))
-        self.application.add_handler(CommandHandler("clear", self._handle_clear))
+        self.application.add_handler(CommandHandler("reset", self._handle_reset))
+        self.application.add_handler(CommandHandler("cleanup", self._handle_cleanup))
         self.application.add_handler(CommandHandler("help", self._handle_help))
         self.application.add_handler(CommandHandler("dryrun", self._handle_dryrun))
         self.application.add_handler(CommandHandler("settings", self._handle_settings))
@@ -100,7 +104,27 @@ class TelegramService(BaseService):
             )
         )
 
-        logger.info("Telegram bot initialized")
+        # Register commands with Telegram for autocomplete menu
+        commands = [
+            BotCommand("start", "Initialize bot and show welcome"),
+            BotCommand("status", "Show system health and queue status"),
+            BotCommand("help", "Show all available commands"),
+            BotCommand("queue", "View pending scheduled posts"),
+            BotCommand("next", "Force-send next scheduled post"),
+            BotCommand("pause", "Pause automatic posting"),
+            BotCommand("resume", "Resume posting"),
+            BotCommand("schedule", "Create N days of posting schedule"),
+            BotCommand("stats", "Show media library statistics"),
+            BotCommand("history", "Show recent post history"),
+            BotCommand("locks", "View permanently rejected items"),
+            BotCommand("reset", "Reset posting queue to empty"),
+            BotCommand("cleanup", "Delete recent bot messages"),
+            BotCommand("settings", "Configure bot settings"),
+            BotCommand("dryrun", "Toggle dry-run mode"),
+        ]
+        await self.bot.set_my_commands(commands)
+
+        logger.info("Telegram bot initialized with command menu")
 
     async def send_notification(
         self, queue_item_id: str, force_sent: bool = False
@@ -214,6 +238,9 @@ class TelegramService(BaseService):
                     caption=caption,
                     reply_markup=reply_markup,
                 )
+
+            # Track message ID for cleanup
+            self.message_cache.append(message.message_id)
 
             # Save telegram message ID
             self.queue_repo.set_telegram_message(
@@ -439,7 +466,9 @@ class TelegramService(BaseService):
             f"📈 24h: {len(recent_posts)} posts"
         )
 
-        await update.message.reply_text(status_msg, parse_mode="Markdown")
+        message = await update.message.reply_text(status_msg, parse_mode="Markdown")
+        # Track message for cleanup
+        self.message_cache.append(message.message_id)
 
         # Log interaction
         self.interaction_service.log_command(
@@ -464,9 +493,11 @@ class TelegramService(BaseService):
         queue_items = all_pending[:10]  # Show first 10
 
         if not queue_items:
-            await update.message.reply_text(
+            message = await update.message.reply_text(
                 "📭 *Queue Empty*\n\nNo posts scheduled.", parse_mode="Markdown"
             )
+            # Track message for cleanup
+            self.message_cache.append(message.message_id)
         else:
             lines = [f"📅 *Upcoming Queue* ({len(queue_items)} of {total_count})\n"]
 
@@ -488,7 +519,9 @@ class TelegramService(BaseService):
                 lines.append(f"{i}. 🕐 {scheduled}")
                 lines.append(f"    📁 {filename} ({category})\n")
 
-            await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+            message = await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+            # Track message for cleanup
+            self.message_cache.append(message.message_id)
 
         # Log interaction
         self.interaction_service.log_command(
@@ -573,13 +606,14 @@ class TelegramService(BaseService):
             "/queue - View upcoming posts\n"
             "/next - Force send next post\n"
             "/schedule N - Add N days to queue\n"
-            "/clear - Clear all pending posts\n\n"
+            "/reset - Reset queue (clear all pending)\n\n"
             "*Control Commands:*\n"
             "/settings - View/toggle bot settings\n"
             "/pause - Pause automatic posting\n"
             "/resume - Resume posting\n"
             "/dryrun - Toggle dry run mode\n"
-            "/status - System health check\n\n"
+            "/status - System health check\n"
+            "/cleanup - Delete recent bot messages\n\n"
             "*Info Commands:*\n"
             "/stats - Media library statistics\n"
             "/history N - Show last N posts\n"
@@ -2137,8 +2171,8 @@ class TelegramService(BaseService):
             telegram_message_id=update.message.message_id,
         )
 
-    async def _handle_clear(self, update, context):
-        """Handle /clear command - clear pending queue with confirmation."""
+    async def _handle_reset(self, update, context):
+        """Handle /reset command - reset posting queue with confirmation."""
         user = self._get_or_create_user(update.effective_user)
 
         pending_count = self.queue_repo.count_pending()
@@ -2169,11 +2203,81 @@ class TelegramService(BaseService):
 
         self.interaction_service.log_command(
             user_id=str(user.id),
-            command="/clear",
+            command="/reset",
             context={"pending_count": pending_count},
             telegram_chat_id=update.effective_chat.id,
             telegram_message_id=update.message.message_id,
         )
+
+    async def _handle_cleanup(self, update, context):
+        """Handle /cleanup command - delete recent bot messages from chat."""
+        user = self._get_or_create_user(update.effective_user)
+        chat_id = update.effective_chat.id
+
+        if not self.message_cache:
+            await update.message.reply_text(
+                "📭 *No Messages to Clean*\n\n"
+                "The message cache is empty. Messages are only tracked "
+                "while the bot is running.",
+                parse_mode="Markdown",
+            )
+            return
+
+        deleted_count = 0
+        failed_count = 0
+        total_messages = len(self.message_cache)
+
+        # Delete messages in reverse order (newest first)
+        for message_id in reversed(list(self.message_cache)):
+            try:
+                await context.bot.delete_message(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                )
+                deleted_count += 1
+            except Exception as e:
+                # Message might be >48hrs old or already deleted
+                failed_count += 1
+                logger.debug(f"Could not delete message {message_id}: {e}")
+
+        # Clear the cache after deletion attempt
+        self.message_cache.clear()
+
+        # Send ephemeral confirmation (delete after 5 seconds)
+        response_text = (
+            f"🧹 *Cleanup Complete*\n\n"
+            f"✅ Deleted: {deleted_count} messages\n"
+        )
+        if failed_count > 0:
+            response_text += (
+                f"⚠️ Failed: {failed_count} messages\n"
+                f"(Messages older than 48 hours cannot be deleted)"
+            )
+
+        response = await update.message.reply_text(
+            response_text, parse_mode="Markdown"
+        )
+
+        # Log the command
+        self.interaction_service.log_command(
+            user_id=str(user.id),
+            command="/cleanup",
+            context={
+                "total_cached": total_messages,
+                "deleted": deleted_count,
+                "failed": failed_count,
+            },
+            telegram_chat_id=chat_id,
+            telegram_message_id=update.message.message_id,
+        )
+
+        # Delete the confirmation message after 5 seconds
+        await asyncio.sleep(5)
+        try:
+            await response.delete()
+            await update.message.delete()  # Also delete the user's /cleanup command
+        except Exception:
+            pass  # Ignore errors if already deleted
 
     async def _handle_callback(self, update, context):
         """Handle inline button callbacks."""
@@ -2214,9 +2318,9 @@ class TelegramService(BaseService):
             # Resume callbacks
             elif action == "resume":
                 await self._handle_resume_callback(data, user, query)
-            # Clear callbacks
+            # Reset queue callbacks (callback data still uses "clear" for backwards compat)
             elif action == "clear":
-                await self._handle_clear_callback(data, user, query)
+                await self._handle_reset_callback(data, user, query)
             # Settings callbacks
             elif action == "settings_toggle":
                 await self._handle_settings_toggle(data, user, query)
@@ -3371,10 +3475,10 @@ class TelegramService(BaseService):
             telegram_message_id=query.message.message_id,
         )
 
-    async def _handle_clear_callback(self, action: str, user, query):
-        """Handle clear queue callback buttons (confirm/cancel)."""
+    async def _handle_reset_callback(self, action: str, user, query):
+        """Handle reset queue callback buttons (confirm/cancel)."""
         if action == "confirm":
-            # Clear all pending posts
+            # Reset queue - clear all pending posts
             all_pending = self.queue_repo.get_all(status="pending")
             cleared = 0
             for item in all_pending:

@@ -53,7 +53,7 @@
     "deny": [
       "Bash(storyline-cli process-queue*)",
       "Bash(storyline-cli create-schedule*)",
-      "Bash(storyline-cli clear-queue*)",
+      "Bash(storyline-cli reset-queue*)",
       "Bash(storyline-cli instagram-auth*)",
       "Bash(python -m src.main*)",
       "Bash(python src/main.py*)"

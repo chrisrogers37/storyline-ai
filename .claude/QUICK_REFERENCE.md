@@ -5,7 +5,7 @@
 **NEVER run these commands** (they post to Instagram or modify production):
 - `storyline-cli process-queue`
 - `storyline-cli create-schedule`
-- `storyline-cli clear-queue`
+- `storyline-cli reset-queue`
 - `python -m src.main`
 
 **SAFE commands** (read-only):

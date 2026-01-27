@@ -140,10 +140,10 @@ def list_queue():
     console.print(table)
 
 
-@click.command(name="clear-queue")
+@click.command(name="reset-queue")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
-def clear_queue(yes):
-    """Clear all pending queue items.
+def reset_queue(yes):
+    """Reset posting queue to empty.
 
     Removes all items from the posting queue. Media items remain
     in the library and can be scheduled again.
