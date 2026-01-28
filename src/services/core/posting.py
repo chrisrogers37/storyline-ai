@@ -305,21 +305,18 @@ class PostingService(BaseService):
         """
         Send post notification to Telegram.
 
+        Note: This sends notifications EVEN in dry run mode, because the team
+        needs to see posts to manually review and post them. Dry run mode only
+        affects Instagram API posting, not Telegram notifications.
+
         Args:
             queue_item: Queue item to process
 
         Returns:
             True if sent successfully
         """
-        chat_settings = self._get_chat_settings()
-        if chat_settings.dry_run_mode:
-            logger.info(
-                f"[DRY RUN] Would send Telegram notification for queue item {queue_item.id}"
-            )
-            return True
-
         try:
-            # Send notification to Telegram
+            # Send notification to Telegram (even in dry run mode)
             success = await self.telegram_service.send_notification(str(queue_item.id))
 
             if success:

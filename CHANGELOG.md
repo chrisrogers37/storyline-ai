@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Dry Run Mode Blocking Telegram Notifications** - Critical bug fix
+  - **Bug**: Dry run mode was blocking ALL Telegram notifications from being sent
+  - **Impact**: Scheduled posts weren't appearing in Telegram (only /next worked)
+  - **Root Cause**: `_post_via_telegram()` returned early in dry run mode without sending
+  - **Fix**: Dry run mode now only affects Instagram API posting, NOT Telegram notifications
+  - **Behavior**: Telegram notifications sent in all modes (dry run is for Instagram only)
+  - Files: `src/services/core/posting.py:304-340`
+
 ### Added - Telegram Command Menu & Message Cleanup (Phase 1.8)
 
 #### Native Telegram Command Menu
