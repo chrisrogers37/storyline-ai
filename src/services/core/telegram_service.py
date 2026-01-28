@@ -23,6 +23,7 @@ from src.config.settings import settings
 from src.utils.logger import logger
 from datetime import datetime, timedelta
 from collections import deque
+import asyncio
 import re
 
 
@@ -519,7 +520,9 @@ class TelegramService(BaseService):
                 lines.append(f"{i}. 🕐 {scheduled}")
                 lines.append(f"    📁 {filename} ({category})\n")
 
-            message = await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+            message = await update.message.reply_text(
+                "\n".join(lines), parse_mode="Markdown"
+            )
             # Track message for cleanup
             self.message_cache.append(message.message_id)
 
@@ -2245,8 +2248,7 @@ class TelegramService(BaseService):
 
         # Send ephemeral confirmation (delete after 5 seconds)
         response_text = (
-            f"🧹 *Cleanup Complete*\n\n"
-            f"✅ Deleted: {deleted_count} messages\n"
+            f"🧹 *Cleanup Complete*\n\n✅ Deleted: {deleted_count} messages\n"
         )
         if failed_count > 0:
             response_text += (
@@ -2254,9 +2256,7 @@ class TelegramService(BaseService):
                 f"(Messages older than 48 hours cannot be deleted)"
             )
 
-        response = await update.message.reply_text(
-            response_text, parse_mode="Markdown"
-        )
+        response = await update.message.reply_text(response_text, parse_mode="Markdown")
 
         # Log the command
         self.interaction_service.log_command(
@@ -3224,7 +3224,9 @@ class TelegramService(BaseService):
             # Show success toast (friendly name)
             await query.answer(f"✅ Switched to {switched_account.display_name}")
 
-            logger.info(f"Rebuilding account selector menu for queue {str(queue_item.id)[:8]}...")
+            logger.info(
+                f"Rebuilding account selector menu for queue {str(queue_item.id)[:8]}..."
+            )
 
             # Stay in account selection menu to show updated checkmark
             # User can click "Back to Post" to return to posting workflow
@@ -3237,13 +3239,9 @@ class TelegramService(BaseService):
             await query.answer(f"Error: {e}", show_alert=True)
         except Exception as e:
             # Catch all other exceptions (DB errors, Telegram errors, etc.)
-            logger.error(
-                f"Unexpected error during account switch: {e}",
-                exc_info=True
-            )
+            logger.error(f"Unexpected error during account switch: {e}", exc_info=True)
             await query.answer(
-                f"⚠️ Error switching account: {str(e)[:50]}",
-                show_alert=True
+                f"⚠️ Error switching account: {str(e)[:50]}", show_alert=True
             )
 
     async def _handle_back_to_post(self, short_queue_id: str, user, query):

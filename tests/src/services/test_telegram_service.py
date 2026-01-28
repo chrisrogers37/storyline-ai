@@ -1375,8 +1375,8 @@ class TestLocksCommand:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-class TestClearCommand:
-    """Tests for /clear command."""
+class TestResetCommand:
+    """Tests for /reset command (formerly /clear)."""
 
     async def test_reset_shows_confirmation(self, mock_telegram_service):
         """Test /reset shows confirmation dialog."""
@@ -1545,11 +1545,11 @@ class TestResumeCallbacks:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-class TestClearCallbacks:
-    """Tests for clear callback handlers."""
+class TestResetCallbacks:
+    """Tests for reset callback handlers (formerly clear)."""
 
-    async def test_clear_confirm(self, mock_telegram_service):
-        """Test clear:confirm deletes all pending posts."""
+    async def test_reset_confirm(self, mock_telegram_service):
+        """Test reset:confirm deletes all pending posts."""
         mock_user = Mock()
         mock_user.id = uuid4()
         mock_user.telegram_username = "testuser"
@@ -1565,7 +1565,7 @@ class TestClearCallbacks:
         mock_query = AsyncMock()
         mock_query.message = Mock(chat_id=-100123, message_id=1)
 
-        await mock_telegram_service._handle_clear_callback(
+        await mock_telegram_service._handle_reset_callback(
             "confirm", mock_user, mock_query
         )
 
@@ -1576,8 +1576,8 @@ class TestClearCallbacks:
         assert "Queue Cleared" in call_args.args[0]
         assert "Removed 2 pending posts" in call_args.args[0]
 
-    async def test_clear_cancel(self, mock_telegram_service):
-        """Test clear:cancel does not delete anything."""
+    async def test_reset_cancel(self, mock_telegram_service):
+        """Test reset:cancel does not delete anything."""
         mock_user = Mock()
         mock_user.id = uuid4()
         mock_user.telegram_username = "testuser"
@@ -1585,7 +1585,7 @@ class TestClearCallbacks:
         mock_query = AsyncMock()
         mock_query.message = Mock(chat_id=-100123, message_id=1)
 
-        await mock_telegram_service._handle_clear_callback(
+        await mock_telegram_service._handle_reset_callback(
             "cancel", mock_user, mock_query
         )
 
