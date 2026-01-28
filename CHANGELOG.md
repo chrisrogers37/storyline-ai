@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **CI Failures** - Resolved all blocking CI issues (#20)
+  - Fixed missing `asyncio` import in telegram_service.py causing ruff check failure
+  - Auto-formatted telegram_service.py to pass ruff format checks
+  - Updated test suite to reflect /clear → /reset command rename
+  - Fixed test assertion checking wrong method for dry_run_mode verification
+  - All 310 tests now passing ✅
+
+### Fixed
 
 - **Dry Run Mode Blocking Telegram Notifications** - Critical bug fix
   - **Bug**: Dry run mode was blocking ALL Telegram notifications from being sent

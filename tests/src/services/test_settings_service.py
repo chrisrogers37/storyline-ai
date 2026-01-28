@@ -609,8 +609,10 @@ class TestServiceSettingsUsage:
         from src.services.core.posting import PostingService
         import inspect
 
-        # Read _post_via_telegram source
-        source = inspect.getsource(PostingService._post_via_telegram)
+        # Read _post_via_instagram source (this is where dry_run is checked)
+        # Note: _post_via_telegram intentionally does NOT check dry_run because
+        # Telegram notifications should always be sent even in dry run mode
+        source = inspect.getsource(PostingService._post_via_instagram)
 
         # Should reference chat_settings.dry_run_mode, not settings.DRY_RUN_MODE
         assert "dry_run_mode" in source.lower()
