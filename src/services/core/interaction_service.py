@@ -244,3 +244,18 @@ class InteractionService:
             List of UserInteraction records
         """
         return self.interaction_repo.get_recent(days=days, limit=limit)
+
+    def get_deletable_bot_messages(self, chat_id: int) -> list:
+        """
+        Get bot messages that can be deleted from a chat.
+
+        Returns bot_response interactions from the last 48 hours
+        (Telegram API limit for message deletion).
+
+        Args:
+            chat_id: Telegram chat ID
+
+        Returns:
+            List of UserInteraction records with telegram_message_id
+        """
+        return self.interaction_repo.get_bot_responses_by_chat(chat_id, hours=48)

@@ -22,7 +22,6 @@ from src.services.core.instagram_account_service import InstagramAccountService
 from src.config.settings import settings
 from src.utils.logger import logger
 from datetime import datetime, timedelta
-from collections import deque
 import asyncio
 import re
 
@@ -62,8 +61,6 @@ class TelegramService(BaseService):
         self.ig_account_service = InstagramAccountService()
         self.bot = None
         self.application = None
-        # Track sent message IDs for cleanup (keep last 100 messages)
-        self.message_cache = deque(maxlen=100)
 
     @property
     def is_paused(self) -> bool:
@@ -239,9 +236,6 @@ class TelegramService(BaseService):
                     caption=caption,
                     reply_markup=reply_markup,
                 )
-
-            # Track message ID for cleanup
-            self.message_cache.append(message.message_id)
 
             # Save telegram message ID
             self.queue_repo.set_telegram_message(
@@ -468,8 +462,6 @@ class TelegramService(BaseService):
         )
 
         message = await update.message.reply_text(status_msg, parse_mode="Markdown")
-        # Track message for cleanup
-        self.message_cache.append(message.message_id)
 
         # Log interaction
         self.interaction_service.log_command(
@@ -494,11 +486,9 @@ class TelegramService(BaseService):
         queue_items = all_pending[:10]  # Show first 10
 
         if not queue_items:
-            message = await update.message.reply_text(
+            await update.message.reply_text(
                 "📭 *Queue Empty*\n\nNo posts scheduled.", parse_mode="Markdown"
             )
-            # Track message for cleanup
-            self.message_cache.append(message.message_id)
         else:
             lines = [f"📅 *Upcoming Queue* ({len(queue_items)} of {total_count})\n"]
 
@@ -520,11 +510,9 @@ class TelegramService(BaseService):
                 lines.append(f"{i}. 🕐 {scheduled}")
                 lines.append(f"    📁 {filename} ({category})\n")
 
-            message = await update.message.reply_text(
+            await update.message.reply_text(
                 "\n".join(lines), parse_mode="Markdown"
             )
-            # Track message for cleanup
-            self.message_cache.append(message.message_id)
 
         # Log interaction
         self.interaction_service.log_command(
@@ -2217,21 +2205,26 @@ class TelegramService(BaseService):
         user = self._get_or_create_user(update.effective_user)
         chat_id = update.effective_chat.id
 
-        if not self.message_cache:
+        # Query database for bot messages from last 48 hours
+        bot_messages = self.interaction_service.get_deletable_bot_messages(chat_id)
+
+        if not bot_messages:
             await update.message.reply_text(
                 "📭 *No Messages to Clean*\n\n"
-                "The message cache is empty. Messages are only tracked "
-                "while the bot is running.",
+                "No bot messages found in the last 48 hours.",
                 parse_mode="Markdown",
             )
             return
 
         deleted_count = 0
         failed_count = 0
-        total_messages = len(self.message_cache)
+        total_messages = len(bot_messages)
 
-        # Delete messages in reverse order (newest first)
-        for message_id in reversed(list(self.message_cache)):
+        # Delete messages (newest first - already sorted by query)
+        for interaction in bot_messages:
+            message_id = interaction.telegram_message_id
+            if not message_id:
+                continue
             try:
                 await context.bot.delete_message(
                     chat_id=chat_id,
@@ -2239,12 +2232,9 @@ class TelegramService(BaseService):
                 )
                 deleted_count += 1
             except Exception as e:
-                # Message might be >48hrs old or already deleted
+                # Message might be already deleted or inaccessible
                 failed_count += 1
                 logger.debug(f"Could not delete message {message_id}: {e}")
-
-        # Clear the cache after deletion attempt
-        self.message_cache.clear()
 
         # Send ephemeral confirmation (delete after 5 seconds)
         response_text = (
@@ -2253,7 +2243,7 @@ class TelegramService(BaseService):
         if failed_count > 0:
             response_text += (
                 f"⚠️ Failed: {failed_count} messages\n"
-                f"(Messages older than 48 hours cannot be deleted)"
+                f"(May have been already deleted)"
             )
 
         response = await update.message.reply_text(response_text, parse_mode="Markdown")
@@ -2263,7 +2253,7 @@ class TelegramService(BaseService):
             user_id=str(user.id),
             command="/cleanup",
             context={
-                "total_cached": total_messages,
+                "total_found": total_messages,
                 "deleted": deleted_count,
                 "failed": failed_count,
             },

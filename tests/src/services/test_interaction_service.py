@@ -254,3 +254,52 @@ class TestLogMessage:
         )
 
         assert result is None
+
+
+class TestGetDeletableBotMessages:
+    """Tests for get_deletable_bot_messages method."""
+
+    def test_get_deletable_bot_messages_success(self, interaction_service):
+        """Test getting deletable bot messages for a chat."""
+        # Create mock bot response interactions
+        mock_responses = [
+            Mock(telegram_message_id=1001, interaction_name="photo_notification"),
+            Mock(telegram_message_id=1002, interaction_name="status_message"),
+            Mock(telegram_message_id=1003, interaction_name="queue_listing"),
+        ]
+        interaction_service.interaction_repo.get_bot_responses_by_chat.return_value = (
+            mock_responses
+        )
+        chat_id = -1001234567890
+
+        result = interaction_service.get_deletable_bot_messages(chat_id)
+
+        assert result == mock_responses
+        assert len(result) == 3
+        interaction_service.interaction_repo.get_bot_responses_by_chat.assert_called_once_with(
+            chat_id, hours=48
+        )
+
+    def test_get_deletable_bot_messages_empty(self, interaction_service):
+        """Test getting deletable bot messages when none exist."""
+        interaction_service.interaction_repo.get_bot_responses_by_chat.return_value = []
+        chat_id = -1001234567890
+
+        result = interaction_service.get_deletable_bot_messages(chat_id)
+
+        assert result == []
+        interaction_service.interaction_repo.get_bot_responses_by_chat.assert_called_once_with(
+            chat_id, hours=48
+        )
+
+    def test_get_deletable_bot_messages_uses_48_hour_window(self, interaction_service):
+        """Test that the method uses the 48-hour Telegram deletion limit."""
+        interaction_service.interaction_repo.get_bot_responses_by_chat.return_value = []
+        chat_id = -1001234567890
+
+        interaction_service.get_deletable_bot_messages(chat_id)
+
+        # Verify the 48-hour window is used (Telegram API limit)
+        interaction_service.interaction_repo.get_bot_responses_by_chat.assert_called_once_with(
+            chat_id, hours=48
+        )

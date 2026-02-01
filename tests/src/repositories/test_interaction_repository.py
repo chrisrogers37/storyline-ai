@@ -336,3 +336,86 @@ class TestInteractionRepository:
         assert interaction.context == complex_context
         assert interaction.context["nested"]["key"] == "value"
         assert interaction.context["list"] == [1, 2, 3]
+
+    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    def test_get_bot_responses_by_chat(self, test_db):
+        """Test getting bot responses for a specific chat within 48 hours."""
+        repo = InteractionRepository()
+
+        chat_id = -1001234567890
+
+        # Create bot_response interactions with telegram_message_id
+        repo.create(
+            user_id=None,
+            interaction_type="bot_response",
+            interaction_name="photo_notification",
+            context={"caption": "Test caption"},
+            telegram_chat_id=chat_id,
+            telegram_message_id=1001,
+        )
+        repo.create(
+            user_id=None,
+            interaction_type="bot_response",
+            interaction_name="status_message",
+            context={},
+            telegram_chat_id=chat_id,
+            telegram_message_id=1002,
+        )
+        # Different chat - should not be returned
+        repo.create(
+            user_id=None,
+            interaction_type="bot_response",
+            interaction_name="photo_notification",
+            telegram_chat_id=-1009999999999,
+            telegram_message_id=2001,
+        )
+        # Command interaction - should not be returned
+        from src.repositories.user_repository import UserRepository
+        user_repo = UserRepository()
+        user = user_repo.create(telegram_user_id=900020)
+        repo.create(
+            user_id=str(user.id),
+            interaction_type="command",
+            interaction_name="/status",
+            telegram_chat_id=chat_id,
+            telegram_message_id=3001,
+        )
+
+        responses = repo.get_bot_responses_by_chat(chat_id, hours=48)
+
+        # Should only get bot_response types for the specified chat
+        assert len(responses) == 2
+        message_ids = [r.telegram_message_id for r in responses]
+        assert 1001 in message_ids
+        assert 1002 in message_ids
+        assert 2001 not in message_ids  # Different chat
+        assert 3001 not in message_ids  # Not a bot_response
+
+    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    def test_get_bot_responses_by_chat_excludes_null_message_ids(self, test_db):
+        """Test that responses without telegram_message_id are excluded."""
+        repo = InteractionRepository()
+
+        chat_id = -1001234567890
+
+        # Create response with message_id
+        repo.create(
+            user_id=None,
+            interaction_type="bot_response",
+            interaction_name="photo_notification",
+            telegram_chat_id=chat_id,
+            telegram_message_id=1001,
+        )
+        # Create response without message_id
+        repo.create(
+            user_id=None,
+            interaction_type="bot_response",
+            interaction_name="photo_notification",
+            telegram_chat_id=chat_id,
+            telegram_message_id=None,
+        )
+
+        responses = repo.get_bot_responses_by_chat(chat_id, hours=48)
+
+        assert len(responses) == 1
+        assert responses[0].telegram_message_id == 1001
