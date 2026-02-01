@@ -609,7 +609,36 @@ INSERT INTO schema_version (version, description)
 VALUES (2, 'Add new column to media_items');
 ```
 
-### 5. Changelog Maintenance (CRITICAL)
+### 5. Pre-Commit Checklist (CRITICAL)
+
+**ALWAYS complete these steps before committing or creating PRs:**
+
+```bash
+# 1. Run ruff linting on changed files
+source venv/bin/activate
+ruff check src/ tests/
+
+# 2. Run ruff formatting on changed files
+ruff format src/ tests/
+
+# 3. Run tests to ensure nothing is broken
+pytest
+
+# 4. Update CHANGELOG.md (see section 6 below)
+```
+
+**Quick single-command check:**
+```bash
+source venv/bin/activate && ruff check src/ tests/ && ruff format --check src/ tests/ && pytest
+```
+
+**CI will fail if:**
+- Ruff linting errors exist (`ruff check`)
+- Ruff formatting is incorrect (`ruff format --check`)
+- CHANGELOG.md is not updated for PRs
+- Tests fail
+
+### 6. Changelog Maintenance (CRITICAL)
 
 **ALWAYS update CHANGELOG.md when creating PRs.** The changelog is the user-facing record of all changes.
 
@@ -689,7 +718,7 @@ VALUES (2, 'Add new column to media_items');
 - `src/services/core/telegram_service.py` - Account switching UI
 ```
 
-### 6. Logging Standards
+### 7. Logging Standards
 
 ```python
 from src.utils.logger import logger
@@ -707,7 +736,7 @@ logger.error(f"Failed to upload to Cloudinary: {error}", exc_info=True)
 # CRITICAL: Severe error, app might crash
 ```
 
-### 7. Async/Await Usage
+### 8. Async/Await Usage
 
 ```python
 # Telegram and HTTP operations are async

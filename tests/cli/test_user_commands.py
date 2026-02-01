@@ -11,7 +11,9 @@ from src.repositories.user_repository import UserRepository
 class TestUserCommands:
     """Test suite for user CLI commands."""
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_list_users_command(self, test_db):
         """Test list-users CLI command."""
         user_repo = UserRepository(test_db)
@@ -43,7 +45,9 @@ class TestUserCommands:
             or result.exit_code == 0
         )
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_list_users_empty_database(self, test_db):
         """Test list-users with no users."""
         runner = CliRunner()
@@ -53,7 +57,9 @@ class TestUserCommands:
         # Command should handle empty database gracefully
         assert result.exit_code == 0
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_promote_user_command(self, test_db):
         """Test promote-user CLI command."""
         user_repo = UserRepository(test_db)
@@ -75,7 +81,9 @@ class TestUserCommands:
         updated_user = user_repo.get_by_telegram_id(3000003)
         assert updated_user.role == "admin"
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_promote_user_nonexistent(self, test_db):
         """Test promote-user with non-existent user."""
         runner = CliRunner()
@@ -85,7 +93,9 @@ class TestUserCommands:
         # Should handle gracefully
         assert "not found" in result.output.lower() or result.exit_code != 0
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_promote_user_invalid_role(self, test_db):
         """Test promote-user with invalid role."""
         user_repo = UserRepository(test_db)

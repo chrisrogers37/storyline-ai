@@ -232,3 +232,34 @@ class InteractionRepository(BaseRepository):
             "skip_percentage": round(skipped / total * 100, 1) if total > 0 else 0,
             "rejection_rate": round(rejected / total * 100, 1) if total > 0 else 0,
         }
+
+    def get_bot_responses_by_chat(
+        self,
+        chat_id: int,
+        hours: int = 48,
+    ) -> List[UserInteraction]:
+        """
+        Get bot response messages for a specific chat within time window.
+
+        Used by /cleanup command to find deletable bot messages.
+        Telegram API only allows deleting messages < 48 hours old.
+
+        Args:
+            chat_id: Telegram chat ID to filter by
+            hours: Lookback window in hours (default 48 for Telegram limit)
+
+        Returns:
+            List of bot_response interactions with telegram_message_id
+        """
+        since = datetime.utcnow() - timedelta(hours=hours)
+        return (
+            self.db.query(UserInteraction)
+            .filter(
+                UserInteraction.interaction_type == "bot_response",
+                UserInteraction.telegram_chat_id == chat_id,
+                UserInteraction.telegram_message_id.isnot(None),
+                UserInteraction.created_at >= since,
+            )
+            .order_by(UserInteraction.created_at.desc())
+            .all()
+        )

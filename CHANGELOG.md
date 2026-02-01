@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **/cleanup Command Not Finding Messages After Restart** - Critical bug fix
+  - **Bug**: `/cleanup` command showed "cache is empty" after bot restart
+  - **Root Cause**: Command relied on in-memory deque that was cleared on restart
+  - **Fix**: Query `user_interactions` table for bot messages instead of volatile cache
+  - Bot messages were already being logged via `log_bot_response()`, now cleanup uses that data
+  - Removed in-memory `message_cache` deque (no longer needed)
+  - Added `get_bot_responses_by_chat()` repository method
+  - Added `get_deletable_bot_messages()` service method
+
 - **CI Failures** - Resolved all blocking CI issues (#20)
   - Fixed missing `asyncio` import in telegram_service.py causing ruff check failure
   - Auto-formatted telegram_service.py to pass ruff format checks

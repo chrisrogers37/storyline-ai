@@ -14,7 +14,9 @@ from src.repositories.history_repository import HistoryRepository
 class TestPostingService:
     """Test suite for PostingService."""
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_process_pending_queue_no_items(self, test_db):
         """Test processing queue when no items are pending."""
         service = PostingService(db=test_db)
@@ -23,7 +25,9 @@ class TestPostingService:
 
         assert result["processed"] == 0
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_mark_as_posted(self, test_db):
         """Test marking a queue item as posted."""
         media_repo = MediaRepository(test_db)
@@ -69,7 +73,9 @@ class TestPostingService:
         updated_media = media_repo.get_by_id(media.id)
         assert updated_media.times_posted == 1
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_mark_as_skipped(self, test_db):
         """Test marking a queue item as skipped."""
         media_repo = MediaRepository(test_db)
@@ -118,7 +124,9 @@ class TestPostingService:
         updated_media = media_repo.get_by_id(media.id)
         assert updated_media.times_posted == 0
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_get_queue_item_with_media(self, test_db):
         """Test retrieving queue item with media details."""
         media_repo = MediaRepository(test_db)
@@ -149,7 +157,9 @@ class TestPostingService:
         assert result["queue_item"].id == queue_item.id
         assert result["media"].id == media.id
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_retry_failed_post(self, test_db):
         """Test retrying a failed post."""
         media_repo = MediaRepository(test_db)

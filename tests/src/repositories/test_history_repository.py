@@ -11,7 +11,9 @@ from src.repositories.user_repository import UserRepository
 class TestHistoryRepository:
     """Test suite for HistoryRepository."""
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_create_history_record(self, test_db):
         """Test creating a posting history record."""
         media_repo = MediaRepository(test_db)
@@ -42,7 +44,9 @@ class TestHistoryRepository:
         assert history.posted_by_user_id == user.id
         assert history.status == "posted"
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_get_by_media_id(self, test_db):
         """Test retrieving history by media ID."""
         media_repo = MediaRepository(test_db)
@@ -69,7 +73,9 @@ class TestHistoryRepository:
         assert len(records) >= 1
         assert records[0].media_id == media.id
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_get_by_user_id(self, test_db):
         """Test retrieving history by user ID."""
         media_repo = MediaRepository(test_db)
@@ -95,7 +101,9 @@ class TestHistoryRepository:
         assert len(records) >= 1
         assert records[0].posted_by_user_id == user.id
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_get_stats(self, test_db):
         """Test getting posting statistics."""
         media_repo = MediaRepository(test_db)
@@ -122,7 +130,9 @@ class TestHistoryRepository:
         assert stats["total_posts"] >= 1
         assert stats["total_users"] >= 1
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_get_recent(self, test_db):
         """Test getting recent posting history."""
         media_repo = MediaRepository(test_db)
@@ -147,7 +157,9 @@ class TestHistoryRepository:
 
         assert len(recent) >= 1
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_list_all_with_filters(self, test_db):
         """Test listing history with status filter."""
         media_repo = MediaRepository(test_db)

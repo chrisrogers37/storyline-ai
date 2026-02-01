@@ -6,9 +6,6 @@ from datetime import datetime
 from uuid import uuid4
 
 from src.services.core.telegram_service import TelegramService
-from src.repositories.user_repository import UserRepository
-from src.repositories.queue_repository import QueueRepository
-from src.repositories.media_repository import MediaRepository
 
 
 @pytest.fixture
@@ -514,7 +511,9 @@ class TestTelegramService:
         existing_user.telegram_username = "existing"
 
         service.user_repo.get_by_telegram_id.return_value = existing_user
-        service.user_repo.update_profile.return_value = existing_user  # Profile sync returns same user
+        service.user_repo.update_profile.return_value = (
+            existing_user  # Profile sync returns same user
+        )
 
         # Mock Telegram user with same ID
         telegram_user = Mock()
@@ -722,7 +721,6 @@ class TestNextCommand:
         mock_telegram_service.user_repo.create.return_value = mock_user
 
         queue_item_id = uuid4()
-        media_id = uuid4()
 
         mock_media = Mock()
         mock_media.file_name = "next_post.jpg"
@@ -932,7 +930,9 @@ class TestNextCommand:
         assert call_kwargs["context"]["success"] is True
 
 
-@pytest.mark.skip(reason="Needs SettingsService mock for chat_settings.is_paused - TODO")
+@pytest.mark.skip(
+    reason="Needs SettingsService mock for chat_settings.is_paused - TODO"
+)
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestPauseCommand:
@@ -1596,7 +1596,9 @@ class TestResetCallbacks:
         assert "Cancelled" in call_args.args[0]
 
 
-@pytest.mark.skip(reason="Complex integration test requiring PostingService and database - TODO")
+@pytest.mark.skip(
+    reason="Complex integration test requiring PostingService and database - TODO"
+)
 @pytest.mark.unit
 class TestPauseIntegration:
     """Tests for pause integration with PostingService."""
@@ -1888,9 +1890,7 @@ class TestAccountSelectorCallbacks:
         mock_account.display_name = "Test Account"
         mock_account.instagram_username = "testaccount"
         mock_telegram_service.ig_account_service = Mock()
-        mock_telegram_service.ig_account_service.get_account_by_id_prefix.return_value = (
-            mock_account
-        )
+        mock_telegram_service.ig_account_service.get_account_by_id_prefix.return_value = mock_account
         mock_telegram_service.ig_account_service.switch_account.return_value = (
             mock_account
         )

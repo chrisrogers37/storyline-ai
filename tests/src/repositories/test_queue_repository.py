@@ -13,7 +13,9 @@ from src.repositories.user_repository import UserRepository
 class TestQueueRepository:
     """Test suite for QueueRepository."""
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_create_queue_item(self, test_db):
         """Test creating a new queue item."""
         media_repo = MediaRepository(test_db)
@@ -43,7 +45,9 @@ class TestQueueRepository:
         assert queue_item.status == "pending"
         assert queue_item.retry_count == 0
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_get_pending_items(self, test_db):
         """Test retrieving pending queue items."""
         media_repo = MediaRepository(test_db)
@@ -71,7 +75,9 @@ class TestQueueRepository:
 
         assert len(pending_items) >= 1
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_update_status(self, test_db):
         """Test updating queue item status."""
         media_repo = MediaRepository(test_db)
@@ -104,7 +110,9 @@ class TestQueueRepository:
         assert updated_item.status == "posted"
         assert updated_item.telegram_message_id == 12345
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_schedule_retry(self, test_db):
         """Test scheduling a retry for failed queue item."""
         media_repo = MediaRepository(test_db)
@@ -137,7 +145,9 @@ class TestQueueRepository:
         assert retried_item.retry_count == 1
         assert retried_item.scheduled_time > datetime.utcnow()
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_delete_queue_item(self, test_db):
         """Test deleting a queue item."""
         media_repo = MediaRepository(test_db)
@@ -169,7 +179,9 @@ class TestQueueRepository:
         deleted_item = queue_repo.get_by_id(item_id)
         assert deleted_item is None
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_list_all_queue_items(self, test_db):
         """Test listing all queue items."""
         media_repo = MediaRepository(test_db)
@@ -197,7 +209,9 @@ class TestQueueRepository:
 
         assert len(all_items) >= 1
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_get_by_media_id(self, test_db):
         """Test retrieving queue items by media ID."""
         media_repo = MediaRepository(test_db)
@@ -230,7 +244,9 @@ class TestQueueRepository:
 class TestShiftSlotsForward:
     """Test suite for QueueRepository.shift_slots_forward()."""
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_shift_slots_forward_basic(self, test_db):
         """Test basic slot shifting - each item inherits the previous slot."""
         from src.models.posting_queue import PostingQueue
@@ -296,7 +312,9 @@ class TestShiftSlotsForward:
         assert queue_items[2].scheduled_for == times[1]  # C got B's time
         assert queue_items[3].scheduled_for == times[2]  # D got C's time
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_shift_slots_forward_last_item(self, test_db):
         """Test shifting when force-posting the last item - no shift needed."""
         from src.models.posting_queue import PostingQueue
@@ -353,7 +371,9 @@ class TestShiftSlotsForward:
 
         assert shifted == 0
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_shift_slots_forward_empty_queue(self, test_db):
         """Test shifting with empty queue."""
         queue_repo = QueueRepository()
@@ -364,7 +384,9 @@ class TestShiftSlotsForward:
 
         assert shifted == 0
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_shift_slots_forward_single_item(self, test_db):
         """Test shifting when only one item in queue."""
         from src.models.posting_queue import PostingQueue
@@ -398,7 +420,9 @@ class TestShiftSlotsForward:
 
         assert shifted == 0
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_shift_slots_forward_multiple_calls(self, test_db):
         """Test multiple consecutive shifts (simulating multiple /next calls)."""
         from src.models.posting_queue import PostingQueue

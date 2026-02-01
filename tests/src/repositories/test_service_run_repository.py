@@ -10,7 +10,9 @@ from src.repositories.user_repository import UserRepository
 class TestServiceRunRepository:
     """Test suite for ServiceRunRepository."""
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_create_run(self, test_db):
         """Test creating a service run record."""
         run_repo = ServiceRunRepository(test_db)
@@ -26,7 +28,9 @@ class TestServiceRunRepository:
         assert run.method_name == "test_method"
         assert run.status == "running"
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_complete_run_success(self, test_db):
         """Test completing a service run successfully."""
         run_repo = ServiceRunRepository(test_db)
@@ -45,7 +49,9 @@ class TestServiceRunRepository:
         assert completed_run.execution_time_seconds is not None
         assert completed_run.error_message is None
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_complete_run_failure(self, test_db):
         """Test completing a service run with failure."""
         run_repo = ServiceRunRepository(test_db)
@@ -66,7 +72,9 @@ class TestServiceRunRepository:
         assert completed_run.error_message == "Something went wrong"
         assert completed_run.error_traceback is not None
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_get_recent_runs(self, test_db):
         """Test retrieving recent service runs."""
         run_repo = ServiceRunRepository(test_db)
@@ -79,7 +87,9 @@ class TestServiceRunRepository:
 
         assert len(recent_runs) >= 2
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_get_failed_runs(self, test_db):
         """Test retrieving failed service runs."""
         run_repo = ServiceRunRepository(test_db)
@@ -95,7 +105,9 @@ class TestServiceRunRepository:
         assert len(failed_runs) >= 1
         assert all(r.status == "failed" for r in failed_runs)
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_get_runs_by_service(self, test_db):
         """Test retrieving runs for a specific service."""
         run_repo = ServiceRunRepository(test_db)
@@ -109,7 +121,9 @@ class TestServiceRunRepository:
         assert len(specific_runs) >= 1
         assert all(r.service_name == "SpecificService" for r in specific_runs)
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_get_runs_by_user(self, test_db):
         """Test retrieving runs triggered by a specific user."""
         user_repo = UserRepository(test_db)
@@ -129,7 +143,9 @@ class TestServiceRunRepository:
         assert len(user_runs) >= 1
         assert all(r.triggered_by_user_id == user.id for r in user_runs)
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_execution_time_calculation(self, test_db):
         """Test that execution time is calculated correctly."""
         run_repo = ServiceRunRepository(test_db)
