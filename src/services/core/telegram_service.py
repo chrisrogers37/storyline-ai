@@ -461,7 +461,7 @@ class TelegramService(BaseService):
             f"📈 24h: {len(recent_posts)} posts"
         )
 
-        message = await update.message.reply_text(status_msg, parse_mode="Markdown")
+        await update.message.reply_text(status_msg, parse_mode="Markdown")
 
         # Log interaction
         self.interaction_service.log_command(
@@ -510,9 +510,7 @@ class TelegramService(BaseService):
                 lines.append(f"{i}. 🕐 {scheduled}")
                 lines.append(f"    📁 {filename} ({category})\n")
 
-            await update.message.reply_text(
-                "\n".join(lines), parse_mode="Markdown"
-            )
+            await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
         # Log interaction
         self.interaction_service.log_command(
@@ -2242,8 +2240,7 @@ class TelegramService(BaseService):
         )
         if failed_count > 0:
             response_text += (
-                f"⚠️ Failed: {failed_count} messages\n"
-                f"(May have been already deleted)"
+                f"⚠️ Failed: {failed_count} messages\n(May have been already deleted)"
             )
 
         response = await update.message.reply_text(response_text, parse_mode="Markdown")

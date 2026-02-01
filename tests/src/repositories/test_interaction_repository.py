@@ -10,7 +10,9 @@ from src.repositories.interaction_repository import InteractionRepository
 class TestInteractionRepository:
     """Test suite for InteractionRepository."""
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_create_command_interaction(self, test_db):
         """Test creating a command interaction."""
         # First create a user to reference
@@ -36,7 +38,9 @@ class TestInteractionRepository:
         assert interaction.context == {"queue_size": 5}
         assert interaction.telegram_chat_id == 123456
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_create_callback_interaction(self, test_db):
         """Test creating a callback interaction."""
         from src.repositories.user_repository import UserRepository
@@ -56,7 +60,9 @@ class TestInteractionRepository:
         assert interaction.interaction_name == "posted"
         assert interaction.context["media_filename"] == "test.jpg"
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_get_by_user(self, test_db):
         """Test getting interactions by user."""
         from src.repositories.user_repository import UserRepository
@@ -81,7 +87,9 @@ class TestInteractionRepository:
 
         assert len(interactions) == 3
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_get_by_type(self, test_db):
         """Test getting interactions by type."""
         from src.repositories.user_repository import UserRepository
@@ -108,7 +116,9 @@ class TestInteractionRepository:
         assert len([i for i in commands if str(i.user_id) == str(user.id)]) >= 2
         assert len([i for i in callbacks if str(i.user_id) == str(user.id)]) >= 1
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_get_by_name(self, test_db):
         """Test getting interactions by name."""
         from src.repositories.user_repository import UserRepository
@@ -133,7 +143,9 @@ class TestInteractionRepository:
 
         assert len([i for i in posted if str(i.user_id) == str(user.id)]) >= 2
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_count_by_user(self, test_db):
         """Test counting interactions by user."""
         from src.repositories.user_repository import UserRepository
@@ -155,7 +167,9 @@ class TestInteractionRepository:
 
         assert count >= 2
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_count_by_name(self, test_db):
         """Test counting interactions by name."""
         from src.repositories.user_repository import UserRepository
@@ -182,7 +196,9 @@ class TestInteractionRepository:
         assert posted_count >= 2
         assert skip_count >= 1
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_get_user_stats(self, test_db):
         """Test getting aggregated user stats."""
         from src.repositories.user_repository import UserRepository
@@ -219,7 +235,9 @@ class TestInteractionRepository:
         assert stats["posts_rejected"] >= 1
         assert "/status" in stats["commands_used"]
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_get_team_activity(self, test_db):
         """Test getting team-wide activity."""
         from src.repositories.user_repository import UserRepository
@@ -252,7 +270,9 @@ class TestInteractionRepository:
         assert "command" in activity["interactions_by_type"]
         assert "callback" in activity["interactions_by_type"]
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_get_content_decisions(self, test_db):
         """Test getting content decision breakdown."""
         from src.repositories.user_repository import UserRepository
@@ -287,7 +307,9 @@ class TestInteractionRepository:
         assert "posted_percentage" in decisions
         assert "rejection_rate" in decisions
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_get_recent(self, test_db):
         """Test getting recent interactions."""
         from src.repositories.user_repository import UserRepository
@@ -309,7 +331,9 @@ class TestInteractionRepository:
 
         assert len(recent) >= 2
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_context_stores_json(self, test_db):
         """Test that context field properly stores JSON data."""
         from src.repositories.user_repository import UserRepository
@@ -337,7 +361,9 @@ class TestInteractionRepository:
         assert interaction.context["nested"]["key"] == "value"
         assert interaction.context["list"] == [1, 2, 3]
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_get_bot_responses_by_chat(self, test_db):
         """Test getting bot responses for a specific chat within 48 hours."""
         repo = InteractionRepository()
@@ -371,6 +397,7 @@ class TestInteractionRepository:
         )
         # Command interaction - should not be returned
         from src.repositories.user_repository import UserRepository
+
         user_repo = UserRepository()
         user = user_repo.create(telegram_user_id=900020)
         repo.create(
@@ -391,7 +418,9 @@ class TestInteractionRepository:
         assert 2001 not in message_ids  # Different chat
         assert 3001 not in message_ids  # Not a bot_response
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_get_bot_responses_by_chat_excludes_null_message_ids(self, test_db):
         """Test that responses without telegram_message_id are excluded."""
         repo = InteractionRepository()

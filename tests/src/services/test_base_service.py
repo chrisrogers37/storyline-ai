@@ -28,7 +28,9 @@ class MockServiceForTesting(BaseService):
 class TestBaseService:
     """Test suite for BaseService."""
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_service_initialization(self, test_db):
         """Test service initialization."""
         service = MockServiceForTesting(db=test_db)
@@ -36,7 +38,9 @@ class TestBaseService:
         assert service.db is not None
         assert service.service_run_repo is not None
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_track_execution_creates_run(self, test_db):
         """Test that track_execution creates a service run record."""
         service = MockServiceForTesting(db=test_db)
@@ -54,7 +58,9 @@ class TestBaseService:
         assert latest_run.method_name == "test_method"
         assert latest_run.status == "success"
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_track_execution_records_success(self, test_db):
         """Test that successful execution is recorded correctly."""
         service = MockServiceForTesting(db=test_db)
@@ -74,7 +80,9 @@ class TestBaseService:
         assert latest_run.execution_time_seconds is not None
         assert latest_run.error_message is None
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_track_execution_records_failure(self, test_db):
         """Test that failed execution is recorded correctly."""
         service = MockServiceForTesting(db=test_db)
@@ -93,7 +101,9 @@ class TestBaseService:
         assert latest_run.error_traceback is not None
         assert "ValueError" in latest_run.error_traceback
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_track_execution_with_parameters(self, test_db):
         """Test tracking execution with parameters."""
         service = MockServiceForTesting(db=test_db)
@@ -110,7 +120,9 @@ class TestBaseService:
 
         assert latest_run.parameters == params
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_track_execution_with_user_id(self, test_db):
         """Test tracking execution with user attribution."""
         from src.repositories.user_repository import UserRepository
@@ -131,7 +143,9 @@ class TestBaseService:
 
         assert latest_run.triggered_by_user_id == user.id
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_track_execution_with_result_summary(self, test_db):
         """Test tracking execution with result summary."""
         service = MockServiceForTesting(db=test_db)
@@ -150,7 +164,9 @@ class TestBaseService:
 
         assert latest_run.result_summary == result_summary
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_track_execution_calculates_timing(self, test_db):
         """Test that execution time is calculated."""
         import time
@@ -168,7 +184,9 @@ class TestBaseService:
         assert latest_run.execution_time_seconds is not None
         assert latest_run.execution_time_seconds >= 0.1
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_get_logger(self, test_db):
         """Test that service has logger."""
         service = MockServiceForTesting(db=test_db)

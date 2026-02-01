@@ -16,7 +16,9 @@ from src.repositories.lock_repository import LockRepository
 class TestSchedulerService:
     """Test suite for SchedulerService."""
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_create_schedule_creates_queue_items(self, test_db):
         """Test that create_schedule creates queue items."""
         media_repo = MediaRepository(test_db)
@@ -45,7 +47,9 @@ class TestSchedulerService:
         queue_items = queue_repo.list_all()
         assert len(queue_items) >= 1
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_select_next_media_prioritizes_never_posted(self, test_db):
         """Test that never-posted media is prioritized."""
         media_repo = MediaRepository(test_db)
@@ -77,7 +81,9 @@ class TestSchedulerService:
         assert selected is not None
         assert selected.times_posted == 0
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_select_next_media_excludes_locked(self, test_db):
         """Test that locked media is excluded from selection."""
         media_repo = MediaRepository(test_db)
@@ -116,7 +122,9 @@ class TestSchedulerService:
         assert selected is not None
         assert selected.id == unlocked_media.id
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_select_next_media_excludes_queued(self, test_db):
         """Test that queued media is excluded from selection."""
         media_repo = MediaRepository(test_db)
@@ -157,7 +165,9 @@ class TestSchedulerService:
         assert selected is not None
         assert selected.id == available_media.id
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     def test_generate_time_slots(self, test_db):
         """Test generating time slots for scheduling."""
         service = SchedulerService(db=test_db)
@@ -174,7 +184,9 @@ class TestSchedulerService:
         for i in range(len(time_slots) - 1):
             assert time_slots[i] < time_slots[i + 1]
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     @patch("src.services.core.scheduler.settings")
     def test_create_schedule_respects_posting_hours(self, mock_settings, test_db):
         """Test that schedule respects posting hours configuration."""

@@ -124,8 +124,12 @@ class TestInstagramAPIService:
 
     # ==================== is_configured Tests ====================
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     @patch("src.services.integrations.instagram_api.settings")
     def test_is_configured_all_settings(self, mock_settings, instagram_service):
         """Test is_configured returns True when all settings present."""
@@ -144,8 +148,12 @@ class TestInstagramAPIService:
 
         assert instagram_service.is_configured() is False
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     @patch("src.services.integrations.instagram_api.settings")
     def test_is_configured_missing_account_id(self, mock_settings, instagram_service):
         """Test is_configured returns False when account ID missing."""
@@ -253,8 +261,12 @@ class TestInstagramAPIService:
         with pytest.raises(RateLimitError, match="Rate limit exhausted"):
             await instagram_service.post_story("https://example.com/image.jpg")
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     @pytest.mark.asyncio
     @patch("src.services.integrations.instagram_api.settings")
     async def test_post_story_no_token(self, mock_settings, instagram_service):
@@ -266,8 +278,12 @@ class TestInstagramAPIService:
         with pytest.raises(TokenExpiredError, match="No valid Instagram token"):
             await instagram_service.post_story("https://example.com/image.jpg")
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     @pytest.mark.asyncio
     @patch("src.services.integrations.instagram_api.settings")
     async def test_post_story_no_account_id(self, mock_settings, instagram_service):
@@ -282,8 +298,12 @@ class TestInstagramAPIService:
         ):
             await instagram_service.post_story("https://example.com/image.jpg")
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     @pytest.mark.asyncio
     @patch("src.services.integrations.instagram_api.settings")
     async def test_post_story_success(self, mock_settings, instagram_service):
@@ -326,8 +346,12 @@ class TestInstagramAPIService:
         assert result["container_id"] == "container_123"
         assert "timestamp" in result
 
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
-    @pytest.mark.skip(reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/")
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
+    )
     @pytest.mark.asyncio
     @patch("src.services.integrations.instagram_api.settings")
     async def test_post_story_network_error(self, mock_settings, instagram_service):
