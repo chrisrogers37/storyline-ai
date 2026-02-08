@@ -152,13 +152,9 @@ class TelegramService(BaseService):
             logger.error(f"Media item not found: {queue_item.media_item_id}")
             return False
 
-        # Get verbose setting from chat settings
+        # Get verbose setting and chat settings
         chat_settings = self.settings_service.get_settings(self.channel_id)
-        verbose = (
-            chat_settings.show_verbose_notifications
-            if chat_settings.show_verbose_notifications is not None
-            else True
-        )
+        verbose = self._is_verbose(self.channel_id)
 
         # Get active Instagram account for display
         active_account = self.ig_account_service.get_active_account(self.channel_id)
@@ -2394,8 +2390,12 @@ class TelegramService(BaseService):
         # Update user stats
         self.user_repo.increment_posts(str(user.id))
 
-        # Update message
-        new_caption = f"✅ Marked as posted by {self._get_display_name(user)}"
+        # Update message (respect verbose setting)
+        verbose = self._is_verbose(query.message.chat_id)
+        if verbose:
+            new_caption = f"✅ Marked as posted by {self._get_display_name(user)}"
+        else:
+            new_caption = f"✅ Posted by {self._get_display_name(user)}"
         await query.edit_message_caption(caption=new_caption)
 
         # Log interaction
@@ -2611,9 +2611,6 @@ class TelegramService(BaseService):
                     ],
                 ]
 
-                # Escape filename for Markdown
-                escaped_filename = _escape_markdown(media_item.file_name)
-
                 # Fetch account username from API (cached)
                 account_info = await instagram_service.get_account_info(
                     telegram_chat_id=chat_id
@@ -2623,31 +2620,41 @@ class TelegramService(BaseService):
                 else:
                     account_display = "Unknown account"
 
-                # Apply the same transformation we'd use for Instagram
-                media_type = (
-                    "VIDEO"
-                    if media_item.file_path.lower().endswith((".mp4", ".mov"))
-                    else "IMAGE"
-                )
-                if media_type == "IMAGE":
-                    preview_url = cloud_service.get_story_optimized_url(cloud_url)
-                else:
-                    preview_url = cloud_url
+                # Check verbose setting
+                verbose = self._is_verbose(chat_id)
 
-                caption = (
-                    f"🧪 DRY RUN - Cloudinary Upload Complete\n\n"
-                    f"📁 File: {media_item.file_name}\n"
-                    f"📸 Account: {account_display}\n\n"
-                    f"✅ Cloudinary upload: Success\n"
-                    f"🔗 Preview (with blur): {preview_url}\n\n"
-                    f"⏸️ Stopped before Instagram API\n"
-                    f"(DRY_RUN_MODE=true)\n\n"
-                    f"• No Instagram post made\n"
-                    f"• No history recorded\n"
-                    f"• No TTL lock created\n"
-                    f"• Queue item preserved\n\n"
-                    f"Tested by: {self._get_display_name(user)}"
-                )
+                if verbose:
+                    # Apply the same transformation we'd use for Instagram
+                    media_type = (
+                        "VIDEO"
+                        if media_item.file_path.lower().endswith((".mp4", ".mov"))
+                        else "IMAGE"
+                    )
+                    if media_type == "IMAGE":
+                        preview_url = cloud_service.get_story_optimized_url(cloud_url)
+                    else:
+                        preview_url = cloud_url
+
+                    caption = (
+                        f"🧪 DRY RUN - Cloudinary Upload Complete\n\n"
+                        f"📁 File: {media_item.file_name}\n"
+                        f"📸 Account: {account_display}\n\n"
+                        f"✅ Cloudinary upload: Success\n"
+                        f"🔗 Preview (with blur): {preview_url}\n\n"
+                        f"⏸️ Stopped before Instagram API\n"
+                        f"(DRY_RUN_MODE=true)\n\n"
+                        f"• No Instagram post made\n"
+                        f"• No history recorded\n"
+                        f"• No TTL lock created\n"
+                        f"• Queue item preserved\n\n"
+                        f"Tested by: {self._get_display_name(user)}"
+                    )
+                else:
+                    caption = (
+                        f"🧪 DRY RUN ✅\n\n"
+                        f"📸 Account: {account_display}\n"
+                        f"Tested by: {self._get_display_name(user)}"
+                    )
                 await query.edit_message_caption(
                     caption=caption,
                     reply_markup=InlineKeyboardMarkup(keyboard),
@@ -2737,11 +2744,7 @@ class TelegramService(BaseService):
             self.user_repo.increment_posts(str(user.id))
 
             # Success message - check verbose setting (chat_settings already loaded at start)
-            verbose = (
-                chat_settings.show_verbose_notifications
-                if chat_settings.show_verbose_notifications is not None
-                else True
-            )
+            verbose = self._is_verbose(chat_id)
 
             # Fetch account username from API (cached)
             account_info = await instagram_service.get_account_info(
@@ -2763,8 +2766,10 @@ class TelegramService(BaseService):
                     f"Posted by: {self._get_display_name(user)}"
                 )
             else:
-                # Verbose OFF: Show minimal info
-                caption = f"✅ Posted to {account_display}"
+                # Verbose OFF: Show minimal info (always include user)
+                caption = (
+                    f"✅ Posted to {account_display} by {self._get_display_name(user)}"
+                )
 
             await query.edit_message_caption(caption=caption, parse_mode="Markdown")
 
@@ -3354,13 +3359,17 @@ class TelegramService(BaseService):
         # Delete from queue
         self.queue_repo.delete(queue_id)
 
-        # Update message with clear feedback
-        caption = (
-            f"🚫 *Permanently Rejected*\n\n"
-            f"By: {self._get_display_name(user)}\n"
-            f"File: {media_item.file_name if media_item else 'Unknown'}\n\n"
-            f"This media will never be queued again."
-        )
+        # Update message with clear feedback (respect verbose setting)
+        verbose = self._is_verbose(query.message.chat_id)
+        if verbose:
+            caption = (
+                f"🚫 *Permanently Rejected*\n\n"
+                f"By: {self._get_display_name(user)}\n"
+                f"File: {media_item.file_name if media_item else 'Unknown'}\n\n"
+                f"This media will never be queued again."
+            )
+        else:
+            caption = f"🚫 Rejected by {self._get_display_name(user)}"
         await query.edit_message_caption(caption=caption, parse_mode="Markdown")
 
         # Log interaction
@@ -3516,6 +3525,13 @@ class TelegramService(BaseService):
             )
 
         return user
+
+    def _is_verbose(self, chat_id) -> bool:
+        """Check if verbose notifications are enabled for a chat."""
+        chat_settings = self.settings_service.get_settings(chat_id)
+        if chat_settings.show_verbose_notifications is not None:
+            return chat_settings.show_verbose_notifications
+        return True
 
     def _get_display_name(self, user) -> str:
         """Get best available display name for user (username > first_name > user_id)."""

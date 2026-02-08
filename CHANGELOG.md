@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Auto-Post Success Missing User in Verbose OFF** - Bug fix
+  - **Bug**: With verbose notifications OFF, auto-post success showed `✅ Posted to @account` without identifying who triggered the post
+  - **Fix**: Now always shows `✅ Posted to @account by @user` regardless of verbose setting
+
+### Changed
+- **Verbose Setting Now Controls More Message Types** - Expanded scope
+  - Verbose OFF now produces minimal output for: manual posted confirmations, rejected confirmations, and dry run results
+  - Added `_is_verbose()` helper method to reduce code duplication (replaces 3-line inline checks)
+  - Verbose ON behavior is unchanged (all existing detailed messages preserved)
+  - User-initiated commands (`/status`, `/queue`, `/help`, etc.) are intentionally excluded — they always show full detail
+  - See `documentation/planning/verbose-settings-improvement-plan.md` for full audit
+
+### Fixed
 - **/cleanup Command Not Finding Messages After Restart** - Critical bug fix
   - **Bug**: `/cleanup` command showed "cache is empty" after bot restart
   - **Root Cause**: Command relied on in-memory deque that was cleared on restart
