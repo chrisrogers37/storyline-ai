@@ -40,6 +40,15 @@ documentation/
 - Coverage gaps and future work
 - Test infrastructure documentation
 
+### Refactoring Plans
+
+**[telegram-service-refactor-plan.md](planning/telegram-service-refactor-plan.md)** - 📋 PLANNING
+- Decomposition plan for 3,500-line TelegramService monolith
+- Composition-based architecture with 5 handler modules
+- Callback routing and handler registration strategy
+- Test migration plan and risk assessment
+- 3-PR incremental migration strategy
+
 ### Feature Designs
 
 **[phase-1.5-telegram-enhancements.md](planning/phase-1.5-telegram-enhancements.md)** - ✅ COMPLETE (v1.3.0)
