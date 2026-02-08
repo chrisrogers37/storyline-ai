@@ -20,6 +20,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - User-initiated commands (`/status`, `/queue`, `/help`, etc.) are intentionally excluded — they always show full detail
   - See `documentation/planning/verbose-settings-improvement-plan.md` for full audit
 
+- **Refactored Settings Keyboard** - Eliminated 3x code duplication
+  - Extracted `_build_settings_message_and_keyboard()` helper method
+  - Settings menu keyboard was copy-pasted in `_handle_settings`, `_refresh_settings_message`, and `_send_settings_message_by_chat_id`
+  - Adding a new setting now requires changing only one place
+
+- **Refactored Posted/Skipped Handlers** - Extracted shared `_complete_queue_action()` helper
+  - `_handle_posted` and `_handle_skipped` shared ~60 lines of identical code (history, queue delete, logging)
+  - Now both delegate to `_complete_queue_action()` with status-specific parameters
+
+- **Simple Caption Now Respects Verbose and Account** - Consistency fix
+  - `_build_simple_caption()` now accepts `verbose` and `active_account` parameters
+  - Previously, switching `CAPTION_STYLE` to "simple" would silently ignore the verbose toggle
+
+- **Centralized Version String** - Single source of truth
+  - Added `__version__` in `src/__init__.py` (currently `1.4.0`)
+  - `setup.py`, `cli/main.py`, and startup notification now all reference `__version__`
+  - Startup notification previously showed hardcoded `v1.0.1` (3 versions behind)
+
+- **Eliminated Redundant DB Queries** - Performance improvement
+  - `_is_verbose()` now accepts optional pre-loaded `chat_settings` parameter
+  - Saves an extra database round-trip in `_do_autopost` where settings are already loaded
+
 ### Fixed
 - **/cleanup Command Not Finding Messages After Restart** - Critical bug fix
   - **Bug**: `/cleanup` command showed "cache is empty" after bot restart

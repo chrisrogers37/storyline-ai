@@ -22,12 +22,13 @@ from cli.commands.media import (
 )
 from cli.commands.queue import reset_queue, create_schedule, list_queue, process_queue
 from cli.commands.users import list_users, promote_user
+from src import __version__
 
 console = Console()
 
 
 @click.group()
-@click.version_option(version="1.4.0")
+@click.version_option(version=__version__)
 def cli():
     """Storyline AI - Instagram Story Automation System"""
     pass

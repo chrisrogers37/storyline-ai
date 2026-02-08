@@ -1929,3 +1929,500 @@ class TestAccountSelectorCallbacks:
         mock_query.edit_message_caption.assert_called_once()
         call_args = mock_query.edit_message_caption.call_args
         assert "Select Instagram Account" in call_args.kwargs["caption"]
+
+
+@pytest.mark.unit
+class TestIsVerbose:
+    """Tests for _is_verbose helper method."""
+
+    def test_verbose_true_when_setting_is_true(self, mock_telegram_service):
+        """Test _is_verbose returns True when show_verbose_notifications=True."""
+        mock_settings = Mock()
+        mock_settings.show_verbose_notifications = True
+        mock_telegram_service.settings_service.get_settings.return_value = mock_settings
+
+        assert mock_telegram_service._is_verbose(-100123) is True
+
+    def test_verbose_false_when_setting_is_false(self, mock_telegram_service):
+        """Test _is_verbose returns False when show_verbose_notifications=False."""
+        mock_settings = Mock()
+        mock_settings.show_verbose_notifications = False
+        mock_telegram_service.settings_service.get_settings.return_value = mock_settings
+
+        assert mock_telegram_service._is_verbose(-100123) is False
+
+    def test_verbose_defaults_to_true_when_none(self, mock_telegram_service):
+        """Test _is_verbose defaults to True when setting is None."""
+        mock_settings = Mock()
+        mock_settings.show_verbose_notifications = None
+        mock_telegram_service.settings_service.get_settings.return_value = mock_settings
+
+        assert mock_telegram_service._is_verbose(-100123) is True
+
+    def test_verbose_uses_preloaded_settings(self, mock_telegram_service):
+        """Test _is_verbose uses pre-loaded chat_settings when provided."""
+        preloaded = Mock()
+        preloaded.show_verbose_notifications = False
+
+        result = mock_telegram_service._is_verbose(-100123, chat_settings=preloaded)
+
+        assert result is False
+        # Should NOT call get_settings since we passed chat_settings
+        mock_telegram_service.settings_service.get_settings.assert_not_called()
+
+
+@pytest.mark.unit
+class TestVerboseEnhancedCaption:
+    """Tests for verbose toggle in _build_enhanced_caption."""
+
+    def test_verbose_on_shows_workflow_instructions(self, mock_telegram_service):
+        """Test that verbose=True includes workflow instructions."""
+        mock_media = Mock()
+        mock_media.title = "Test"
+        mock_media.caption = None
+        mock_media.link_url = None
+        mock_media.tags = []
+
+        with patch("src.services.core.telegram_service.settings") as mock_settings:
+            mock_settings.CAPTION_STYLE = "enhanced"
+            caption = mock_telegram_service._build_caption(
+                mock_media, verbose=True, active_account=None
+            )
+
+        assert "Click & hold image" in caption
+        assert "Open Instagram" in caption
+
+    def test_verbose_off_hides_workflow_instructions(self, mock_telegram_service):
+        """Test that verbose=False omits workflow instructions."""
+        mock_media = Mock()
+        mock_media.title = "Test"
+        mock_media.caption = None
+        mock_media.link_url = None
+        mock_media.tags = []
+
+        with patch("src.services.core.telegram_service.settings") as mock_settings:
+            mock_settings.CAPTION_STYLE = "enhanced"
+            caption = mock_telegram_service._build_caption(
+                mock_media, verbose=False, active_account=None
+            )
+
+        assert "Click & hold image" not in caption
+        assert "Open Instagram" not in caption
+
+    def test_verbose_off_still_shows_account(self, mock_telegram_service):
+        """Test that verbose=False still shows the account indicator."""
+        mock_media = Mock()
+        mock_media.title = "Test"
+        mock_media.caption = None
+        mock_media.link_url = None
+        mock_media.tags = []
+
+        mock_account = Mock()
+        mock_account.display_name = "My Brand"
+
+        with patch("src.services.core.telegram_service.settings") as mock_settings:
+            mock_settings.CAPTION_STYLE = "enhanced"
+            caption = mock_telegram_service._build_caption(
+                mock_media, verbose=False, active_account=mock_account
+            )
+
+        assert "My Brand" in caption
+
+
+@pytest.mark.unit
+class TestVerboseSimpleCaption:
+    """Tests for verbose toggle in _build_simple_caption."""
+
+    def test_simple_verbose_on_shows_file_and_id(self, mock_telegram_service):
+        """Test simple caption includes file/ID info when verbose=True."""
+        mock_media = Mock()
+        mock_media.id = "12345678-abcd-efgh-ijkl-mnopqrstuvwx"
+        mock_media.title = "Test"
+        mock_media.file_name = "image.jpg"
+        mock_media.caption = None
+        mock_media.link_url = None
+        mock_media.tags = []
+
+        with patch("src.services.core.telegram_service.settings") as mock_settings:
+            mock_settings.CAPTION_STYLE = "simple"
+            caption = mock_telegram_service._build_caption(
+                mock_media, verbose=True, active_account=None
+            )
+
+        assert "File: image.jpg" in caption
+        assert "ID:" in caption
+
+    def test_simple_verbose_off_hides_file_and_id(self, mock_telegram_service):
+        """Test simple caption omits file/ID info when verbose=False."""
+        mock_media = Mock()
+        mock_media.id = "12345678-abcd-efgh-ijkl-mnopqrstuvwx"
+        mock_media.title = "Test"
+        mock_media.file_name = "image.jpg"
+        mock_media.caption = None
+        mock_media.link_url = None
+        mock_media.tags = []
+
+        with patch("src.services.core.telegram_service.settings") as mock_settings:
+            mock_settings.CAPTION_STYLE = "simple"
+            caption = mock_telegram_service._build_caption(
+                mock_media, verbose=False, active_account=None
+            )
+
+        assert "File:" not in caption
+        assert "ID:" not in caption
+
+    def test_simple_caption_shows_account(self, mock_telegram_service):
+        """Test simple caption includes account when provided."""
+        mock_media = Mock()
+        mock_media.title = "Test"
+        mock_media.file_name = "image.jpg"
+        mock_media.caption = None
+        mock_media.link_url = None
+        mock_media.tags = []
+
+        mock_account = Mock()
+        mock_account.display_name = "Brand Account"
+
+        with patch("src.services.core.telegram_service.settings") as mock_settings:
+            mock_settings.CAPTION_STYLE = "simple"
+            caption = mock_telegram_service._build_caption(
+                mock_media, verbose=True, active_account=mock_account
+            )
+
+        assert "Brand Account" in caption
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestVerbosePostedSkipped:
+    """Tests for verbose toggle in posted/skipped confirmations."""
+
+    async def test_posted_verbose_on_shows_marked_as_posted(
+        self, mock_telegram_service
+    ):
+        """Test verbose=True shows 'Marked as posted by' message."""
+        queue_id = str(uuid4())
+        mock_queue_item = Mock()
+        mock_queue_item.media_item_id = uuid4()
+        mock_queue_item.created_at = datetime.utcnow()
+        mock_queue_item.scheduled_for = datetime.utcnow()
+        mock_telegram_service.queue_repo.get_by_id.return_value = mock_queue_item
+
+        mock_media = Mock()
+        mock_media.file_name = "test.jpg"
+        mock_telegram_service.media_repo.get_by_id.return_value = mock_media
+
+        # Verbose ON
+        mock_settings = Mock()
+        mock_settings.show_verbose_notifications = True
+        mock_telegram_service.settings_service.get_settings.return_value = mock_settings
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "poster"
+        mock_user.telegram_first_name = "Test"
+
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100123, message_id=1)
+
+        await mock_telegram_service._handle_posted(queue_id, mock_user, mock_query)
+
+        caption = (
+            mock_query.edit_message_caption.call_args.kwargs.get("caption")
+            or mock_query.edit_message_caption.call_args.args[0]
+        )
+        assert "Marked as posted" in caption
+        assert "@poster" in caption
+
+    async def test_posted_verbose_off_shows_posted_by(self, mock_telegram_service):
+        """Test verbose=False shows shorter 'Posted by' message."""
+        queue_id = str(uuid4())
+        mock_queue_item = Mock()
+        mock_queue_item.media_item_id = uuid4()
+        mock_queue_item.created_at = datetime.utcnow()
+        mock_queue_item.scheduled_for = datetime.utcnow()
+        mock_telegram_service.queue_repo.get_by_id.return_value = mock_queue_item
+
+        mock_media = Mock()
+        mock_media.file_name = "test.jpg"
+        mock_telegram_service.media_repo.get_by_id.return_value = mock_media
+
+        # Verbose OFF
+        mock_settings = Mock()
+        mock_settings.show_verbose_notifications = False
+        mock_telegram_service.settings_service.get_settings.return_value = mock_settings
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "poster"
+        mock_user.telegram_first_name = "Test"
+
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100123, message_id=1)
+
+        await mock_telegram_service._handle_posted(queue_id, mock_user, mock_query)
+
+        caption = (
+            mock_query.edit_message_caption.call_args.kwargs.get("caption")
+            or mock_query.edit_message_caption.call_args.args[0]
+        )
+        assert "Marked as posted" not in caption
+        assert "Posted by @poster" in caption
+
+    async def test_skipped_always_shows_user(self, mock_telegram_service):
+        """Test skipped always shows user regardless of verbose."""
+        queue_id = str(uuid4())
+        mock_queue_item = Mock()
+        mock_queue_item.media_item_id = uuid4()
+        mock_queue_item.created_at = datetime.utcnow()
+        mock_queue_item.scheduled_for = datetime.utcnow()
+        mock_telegram_service.queue_repo.get_by_id.return_value = mock_queue_item
+
+        mock_media = Mock()
+        mock_media.file_name = "test.jpg"
+        mock_telegram_service.media_repo.get_by_id.return_value = mock_media
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "skipper"
+        mock_user.telegram_first_name = "Test"
+
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100123, message_id=1)
+
+        await mock_telegram_service._handle_skipped(queue_id, mock_user, mock_query)
+
+        caption = (
+            mock_query.edit_message_caption.call_args.kwargs.get("caption")
+            or mock_query.edit_message_caption.call_args.args[0]
+        )
+        assert "Skipped by @skipper" in caption
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestVerboseRejected:
+    """Tests for verbose toggle in rejected confirmation."""
+
+    async def test_rejected_verbose_on_shows_full_detail(self, mock_telegram_service):
+        """Test verbose=True shows full rejection message with file info."""
+        queue_id = str(uuid4())
+        mock_queue_item = Mock()
+        mock_queue_item.media_item_id = uuid4()
+        mock_queue_item.created_at = datetime.utcnow()
+        mock_queue_item.scheduled_for = datetime.utcnow()
+        mock_telegram_service.queue_repo.get_by_id.return_value = mock_queue_item
+
+        mock_media = Mock()
+        mock_media.file_name = "rejected.jpg"
+        mock_telegram_service.media_repo.get_by_id.return_value = mock_media
+
+        # Verbose ON
+        mock_settings = Mock()
+        mock_settings.show_verbose_notifications = True
+        mock_telegram_service.settings_service.get_settings.return_value = mock_settings
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "rejecter"
+        mock_user.telegram_first_name = "Test"
+
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100123, message_id=1)
+
+        await mock_telegram_service._handle_rejected(queue_id, mock_user, mock_query)
+
+        caption = (
+            mock_query.edit_message_caption.call_args.kwargs.get("caption")
+            or mock_query.edit_message_caption.call_args.args[0]
+        )
+        assert "Permanently Rejected" in caption
+        assert "rejected.jpg" in caption
+        assert "never be queued again" in caption
+
+    async def test_rejected_verbose_off_shows_minimal(self, mock_telegram_service):
+        """Test verbose=False shows minimal rejection message."""
+        queue_id = str(uuid4())
+        mock_queue_item = Mock()
+        mock_queue_item.media_item_id = uuid4()
+        mock_queue_item.created_at = datetime.utcnow()
+        mock_queue_item.scheduled_for = datetime.utcnow()
+        mock_telegram_service.queue_repo.get_by_id.return_value = mock_queue_item
+
+        mock_media = Mock()
+        mock_media.file_name = "rejected.jpg"
+        mock_telegram_service.media_repo.get_by_id.return_value = mock_media
+
+        # Verbose OFF
+        mock_settings = Mock()
+        mock_settings.show_verbose_notifications = False
+        mock_telegram_service.settings_service.get_settings.return_value = mock_settings
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "rejecter"
+        mock_user.telegram_first_name = "Test"
+
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100123, message_id=1)
+
+        await mock_telegram_service._handle_rejected(queue_id, mock_user, mock_query)
+
+        caption = (
+            mock_query.edit_message_caption.call_args.kwargs.get("caption")
+            or mock_query.edit_message_caption.call_args.args[0]
+        )
+        assert "Rejected by @rejecter" in caption
+        assert "never be queued again" not in caption
+
+
+@pytest.mark.unit
+class TestBuildSettingsKeyboard:
+    """Tests for _build_settings_message_and_keyboard helper."""
+
+    def test_returns_message_and_markup(self, mock_telegram_service):
+        """Test helper returns (message, InlineKeyboardMarkup) tuple."""
+        mock_telegram_service.settings_service.get_settings_display.return_value = {
+            "dry_run_mode": False,
+            "enable_instagram_api": True,
+            "is_paused": False,
+            "posts_per_day": 3,
+            "posting_hours_start": 9,
+            "posting_hours_end": 21,
+            "show_verbose_notifications": True,
+        }
+        mock_telegram_service.ig_account_service.get_accounts_for_display.return_value = {
+            "active_account_id": "some-id",
+            "active_account_name": "Test Account",
+        }
+
+        message, markup = mock_telegram_service._build_settings_message_and_keyboard(
+            -100123
+        )
+
+        assert "Bot Settings" in message
+        assert markup is not None
+
+    def test_verbose_toggle_button_shows_state(self, mock_telegram_service):
+        """Test that verbose button shows correct ON/OFF state."""
+
+        mock_telegram_service.settings_service.get_settings_display.return_value = {
+            "dry_run_mode": False,
+            "enable_instagram_api": False,
+            "is_paused": False,
+            "posts_per_day": 3,
+            "posting_hours_start": 9,
+            "posting_hours_end": 21,
+            "show_verbose_notifications": False,
+        }
+        mock_telegram_service.ig_account_service.get_accounts_for_display.return_value = {
+            "active_account_id": None,
+            "active_account_name": "Not selected",
+        }
+
+        _, markup = mock_telegram_service._build_settings_message_and_keyboard(-100123)
+
+        # Find verbose button in keyboard
+        all_buttons = [btn for row in markup.inline_keyboard for btn in row]
+        verbose_buttons = [b for b in all_buttons if "Verbose" in b.text]
+        assert len(verbose_buttons) == 1
+        assert "OFF" in verbose_buttons[0].text
+
+
+@pytest.mark.unit
+class TestCompleteQueueAction:
+    """Tests for _complete_queue_action shared helper."""
+
+    @pytest.mark.asyncio
+    async def test_posted_creates_lock_and_increments(self, mock_telegram_service):
+        """Test posted action creates lock and increments counters."""
+        queue_id = str(uuid4())
+        media_id = uuid4()
+
+        mock_queue_item = Mock()
+        mock_queue_item.media_item_id = media_id
+        mock_queue_item.created_at = datetime.utcnow()
+        mock_queue_item.scheduled_for = datetime.utcnow()
+        mock_telegram_service.queue_repo.get_by_id.return_value = mock_queue_item
+        mock_telegram_service.media_repo.get_by_id.return_value = Mock(
+            file_name="test.jpg"
+        )
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "tester"
+
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100123, message_id=1)
+
+        await mock_telegram_service._complete_queue_action(
+            queue_id,
+            mock_user,
+            mock_query,
+            status="posted",
+            success=True,
+            caption="✅ Test",
+            callback_name="posted",
+        )
+
+        mock_telegram_service.media_repo.increment_times_posted.assert_called_once()
+        mock_telegram_service.lock_service.create_lock.assert_called_once()
+        mock_telegram_service.user_repo.increment_posts.assert_called_once()
+        mock_telegram_service.queue_repo.delete.assert_called_once_with(queue_id)
+
+    @pytest.mark.asyncio
+    async def test_skipped_does_not_create_lock(self, mock_telegram_service):
+        """Test skipped action does NOT create lock or increment counters."""
+        queue_id = str(uuid4())
+        media_id = uuid4()
+
+        mock_queue_item = Mock()
+        mock_queue_item.media_item_id = media_id
+        mock_queue_item.created_at = datetime.utcnow()
+        mock_queue_item.scheduled_for = datetime.utcnow()
+        mock_telegram_service.queue_repo.get_by_id.return_value = mock_queue_item
+        mock_telegram_service.media_repo.get_by_id.return_value = Mock(
+            file_name="test.jpg"
+        )
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "tester"
+
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100123, message_id=1)
+
+        await mock_telegram_service._complete_queue_action(
+            queue_id,
+            mock_user,
+            mock_query,
+            status="skipped",
+            success=False,
+            caption="⏭️ Test",
+            callback_name="skip",
+        )
+
+        mock_telegram_service.media_repo.increment_times_posted.assert_not_called()
+        mock_telegram_service.lock_service.create_lock.assert_not_called()
+        mock_telegram_service.user_repo.increment_posts.assert_not_called()
+        mock_telegram_service.queue_repo.delete.assert_called_once_with(queue_id)
+
+    @pytest.mark.asyncio
+    async def test_queue_item_not_found(self, mock_telegram_service):
+        """Test _complete_queue_action handles missing queue item."""
+        mock_telegram_service.queue_repo.get_by_id.return_value = None
+
+        mock_query = AsyncMock()
+
+        await mock_telegram_service._complete_queue_action(
+            "nonexistent",
+            Mock(),
+            mock_query,
+            status="posted",
+            success=True,
+            caption="test",
+            callback_name="posted",
+        )
+
+        mock_query.edit_message_caption.assert_called_once()
+        assert "not found" in str(mock_query.edit_message_caption.call_args)

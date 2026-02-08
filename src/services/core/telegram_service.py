@@ -21,6 +21,7 @@ from src.services.core.settings_service import SettingsService
 from src.services.core.instagram_account_service import InstagramAccountService
 from src.config.settings import settings
 from src.utils.logger import logger
+from src import __version__
 from datetime import datetime, timedelta
 import asyncio
 import re
@@ -152,9 +153,9 @@ class TelegramService(BaseService):
             logger.error(f"Media item not found: {queue_item.media_item_id}")
             return False
 
-        # Get verbose setting and chat settings
+        # Get chat settings and verbose preference
         chat_settings = self.settings_service.get_settings(self.channel_id)
-        verbose = self._is_verbose(self.channel_id)
+        verbose = self._is_verbose(self.channel_id, chat_settings=chat_settings)
 
         # Get active Instagram account for display
         active_account = self.ig_account_service.get_active_account(self.channel_id)
@@ -278,9 +279,20 @@ class TelegramService(BaseService):
                 active_account=active_account,
             )
         else:
-            return self._build_simple_caption(media_item, force_sent=force_sent)
+            return self._build_simple_caption(
+                media_item,
+                force_sent=force_sent,
+                verbose=verbose,
+                active_account=active_account,
+            )
 
-    def _build_simple_caption(self, media_item, force_sent: bool = False) -> str:
+    def _build_simple_caption(
+        self,
+        media_item,
+        force_sent: bool = False,
+        verbose: bool = True,
+        active_account=None,
+    ) -> str:
         """Build simple caption (original format)."""
         caption_parts = []
 
@@ -290,6 +302,10 @@ class TelegramService(BaseService):
 
         if media_item.title:
             caption_parts.append(f"📸 {media_item.title}")
+
+        # Account indicator
+        if active_account:
+            caption_parts.append(f"📸 Account: {active_account.display_name}")
 
         if media_item.caption:
             caption_parts.append(media_item.caption)
@@ -301,8 +317,9 @@ class TelegramService(BaseService):
             tags_str = " ".join([f"#{tag}" for tag in media_item.tags])
             caption_parts.append(tags_str)
 
-        caption_parts.append(f"\n📝 File: {media_item.file_name}")
-        caption_parts.append(f"🆔 ID: {str(media_item.id)[:8]}")
+        if verbose:
+            caption_parts.append(f"\n📝 File: {media_item.file_name}")
+            caption_parts.append(f"🆔 ID: {str(media_item.id)[:8]}")
 
         return "\n\n".join(caption_parts)
 
@@ -705,6 +722,81 @@ class TelegramService(BaseService):
             telegram_message_id=update.message.message_id,
         )
 
+    def _build_settings_message_and_keyboard(self, chat_id: int):
+        """Build the settings message text and inline keyboard.
+
+        Returns (message, reply_markup) tuple. Used by _handle_settings,
+        _refresh_settings_message, and _send_settings_message_by_chat_id.
+        """
+        settings_data = self.settings_service.get_settings_display(chat_id)
+        account_data = self.ig_account_service.get_accounts_for_display(chat_id)
+
+        message = (
+            "⚙️ *Bot Settings*\n\n"
+            "_Regenerate: Clears queue, creates new schedule_\n"
+            "_+7 Days: Extends existing queue_"
+        )
+
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    "✅ Dry Run" if settings_data["dry_run_mode"] else "Dry Run",
+                    callback_data="settings_toggle:dry_run_mode",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    "✅ Instagram API"
+                    if settings_data["enable_instagram_api"]
+                    else "Instagram API",
+                    callback_data="settings_toggle:enable_instagram_api",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    "⏸️ Paused" if settings_data["is_paused"] else "▶️ Active",
+                    callback_data="settings_toggle:is_paused",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    f"📸 Default: {account_data['active_account_name']}"
+                    if account_data["active_account_id"]
+                    else "📸 Set Default Account",
+                    callback_data="settings_accounts:select",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    f"📊 Posts/Day: {settings_data['posts_per_day']}",
+                    callback_data="settings_edit:posts_per_day",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    f"🕐 Hours: {settings_data['posting_hours_start']}:00-{settings_data['posting_hours_end']}:00 UTC",
+                    callback_data="settings_edit:hours",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    f"📝 Verbose: {'ON' if settings_data['show_verbose_notifications'] else 'OFF'}",
+                    callback_data="settings_toggle:show_verbose_notifications",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    "🔄 Regenerate", callback_data="schedule_action:regenerate"
+                ),
+                InlineKeyboardButton(
+                    "📅 +7 Days", callback_data="schedule_action:extend"
+                ),
+            ],
+            [InlineKeyboardButton("❌ Close", callback_data="settings_close")],
+        ]
+
+        return message, InlineKeyboardMarkup(keyboard)
+
     async def _handle_settings(self, update, context):
         """Handle /settings command - show settings menu with toggle buttons."""
         user = self._get_or_create_user(update.effective_user)
@@ -718,87 +810,7 @@ class TelegramService(BaseService):
             telegram_message_id=update.message.message_id,
         )
 
-        settings_data = self.settings_service.get_settings_display(chat_id)
-        account_data = self.ig_account_service.get_accounts_for_display(chat_id)
-
-        # Build message with explanation
-        message = (
-            "⚙️ *Bot Settings*\n\n"
-            "_Regenerate: Clears queue, creates new schedule_\n"
-            "_+7 Days: Extends existing queue_"
-        )
-
-        # Build inline keyboard with toggles
-        keyboard = [
-            # Row 1: Dry Run toggle
-            [
-                InlineKeyboardButton(
-                    "✅ Dry Run" if settings_data["dry_run_mode"] else "Dry Run",
-                    callback_data="settings_toggle:dry_run_mode",
-                ),
-            ],
-            # Row 2: Instagram API toggle
-            [
-                InlineKeyboardButton(
-                    "✅ Instagram API"
-                    if settings_data["enable_instagram_api"]
-                    else "Instagram API",
-                    callback_data="settings_toggle:enable_instagram_api",
-                ),
-            ],
-            # Row 3: Pause toggle
-            [
-                InlineKeyboardButton(
-                    "⏸️ Paused" if settings_data["is_paused"] else "▶️ Active",
-                    callback_data="settings_toggle:is_paused",
-                ),
-            ],
-            # Row 4: Instagram Account config
-            [
-                InlineKeyboardButton(
-                    f"📸 Default: {account_data['active_account_name']}"
-                    if account_data["active_account_id"]
-                    else "📸 Set Default Account",
-                    callback_data="settings_accounts:select",
-                ),
-            ],
-            # Row 5: Posts per day (editable)
-            [
-                InlineKeyboardButton(
-                    f"📊 Posts/Day: {settings_data['posts_per_day']}",
-                    callback_data="settings_edit:posts_per_day",
-                ),
-            ],
-            # Row 6: Posting hours (editable)
-            [
-                InlineKeyboardButton(
-                    f"🕐 Hours: {settings_data['posting_hours_start']}:00-{settings_data['posting_hours_end']}:00 UTC",
-                    callback_data="settings_edit:hours",
-                ),
-            ],
-            # Row 7: Verbose notifications toggle
-            [
-                InlineKeyboardButton(
-                    f"📝 Verbose: {'ON' if settings_data['show_verbose_notifications'] else 'OFF'}",
-                    callback_data="settings_toggle:show_verbose_notifications",
-                ),
-            ],
-            # Row 8: Schedule management
-            [
-                InlineKeyboardButton(
-                    "🔄 Regenerate", callback_data="schedule_action:regenerate"
-                ),
-                InlineKeyboardButton(
-                    "📅 +7 Days", callback_data="schedule_action:extend"
-                ),
-            ],
-            # Row 9: Close button
-            [
-                InlineKeyboardButton("❌ Close", callback_data="settings_close"),
-            ],
-        ]
-
-        reply_markup = InlineKeyboardMarkup(keyboard)
+        message, reply_markup = self._build_settings_message_and_keyboard(chat_id)
 
         await update.message.reply_text(
             message, parse_mode="Markdown", reply_markup=reply_markup
@@ -831,79 +843,12 @@ class TelegramService(BaseService):
     async def _refresh_settings_message(self, query, show_answer: bool = True):
         """Refresh the settings message with current values."""
         chat_id = query.message.chat_id
-        settings_data = self.settings_service.get_settings_display(chat_id)
-        account_data = self.ig_account_service.get_accounts_for_display(chat_id)
-
-        # Rebuild message with explanation
-        message = (
-            "⚙️ *Bot Settings*\n\n"
-            "_Regenerate: Clears queue, creates new schedule_\n"
-            "_+7 Days: Extends existing queue_"
-        )
-
-        # Rebuild keyboard with updated values
-        keyboard = [
-            [
-                InlineKeyboardButton(
-                    "✅ Dry Run" if settings_data["dry_run_mode"] else "Dry Run",
-                    callback_data="settings_toggle:dry_run_mode",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "✅ Instagram API"
-                    if settings_data["enable_instagram_api"]
-                    else "Instagram API",
-                    callback_data="settings_toggle:enable_instagram_api",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "⏸️ Paused" if settings_data["is_paused"] else "▶️ Active",
-                    callback_data="settings_toggle:is_paused",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    f"📸 Default: {account_data['active_account_name']}"
-                    if account_data["active_account_id"]
-                    else "📸 Set Default Account",
-                    callback_data="settings_accounts:select",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    f"📊 Posts/Day: {settings_data['posts_per_day']}",
-                    callback_data="settings_edit:posts_per_day",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    f"🕐 Hours: {settings_data['posting_hours_start']}:00-{settings_data['posting_hours_end']}:00 UTC",
-                    callback_data="settings_edit:hours",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    f"📝 Verbose: {'ON' if settings_data['show_verbose_notifications'] else 'OFF'}",
-                    callback_data="settings_toggle:show_verbose_notifications",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "🔄 Regenerate", callback_data="schedule_action:regenerate"
-                ),
-                InlineKeyboardButton(
-                    "📅 +7 Days", callback_data="schedule_action:extend"
-                ),
-            ],
-            [InlineKeyboardButton("❌ Close", callback_data="settings_close")],
-        ]
+        message, reply_markup = self._build_settings_message_and_keyboard(chat_id)
 
         await query.edit_message_text(
             text=message,
             parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(keyboard),
+            reply_markup=reply_markup,
         )
         if show_answer:
             await query.answer("Setting updated!")
@@ -1142,78 +1087,13 @@ class TelegramService(BaseService):
 
     async def _send_settings_message_by_chat_id(self, chat_id: int, context):
         """Send a fresh settings message to a chat (used after editing)."""
-        settings_data = self.settings_service.get_settings_display(chat_id)
-        account_data = self.ig_account_service.get_accounts_for_display(chat_id)
-
-        message = (
-            "⚙️ *Bot Settings*\n\n"
-            "_Regenerate: Clears queue, creates new schedule_\n"
-            "_+7 Days: Extends existing queue_"
-        )
-
-        keyboard = [
-            [
-                InlineKeyboardButton(
-                    "✅ Dry Run" if settings_data["dry_run_mode"] else "Dry Run",
-                    callback_data="settings_toggle:dry_run_mode",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "✅ Instagram API"
-                    if settings_data["enable_instagram_api"]
-                    else "Instagram API",
-                    callback_data="settings_toggle:enable_instagram_api",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "⏸️ Paused" if settings_data["is_paused"] else "▶️ Active",
-                    callback_data="settings_toggle:is_paused",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    f"📸 Default: {account_data['active_account_name']}"
-                    if account_data["active_account_id"]
-                    else "📸 Set Default Account",
-                    callback_data="settings_accounts:select",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    f"📊 Posts/Day: {settings_data['posts_per_day']}",
-                    callback_data="settings_edit:posts_per_day",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    f"🕐 Hours: {settings_data['posting_hours_start']}:00-{settings_data['posting_hours_end']}:00 UTC",
-                    callback_data="settings_edit:hours",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    f"📝 Verbose: {'ON' if settings_data['show_verbose_notifications'] else 'OFF'}",
-                    callback_data="settings_toggle:show_verbose_notifications",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "🔄 Regenerate", callback_data="schedule_action:regenerate"
-                ),
-                InlineKeyboardButton(
-                    "📅 +7 Days", callback_data="schedule_action:extend"
-                ),
-            ],
-            [InlineKeyboardButton("❌ Close", callback_data="settings_close")],
-        ]
+        message, reply_markup = self._build_settings_message_and_keyboard(chat_id)
 
         await context.bot.send_message(
             chat_id=chat_id,
             text=message,
             parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(keyboard),
+            reply_markup=reply_markup,
         )
 
     async def _handle_schedule_action(self, action: str, user, query):
@@ -2353,15 +2233,28 @@ class TelegramService(BaseService):
             # Clean up open transactions to prevent "idle in transaction"
             self.cleanup_transactions()
 
-    async def _handle_posted(self, queue_id: str, user, query):
-        """Handle 'Posted' button click."""
+    async def _complete_queue_action(
+        self,
+        queue_id: str,
+        user,
+        query,
+        status: str,
+        success: bool,
+        caption: str,
+        callback_name: str,
+    ):
+        """Shared handler for posted/skipped actions.
+
+        Handles the common workflow: validate queue item, create history,
+        delete from queue, update caption, and log interactions.
+        For 'posted' status, also increments post count, creates lock, and updates user stats.
+        """
         queue_item = self.queue_repo.get_by_id(queue_id)
 
         if not queue_item:
             await query.edit_message_caption(caption="⚠️ Queue item not found")
             return
 
-        # Get media item
         media_item = self.media_repo.get_by_id(str(queue_item.media_item_id))
 
         # Create history record
@@ -2372,96 +2265,28 @@ class TelegramService(BaseService):
             queue_deleted_at=datetime.utcnow(),
             scheduled_for=queue_item.scheduled_for,
             posted_at=datetime.utcnow(),
-            status="posted",
-            success=True,
+            status=status,
+            success=success,
             posted_by_user_id=str(user.id),
             posted_by_telegram_username=user.telegram_username,
         )
 
-        # Update media item
-        self.media_repo.increment_times_posted(str(queue_item.media_item_id))
-
-        # Create 30-day lock to prevent reposting
-        self.lock_service.create_lock(str(queue_item.media_item_id))
-
-        # Delete from queue
-        self.queue_repo.delete(queue_id)
-
-        # Update user stats
-        self.user_repo.increment_posts(str(user.id))
-
-        # Update message (respect verbose setting)
-        verbose = self._is_verbose(query.message.chat_id)
-        if verbose:
-            new_caption = f"✅ Marked as posted by {self._get_display_name(user)}"
-        else:
-            new_caption = f"✅ Posted by {self._get_display_name(user)}"
-        await query.edit_message_caption(caption=new_caption)
-
-        # Log interaction
-        self.interaction_service.log_callback(
-            user_id=str(user.id),
-            callback_name="posted",
-            context={
-                "queue_item_id": queue_id,
-                "media_id": str(queue_item.media_item_id),
-                "media_filename": media_item.file_name if media_item else None,
-            },
-            telegram_chat_id=query.message.chat_id,
-            telegram_message_id=query.message.message_id,
-        )
-
-        # Log outgoing bot response
-        self.interaction_service.log_bot_response(
-            response_type="caption_update",
-            context={
-                "caption": new_caption,
-                "action": "posted",
-                "media_filename": media_item.file_name if media_item else None,
-                "edited": True,
-            },
-            telegram_chat_id=query.message.chat_id,
-            telegram_message_id=query.message.message_id,
-        )
-
-        logger.info(f"Post marked as completed by {self._get_display_name(user)}")
-
-    async def _handle_skipped(self, queue_id: str, user, query):
-        """Handle 'Skip' button click."""
-        queue_item = self.queue_repo.get_by_id(queue_id)
-
-        if not queue_item:
-            await query.edit_message_caption(caption="⚠️ Queue item not found")
-            return
-
-        # Get media item for context
-        media_item = self.media_repo.get_by_id(str(queue_item.media_item_id))
-
-        # Create history record
-        self.history_repo.create(
-            media_item_id=str(queue_item.media_item_id),
-            queue_item_id=queue_id,
-            queue_created_at=queue_item.created_at,
-            queue_deleted_at=datetime.utcnow(),
-            scheduled_for=queue_item.scheduled_for,
-            posted_at=datetime.utcnow(),
-            status="skipped",
-            success=False,
-            posted_by_user_id=str(user.id),
-            posted_by_telegram_username=user.telegram_username,
-        )
+        # Posted-specific: track reposting and user stats
+        if status == "posted":
+            self.media_repo.increment_times_posted(str(queue_item.media_item_id))
+            self.lock_service.create_lock(str(queue_item.media_item_id))
+            self.user_repo.increment_posts(str(user.id))
 
         # Delete from queue
         self.queue_repo.delete(queue_id)
 
         # Update message
-        new_caption = f"⏭️ Skipped by {self._get_display_name(user)}"
-        await query.edit_message_caption(caption=new_caption)
+        await query.edit_message_caption(caption=caption)
 
         # Log interaction
         self.interaction_service.log_callback(
             user_id=str(user.id),
-            callback_name="skip",
+            callback_name=callback_name,
             context={
                 "queue_item_id": queue_id,
                 "media_id": str(queue_item.media_item_id),
@@ -2475,8 +2300,8 @@ class TelegramService(BaseService):
         self.interaction_service.log_bot_response(
             response_type="caption_update",
             context={
-                "caption": new_caption,
-                "action": "skipped",
+                "caption": caption,
+                "action": callback_name,
                 "media_filename": media_item.file_name if media_item else None,
                 "edited": True,
             },
@@ -2484,7 +2309,41 @@ class TelegramService(BaseService):
             telegram_message_id=query.message.message_id,
         )
 
-        logger.info(f"Post skipped by {self._get_display_name(user)}")
+        logger.info(f"Post {status} by {self._get_display_name(user)}")
+
+    async def _handle_posted(self, queue_id: str, user, query):
+        """Handle 'Posted' button click."""
+        verbose = self._is_verbose(query.message.chat_id)
+        display_name = self._get_display_name(user)
+        if verbose:
+            caption = f"✅ Marked as posted by {display_name}"
+        else:
+            caption = f"✅ Posted by {display_name}"
+
+        await self._complete_queue_action(
+            queue_id,
+            user,
+            query,
+            status="posted",
+            success=True,
+            caption=caption,
+            callback_name="posted",
+        )
+
+    async def _handle_skipped(self, queue_id: str, user, query):
+        """Handle 'Skip' button click."""
+        display_name = self._get_display_name(user)
+        caption = f"⏭️ Skipped by {display_name}"
+
+        await self._complete_queue_action(
+            queue_id,
+            user,
+            query,
+            status="skipped",
+            success=False,
+            caption=caption,
+            callback_name="skip",
+        )
 
     async def _handle_autopost(self, queue_id: str, user, query):
         """
@@ -2620,8 +2479,8 @@ class TelegramService(BaseService):
                 else:
                     account_display = "Unknown account"
 
-                # Check verbose setting
-                verbose = self._is_verbose(chat_id)
+                # Check verbose setting (reuse already-loaded chat_settings)
+                verbose = self._is_verbose(chat_id, chat_settings=chat_settings)
 
                 if verbose:
                     # Apply the same transformation we'd use for Instagram
@@ -2743,8 +2602,8 @@ class TelegramService(BaseService):
             # Update user stats
             self.user_repo.increment_posts(str(user.id))
 
-            # Success message - check verbose setting (chat_settings already loaded at start)
-            verbose = self._is_verbose(chat_id)
+            # Success message (reuse already-loaded chat_settings)
+            verbose = self._is_verbose(chat_id, chat_settings=chat_settings)
 
             # Fetch account username from API (cached)
             account_info = await instagram_service.get_account_info(
@@ -3526,9 +3385,14 @@ class TelegramService(BaseService):
 
         return user
 
-    def _is_verbose(self, chat_id) -> bool:
-        """Check if verbose notifications are enabled for a chat."""
-        chat_settings = self.settings_service.get_settings(chat_id)
+    def _is_verbose(self, chat_id, chat_settings=None) -> bool:
+        """Check if verbose notifications are enabled for a chat.
+
+        Accepts optional pre-loaded chat_settings to avoid redundant DB queries
+        when the caller already has settings loaded.
+        """
+        if chat_settings is None:
+            chat_settings = self.settings_service.get_settings(chat_id)
         if chat_settings.show_verbose_notifications is not None:
             return chat_settings.show_verbose_notifications
         return True
@@ -3574,7 +3438,7 @@ class TelegramService(BaseService):
                 f"├─ Posts/day: {settings.POSTS_PER_DAY}\n"
                 f"├─ Window: {settings.POSTING_HOURS_START:02d}:00-{settings.POSTING_HOURS_END:02d}:00 UTC\n"
                 f"└─ Media indexed: {media_count} items\n\n"
-                f"🤖 v1.0.1"
+                f"🤖 v{__version__}"
             )
 
             # Send to admin
