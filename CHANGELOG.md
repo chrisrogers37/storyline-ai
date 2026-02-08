@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **TelegramService Refactor PR 1: Extract Command Handlers** - Architecture improvement
+  - Extracted 14 `/command` handlers from `TelegramService` (3,504 lines) into new `TelegramCommandHandlers` class
+  - New file: `src/services/core/telegram_commands.py` (~715 lines)
+  - `TelegramService` reduced by ~655 lines (from 3,504 to 2,849)
+  - Uses composition pattern: handler class receives service reference via `__init__(self, service)`
+  - Command registration moved to a clean `command_map` dict in `initialize()`
+  - Tests split into `test_telegram_commands.py` alongside the new module
+  - All 81 tests pass (65 passed, 16 skipped) - zero regressions
+  - Part 1 of 3 in the TelegramService decomposition plan
+
 ### Fixed
 - **Auto-Post Success Missing User in Verbose OFF** - Bug fix
   - **Bug**: With verbose notifications OFF, auto-post success showed `✅ Posted to @account` without identifying who triggered the post
