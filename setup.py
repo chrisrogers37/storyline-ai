@@ -1,8 +1,10 @@
 from setuptools import setup, find_packages
 
+from src import __version__
+
 setup(
     name="storyline-ai",
-    version="1.4.0",
+    version=__version__,
     description="Instagram Story Automation System with Telegram Integration",
     author="Your Name",
     packages=find_packages(),
