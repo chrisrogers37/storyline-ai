@@ -57,27 +57,41 @@ tests/
 │   ├── test_user_commands.py
 │   └── test_health_commands.py
 ├── src/
-│   ├── repositories/        # Repository layer tests
+│   ├── repositories/        # Repository layer tests (8 files)
 │   │   ├── test_user_repository.py
 │   │   ├── test_media_repository.py
 │   │   ├── test_queue_repository.py
 │   │   ├── test_history_repository.py
 │   │   ├── test_lock_repository.py
-│   │   └── test_service_run_repository.py
-│   ├── services/            # Service layer tests
+│   │   ├── test_service_run_repository.py
+│   │   ├── test_category_mix_repository.py
+│   │   └── test_interaction_repository.py
+│   ├── services/            # Service layer tests (17 files)
 │   │   ├── test_base_service.py
 │   │   ├── test_media_ingestion.py
 │   │   ├── test_scheduler.py
 │   │   ├── test_media_lock.py
 │   │   ├── test_posting.py
-│   │   ├── test_telegram_service.py
-│   │   └── test_health_check.py
-│   └── utils/               # Utility tests
+│   │   ├── test_telegram_service.py       # Core service tests
+│   │   ├── test_telegram_commands.py      # Command handler tests
+│   │   ├── test_telegram_callbacks.py     # Callback handler tests
+│   │   ├── test_telegram_settings.py      # Settings UI tests
+│   │   ├── test_telegram_accounts.py      # Account handler tests
+│   │   ├── test_health_check.py
+│   │   ├── test_settings_service.py       # Per-chat settings
+│   │   ├── test_instagram_account_service.py  # Multi-account
+│   │   ├── test_interaction_service.py    # Bot interaction tracking
+│   │   ├── test_instagram_api.py          # Instagram Graph API
+│   │   ├── test_cloud_storage.py          # Cloudinary integration
+│   │   └── test_token_refresh.py          # Token lifecycle
+│   └── utils/               # Utility tests (5 files)
 │       ├── test_file_hash.py
 │       ├── test_logger.py
 │       ├── test_validators.py
-│       └── test_image_processing.py
-└── integration/             # Integration tests (future)
+│       ├── test_image_processing.py
+│       └── test_encryption.py             # Fernet encryption
+└── integration/             # Integration tests
+    └── test_instagram_posting.py          # End-to-end posting
 ```
 
 ## Test Markers

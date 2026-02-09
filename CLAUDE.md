@@ -206,6 +206,12 @@ storyline-cli category-mix-history --limit 10
 storyline-cli instagram-auth         # Authenticate with Instagram
 storyline-cli instagram-status       # Check token status
 
+# Multi-Account Management
+storyline-cli add-instagram-account  # Register new Instagram account
+storyline-cli list-instagram-accounts # Show all registered accounts
+storyline-cli deactivate-instagram-account <id>  # Soft-delete an account
+storyline-cli reactivate-instagram-account <id>  # Restore a deactivated account
+
 # Run main application (scheduler + Telegram bot)
 python -m src.main
 
@@ -229,10 +235,21 @@ storyline-cli reset-queue        # Reset queue (clear all pending posts)
 | **MediaIngestionService** | Scan filesystem, index media | `scan_directory()`, `index_file()`, `detect_duplicates()` |
 | **SchedulerService** | Create posting schedule | `create_schedule()`, `select_media()`, `add_to_queue()` |
 | **PostingService** | Orchestrate posting workflow | `process_pending_posts()`, `post_automated()`, `post_via_telegram()` |
-| **TelegramService** | Telegram bot operations | `send_notification()`, `handle_callback()`, `handle_commands()` |
+| **TelegramService** | Telegram bot coordination | `send_notification()`, `initialize()`, `start_polling()` |
+| **TelegramCommandHandlers** | `/command` handlers | `handle_status()`, `handle_queue()`, `handle_next()` |
+| **TelegramCallbackHandlers** | Button callback handlers | `handle_posted()`, `handle_skipped()`, `handle_rejected()` |
+| **TelegramAutopostHandler** | Auto-posting via API | `handle_autopost()` |
+| **TelegramSettingsHandlers** | Settings UI | `handle_settings()`, `handle_settings_toggle()` |
+| **TelegramAccountHandlers** | Account selection | `handle_account_selection_menu()`, `handle_account_switch()` |
 | **MediaLockService** | TTL lock management | `create_lock()`, `is_locked()`, `cleanup_expired_locks()` |
 | **HealthCheckService** | System health monitoring | `check_all()`, `check_database()`, `check_instagram_api()` |
-| **InteractionService** | Bot interaction tracking | `log_command()`, `log_callback()`, track user interactions |
+| **SettingsService** | Per-chat runtime configuration | `get_settings()`, `toggle_setting()`, `update_schedule_settings()` |
+| **InstagramAccountService** | Multi-account management | `add_account()`, `switch_account()`, `get_active_account()` |
+| **InteractionService** | Bot interaction tracking | `log_command()`, `log_callback()`, `log_bot_response()` |
+
+> **Note**: `InteractionService` intentionally does NOT extend `BaseService` to avoid recursive tracking.
+> The Telegram handler modules (commands, callbacks, etc.) use a composition pattern — they receive
+> a reference to the parent `TelegramService` and are NOT standalone services.
 
 ### Phase 2 Services (When ENABLE_INSTAGRAM_API=true)
 
@@ -269,15 +286,35 @@ storyline-cli reset-queue        # Reset queue (clear all pending posts)
 - `category_post_case_mix` - Type 2 SCD for posting ratio configuration
 - `user_interactions` - Bot interaction tracking for analytics
 
+**Settings & Account Tables** (Phase 2):
+- `chat_settings` - Per-chat runtime configuration (DB-backed, `.env` fallback)
+- `instagram_accounts` - Multi-Instagram account identity management
+
 **Integration Tables** (Phase 2+):
-- `api_tokens` - Encrypted OAuth tokens for Instagram, Shopify, etc.
-- `shopify_products` - Type 2 SCD for product history
-- `media_product_links` - Many-to-many media ↔ products
-- `instagram_post_metrics` - Performance data from Meta API
+- `api_tokens` - Encrypted OAuth tokens (linked to `instagram_accounts` via FK)
+- `shopify_products` - Type 2 SCD for product history (Future)
+- `media_product_links` - Many-to-many media ↔ products (Future)
+- `instagram_post_metrics` - Performance data from Meta API (Future)
 
 **Phase 2 Columns Added**:
 - `media_items`: `cloud_url`, `cloud_public_id`, `cloud_uploaded_at`, `cloud_expires_at`
 - `posting_history`: `instagram_story_id`, `posting_method` ('instagram_api' | 'telegram_manual')
+
+### Settings Architecture (Database + .env Hybrid)
+
+Settings are stored in the `chat_settings` table with `.env` as fallback:
+- **First access**: `SettingsService.get_settings()` bootstraps from `.env` values into the database
+- **Runtime changes**: Made via Telegram `/settings` command, persisted to DB
+- **Survives restarts**: All settings (pause state, dry-run, Instagram API toggle) persist
+- **Per-chat**: Each Telegram chat can have independent settings
+- **Configurable via Telegram**: `dry_run_mode`, `enable_instagram_api`, `is_paused`, `posts_per_day`, `posting_hours_start/end`, `show_verbose_notifications`, `active_instagram_account_id`
+
+### Multi-Account Instagram Architecture
+
+Three tables work together for multi-account support:
+- `instagram_accounts` = **Identity** (what accounts exist? display name, Instagram ID, username)
+- `api_tokens` = **Credentials** (OAuth tokens per account, encrypted via Fernet)
+- `chat_settings.active_instagram_account_id` = **Selection** (which account is active per chat)
 
 ### Critical Design Patterns
 
@@ -347,6 +384,39 @@ storyline-cli reset-queue        # Reset queue (clear all pending posts)
    - Create 30-day TTL lock automatically
    - Increment `times_posted` counter
    - Update `last_posted_at` timestamp
+
+## Telegram Bot Commands Reference
+
+| Command | Description | Handler Module |
+|---------|-------------|----------------|
+| `/start` | Initialize bot, show welcome | `telegram_commands.py` |
+| `/status` | System health and queue status | `telegram_commands.py` |
+| `/help` | Show available commands | `telegram_commands.py` |
+| `/queue` | View pending scheduled posts | `telegram_commands.py` |
+| `/next` | Force-send next scheduled post | `telegram_commands.py` |
+| `/pause` | Pause automatic posting | `telegram_commands.py` |
+| `/resume` | Resume posting | `telegram_commands.py` |
+| `/schedule N` | Create N days of posting schedule | `telegram_commands.py` |
+| `/stats` | Media library statistics | `telegram_commands.py` |
+| `/history N` | Recent post history | `telegram_commands.py` |
+| `/locks` | View permanently rejected items | `telegram_commands.py` |
+| `/reset` | Reset posting queue | `telegram_commands.py` |
+| `/cleanup` | Delete recent bot messages | `telegram_commands.py` |
+| `/settings` | Configure bot settings | `telegram_settings.py` |
+| `/dryrun` | Toggle dry-run mode | `telegram_commands.py` |
+
+### Telegram Callback Actions
+
+| Action | Description | Handler Module |
+|--------|-------------|----------------|
+| `posted:{queue_id}` | Mark as posted to Instagram | `telegram_callbacks.py` |
+| `skip:{queue_id}` | Skip for later | `telegram_callbacks.py` |
+| `reject:{queue_id}` | Initiate permanent rejection | `telegram_callbacks.py` |
+| `confirm_reject:{queue_id}` | Confirm rejection | `telegram_callbacks.py` |
+| `autopost:{queue_id}` | Auto-post via Instagram API | `telegram_autopost.py` |
+| `settings_toggle:{setting}` | Toggle a boolean setting | `telegram_settings.py` |
+| `sa:{queue_id}` | Open account selector | `telegram_accounts.py` |
+| `sap:{queue_id}:{account_id}` | Switch account for post | `telegram_accounts.py` |
 
 ## Feature Flags
 
@@ -609,6 +679,22 @@ INSERT INTO schema_version (version, description)
 VALUES (2, 'Add new column to media_items');
 ```
 
+**Current migration history** (as of 2026-02-09):
+
+| Version | File | Description |
+|---------|------|-------------|
+| - | `setup_database.sql` | Initial schema (all Phase 1 tables) |
+| 001 | `001_add_category_column.sql` | Category column on media_items |
+| 002 | `002_add_category_post_case_mix.sql` | Category ratio configuration (Type 2 SCD) |
+| 003 | `003_add_user_interactions.sql` | Bot interaction tracking |
+| 004 | `004_instagram_api_phase2.sql` | Instagram API columns on media/history |
+| 005 | `005_bot_response_logging.sql` | Bot response logging columns |
+| 006 | `006_chat_settings.sql` | Per-chat runtime settings |
+| 007 | `007_instagram_accounts.sql` | Multi-account identity table |
+| 008 | `008_api_tokens_account_fk.sql` | Token-account linking |
+| 009 | `009_chat_settings_active_account.sql` | Per-chat account selection |
+| 010 | `010_add_verbose_notifications.sql` | Verbose notifications toggle |
+
 ### 5. Pre-Commit Checklist (CRITICAL)
 
 **ALWAYS complete these steps before committing or creating PRs:**
@@ -806,11 +892,22 @@ def get_or_create_user(telegram_user_data: dict) -> User:
 src/
 ├── services/
 │   ├── core/
-│   │   └── example_service.py     # Class: ExampleService
+│   │   ├── telegram_service.py        # Core bot lifecycle + coordination
+│   │   ├── telegram_commands.py       # /command handlers (composition)
+│   │   ├── telegram_callbacks.py      # Button callback handlers
+│   │   ├── telegram_autopost.py       # Auto-posting logic
+│   │   ├── telegram_settings.py       # Settings UI handlers
+│   │   ├── telegram_accounts.py       # Account selection handlers
+│   │   ├── settings_service.py        # Per-chat runtime settings
+│   │   ├── instagram_account_service.py  # Multi-account management
+│   │   ├── interaction_service.py     # Bot interaction tracking
+│   │   └── ...                        # Other core services
 │   ├── integrations/
-│   │   └── instagram_api.py       # Class: InstagramAPIService
+│   │   ├── instagram_api.py           # Class: InstagramAPIService
+│   │   ├── cloud_storage.py           # Class: CloudStorageService
+│   │   └── token_refresh.py           # Class: TokenRefreshService
 │   └── domain/
-│       └── analytics.py           # Class: AnalyticsService
+│       └── (empty - future analytics/AI services)
 ├── repositories/
 │   └── example_repository.py      # Class: ExampleRepository
 ├── models/

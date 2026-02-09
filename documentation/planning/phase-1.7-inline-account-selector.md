@@ -1,10 +1,10 @@
 # Phase 1.7: Inline Account Selector for Posting Workflow
 
-**Status**: Planning (Feature Design)
+**Status**: ✅ COMPLETE (Implemented in v1.5.0)
 **Created**: 2026-01-26
-**Priority**: Medium (UX Enhancement)
+**Priority**: Delivered
 **Dependencies**: Phase 1.5 (Instagram Account Management) - Complete
-**Target Version**: v1.5.0
+**Delivered Version**: v1.5.0
 **Estimated Effort**: 3-5 days
 
 ---

@@ -2,9 +2,9 @@
 
 Welcome to the Storyline AI documentation hub. All project documentation is organized here by purpose.
 
-**Last Updated**: 2026-01-11
-**Current Version**: v1.4.0
-**Current Phase**: Phase 1.6 (Category Scheduling) - ✅ COMPLETE
+**Last Updated**: 2026-02-09
+**Current Version**: v1.5.0+
+**Current Phase**: Phase 2 (Instagram API Automation) - ✅ COMPLETE | Phase 1.8 (Telegram UX) - ✅ COMPLETE
 
 ## 📁 Documentation Structure
 
@@ -24,45 +24,59 @@ documentation/
 
 ## 📋 Planning & Architecture
 
-### Master Implementation Plan
-**[instagram_automation_plan.md](planning/instagram_automation_plan.md)** - ✅ Phases 1-1.6 Complete
-- Complete technical specification
-- All phases (1-5) with detailed requirements
-- Database schema design
-- Service architecture
-- API endpoints
-- UI mockups and workflows
+### Master Roadmap
+**[phases/00_MASTER_ROADMAP.md](planning/phases/00_MASTER_ROADMAP.md)** - ✅ Phases 1-2.5 Complete
+- Vision and long-term architecture
+- Phase overview with status markers
+- Service naming conventions and data model strategy
+- Data flow diagrams (current and future)
+
+### Phase Planning Documents
+
+**[phases/01_settings_and_multitenancy.md](planning/phases/01_settings_and_multitenancy.md)** - ✅ Phases 1-1.5 Complete
+- Database-backed settings management
+- Multi-Instagram account management
+- Full implementation details (models, repos, services, CLI, tests)
+- Future: Cloud Media Storage (Phase 2), Multi-Tenancy (Phase 3)
+
+**[phases/02_shopify_integration.md](planning/phases/02_shopify_integration.md)** - 📋 PLANNED
+**[phases/03_printify_integration.md](planning/phases/03_printify_integration.md)** - 📋 PLANNED
+**[phases/04_media_product_linking.md](planning/phases/04_media_product_linking.md)** - 📋 PLANNED
+**[phases/05_llm_integration.md](planning/phases/05_llm_integration.md)** - 📋 PLANNED
+**[phases/06_order_email_automation.md](planning/phases/06_order_email_automation.md)** - 📋 PLANNED
+**[phases/07_dashboard_ui.md](planning/phases/07_dashboard_ui.md)** - 📋 PLANNED
+
+### Completed Feature Designs
+
+**[telegram-service-refactor-plan.md](planning/telegram-service-refactor-plan.md)** - ✅ COMPLETE
+- Decomposition of 3,500-line TelegramService monolith into 5 handler modules
+- Composition-based architecture, 3-PR migration strategy
+- All PRs merged
+
+**[phase-1.7-inline-account-selector.md](planning/phase-1.7-inline-account-selector.md)** - ✅ COMPLETE (v1.5.0)
+- Inline account selection in posting workflow
+- Account switching without leaving posting context
+
+**[verbose-settings-improvement-plan.md](planning/verbose-settings-improvement-plan.md)** - ✅ COMPLETE
+- Expanded scope of verbose notifications toggle
+- `_is_verbose()` helper method, bug fixes
+
+**[phases/user-interactions-design.md](planning/phases/user-interactions-design.md)** - ✅ COMPLETE
+- User interaction tracking (InteractionService)
+- Command/callback logging, bot response tracking, analytics
 
 ### Test Coverage Report
-**[TEST_COVERAGE.md](planning/TEST_COVERAGE.md)** - ✅ COMPLETE (268 tests)
+**[TEST_COVERAGE.md](guides/TEST_COVERAGE.md)** - ✅ CURRENT (488 tests)
 - Test suite summary by layer
-- Phase 1.6 test additions
+- Phase 1.6 through Phase 2 test additions
 - Coverage gaps and future work
 - Test infrastructure documentation
 
-### Refactoring Plans
+### Other Planning Documents
 
-**[telegram-service-refactor-plan.md](planning/telegram-service-refactor-plan.md)** - 📋 PLANNING
-- Decomposition plan for 3,500-line TelegramService monolith
-- Composition-based architecture with 5 handler modules
-- Callback routing and handler registration strategy
-- Test migration plan and risk assessment
-- 3-PR incremental migration strategy
-
-### Feature Designs
-
-**[phase-1.5-telegram-enhancements.md](planning/phase-1.5-telegram-enhancements.md)** - ✅ COMPLETE (v1.3.0)
-- Telegram UX improvements
-- Bot lifecycle notifications
-- Instagram deep links
-- Enhanced captions
-- 7 new bot commands
-
-**[user-interactions-design.md](planning/user-interactions-design.md)** - 📋 PENDING
-- User interaction tracking system (future)
-- InteractionService architecture
-- Analytics capabilities
-- `/queue` and `/status` command design
+**[01B_telegram_mini_app_secure_input.md](planning/01B_telegram_mini_app_secure_input.md)** - 📋 PLANNED (Future)
+- Telegram Mini App for secure credential input
+- Decision: proceed with message-based approach for now
 
 ---
 
@@ -86,14 +100,22 @@ documentation/
 - Production launch steps
 
 ### Testing Guide
-**[testing.md](guides/testing.md)**
-**[testing-guide.md](guides/testing-guide.md)**
+**[testing-guide.md](guides/testing-guide.md)** (primary)
+**[testing.md](guides/testing.md)** (auto-DB setup details)
 - How test database auto-creation works
 - Running tests (unit, integration, coverage)
-- Writing new tests
+- Writing new tests (488 tests as of 2026-02-09)
 - Test fixtures and patterns
 - CI/CD integration
 - Troubleshooting test failures
+
+### Instagram API Setup
+**[instagram-api-setup.md](guides/instagram-api-setup.md)**
+- Meta Business Suite and developer app setup
+- Instagram Graph API token generation
+- Cloudinary integration
+- Multi-account management via CLI
+- Token bootstrapping and troubleshooting
 
 ### Development Environment Setup
 **[dev-environment-setup.md](guides/dev-environment-setup.md)**
@@ -151,12 +173,8 @@ documentation/
 - All bugs identified during code review and deployment testing
 - Production verified and tested
 
-### Handoffs
-**[HANDOFF-2026-01-05.md](updates/HANDOFF-2026-01-05.md)**
-- Phase 1.5 implementation handoff for v1.2.0
-- Database schema changes documentation
-
 *Note: Updates folder contains dated documents for bug fixes, patches, and significant changes.*
+*Historical handoffs have been moved to `archive/`.*
 
 ---
 
@@ -173,17 +191,14 @@ Coming in Phase 5:
 
 ## 📦 Archive
 
-Completed and historical documents:
+Completed and historical documents (see [archive/ARCHIVE_INDEX.md](archive/ARCHIVE_INDEX.md) for full list):
 
 **[archive/IMPLEMENTATION_COMPLETE.md](archive/IMPLEMENTATION_COMPLETE.md)** - ✅ Phase 1 Complete (v1.0.1)
-- Phase 1 completion checklist and delivered components
-- Deployment verification results
-
-**[archive/upcoming_build_notes.md](archive/upcoming_build_notes.md)** - ✅ Implemented
-- Original feature ideas (all implemented in Phase 1.5)
-
-**[archive/instagram_automation_plan.md](archive/instagram_automation_plan.md)** - 📋 Reference
-- Original planning document (superseded by planning/ versions)
+**[archive/HANDOFF-2026-01-05.md](archive/HANDOFF-2026-01-05.md)** - ✅ v1.2.0 deployment handoff
+**[archive/upcoming_build_notes.md](archive/upcoming_build_notes.md)** - ✅ All features implemented
+**[archive/phase-1.5-telegram-enhancements.md](archive/phase-1.5-telegram-enhancements.md)** - ✅ Phase 1.5 Complete (v1.3.0)
+**[archive/instagram_automation_plan.md](archive/instagram_automation_plan.md)** - 📋 Reference (superseded by phases/ docs)
+**[archive/01_instagram_api.md](archive/01_instagram_api.md)** - ✅ Phase 2 Complete (v1.5.0)
 
 ---
 
@@ -192,24 +207,26 @@ Completed and historical documents:
 ### For New Developers
 1. Start with **[quickstart.md](guides/quickstart.md)** (10 min setup)
 2. Read **[testing-guide.md](guides/testing-guide.md)** (understand testing)
-3. Review **[instagram_automation_plan.md](planning/instagram_automation_plan.md)** (full architecture)
+3. Review **[phases/00_MASTER_ROADMAP.md](planning/phases/00_MASTER_ROADMAP.md)** (architecture and roadmap)
 
 ### For Deploying to Production
 1. Follow **[deployment.md](guides/deployment.md)** step-by-step
 2. Complete Telegram bot setup (Section 1)
 3. Configure database (Section 2)
 4. Deploy and test (Sections 5-11)
+5. For Instagram API: **[instagram-api-setup.md](guides/instagram-api-setup.md)**
 
 ### For Understanding Architecture
-1. Check **[instagram_automation_plan.md](planning/instagram_automation_plan.md)**
-   - See "System Architecture" section
-   - Review database schema
-   - Understand service layer design
+1. Check **[phases/00_MASTER_ROADMAP.md](planning/phases/00_MASTER_ROADMAP.md)**
+   - See architecture principles and data flow diagrams
+   - Review service naming conventions
+   - Understand phase progression
+2. Read root **[CLAUDE.md](../CLAUDE.md)** for detailed service/model reference
 
 ### For Contributing Code
-1. Read root **[CLAUDE.md](../CLAUDE.md)** (development guidelines)
+1. Read root **[CLAUDE.md](../CLAUDE.md)** (development guidelines, pre-commit checklist)
 2. Review **[testing-guide.md](guides/testing-guide.md)** (test requirements)
-3. Check **[planning/instagram_automation_plan.md](planning/instagram_automation_plan.md)** for context
+3. Check **[phases/00_MASTER_ROADMAP.md](planning/phases/00_MASTER_ROADMAP.md)** for context
 
 ---
 
@@ -259,13 +276,14 @@ Current documentation status:
 
 | Area | Status | Files | Notes |
 |------|--------|-------|-------|
-| **Planning** | ✅ Complete | 4 files | Phase 1.6 complete |
-| **Getting Started** | ✅ Complete | 4 guides | All setup guides |
-| **Testing** | ✅ Complete | 2 guides | 268 tests documented |
-| **Updates** | ✅ Current | 4 files | Bugfixes, features, handoffs |
-| **Archive** | ✅ Organized | 3 files | Historical docs preserved |
-| **Operations** | ✅ Complete | 3 files | Monitoring, backup, troubleshooting |
-| **API Docs** | ⏳ Phase 5 | 0 files | Future: REST API |
+| **Planning** | ✅ Current | 12 files | Phases 1-2.5 complete, 3-8 planned |
+| **Getting Started** | ✅ Current | 6 guides | Setup, deployment, testing, Instagram API |
+| **Testing** | ✅ Current | 2 guides | 488 tests documented |
+| **Updates** | ✅ Current | 3 files | Bugfixes, features |
+| **Archive** | ✅ Organized | 7 files | Historical docs preserved |
+| **Operations** | ✅ Current | 3 files | Monitoring, backup, troubleshooting |
+| **Security** | ✅ Current | 1 file | Security review completed |
+| **API Docs** | ⏳ Future | 0 files | Future: REST API |
 
 ### Document Status Legend
 - ✅ **COMPLETE** - Fully implemented and documented
@@ -280,9 +298,11 @@ Current documentation status:
 - **Setup issues?** → See [quickstart.md](guides/quickstart.md) troubleshooting
 - **Deployment questions?** → Check [deployment.md](guides/deployment.md)
 - **Test failures?** → Review [testing-guide.md](guides/testing-guide.md)
-- **Architecture questions?** → Read [instagram_automation_plan.md](planning/instagram_automation_plan.md)
+- **Architecture questions?** → Read [phases/00_MASTER_ROADMAP.md](planning/phases/00_MASTER_ROADMAP.md)
 - **Version history?** → Check [ROADMAP.md](ROADMAP.md)
+- **Instagram API setup?** → Follow [instagram-api-setup.md](guides/instagram-api-setup.md)
+- **Security concerns?** → Review [SECURITY_REVIEW.md](SECURITY_REVIEW.md)
 
 ---
 
-*Last updated: 2026-01-11*
+*Last updated: 2026-02-09*

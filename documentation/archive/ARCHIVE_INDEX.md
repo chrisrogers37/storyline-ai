@@ -26,6 +26,7 @@ For current documentation, refer to:
 | `upcoming_build_notes.md` | Feature brainstorming | All features implemented |
 | `phase-1.5-telegram-enhancements.md` | Phase 1.5 planning | Phase 1.5 complete (v1.3.0) |
 | `instagram_automation_plan.md` | Original master planning doc | Superseded by `phases/` docs |
+| `01_instagram_api.md` | Phase 2 Instagram API planning | Phase 2 complete (v1.5.0) |
 
 ## When to Reference Archive
 

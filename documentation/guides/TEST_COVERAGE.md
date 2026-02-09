@@ -1,10 +1,10 @@
 # Test Coverage Report
 
-**Last Updated**: 2026-01-11
-**Total Tests**: 268
+**Last Updated**: 2026-02-09
+**Total Tests**: 488
 **Test Framework**: pytest 7.4.3
 **Coverage Target**: Core business logic and critical paths
-**Status**: ✅ COMPLETE (Phase 1.6)
+**Status**: ✅ Current through Phase 2 + TelegramService Refactor
 
 ---
 
@@ -14,13 +14,32 @@
 
 | Layer | Files | Tests | Coverage Focus |
 |-------|-------|-------|----------------|
-| **Repositories** | 7 | 67 | CRUD operations, database interactions |
-| **Services** | 8 | 116 | Business logic, workflow orchestration |
-| **Utilities** | 4 | 40 | File hashing, image processing, validation |
-| **CLI** | 4 | 45 | Command interface, user interactions |
-| **TOTAL** | **23** | **268** | **Full Phase 1.6 functionality** |
+| **Repositories** | 8 | ~80 | CRUD operations, database interactions |
+| **Services** | 17 | ~300 | Business logic, workflow orchestration |
+| **Utilities** | 5 | ~50 | File hashing, image processing, validation, encryption |
+| **CLI** | 4 | ~45 | Command interface, user interactions |
+| **Integration** | 1 | ~13 | End-to-end Instagram posting workflow |
+| **TOTAL** | **35** | **488** | **Full Phase 2 + TelegramService refactor** |
 
-### Phase 1.6 Additions (95 new tests)
+### Post-Phase 1.6 Test Additions (~220 new tests)
+
+**Phase 2 - Instagram API (v1.5.0)**:
+- **InstagramAPIService** - API posting, rate limiting, error handling
+- **CloudStorageService** - Cloudinary upload/delete/cleanup
+- **TokenRefreshService** - Token lifecycle, refresh, health checks
+- **InstagramAccountService** - Multi-account CRUD, switching, display
+- **SettingsService** - Per-chat settings, toggles, validation
+- **InteractionService** - Command/callback logging, bot response tracking
+- **Integration tests** - End-to-end Instagram posting workflow
+
+**Phase 1.8 - Telegram UX + Refactor**:
+- **TelegramCommands** - Extracted command handler tests
+- **TelegramCallbacks** - Extracted callback handler tests
+- **TelegramSettings** - Settings UI handler tests
+- **TelegramAccounts** - Account selection handler tests
+- **Encryption utility** - Fernet encryption/decryption tests
+
+### Phase 1.6 Additions (95 new tests, historical)
 - **Category Extraction** (7 tests) - Folder structure → category mapping
 - **CategoryMixRepository** (18 tests) - Type 2 SCD ratio management
 - **Scheduler Category Allocation** (9 tests) - Category-aware slot distribution
@@ -423,11 +442,12 @@ assert lock_repo.is_locked(media.id) is True
 4. **Concurrent access** - Multiple users clicking buttons simultaneously
 5. **Network failures** - Telegram API timeout/retry scenarios
 
-### Acceptable Gaps (Phase 1)
-- Instagram API integration (Phase 2)
-- Cloudinary integration (Phase 2)
-- Web frontend (Phase 5)
-- Real-time metrics (Phase 4)
+### Acceptable Gaps
+- ~~Instagram API integration (Phase 2)~~ ✅ Now tested
+- ~~Cloudinary integration (Phase 2)~~ ✅ Now tested
+- Web frontend (Phase 5+)
+- Real-time metrics (Phase 4+)
+- Shopify/Printify integration (Phase 3-4)
 
 ---
 
@@ -503,25 +523,29 @@ pytest -n auto
 
 ## Conclusion
 
-✅ **Phase 1.6 Test Suite Status**: **COMPLETE**
+✅ **Test Suite Status**: **CURRENT** (488 tests)
 
-- All critical workflows tested (268 tests)
+- All critical workflows tested
 - Category-based scheduling fully tested
 - Type 2 SCD ratio management validated
-- Deployment bugs caught and fixed
-- Full coverage of 10+ bot commands
-- Resume/clear callback handlers tested
-- Pause integration with PostingService verified
-- Test coverage adequate for production use
-- Infrastructure ready for Phase 2 expansion
+- Instagram API automation tested (Phase 2)
+- Cloudinary integration tested
+- Token management and encryption tested
+- Multi-account management tested
+- TelegramService refactored into 5 handler modules, all tested
+- Per-chat settings management tested
+- Interaction tracking tested
+- 15+ Telegram bot commands tested
 
 **Version History**:
 - v1.0.0: 147 tests (Phase 1)
 - v1.2.0: 155 tests (Phase 1.5 Week 1)
 - v1.3.0: 173 tests (Phase 1.5 Week 2)
-- v1.4.0: 268 tests (Phase 1.6 - current)
+- v1.4.0: 268 tests (Phase 1.6)
+- v1.5.0: 345 tests (Phase 2 - Instagram API)
+- Current: 488 tests (Phase 1.8 + TelegramService refactor)
 
 **Next Steps**:
 - Maintain test coverage as new features added
-- Add integration tests for Telegram bot when Phase 2 adds API automation
 - Consider adding performance tests for large media libraries (1000+ items)
+- Add tests for future Shopify/Printify integrations (Phase 3-4)

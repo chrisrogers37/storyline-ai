@@ -1,8 +1,8 @@
 # Storyline AI - Product Roadmap
 
-**Last Updated**: 2026-01-27
-**Current Version**: v1.5.0 (Phase 2 Complete)
-**Next Version**: v1.6.0 (Phase 1.8 - Telegram UX Improvements)
+**Last Updated**: 2026-02-09
+**Current Version**: v1.5.0+ (Phase 2 Complete, Phase 1.8 Complete)
+**Next Version**: v1.6.0 (TBD)
 
 ---
 
@@ -200,6 +200,43 @@ Build a delightful Instagram Story automation system that:
 
 ---
 
+## Phase 1.7: Inline Account Selector ✅ COMPLETE
+
+**Status**: ✅ Delivered in v1.5.0
+**Goal**: Add inline account selection to posting workflow
+
+### Delivered Features
+- ✅ **Inline Account Selector** - Switch accounts without leaving posting context
+- ✅ **Redesigned Settings Flow** - Clearer account management in `/settings`
+- ✅ **Visual Feedback** - Checkmark on active account, clear switching UX
+- ✅ **Auto-Select** - Single account auto-selected
+
+**Completed**: January 2026
+
+---
+
+## Phase 1.8: Telegram UX Improvements ✅ COMPLETE
+
+**Status**: ✅ Delivered (Unreleased version)
+**Goal**: Improve Telegram bot UX and code maintainability
+
+### Delivered Features
+- ✅ **TelegramService Refactor** - 3,500-line monolith decomposed into 5 handler modules
+  - `telegram_commands.py` - Command handlers
+  - `telegram_callbacks.py` - Button callback handlers
+  - `telegram_autopost.py` - Auto-posting logic
+  - `telegram_settings.py` - Settings UI handlers
+  - `telegram_accounts.py` - Account selection handlers
+- ✅ **Verbose Settings Expansion** - Toggle now controls more message types
+- ✅ **`/cleanup` Command** - Delete recent bot messages
+- ✅ **Command Menu Registration** - Native Telegram `/` autocomplete
+- ✅ **Dry Run Bug Fix** - Fixed dry run not actually skipping Instagram API
+- ✅ **488 comprehensive tests**
+
+**Completed**: February 2026
+
+---
+
 ## Phase 3: Advanced Features 🔮 FUTURE
 
 **Status**: 🔮 Exploratory
@@ -274,7 +311,8 @@ Build a delightful Instagram Story automation system that:
 
 | Version | Date | Phase | Description |
 |---------|------|-------|-------------|
-| v1.6.0 | TBD | Phase 1.8 | Telegram command menu + /cleanup command |
+| v1.6.0 | TBD | - | TBD |
+| v1.5.0+ | 2026-02 | Phase 1.7-1.8 | Inline account selector, TelegramService refactor, verbose expansion, /cleanup |
 | v1.5.0 | 2026-01-24 | Phase 2 | Instagram API automation + Multi-account support |
 | v1.4.0 | 2026-01-10 | Phase 1.6 | Category-based scheduling with configurable ratios |
 | v1.3.0 | 2026-01-08 | Phase 1.5 | Bot management commands (/pause, /resume, /stats, etc.) |
