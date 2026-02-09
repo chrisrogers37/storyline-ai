@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **TelegramService Refactor PR 3: Extract Settings + Accounts** - Architecture improvement
+  - Extracted settings handlers into new `TelegramSettingsHandlers` class (`telegram_settings.py`)
+    - Handles: /settings command, toggle buttons, numeric edits (posts_per_day, hours), schedule management (regenerate/extend)
+  - Extracted account handlers into new `TelegramAccountHandlers` class (`telegram_accounts.py`)
+    - Handles: account selection menu, add/remove flows, inline account switching from posting workflow, back-to-post rebuild
+  - `TelegramService` reduced from ~1,984 to ~681 lines (core routing, initialization, captions, shared utilities)
+  - `_handle_callback` router updated to dispatch to `self.settings_handler.*` and `self.accounts.*`
+  - `_handle_conversation_message` delegates to new handler modules
+  - Tests split into `test_telegram_settings.py` and `test_telegram_accounts.py`
+  - All 345 tests pass (77 telegram-specific) - zero regressions
+  - Part 3 of 3 in the TelegramService decomposition plan (refactor complete)
+
+- **TelegramService Refactor PR 2: Extract Callbacks + Autopost** - Architecture improvement
+  - Extracted 9 callback handlers into new `TelegramCallbackHandlers` class (`telegram_callbacks.py`)
+    - Handles: posted, skipped, back, reject confirmation, cancel reject, rejected, resume, reset
+  - Extracted auto-post flow into new `TelegramAutopostHandler` class (`telegram_autopost.py`)
+    - Handles: Cloudinary upload, Instagram API posting, dry run mode, safety gates
+  - `TelegramService` reduced by ~765 lines (from 2,849 to ~1,984)
+  - `_handle_callback` router updated to dispatch to `self.callbacks.*` and `self.autopost.*`
+  - Tests split into `test_telegram_callbacks.py` alongside the new modules
+  - Routing tests remain in `test_telegram_service.py` (new `TestCallbackRouting` class)
+  - All 81 tests pass (65 passed, 16 skipped) - zero regressions
+  - Part 2 of 3 in the TelegramService decomposition plan
+
+- **TelegramService Refactor PR 1: Extract Command Handlers** - Architecture improvement
+  - Extracted 14 `/command` handlers from `TelegramService` (3,504 lines) into new `TelegramCommandHandlers` class
+  - New file: `src/services/core/telegram_commands.py` (~715 lines)
+  - `TelegramService` reduced by ~655 lines (from 3,504 to 2,849)
+  - Uses composition pattern: handler class receives service reference via `__init__(self, service)`
+  - Command registration moved to a clean `command_map` dict in `initialize()`
+  - Tests split into `test_telegram_commands.py` alongside the new module
+  - All 81 tests pass (65 passed, 16 skipped) - zero regressions
+  - Part 1 of 3 in the TelegramService decomposition plan
+
 ### Fixed
 - **Auto-Post Success Missing User in Verbose OFF** - Bug fix
   - **Bug**: With verbose notifications OFF, auto-post success showed `✅ Posted to @account` without identifying who triggered the post
