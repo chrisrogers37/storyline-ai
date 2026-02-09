@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **TelegramService Refactor PR 2: Extract Callbacks + Autopost** - Architecture improvement
+  - Extracted 9 callback handlers into new `TelegramCallbackHandlers` class (`telegram_callbacks.py`)
+    - Handles: posted, skipped, back, reject confirmation, cancel reject, rejected, resume, reset
+  - Extracted auto-post flow into new `TelegramAutopostHandler` class (`telegram_autopost.py`)
+    - Handles: Cloudinary upload, Instagram API posting, dry run mode, safety gates
+  - `TelegramService` reduced by ~765 lines (from 2,849 to ~1,984)
+  - `_handle_callback` router updated to dispatch to `self.callbacks.*` and `self.autopost.*`
+  - Tests split into `test_telegram_callbacks.py` alongside the new modules
+  - Routing tests remain in `test_telegram_service.py` (new `TestCallbackRouting` class)
+  - All 81 tests pass (65 passed, 16 skipped) - zero regressions
+  - Part 2 of 3 in the TelegramService decomposition plan
+
 - **TelegramService Refactor PR 1: Extract Command Handlers** - Architecture improvement
   - Extracted 14 `/command` handlers from `TelegramService` (3,504 lines) into new `TelegramCommandHandlers` class
   - New file: `src/services/core/telegram_commands.py` (~715 lines)
