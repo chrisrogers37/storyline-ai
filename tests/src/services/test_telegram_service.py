@@ -8,6 +8,8 @@ from uuid import uuid4
 from src.services.core.telegram_service import TelegramService
 from src.services.core.telegram_callbacks import TelegramCallbackHandlers
 from src.services.core.telegram_autopost import TelegramAutopostHandler
+from src.services.core.telegram_settings import TelegramSettingsHandlers
+from src.services.core.telegram_accounts import TelegramAccountHandlers
 
 
 @pytest.fixture
@@ -64,6 +66,8 @@ def mock_telegram_service():
         # Set up sub-handlers for callback routing tests
         service.callbacks = TelegramCallbackHandlers(service)
         service.autopost = TelegramAutopostHandler(service)
+        service.settings_handler = TelegramSettingsHandlers(service)
+        service.accounts = TelegramAccountHandlers(service)
 
         yield service
 
@@ -653,144 +657,7 @@ class TestInlineAccountSelector:
         assert callback_data == "sap:550e8400:660f9511"
 
 
-@pytest.mark.unit
-class TestAccountSelectorCallbacks:
-    """Tests for account selector callback handlers."""
-
-    async def test_handle_post_account_selector_shows_accounts(
-        self, mock_telegram_service
-    ):
-        """Test that account selector menu shows all configured accounts."""
-        queue_id = str(uuid4())
-
-        mock_queue_item = Mock()
-        mock_queue_item.id = queue_id
-        mock_telegram_service.queue_repo.get_by_id.return_value = mock_queue_item
-
-        mock_telegram_service.ig_account_service = Mock()
-        mock_telegram_service.ig_account_service.get_accounts_for_display.return_value = {
-            "accounts": [
-                {"id": "acc1", "display_name": "Main Account", "username": "main"},
-                {"id": "acc2", "display_name": "Brand Account", "username": "brand"},
-            ],
-            "active_account_id": "acc1",
-        }
-
-        mock_user = Mock()
-        mock_user.id = uuid4()
-
-        mock_query = AsyncMock()
-        mock_query.message = Mock(chat_id=-100123, message_id=1)
-
-        await mock_telegram_service._handle_post_account_selector(
-            queue_id, mock_user, mock_query
-        )
-
-        # Verify edit_message_caption was called
-        mock_query.edit_message_caption.assert_called_once()
-        call_args = mock_query.edit_message_caption.call_args
-        assert "Select Instagram Account" in call_args.kwargs["caption"]
-
-    async def test_handle_back_to_post_rebuilds_workflow(self, mock_telegram_service):
-        """Test that back_to_post returns to the posting workflow."""
-        queue_id = str(uuid4())
-        short_queue_id = queue_id[:8]
-
-        mock_queue_item = Mock()
-        mock_queue_item.id = queue_id
-        mock_queue_item.media_item_id = uuid4()
-        mock_telegram_service.queue_repo.get_by_id_prefix.return_value = mock_queue_item
-        mock_telegram_service.queue_repo.get_by_id.return_value = mock_queue_item
-
-        mock_media_item = Mock()
-        mock_media_item.title = "Test"
-        mock_media_item.caption = None
-        mock_media_item.link_url = None
-        mock_media_item.tags = []
-        mock_telegram_service.media_repo.get_by_id.return_value = mock_media_item
-
-        mock_telegram_service.ig_account_service = Mock()
-        mock_telegram_service.ig_account_service.get_active_account.return_value = None
-
-        mock_telegram_service.settings_service = Mock()
-        mock_telegram_service.settings_service.get_settings.return_value = Mock(
-            enable_instagram_api=False
-        )
-
-        mock_user = Mock()
-        mock_user.id = uuid4()
-
-        mock_query = AsyncMock()
-        mock_query.message = Mock(chat_id=-100123, message_id=1)
-
-        await mock_telegram_service._handle_back_to_post(
-            short_queue_id, mock_user, mock_query
-        )
-
-        # Should call edit_message_caption to rebuild the posting workflow
-        mock_query.edit_message_caption.assert_called()
-
-    async def test_handle_post_account_switch_stays_in_selector(
-        self, mock_telegram_service
-    ):
-        """Test that switching account stays in selector menu to show updated checkmark."""
-        queue_id = str(uuid4())
-        account_id = str(uuid4())
-        short_queue_id = queue_id[:8]
-        short_account_id = account_id[:8]
-        chat_id = -100123
-
-        # Mock queue item
-        mock_queue_item = Mock()
-        mock_queue_item.id = queue_id
-        mock_telegram_service.queue_repo.get_by_id_prefix.return_value = mock_queue_item
-        mock_telegram_service.queue_repo.get_by_id.return_value = mock_queue_item
-
-        # Mock account
-        mock_account = Mock()
-        mock_account.id = account_id
-        mock_account.display_name = "Test Account"
-        mock_account.instagram_username = "testaccount"
-        mock_telegram_service.ig_account_service = Mock()
-        mock_telegram_service.ig_account_service.get_account_by_id_prefix.return_value = mock_account
-        mock_telegram_service.ig_account_service.switch_account.return_value = (
-            mock_account
-        )
-        mock_telegram_service.ig_account_service.get_accounts_for_display.return_value = {
-            "accounts": [
-                {
-                    "id": account_id,
-                    "display_name": "Test Account",
-                    "username": "testaccount",
-                }
-            ],
-            "active_account_id": account_id,
-        }
-
-        mock_user = Mock()
-        mock_user.id = uuid4()
-
-        mock_query = AsyncMock()
-        mock_query.message = Mock(chat_id=chat_id, message_id=1)
-
-        # Call the handler
-        data = f"{short_queue_id}:{short_account_id}"
-        await mock_telegram_service._handle_post_account_switch(
-            data, mock_user, mock_query
-        )
-
-        # Verify switch_account was called
-        mock_telegram_service.ig_account_service.switch_account.assert_called_once_with(
-            chat_id, account_id, mock_user
-        )
-
-        # Verify success toast was shown
-        mock_query.answer.assert_called_once_with("✅ Switched to Test Account")
-
-        # Verify edit_message_caption was called (account selector menu rebuilt)
-        mock_query.edit_message_caption.assert_called_once()
-        call_args = mock_query.edit_message_caption.call_args
-        assert "Select Instagram Account" in call_args.kwargs["caption"]
+# TestAccountSelectorCallbacks has been moved to test_telegram_accounts.py
 
 
 @pytest.mark.unit
@@ -954,54 +821,5 @@ class TestVerboseSimpleCaption:
         assert "Brand Account" in caption
 
 
-@pytest.mark.unit
-class TestBuildSettingsKeyboard:
-    """Tests for _build_settings_message_and_keyboard helper."""
-
-    def test_returns_message_and_markup(self, mock_telegram_service):
-        """Test helper returns (message, InlineKeyboardMarkup) tuple."""
-        mock_telegram_service.settings_service.get_settings_display.return_value = {
-            "dry_run_mode": False,
-            "enable_instagram_api": True,
-            "is_paused": False,
-            "posts_per_day": 3,
-            "posting_hours_start": 9,
-            "posting_hours_end": 21,
-            "show_verbose_notifications": True,
-        }
-        mock_telegram_service.ig_account_service.get_accounts_for_display.return_value = {
-            "active_account_id": "some-id",
-            "active_account_name": "Test Account",
-        }
-
-        message, markup = mock_telegram_service._build_settings_message_and_keyboard(
-            -100123
-        )
-
-        assert "Bot Settings" in message
-        assert markup is not None
-
-    def test_verbose_toggle_button_shows_state(self, mock_telegram_service):
-        """Test that verbose button shows correct ON/OFF state."""
-
-        mock_telegram_service.settings_service.get_settings_display.return_value = {
-            "dry_run_mode": False,
-            "enable_instagram_api": False,
-            "is_paused": False,
-            "posts_per_day": 3,
-            "posting_hours_start": 9,
-            "posting_hours_end": 21,
-            "show_verbose_notifications": False,
-        }
-        mock_telegram_service.ig_account_service.get_accounts_for_display.return_value = {
-            "active_account_id": None,
-            "active_account_name": "Not selected",
-        }
-
-        _, markup = mock_telegram_service._build_settings_message_and_keyboard(-100123)
-
-        # Find verbose button in keyboard
-        all_buttons = [btn for row in markup.inline_keyboard for btn in row]
-        verbose_buttons = [b for b in all_buttons if "Verbose" in b.text]
-        assert len(verbose_buttons) == 1
-        assert "OFF" in verbose_buttons[0].text
+# TestBuildSettingsKeyboard has been moved to test_telegram_settings.py
+# TestAccountSelectorCallbacks has been moved to test_telegram_accounts.py
