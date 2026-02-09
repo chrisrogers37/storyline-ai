@@ -453,19 +453,41 @@ The Page Access Token is what you store in `INSTAGRAM_ACCESS_TOKEN`. It:
 
 ## Multiple Instagram Accounts
 
-To manage multiple accounts, you can store alternate credentials commented out:
+The system supports multiple Instagram accounts natively. Use CLI commands to manage accounts:
 
 ```bash
-# Currently active: Account A
-INSTAGRAM_ACCOUNT_ID=12345678901234567
-INSTAGRAM_ACCESS_TOKEN=EAAXXX...your_token_here...
+# Add your first account (tokens are encrypted and stored in the database)
+storyline-cli add-instagram-account \
+    --display-name "Main Brand" \
+    --account-id "12345678901234567" \
+    --username "brand_main" \
+    --access-token "EAAXXX...your_token_here..."
 
-# Alternate: Account B
-# INSTAGRAM_ACCOUNT_ID=98765432109876543
-# INSTAGRAM_ACCESS_TOKEN=EAAXXX...alternate_token_here...
+# Add additional accounts
+storyline-cli add-instagram-account \
+    --display-name "Promo Account" \
+    --account-id "98765432109876543" \
+    --username "brand_promo" \
+    --access-token "EAAXXX...alternate_token_here..."
+
+# List all accounts
+storyline-cli list-instagram-accounts
+
+# Deactivate an account (soft delete)
+storyline-cli deactivate-instagram-account <account-uuid>
+
+# Reactivate a previously deactivated account
+storyline-cli reactivate-instagram-account <account-uuid>
 ```
 
-Swap which lines are commented to switch accounts.
+**Switching active accounts** in Telegram:
+- Use `/settings` → Account selector to switch between accounts
+- Or use the inline account selector button on posting notifications
+- If only one account exists, it is auto-selected
+
+> **Note**: The `.env` values `INSTAGRAM_ACCOUNT_ID` and `INSTAGRAM_ACCESS_TOKEN` are used
+> only for initial bootstrap. Once accounts are added via CLI, all account management is
+> handled through the database. Database migrations 007-009 handle multi-account schema.
 
 ---
 

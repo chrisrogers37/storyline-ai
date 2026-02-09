@@ -1,5 +1,10 @@
 # Verbose Settings Improvement Plan
 
+> **Status**: ✅ COMPLETE
+> All fixes implemented: auto-post user attribution bug fixed, `_is_verbose()` helper extracted,
+> verbose toggle now controls manual posted, rejected, and dry run messages.
+> See CHANGELOG.md `[Unreleased]` section for details.
+
 ## Problem Statement
 
 The `show_verbose_notifications` setting (toggled via `/settings` > "Verbose: ON/OFF") is **underspecified in scope**. Users expect that toggling verbose OFF produces a minimal, clean chat experience. In practice, only 2 of ~15+ user-facing message types respect the setting:

@@ -1,6 +1,6 @@
 # Storyline AI - Master Roadmap
 
-**Last Updated**: 2026-01-18
+**Last Updated**: 2026-02-09
 **Vision**: E-commerce Optimization Hub for Social Media Marketing
 
 ---
@@ -63,14 +63,25 @@ src/services/
 │   ├── media_ingestion.py
 │   ├── scheduler.py
 │   ├── posting.py
-│   ├── telegram_service.py
-│   └── health_check.py
+│   ├── telegram_service.py      # Core bot + handler coordination
+│   ├── telegram_commands.py     # /command handlers (refactored)
+│   ├── telegram_callbacks.py    # Button callback handlers (refactored)
+│   ├── telegram_autopost.py     # Auto-posting logic (refactored)
+│   ├── telegram_settings.py     # Settings UI handlers (refactored)
+│   ├── telegram_accounts.py     # Account selection handlers (refactored)
+│   ├── health_check.py
+│   ├── settings_service.py      # Database-backed settings
+│   ├── instagram_account_service.py  # Multi-account management
+│   ├── interaction_service.py   # Bot interaction tracking
+│   └── media_lock.py
 │
 ├── integrations/   # Phase 2-4: External platform integrations
-│   ├── instagram_api.py
-│   ├── shopify_service.py
-│   ├── printify_service.py
-│   └── gmail_service.py
+│   ├── instagram_api.py      # ✅ Implemented
+│   ├── cloud_storage.py      # ✅ Implemented (Cloudinary)
+│   ├── token_refresh.py      # ✅ Implemented
+│   ├── shopify_service.py    # Future
+│   ├── printify_service.py   # Future
+│   └── gmail_service.py      # Future
 │
 ├── domain/         # Phase 5-6: Business intelligence
 │   ├── analytics_service.py
@@ -110,6 +121,10 @@ Entities (Tables):
 │   ├── product_performance (calculated metrics)
 │   └── correlation_insights (media → sales relationships)
 │
+├── Settings Domain (Phase 2.5 - ✅ Complete)
+│   ├── chat_settings (per-chat runtime configuration)
+│   └── instagram_accounts (multi-account identity management)
+│
 ├── User Domain
 │   ├── users (auto-discovered from Telegram)
 │   ├── user_interactions (command/callback tracking)
@@ -131,7 +146,7 @@ Entities (Tables):
 | 1.5 | Telegram Enhancements | ✅ COMPLETE | - | Phase 1 |
 | 1.6 | Category Scheduling | ✅ COMPLETE | - | Phase 1.5 |
 | **2** | **Instagram API Automation** | ✅ COMPLETE | - | Phase 1.6 |
-| **2.5** | **Settings & Multi-Tenancy** | 📋 PLANNED | - | Phase 2 |
+| **2.5** | **Settings & Multi-Tenancy** | ✅ COMPLETE (Phase 1-1.5) | - | Phase 2 |
 | **3** | **Shopify Integration** | 📋 PLANNED | - | Phase 2 |
 | **4** | **Printify Integration** | 📋 PLANNED | - | Phase 3 |
 | **5** | **Media-Product Linking** | 📋 PLANNED | - | Phase 3, 4 |
@@ -143,16 +158,31 @@ Entities (Tables):
 
 ## Phase Details
 
-### Phase 2: Instagram API Automation
-**Document**: [01_instagram_api.md](01_instagram_api.md)
+### Phase 2: Instagram API Automation ✅ COMPLETE
+**Document**: [archive/01_instagram_api.md](../archive/01_instagram_api.md)
 
 Enable automated Instagram Story posting via Meta Graph API. Hybrid mode: auto-post simple content, manual-post complex content.
 
-**Key Deliverables**:
+**Key Deliverables** (all delivered):
 - Instagram Graph API integration
-- Cloudinary/S3 cloud storage for media URLs
-- Token refresh service
-- Feature flag: `ENABLE_INSTAGRAM_API`
+- Cloudinary cloud storage for media URLs
+- Token refresh service with encrypted storage
+- Feature flag: `ENABLE_INSTAGRAM_API` (per-chat in database)
+- Multi-account support (add/switch/deactivate via CLI and Telegram)
+- Inline account selector in posting workflow
+- Per-chat settings with `.env` fallback
+
+### Phase 2.5: Settings & Multi-Tenancy ✅ COMPLETE (Phases 1-1.5)
+**Document**: [01_settings_and_multitenancy.md](01_settings_and_multitenancy.md)
+
+Runtime-configurable settings and Instagram account management. Phases 1 and 1.5 of this document are complete; Phases 2 (Cloud Media Storage) and 3 (Multi-Tenancy) remain future work.
+
+**Key Deliverables** (delivered):
+- Database-backed settings (`chat_settings` table) with `.env` fallback
+- `/settings` command with inline toggle buttons
+- Per-chat pause/resume, dry-run, Instagram API toggles
+- Multi-Instagram account management (identity, credentials, selection separation)
+- Account switching via Telegram `/settings` and inline posting workflow
 
 ---
 
@@ -280,18 +310,29 @@ Built-in via `service_runs` table:
 
 ## Data Flow Diagrams
 
-### Current (Phase 1.6)
+### Current (Phase 2 Complete)
 
 ```
 Media Files → MediaIngestionService → media_items table
                                               ↓
 SchedulerService → posting_queue ← CategoryMixRepository
-                         ↓
-PostingService → TelegramService → Telegram Channel
-                         ↓
-                    User Action (Posted/Skip/Reject)
-                         ↓
-                    posting_history + locks
+       ↑                ↓
+ chat_settings    PostingService ──→ Route Decision
+ (per-chat)             │
+                   ┌────┴────────────────────┐
+                   ↓                          ↓
+           TelegramService           InstagramAPIService
+           (manual workflow)         (auto-post via API)
+                   │                          │
+                   ↓                    ┌─────┴──────┐
+           Telegram Channel             ↓             ↓
+                   ↓              CloudStorage   Instagram
+           User Action            (Cloudinary)    Graph API
+           (Posted/Skip/Reject)       ↓             ↓
+                   ↓              Upload media   Post story
+                   ↓                   └─────┬──────┘
+           posting_history + locks           ↓
+                                       posting_history
 ```
 
 ### Future (Phase 5+)
@@ -352,7 +393,7 @@ LLM Service → Email Drafts → Gmail
 
 | Document | Description |
 |----------|-------------|
-| [01_settings_and_multitenancy.md](01_settings_and_multitenancy.md) | Settings menu, cloud storage, multi-tenancy |
+| [01_settings_and_multitenancy.md](01_settings_and_multitenancy.md) | Settings menu, multi-account, multi-tenancy (Phases 1-1.5 ✅) |
 | [02_shopify_integration.md](02_shopify_integration.md) | Shopify Admin API integration |
 | [03_printify_integration.md](03_printify_integration.md) | Printify API integration |
 | [04_media_product_linking.md](04_media_product_linking.md) | Media ↔ Product relationships |
@@ -391,7 +432,7 @@ Items to address in future iterations:
 
 1. Read this document for overall vision
 2. Review completed phases in `/documentation/ROADMAP.md`
-3. For next implementation, start with Phase 2 document
+3. For next implementation, start with Phase 3 (Shopify Integration)
 4. Each phase document contains:
    - Sub-phase breakdown (01_, 02_, 03_)
    - Data models with SQL

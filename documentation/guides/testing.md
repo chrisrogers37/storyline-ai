@@ -50,7 +50,7 @@ make test
 # The test suite will:
 # ✓ Create database: storyline_ai_test
 # ✓ Create all tables
-# ✓ Run 147 tests
+# ✓ Run 488 tests
 # ✓ Clean up everything
 ```
 

@@ -9,7 +9,9 @@
 ## Step 1: Clone & Install (2 min)
 
 ```bash
-cd /Users/chris/Projects/storyline-ai
+# Clone the repository and navigate to it
+git clone <your-repo-url> storyline-ai
+cd storyline-ai
 
 # Create virtual environment
 python3 -m venv venv
@@ -110,7 +112,9 @@ Storyline AI - Instagram Story Automation System
 1. Application will send notifications to your Telegram channel when posts are due
 2. Click **✅ Posted** after posting to Instagram
 3. Click **⏭️ Skip** to skip a post
-4. Check history: `storyline-cli list-media`
+4. Click **🚫 Reject** to permanently block unwanted media
+5. Use `/settings` in Telegram to configure bot behavior
+6. Check history: `storyline-cli list-media`
 
 ## Troubleshooting
 
@@ -155,18 +159,36 @@ storyline-cli process-queue
 
 ## Next Steps
 
-1. **Customize schedule**: Edit POSTS_PER_DAY and POSTING_HOURS in .env
-2. **Add team members**: Just have them interact with the bot
+1. **Customize schedule**: Use `/settings` in Telegram or edit .env for defaults
+2. **Add team members**: Just have them interact with the bot (auto-discovery)
 3. **Promote admins**: `storyline-cli promote-user <telegram_id> --role admin`
-4. **Run as service**: See documentation for systemd setup
+4. **Run as service**: See [deployment.md](deployment.md) for systemd setup
+5. **Enable Instagram API** (Phase 2): See [instagram-api-setup.md](instagram-api-setup.md)
+6. **Add multiple accounts**: `storyline-cli add-instagram-account --help`
+7. **Category scheduling**: Organize media in subfolders, use `storyline-cli list-categories`
 
-## Success! 🎉
+## Telegram Bot Commands
 
-You now have a fully functional Instagram Story scheduling system with Telegram-based team collaboration!
+Once running, these commands are available in Telegram:
+
+| Command | Description |
+|---------|-------------|
+| `/status` | System health and queue status |
+| `/queue` | View pending scheduled posts |
+| `/next` | Force-send next post immediately |
+| `/settings` | Configure bot settings (dry run, pause, accounts) |
+| `/schedule N` | Create N days of posting schedule |
+| `/pause` / `/resume` | Pause/resume automatic posting |
+| `/stats` | Media library statistics |
+| `/history N` | Recent post history |
+| `/locks` | View permanently rejected items |
+| `/cleanup` | Delete recent bot messages |
+| `/dryrun` | Toggle dry-run mode |
 
 ---
 
 **Need help?** Check:
 - `README.md` - Full documentation
 - `CLAUDE.md` - Developer guide
-- `documentation/instagram_automation_plan.md` - Complete specs
+- [deployment.md](deployment.md) - Production deployment
+- [instagram-api-setup.md](instagram-api-setup.md) - Instagram API setup

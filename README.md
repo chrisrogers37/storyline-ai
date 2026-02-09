@@ -205,7 +205,7 @@ The bot responds to these commands in Telegram:
 - ✅ Type 2 SCD tracking for ratio history
 - ✅ Interactive ratio configuration during indexing
 - ✅ Scheduler integration with category-aware slot allocation
-- ✅ 268 comprehensive tests
+- ✅ 488 comprehensive tests
 
 **Phase 2** (Instagram API Automation) - ✅ COMPLETE (v1.5.0):
 - ✅ Instagram Graph API integration with rate limiting
@@ -216,17 +216,20 @@ The bot responds to these commands in Telegram:
 - ✅ Per-chat settings stored in database
 - ✅ "🤖 Auto Post to Instagram" button when API enabled
 
-**Phase 1.8** (Telegram UX Improvements) - ✅ COMPLETE (Current):
+**Phase 1.8** (Telegram UX Improvements) - ✅ COMPLETE:
 - ✅ Native Telegram command menu (autocomplete with descriptions)
 - ✅ `/cleanup` command to delete recent bot messages
 - ✅ `/reset` command to clear posting queue (renamed from `/clear`)
 - ✅ Message tracking (100-message cache) for efficient cleanup
+- ✅ TelegramService refactored from 3,500-line monolith into 5 handler modules
+- ✅ Verbose settings expansion (controls more message types)
+- ✅ 488 comprehensive tests
 
 ## Development
 
 ### Running Tests
 
-The project includes 268 comprehensive tests with automatic test database setup:
+The project includes 488 comprehensive tests with automatic test database setup:
 
 ```bash
 # Run all tests with coverage

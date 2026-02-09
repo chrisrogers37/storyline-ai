@@ -17,8 +17,8 @@ This document outlines the implementation of runtime-configurable settings, Inst
 - ✅ Phase 1 Complete: `/settings` command with database-backed toggles
 - ✅ Settings persist across restarts (migration 006 deployed)
 - ✅ Pause state tracked with user/timestamp
-- 🚧 Phase 1.5: Instagram Account Management (this section)
-- Current migration version: **006** (next: **007**)
+- ✅ Phase 1.5 Complete: Instagram Account Management (multi-account support)
+- Current migration version: **010** (migrations 007-009 deployed for multi-account)
 
 **Deployment Model:**
 - **Single-tenant by design** - Each deployment = one bot + one database
@@ -1451,7 +1451,7 @@ class TestInstagramAccountService:
 | `src/services/core/posting.py` | Use SettingsService | ✅ |
 | `src/services/core/scheduler.py` | Use SettingsService | ✅ |
 
-### Phase 1.5 Files (🚧 In Progress)
+### Phase 1.5 Files (✅ Complete)
 
 | File | Purpose | Status |
 |------|---------|--------|

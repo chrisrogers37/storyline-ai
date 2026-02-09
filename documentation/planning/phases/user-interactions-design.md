@@ -1,9 +1,9 @@
 # User Interactions System Design
 
 **Created**: 2026-01-06
-**Status**: 📋 PENDING (Future Enhancement)
-**Phase**: Post-1.6 Enhancement
-**Priority**: Low - Nice to have for analytics
+**Status**: ✅ COMPLETE (Implemented in Phase 1.5)
+**Phase**: Implemented as part of Phase 1.5 Telegram Enhancements
+**Priority**: Delivered
 
 ## Overview
 
@@ -503,32 +503,37 @@ async def _handle_queue_command(self, update, context):
 ## Implementation Plan
 
 ### Step 1: Create Model
-- [ ] Create `src/models/user_interaction.py`
-- [ ] Add to `src/models/__init__.py`
+- [x] Create `src/models/user_interaction.py`
+- [x] Add to `src/models/__init__.py`
 
 ### Step 2: Create Repository
-- [ ] Create `src/repositories/interaction_repository.py`
-- [ ] Add to `src/repositories/__init__.py`
+- [x] Create `src/repositories/interaction_repository.py`
+- [x] Add to `src/repositories/__init__.py`
 
 ### Step 3: Create Service
-- [ ] Create `src/services/core/interaction_service.py`
-- [ ] Add logging methods
-- [ ] Add analytics methods
+- [x] Create `src/services/core/interaction_service.py`
+- [x] Add logging methods
+- [x] Add analytics methods
+- [x] Add `log_bot_response()` for outgoing message tracking
 
 ### Step 4: Database Migration
-- [ ] Add CREATE TABLE to `scripts/setup_database.sql`
-- [ ] Create migration script for Pi: `scripts/migrations/003_add_user_interactions.sql`
+- [x] Add CREATE TABLE to `scripts/setup_database.sql`
+- [x] Create migration script for Pi: `scripts/migrations/003_add_user_interactions.sql`
 
 ### Step 5: Integrate with TelegramService
-- [ ] Add InteractionService dependency
-- [ ] Log existing callbacks (posted, skip, reject, confirm_reject, cancel_reject)
-- [ ] Implement `/queue` command with logging
-- [ ] Implement `/status` command with logging
+- [x] Add InteractionService dependency
+- [x] Log existing callbacks (posted, skip, reject, confirm_reject, cancel_reject)
+- [x] Implement `/queue` command with logging
+- [x] Implement `/status` command with logging
 
 ### Step 6: Testing
-- [ ] Unit tests for InteractionRepository
-- [ ] Unit tests for InteractionService
-- [ ] Integration tests for TelegramService logging
+- [x] Unit tests for InteractionRepository
+- [x] Unit tests for InteractionService
+- [x] Integration tests for TelegramService logging
+
+> **Note**: `InteractionService` intentionally does NOT extend `BaseService` to avoid
+> recursive tracking (logging interactions about logging interactions). This is a deliberate
+> architectural exception.
 
 ## Future Enhancements
 
