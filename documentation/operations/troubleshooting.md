@@ -133,9 +133,9 @@ ssh crogberrypi "ls -la /path/to/media/stories/*.jpg | head -5"
 
 | Cause | Fix |
 |-------|-----|
-| Wrong path in `.env` | Update `MEDIA_PATH` |
+| Wrong path in `.env` | Update `MEDIA_DIR` |
 | Permission denied | `chmod -R 755 /path/to/media` |
-| Unsupported format | Only JPG, PNG, GIF supported |
+| Unsupported format | Only JPG, JPEG, PNG, GIF, MP4, MOV supported |
 | File too large | Max 100MB per file |
 
 **Re-index**:

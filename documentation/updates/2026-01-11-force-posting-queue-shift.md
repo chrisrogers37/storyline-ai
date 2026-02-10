@@ -1,9 +1,11 @@
 # Analysis: Force Posting and Queue Shift Behavior
 
 **Date**: 2026-01-11
-**Status**: ✅ IMPLEMENTED
+**Status**: ✅ COMPLETED
 **Issue**: Queue items don't shift forward when posts are made early via `/next` or `--force`
 **Resolution**: Implemented slot-shift logic in shared `force_post_next()` method
+
+> **Historical Note (2026-02-10):** Line numbers reference pre-refactor code (v1.4.0). The `/next` command handler now lives in `telegram_commands.py` (`TelegramCommandHandlers.handle_next()`). The `PostingService.force_post_next()` method location is unchanged.
 
 ---
 

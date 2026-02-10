@@ -10,6 +10,8 @@ This checklist covers everything you need to do **outside of code** to get Phase
 - [ ] Instagram account for your business
 - [ ] Telegram account
 
+> **Note on paths**: This guide uses `/home/pi/` as the example home directory (the default Raspberry Pi OS user). Replace with your actual home directory (e.g., `/home/crog/`, `/home/ubuntu/`) throughout. The `deploy.sh` script uses `~/storyline-ai` which resolves correctly regardless of username.
+
 ---
 
 ## 1. Telegram Bot Setup (15 minutes)

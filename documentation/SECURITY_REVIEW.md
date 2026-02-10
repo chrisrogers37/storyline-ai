@@ -1,7 +1,7 @@
 # Security Review - Storyline AI
 
-**Date**: 2026-01-11  
-**Reviewer**: AI Security Audit  
+**Date**: 2026-01-11 (Updated 2026-02-10)
+**Reviewer**: AI Security Audit
 **Status**: ✅ Generally Secure with Recommendations
 
 ---
@@ -74,15 +74,20 @@ Your repository is **secure** with no hardcoded credentials or leaked account in
 - `/reset` - Resets entire queue with confirmation (any team member)
 - `/schedule` - Creates new posting schedule (any team member)
 - `/next` - Forces immediate post (any team member)
+- `/dryrun` - Toggle dry-run mode (any team member)
+- `/cleanup` - Delete recent bot messages (any team member)
+- `/settings` - Configure bot settings (any team member)
 - `/start`, `/status`, `/queue`, `/stats`, `/history`, `/locks`, `/help` - All team members
 
 **Current Behavior:**
 ```python
-# src/services/core/telegram_service.py
-async def _handle_pause(self, update, context):
-    user = self._get_or_create_user(update.effective_user)
+# src/services/core/telegram_commands.py (post-refactor, v1.6.0)
+# Command handlers are in TelegramCommandHandlers, which receives
+# a reference to the parent TelegramService via composition pattern.
+async def handle_pause(self, update, context):
+    user = self.service._get_or_create_user(update.effective_user)
     # Open to all - collaborative design
-    self.set_paused(True)
+    ...
 ```
 
 **Security Model:**
@@ -95,17 +100,17 @@ async def _handle_pause(self, update, context):
 The codebase supports role-based access (users have `role` field: 'admin' or 'member'). You can add admin checks if needed:
 
 ```python
-async def _handle_pause(self, update, context):
-    user = self._get_or_create_user(update.effective_user)
-    
+# In src/services/core/telegram_commands.py
+async def handle_pause(self, update, context):
+    user = self.service._get_or_create_user(update.effective_user)
+
     if user.role != "admin":
         await update.message.reply_text(
             "❌ *Access Denied*\n\nOnly admins can pause posting.",
             parse_mode="Markdown"
         )
         return
-    
-    self.set_paused(True)
+
     # ... rest of code
 ```
 
@@ -123,8 +128,8 @@ async def _handle_pause(self, update, context):
 
 **Why:**
 1. **Telegram Bot ≠ Instagram Access**: The bot only sends notifications to your Telegram channel
-2. **Instagram API Tokens**: If you enable Phase 2 (Instagram API), tokens are stored in `.env` (not in repo)
-3. **Manual Posting**: Phase 1 is manual posting - the bot just notifies you
+2. **Instagram API Tokens**: If you enable Phase 2 (Instagram API), tokens are encrypted (Fernet) and stored in the `api_tokens` database table. The initial token comes from `.env` and is bootstrapped to the DB on first use.
+3. **Manual Posting**: Phase 1 is manual posting - the bot just notifies you. Phase 2 adds an optional "Auto Post" button.
 4. **Separate Systems**: Telegram and Instagram are completely separate
 
 **What the Bot CAN Do:**
@@ -289,9 +294,10 @@ If you decide to restrict certain commands to admins only in the future, here's 
 
 ### Add Admin Authorization (15 minutes)
 
-1. Add helper method to `TelegramService`:
+1. Add helper method to `TelegramCommandHandlers` (or `TelegramService` for shared use):
 
 ```python
+# In src/services/core/telegram_commands.py
 def _is_admin(self, user) -> bool:
     """Check if user has admin role."""
     return user.role == "admin"
@@ -310,16 +316,18 @@ async def _require_admin(self, update, user) -> bool:
 2. Add checks to commands you want to restrict:
 
 ```python
-async def _handle_pause(self, update, context):
-    user = self._get_or_create_user(update.effective_user)
-    
+async def handle_pause(self, update, context):
+    user = self.service._get_or_create_user(update.effective_user)
+
     if not await self._require_admin(update, user):
         return
-    
+
     # ... rest of existing code
 ```
 
 3. Apply to any commands you want to restrict: `/pause`, `/resume`, `/reset`, `/schedule`, `/next`
+
+> **Note (v1.6.0):** Command handlers now live in `TelegramCommandHandlers` (`telegram_commands.py`), not in `TelegramService` directly. Each handler accesses the parent service via `self.service`.
 
 **Note**: Current design is intentionally open for team collaboration. Only add admin checks if you need them.
 

@@ -228,10 +228,11 @@ Build a delightful Instagram Story automation system that:
   - `telegram_settings.py` - Settings UI handlers
   - `telegram_accounts.py` - Account selection handlers
 - ✅ **Verbose Settings Expansion** - Toggle now controls more message types
-- ✅ **`/cleanup` Command** - Delete recent bot messages
+- ✅ **`/cleanup` Command** - Delete recent bot messages (database-backed, queries last 48h of bot responses)
 - ✅ **Command Menu Registration** - Native Telegram `/` autocomplete
 - ✅ **Dry Run Bug Fix** - Fixed dry run not actually skipping Instagram API
-- ✅ **488 comprehensive tests**
+- ✅ **Button Race Condition Fix** - Async locks prevent duplicate operations on same queue item
+- ✅ **494 comprehensive tests** (351 passing, 143 skipped integration tests)
 
 **Completed**: February 2026
 
@@ -327,7 +328,7 @@ Build a delightful Instagram Story automation system that:
 **Decision**: Implement native Telegram command autocomplete and bot message cleanup
 **Features Added**:
 - `set_my_commands()` registration for native "/" menu in Telegram
-- `/cleanup` command to delete recent bot messages (100-message cache)
+- `/cleanup` command to delete recent bot messages (uses `InteractionService.get_deletable_bot_messages()` to query bot responses from the last 48 hours via the database)
 - Renamed `/clear` → `/reset` for semantic clarity
 **Rationale**:
 - Command discovery through native Telegram UI improves UX significantly

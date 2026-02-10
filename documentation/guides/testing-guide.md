@@ -2,7 +2,7 @@
 
 This document explains how testing works in the Storyline AI project.
 
-**Current test count**: 488 tests (as of v1.6.0)
+**Current test count**: 494 tests (351 passing, 143 skipped integration tests) as of v1.6.0
 
 ## Quick Start
 

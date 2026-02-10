@@ -147,12 +147,12 @@ Entities (Tables):
 | 1.6 | Category Scheduling | ✅ COMPLETE | - | Phase 1.5 |
 | **2** | **Instagram API Automation** | ✅ COMPLETE | - | Phase 1.6 |
 | **2.5** | **Settings & Multi-Tenancy** | ✅ COMPLETE (Phase 1-1.5) | - | Phase 2 |
-| **3** | **Shopify Integration** | 📋 PLANNED | - | Phase 2 |
-| **4** | **Printify Integration** | 📋 PLANNED | - | Phase 3 |
-| **5** | **Media-Product Linking** | 📋 PLANNED | - | Phase 3, 4 |
-| **6** | **LLM Integration** | 📋 PLANNED | - | Phase 5 |
-| **7** | **Order & Email Automation** | 📋 PLANNED | - | Phase 3, 6 |
-| **8** | **Dashboard UI** | 📋 PLANNED | - | Phase 5, 6, 7 |
+| **3** | **Shopify Integration** | 📋 PENDING | - | Phase 2 |
+| **4** | **Printify Integration** | 📋 PENDING | - | Phase 3 |
+| **5** | **Media-Product Linking** | 📋 PENDING | - | Phase 3, 4 |
+| **6** | **LLM Integration** | 📋 PENDING | - | Phase 5 |
+| **7** | **Order & Email Automation** | 📋 PENDING | - | Phase 3, 6 |
+| **8** | **Dashboard UI** | 📋 PENDING | - | Phase 5, 6, 7 |
 
 ---
 
