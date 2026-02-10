@@ -412,19 +412,20 @@ Items to address in future iterations:
 
 ### Telegram Bot UX Improvements
 
-**Race Condition Handling for Button Clicks**
+**Race Condition Handling for Button Clicks** ✅ COMPLETE (v1.6.0)
 - **Problem**: Multiple rapid button clicks can trigger duplicate operations or conflicting actions
-- **Proposed Solution**:
+- **Solution Implemented**:
   1. Track pending operations per queue_id with cancellation tokens
   2. Use asyncio locks to prevent concurrent execution on same item
   3. Terminal actions (Skip/Posted/Reject) cancel any pending Auto Post
-  4. Same button clicked twice cancels current operation
-  5. Visual feedback: "⏳ Processing..." state distinct from idle
+  4. Same button clicked twice shows "⏳ Already processing..." feedback
+  5. Visual feedback: "⏳ Already processing..." toast when lock is held
 - **Implementation Details**:
-  - Add `_operation_locks: Dict[str, asyncio.Lock]` to TelegramService
-  - Add `_cancel_flags: Dict[str, asyncio.Event]` for cancellation signaling
-  - Check cancellation at key points: after Cloudinary upload, before Instagram API call
+  - Added `_operation_locks: dict[str, asyncio.Lock]` to TelegramService
+  - Added `_cancel_flags: dict[str, asyncio.Event]` for cancellation signaling
+  - Cancellation checked at key points: after Cloudinary upload, before Instagram API call
   - Graceful abort with cleanup if cancelled mid-operation
+  - 7 new tests for race condition handling
 
 ---
 

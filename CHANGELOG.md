@@ -7,414 +7,226 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- **TelegramService Refactor PR 3: Extract Settings + Accounts** - Architecture improvement
-  - Extracted settings handlers into new `TelegramSettingsHandlers` class (`telegram_settings.py`)
-    - Handles: /settings command, toggle buttons, numeric edits (posts_per_day, hours), schedule management (regenerate/extend)
-  - Extracted account handlers into new `TelegramAccountHandlers` class (`telegram_accounts.py`)
-    - Handles: account selection menu, add/remove flows, inline account switching from posting workflow, back-to-post rebuild
-  - `TelegramService` reduced from ~1,984 to ~681 lines (core routing, initialization, captions, shared utilities)
-  - `_handle_callback` router updated to dispatch to `self.settings_handler.*` and `self.accounts.*`
-  - `_handle_conversation_message` delegates to new handler modules
-  - Tests split into `test_telegram_settings.py` and `test_telegram_accounts.py`
-  - All 345 tests pass (77 telegram-specific) - zero regressions
-  - Part 3 of 3 in the TelegramService decomposition plan (refactor complete)
-
-- **TelegramService Refactor PR 2: Extract Callbacks + Autopost** - Architecture improvement
-  - Extracted 9 callback handlers into new `TelegramCallbackHandlers` class (`telegram_callbacks.py`)
-    - Handles: posted, skipped, back, reject confirmation, cancel reject, rejected, resume, reset
-  - Extracted auto-post flow into new `TelegramAutopostHandler` class (`telegram_autopost.py`)
-    - Handles: Cloudinary upload, Instagram API posting, dry run mode, safety gates
-  - `TelegramService` reduced by ~765 lines (from 2,849 to ~1,984)
-  - `_handle_callback` router updated to dispatch to `self.callbacks.*` and `self.autopost.*`
-  - Tests split into `test_telegram_callbacks.py` alongside the new modules
-  - Routing tests remain in `test_telegram_service.py` (new `TestCallbackRouting` class)
-  - All 81 tests pass (65 passed, 16 skipped) - zero regressions
-  - Part 2 of 3 in the TelegramService decomposition plan
-
-- **TelegramService Refactor PR 1: Extract Command Handlers** - Architecture improvement
-  - Extracted 14 `/command` handlers from `TelegramService` (3,504 lines) into new `TelegramCommandHandlers` class
-  - New file: `src/services/core/telegram_commands.py` (~715 lines)
-  - `TelegramService` reduced by ~655 lines (from 3,504 to 2,849)
-  - Uses composition pattern: handler class receives service reference via `__init__(self, service)`
-  - Command registration moved to a clean `command_map` dict in `initialize()`
-  - Tests split into `test_telegram_commands.py` alongside the new module
-  - All 81 tests pass (65 passed, 16 skipped) - zero regressions
-  - Part 1 of 3 in the TelegramService decomposition plan
-
-### Fixed
-- **Auto-Post Success Missing User in Verbose OFF** - Bug fix
-  - **Bug**: With verbose notifications OFF, auto-post success showed `✅ Posted to @account` without identifying who triggered the post
-  - **Fix**: Now always shows `✅ Posted to @account by @user` regardless of verbose setting
-
-### Changed
-- **Verbose Setting Now Controls More Message Types** - Expanded scope
-  - Verbose OFF now produces minimal output for: manual posted confirmations, rejected confirmations, and dry run results
-  - Added `_is_verbose()` helper method to reduce code duplication (replaces 3-line inline checks)
-  - Verbose ON behavior is unchanged (all existing detailed messages preserved)
-  - User-initiated commands (`/status`, `/queue`, `/help`, etc.) are intentionally excluded — they always show full detail
-  - See `documentation/planning/verbose-settings-improvement-plan.md` for full audit
-
-- **Refactored Settings Keyboard** - Eliminated 3x code duplication
-  - Extracted `_build_settings_message_and_keyboard()` helper method
-  - Settings menu keyboard was copy-pasted in `_handle_settings`, `_refresh_settings_message`, and `_send_settings_message_by_chat_id`
-  - Adding a new setting now requires changing only one place
-
-- **Refactored Posted/Skipped Handlers** - Extracted shared `_complete_queue_action()` helper
-  - `_handle_posted` and `_handle_skipped` shared ~60 lines of identical code (history, queue delete, logging)
-  - Now both delegate to `_complete_queue_action()` with status-specific parameters
-
-- **Simple Caption Now Respects Verbose and Account** - Consistency fix
-  - `_build_simple_caption()` now accepts `verbose` and `active_account` parameters
-  - Previously, switching `CAPTION_STYLE` to "simple" would silently ignore the verbose toggle
-
-- **Centralized Version String** - Single source of truth
-  - Added `__version__` in `src/__init__.py` (currently `1.4.0`)
-  - `setup.py`, `cli/main.py`, and startup notification now all reference `__version__`
-  - Startup notification previously showed hardcoded `v1.0.1` (3 versions behind)
-
-- **Eliminated Redundant DB Queries** - Performance improvement
-  - `_is_verbose()` now accepts optional pre-loaded `chat_settings` parameter
-  - Saves an extra database round-trip in `_do_autopost` where settings are already loaded
-
-### Fixed
-- **/cleanup Command Not Finding Messages After Restart** - Critical bug fix
-  - **Bug**: `/cleanup` command showed "cache is empty" after bot restart
-  - **Root Cause**: Command relied on in-memory deque that was cleared on restart
-  - **Fix**: Query `user_interactions` table for bot messages instead of volatile cache
-  - Bot messages were already being logged via `log_bot_response()`, now cleanup uses that data
-  - Removed in-memory `message_cache` deque (no longer needed)
-  - Added `get_bot_responses_by_chat()` repository method
-  - Added `get_deletable_bot_messages()` service method
-
-- **CI Failures** - Resolved all blocking CI issues (#20)
-  - Fixed missing `asyncio` import in telegram_service.py causing ruff check failure
-  - Auto-formatted telegram_service.py to pass ruff format checks
-  - Updated test suite to reflect /clear → /reset command rename
-  - Fixed test assertion checking wrong method for dry_run_mode verification
-  - All 310 tests now passing ✅
-
 ### Fixed
 
-- **Dry Run Mode Blocking Telegram Notifications** - Critical bug fix
-  - **Bug**: Dry run mode was blocking ALL Telegram notifications from being sent
-  - **Impact**: Scheduled posts weren't appearing in Telegram (only /next worked)
-  - **Root Cause**: `_post_via_telegram()` returned early in dry run mode without sending
-  - **Fix**: Dry run mode now only affects Instagram API posting, NOT Telegram notifications
-  - **Behavior**: Telegram notifications sent in all modes (dry run is for Instagram only)
-  - Files: `src/services/core/posting.py:304-340`
+- **Race Condition on Telegram Button Clicks** - Prevent duplicate operations from rapid double-clicks
+  - Added `asyncio.Lock` per queue item to prevent concurrent execution
+  - Added cancellation flags so terminal actions (Posted/Skip/Reject) abort pending auto-posts
+  - Auto-post checks cancellation after Cloudinary upload and before Instagram API call
+  - Shows "⏳ Already processing..." feedback when lock is held
+  - Locks and flags cleaned up after operation completes
 
-### Added - Telegram Command Menu & Message Cleanup (Phase 1.8)
+## [1.6.0] - 2026-02-09
 
-#### Native Telegram Command Menu
-- **Command Autocomplete** - Commands now appear in Telegram's native "/" menu
-  - Uses `set_my_commands()` API for native integration
-  - All 15 commands registered with descriptions
-  - Improves command discoverability in Telegram UI
-  - Updates automatically when bot initializes
+### Added
 
-#### New /cleanup Command
-- **Bot Message Cleanup** - Delete recent bot messages from chat
-  - Tracks last 100 sent messages in memory (deque with maxlen=100)
-  - Deletes messages on `/cleanup` command
-  - Gracefully handles 48-hour deletion limit (Telegram API restriction)
-  - Shows summary: deleted count and failed count
-  - Auto-deletes confirmation message after 5 seconds
-  - Clears cache after cleanup attempt
+#### Instagram Account Management (Phase 1.5)
 
-#### Command Improvements
-- **Renamed /clear → /reset** - Clearer distinction from /cleanup
-  - `/reset` - Reset posting queue to empty
-  - `/cleanup` - Delete bot messages from chat
-  - Updated help text, command registration, and CLI
-  - Better semantic separation: "reset" = start over, "cleanup" = tidy up
-  - CLI: `storyline-cli reset-queue` (aligned with Telegram command)
+- **Multi-Account Support** - Store multiple Instagram account identities
+  - Display name, Instagram ID, username per account
+  - Active/inactive status for soft deletion
+  - Separation of concerns: identity (accounts) vs credentials (tokens) vs selection (settings)
+- **Account Switching via Telegram** - Switch between accounts in /settings menu
+  - Per-chat active account selection stored in `chat_settings`
+  - Auto-select when only one account exists
+  - Visual indicator of currently active account
+- **Per-Account Token Storage** - OAuth tokens linked to specific accounts
+  - `api_tokens.instagram_account_id` foreign key
+  - Supports multiple tokens per service (one per account)
+  - Backward compatible with legacy .env-based tokens
+- **New CLI Commands**
+  - `add-instagram-account` - Register new Instagram account with encrypted token
+  - `list-instagram-accounts` - Show all registered accounts with status
+  - `deactivate-instagram-account` - Soft-delete an account
+  - `reactivate-instagram-account` - Restore a deactivated account
+- **InstagramAccountService** - New service for account management
+  - `list_accounts()`, `get_active_account()`, `switch_account()`
+  - `add_account()`, `deactivate_account()`, `reactivate_account()`
+  - `get_accounts_for_display()` - Formatted data for Telegram UI
+  - `auto_select_account_if_single()` - Auto-selection logic
+- **InstagramAPIService** - Multi-account posting support
+  - `post_story()` now accepts `telegram_chat_id` parameter
+  - Credentials retrieved based on active account for chat
+  - Fallback to legacy .env config when no account selected
+- **TokenRefreshService** - Per-account token refresh
+  - `refresh_instagram_token()` accepts `instagram_account_id`
+  - `refresh_all_instagram_tokens()` - Batch refresh for all accounts
+  - Maintains backward compatibility with legacy tokens
+- 24 new unit tests for InstagramAccountService
 
-#### Message Tracking
-- **Automatic Message ID Tracking** - Bot now tracks sent message IDs for cleanup
-  - Tracks notification messages (photos with buttons)
-  - Tracks status and queue listing messages
-  - 100-message rolling cache (prevents memory bloat)
-  - Enables efficient message cleanup
+#### Telegram /settings Menu Improvements
 
-### Fixed
+- **Close Button** - Dismiss the settings menu cleanly with ❌ Close button
+- **Verbose Mode Toggle** - Control notification verbosity via 📝 Verbose toggle
+  - ON (default): Shows detailed workflow instructions
+  - OFF: Shows minimal info
+  - Applies to manual posting notifications and auto-post success messages
+- **Schedule Management Buttons** - Manage queue directly from settings
+  - 🔄 Regenerate: Clears queue and creates new 7-day schedule (with confirmation)
+  - 📅 +7 Days: Extends existing queue by 7 days (preserves current items)
+- Removed Quick Actions buttons (📋 Queue, 📊 Status) - use `/queue` and `/status` commands instead
+- **Instagram Account Configuration via Telegram**
+  - Renamed "Select Account" to "Configure Accounts" - full account management menu
+  - **Add Account Flow** - 3-step conversation: display name → account ID → access token
+    - Auto-fetches username from Instagram API to validate credentials
+    - If account already exists, updates the token instead of erroring
+  - **Remove Account** - Deactivate accounts directly from Telegram with confirmation
+  - **Account Selection** - Select active account from the same menu
+  - Security: bot messages deleted after flow; user warned to delete sensitive messages
+- **SchedulerService `extend_schedule()` method** - Add days to existing schedule without clearing
+  - Finds last scheduled time, generates new slots starting from next day
+  - Respects category ratios and existing scheduler logic
 
-- **CI Test Failures** - Fixed ALL test failures in GitHub Actions CI (from 48 failures → 0 failures)
-  - Updated CI environment variables to provide individual database components (DB_HOST, DB_USER, DB_PASSWORD, etc.)
-  - Fixed PostingService tests to include settings_service mock after recent refactoring
-  - Updated routing tests to match new architecture (all scheduled posts go to Telegram first for review)
-  - Fixed HistoryRepository and CategoryMixRepository tests to use `_db` instead of read-only `db` property
-  - Fixed TelegramService queue tests to provide string values for file_name and category
-  - Fixed ScheduleCommand test to properly mock SchedulerService as context manager
-  - Added ENABLE_INSTAGRAM_API = False to health check test
-  - Converted TestTelegramService integration tests to use mocks instead of real database
-  - Fixed TestNextCommand tests to mock PostingService instead of connecting to database
-  - Marked complex integration tests as @pytest.mark.skip with TODO comments for future refactoring
-  - **Latest Fixes (2026-01-26)** - Completed comprehensive test suite cleanup:
-    - Fixed syntax error in test_telegram_service.py (removed orphaned code after skipped test)
-    - Fixed PostingService and SchedulerService patch paths (patching at source module, not telegram_service)
-    - Added SettingsService and InstagramAccountService mocks to mock_telegram_service fixture
-    - Fixed test_format_queue_notification to set mock_media.title explicitly (avoid Mock auto-creation)
-    - Fixed test_get_or_create_user_existing_user to mock user_repo.update_profile return value
-    - Fixed test_next_sends_earliest_scheduled_post to include queue_item_id in mock return value
-  - **Test Results**: 44 passed, 16 skipped (complex tests marked for future implementation)
-  - **Final Integration Test Cleanup (2026-01-27)** - Skipped 117 integration tests to achieve CI green status:
-    - Skipped all CLI tests (test_media_commands.py, test_queue_commands.py, test_user_commands.py) - 16 tests
-    - Skipped all repository integration tests (7 test files) - 76 tests
-    - Skipped service integration tests (test_base_service.py, test_posting.py, test_media_lock.py) - 20 tests
-    - Selectively skipped tests in test_scheduler.py and test_instagram_api.py that use test_db - 5 tests
-    - All skipped tests marked with TODO comments for future conversion to unit tests or relocation to integration/
-  - **Final Test Results**: ✅ **310 passed, 141 skipped, 0 failed** - CI is now green!
+#### Inline Account Selector (Phase 1.7)
 
-- **Account Switching from Posting Workflow** (2026-01-27) - Fixed critical bug preventing account switching
-  - **Bug**: Clicking account buttons (GT, TL) in inline selector showed loading popup but didn't switch accounts or update checkmarks
-  - **Root Cause 1**: Callback data parsing split on ALL colons instead of just the first one
-    - Callback format: `sap:queue_id:account_id` (3 parts)
-    - Old parsing: `split(':')` → only captured `queue_id`, discarded `account_id`
-    - New parsing: `split(':', 1)` → captures `queue_id:account_id` together
-  - **Root Cause 2**: Debug logging tried to slice UUID objects directly without converting to string
-    - Old: `account.id[:8]` → TypeError: 'UUID' object is not subscriptable
-    - New: `str(account.id)[:8]` → Works correctly
-  - **Impact**: Account switching now works end-to-end:
-    - ✅ Database updates: `chat_settings.active_instagram_account_id` changes
-    - ✅ UI updates: Checkmark moves to selected account
-    - ✅ API calls: Future posts use selected account's Instagram access token
-    - ✅ Attribution: Posts are attributed to the correct account in history
-
-### Added - Inline Account Selector (Phase 1.7)
-
-#### Posting Workflow Enhancements
-- **Account Indicator in Caption** - Posting notifications now show which Instagram account is active
-  - Format: "📸 Account: {display_name}" (shows friendly name, not @username)
+- **Account Indicator in Caption** - Posting notifications show which Instagram account is active
+  - Format: "📸 Account: {display_name}"
   - Shows "📸 Account: Not set" when no account is configured
 - **Account Selector Button** - Switch accounts without leaving the posting workflow
   - New "📸 {account_name}" button in posting notifications
   - Click to see simplified account selector (no add/remove, just switch)
   - Immediate feedback with toast notification on switch
   - Automatically returns to posting workflow with updated caption
+- **Button Layout Reorganization**
+  - Status Actions Grouped: Posted, Skip, and Reject buttons together
+  - Instagram Actions Grouped: Account selector and Open Instagram below
+  - New order: Auto Post → Posted/Skip → Reject → Account Selector → Open Instagram
+- **Shortened Callback Data** - Uses 8-char UUID prefixes for Telegram's 64-byte callback limit
+  - New repository methods: `QueueRepository.get_by_id_prefix()`, `InstagramAccountRepository.get_by_id_prefix()`
+- **Settings Menu** - Renamed account button to "Default: {friendly_name}", clearer "Choose Default Account" language
 
-#### Button Layout Reorganization
-- **Status Actions Grouped** - Posted, Skip, and Reject buttons now grouped together
-- **Instagram Actions Grouped** - Account selector and Open Instagram buttons grouped below
-- **New Button Order**:
-  1. Auto Post to Instagram (if enabled)
-  2. Posted / Skip (same row)
-  3. Reject
-  4. Account Selector
-  5. Open Instagram
+#### Telegram Command Menu & Message Cleanup (Phase 1.8)
 
-#### Settings Menu Improvements
-- **Renamed Account Button** - Changed from "@username" to "Default: {friendly_name}"
-- **Clearer Language** - "Configure Accounts" → "Choose Default Account"
-- **Default Account Concept** - Settings sets the default; posting workflow allows override
-
-#### Technical Implementation
-- **Shortened Callback Data** - Uses 8-char UUID prefixes to stay within Telegram's 64-byte limit
-  - `select_account:{queue_id}` for showing selector
-  - `sap:{short_queue_id}:{short_account_id}` for switching
-  - `btp:{short_queue_id}` for returning to post
-- **New Repository Methods**:
-  - `QueueRepository.get_by_id_prefix()` - Find queue items by UUID prefix
-  - `InstagramAccountRepository.get_by_id_prefix()` - Find accounts by UUID prefix
-- **Bug Fix** - `_handle_cancel_reject` now uses `chat_settings.enable_instagram_api` (database) instead of `settings.ENABLE_INSTAGRAM_API` (env var)
-
-#### Files Changed
-- `src/services/core/telegram_service.py` - Caption builder, keyboard builder, callback handlers
-- `src/repositories/queue_repository.py` - Added `get_by_id_prefix()`
-- `src/repositories/instagram_account_repository.py` - Added `get_by_id_prefix()`
-- `src/services/core/instagram_account_service.py` - Added `get_account_by_id_prefix()`
-- `tests/src/services/test_telegram_service.py` - Added tests for inline account selector
-- `documentation/planning/phase-1.7-inline-account-selector.md` - Updated button order in plan
-
-### Fixed
-
-#### Code Quality and CI
-- **Ruff Linting Errors** - Fixed all 48 linting errors preventing CI from passing
-  - Removed 8 unused imports (urlencode, datetime, BigInteger, Dict, Decimal, Path, Optional, List)
-  - Fixed 18 unnecessary f-strings without placeholders
-  - Fixed 7 boolean comparison patterns (`== True` → direct checks, `== False` → `~` operator)
-  - Reorganized imports in cli/main.py to be at top of file
-  - Removed 1 unused variable in telegram_service.py
+- **Native Telegram Command Menu** - Commands appear in Telegram's native "/" autocomplete
+  - Uses `set_my_commands()` API; all 15 commands registered with descriptions
+  - Updates automatically when bot initializes
+- **`/cleanup` Command** - Delete recent bot messages from chat
+  - Queries `user_interactions` table for bot messages
+  - Gracefully handles 48-hour deletion limit (Telegram API restriction)
+  - Shows summary: deleted count and failed count
+  - Auto-deletes confirmation message after 5 seconds
+- **Renamed `/clear` → `/reset`** - Clearer distinction from `/cleanup`
+  - `/reset` = Reset posting queue to empty; `/cleanup` = Delete bot messages from chat
+  - CLI aligned: `storyline-cli reset-queue`
+- **Automatic Message ID Tracking** - Bot tracks sent message IDs for cleanup
+  - Tracks notification messages (photos with buttons) and status/queue listing messages
+  - 100-message rolling cache
 
 ### Changed
 
-#### Developer Experience Improvements
-- **Claude Code Hooks** - Updated PostToolUse hooks to auto-fix linting errors on file save
-  - Added `ruff check --fix` before `ruff format` in hooks
-  - Automatically fixes unused imports, f-strings, and other linting issues
-- **Pre-Push Linting Script** - New `scripts/lint.sh` to catch CI failures locally
-  - Runs `ruff check --fix` and `ruff format` on all code
-  - Prevents CI failures by validating before push
-- **Documentation Permissions** - Added markdown write permissions for documentation/ folder
-  - Enables frictionless documentation updates via Claude Code
-- **Documentation Organization** - Moved SECURITY_REVIEW.md to documentation/ folder
+#### TelegramService Refactor
 
-#### Planning
+- **PR 1: Extract Command Handlers** - Architecture improvement
+  - Extracted 14 `/command` handlers into new `TelegramCommandHandlers` class (`telegram_commands.py`, ~715 lines)
+  - `TelegramService` reduced by ~655 lines (from 3,504 to 2,849)
+  - Uses composition pattern: handler class receives service reference via `__init__(self, service)`
+  - Command registration moved to a clean `command_map` dict in `initialize()`
+  - Tests split into `test_telegram_commands.py`
+  - All 81 tests pass (65 passed, 16 skipped) - zero regressions
+- **PR 2: Extract Callbacks + Autopost** - Architecture improvement
+  - Extracted 9 callback handlers into new `TelegramCallbackHandlers` class (`telegram_callbacks.py`)
+  - Extracted auto-post flow into new `TelegramAutopostHandler` class (`telegram_autopost.py`)
+  - `TelegramService` reduced by ~765 lines (from 2,849 to ~1,984)
+  - Tests split into `test_telegram_callbacks.py`; routing tests remain in `test_telegram_service.py`
+  - All 81 tests pass - zero regressions
+- **PR 3: Extract Settings + Accounts** - Architecture improvement
+  - Extracted settings handlers into new `TelegramSettingsHandlers` class (`telegram_settings.py`)
+  - Extracted account handlers into new `TelegramAccountHandlers` class (`telegram_accounts.py`)
+  - `TelegramService` reduced from ~1,984 to ~681 lines (core routing, initialization, captions, shared utilities)
+  - Tests split into `test_telegram_settings.py` and `test_telegram_accounts.py`
+  - All 345 tests pass (77 telegram-specific) - zero regressions
+
+#### Verbose Settings Expansion
+
+- **Verbose Setting Now Controls More Message Types** - Manual posted confirmations, rejected confirmations, and dry run results
+- Added `_is_verbose()` helper method to reduce code duplication (replaces 3-line inline checks)
+- User-initiated commands (`/status`, `/queue`, `/help`, etc.) always show full detail
+
+#### Code Quality & Developer Experience
+
+- **Refactored Settings Keyboard** - Eliminated 3x code duplication; extracted `_build_settings_message_and_keyboard()` helper
+- **Refactored Posted/Skipped Handlers** - Extracted shared `_complete_queue_action()` helper (~60 lines of duplicated code removed)
+- **Simple Caption Now Respects Verbose and Account** - Consistency fix for `CAPTION_STYLE=simple`
+- **Centralized Version String** - Added `__version__` in `src/__init__.py`; `setup.py`, `cli/main.py`, and startup notification now reference it
+- **Eliminated Redundant DB Queries** - `_is_verbose()` accepts optional pre-loaded `chat_settings` parameter
+- **Claude Code Hooks** - Auto-fix linting errors on file save (`ruff check --fix` + `ruff format`)
+- **Pre-Push Linting Script** - `scripts/lint.sh` catches CI failures locally
+- **Documentation Organization** - Moved SECURITY_REVIEW.md to documentation/ folder; added markdown write permissions
 - **Phase 1.7 Feature Plan** - Added inline account selector planning document
-  - Comprehensive UX enhancement plan for Instagram account switching
-  - Includes implementation strategy, testing plan, and rollout phases
-  - Ready for development kickoff
-
-### Added - Telegram /settings Menu Improvements
-
-#### New Settings Menu Features
-- **Close Button** - Dismiss the settings menu cleanly with ❌ Close button
-- **Verbose Mode Toggle** - Control notification verbosity via 📝 Verbose toggle
-  - ON (default): Shows detailed workflow instructions (save image, open Instagram, post)
-  - OFF: Shows minimal info (just "✅ Posted to @username")
-  - Applies to both manual posting notifications and auto-post success messages
-- **Schedule Management Buttons** - Manage queue directly from settings
-  - 🔄 Regenerate: Clears queue and creates new 7-day schedule (with confirmation)
-  - 📅 +7 Days: Extends existing queue by 7 days (preserves current items)
-
-#### Settings Menu Cleanup
-- Removed Quick Actions buttons (📋 Queue, 📊 Status) - use /queue and /status commands instead
-- Added explanatory text for schedule actions
-- Cleaner separation between /settings (configuration) and /status (read-only state)
-
-#### Instagram Account Configuration via Telegram
-- **Renamed "Select Account" to "Configure Accounts"** - Now a full account management menu
-- **Add Account Flow** - 3-step conversation to add new Instagram accounts:
-  1. Display name (friendly name for the account)
-  2. Instagram Account ID (from Meta Business Suite)
-  3. Access token (bot attempts to delete immediately for security)
-  - Auto-fetches username from Instagram API to validate credentials
-  - If account already exists, updates the token instead of erroring
-- **Remove Account** - Deactivate accounts directly from Telegram with confirmation
-- **Account Selection** - Select active account from the same menu
-- **Security Notes**:
-  - Bot messages with prompts are deleted after flow completes
-  - Security warning reminds users to delete their own messages (bots cannot delete user messages in private chats due to Telegram API limitation)
-  - Token validation via Instagram API before account creation
-
-#### SchedulerService Enhancement
-- **`extend_schedule()` method** - Add days to existing schedule without clearing
-  - Finds last scheduled time in queue
-  - Generates new slots starting from the next day
-  - Respects category ratios and existing scheduler logic
-  - Returns detailed result with scheduled/skipped counts
-
-#### Database Changes
-- **Migration 010**: Add `show_verbose_notifications` column to `chat_settings`
-  - Boolean column, defaults to true
-  - Controls notification detail level per-chat
-
-### Technical Details
-
-#### New Callback Handlers
-- `settings_close` - Deletes the settings message
-- `settings_toggle:show_verbose_notifications` - Toggles verbose mode
-- `schedule_action:regenerate` - Shows confirmation, then clears queue and creates new schedule
-- `schedule_action:extend` - Extends schedule by 7 days
-- `schedule_confirm:regenerate` - Confirms and executes regeneration
-- `schedule_confirm:cancel` - Cancels and returns to settings
-- `accounts_config:add` - Start add account conversation
-- `accounts_config:remove` - Show remove account menu
-- `account_remove:{id}` - Confirm account removal
-- `account_remove_confirmed:{id}` - Execute account removal
-- `account_add_cancel:cancel` - Cancel add account flow
-
-#### Files Changed
-- `scripts/migrations/010_add_verbose_notifications.sql` - New migration
-- `src/models/chat_settings.py` - Added `show_verbose_notifications` column
-- `src/services/core/settings_service.py` - Added to toggleable settings
-- `src/services/core/scheduler.py` - Added `extend_schedule()` method
-- `src/services/core/telegram_service.py` - New buttons, handlers, verbose caption logic
-- `src/repositories/chat_settings_repository.py` - Updated get_or_create defaults
 
 ### Fixed
 
-- **CRITICAL: Settings Workflow - Database vs .env** - Fixed issue where .env values were overriding database settings
-  - Dry Run toggle in /settings now actually controls posting behavior
-  - Instagram API toggle now works correctly
-  - Account switching now affects which account is used for posting
-  - Verbose mode toggle now controls notification detail level
+#### Critical Bugs
+
+- **Dry Run Mode Blocking Telegram Notifications** - Dry run was blocking ALL Telegram notifications; now only affects Instagram API posting (`src/services/core/posting.py:304-340`)
+- **`/cleanup` Command Not Finding Messages After Restart** - Relied on in-memory deque cleared on restart; now queries `user_interactions` table
+  - Removed in-memory `message_cache` deque; added `get_bot_responses_by_chat()` repository method and `get_deletable_bot_messages()` service method
+- **Auto-Post Success Missing User in Verbose OFF** - Now always shows `✅ Posted to @account by @user` regardless of verbose setting
+- **Settings Workflow - Database vs .env** - Fixed .env values overriding database settings for dry run, Instagram API toggle, account switching, and verbose mode
+  - Fixed all toggle locations: `_do_autopost()`, `send_notification()`, `/dryrun`, `safety_check_before_post()`
   - All settings now persist across service restarts
+- **Token Encryption for Multi-Account** - Tokens added via Telegram were stored unencrypted; now properly encrypts when storing
+- **Account Switching from Posting Workflow** - Fixed critical bug preventing account switching
+  - Root Cause 1: Callback data parsing split on ALL colons instead of just the first one
+  - Root Cause 2: Debug logging sliced UUID objects without converting to string
 
-- **Settings toggle locations fixed**:
-  - `telegram_service.py:_do_autopost()` - Now reads `chat_settings.dry_run_mode`
-  - `telegram_service.py:send_notification()` - Now reads `chat_settings.enable_instagram_api`
-  - `telegram_service.py:/dryrun` command - Now updates database instead of in-memory
-  - `instagram_api.py:safety_check_before_post()` - Now reads from database settings
-  - All `post_story()` and `get_account_info()` calls now pass `telegram_chat_id`
+#### Settings & Account Fixes
 
-- **Add Account Flow - Existing Account Handling** - When adding an account that already exists (e.g., after a previous failed attempt), the token is now updated instead of showing "Account already exists" error
+- **Add Account Flow - Existing Account Handling** - Token now updated instead of showing error when account already exists
+- **Add Account Flow - Security Warning** - Fixed misleading message about bot deleting user messages
+- **InstagramAccountService** - Added `update_account_token()` and `get_account_by_instagram_id()` methods
+- **Editable Posts/Day and Hours** - Previously display-only in /settings; now starts a conversation flow to edit values
+- **`_handle_cancel_reject` Bug** - Now uses `chat_settings.enable_instagram_api` (database) instead of `settings.ENABLE_INSTAGRAM_API` (env var)
 
-- **Add Account Flow - Security Warning** - Fixed misleading message that claimed "Your token message will be deleted immediately" (bots cannot delete user messages in private chats). Now correctly warns users to delete their own messages.
+#### CI & Code Quality
 
-- **InstagramAccountService** - Added `update_account_token()` method for updating tokens on existing accounts and `get_account_by_instagram_id()` convenience method
-
-- **Token Encryption for Multi-Account** - Tokens added via Telegram were stored unencrypted but the posting code tried to decrypt them, causing fallback to legacy .env token. Now properly encrypts tokens when storing.
-
-- **Editable Posts/Day and Hours** - These settings were previously display-only in /settings menu. Now clicking them starts a conversation flow to edit values directly from Telegram.
-
----
-
-### Added - Instagram Account Management (Phase 1.5)
-
-#### Multi-Account Support
-- **Instagram Accounts Table** - Store multiple Instagram account identities
-  - Display name, Instagram ID, username per account
-  - Active/inactive status for soft deletion
-  - Separation of concerns: identity (accounts) vs credentials (tokens) vs selection (settings)
-
-- **Account Switching via Telegram** - Switch between accounts in /settings menu
-  - "📱 Switch Account" button in settings menu
-  - Per-chat active account selection stored in `chat_settings`
-  - Auto-select when only one account exists
-  - Visual indicator of currently active account
-
-- **Per-Account Token Storage** - OAuth tokens linked to specific accounts
-  - `api_tokens.instagram_account_id` foreign key
-  - Supports multiple tokens per service (one per account)
-  - Backward compatible with legacy .env-based tokens
-
-#### New CLI Commands
-- `add-instagram-account` - Register new Instagram account with encrypted token
-- `list-instagram-accounts` - Show all registered accounts with status
-- `deactivate-instagram-account` - Soft-delete an account
-- `reactivate-instagram-account` - Restore a deactivated account
-
-#### Service Layer Updates
-- **InstagramAccountService** - New service for account management
-  - `list_accounts()`, `get_active_account()`, `switch_account()`
-  - `add_account()`, `deactivate_account()`, `reactivate_account()`
-  - `get_accounts_for_display()` - Formatted data for Telegram UI
-  - `auto_select_account_if_single()` - Auto-selection logic
-
-- **InstagramAPIService** - Multi-account posting support
-  - `post_story()` now accepts `telegram_chat_id` parameter
-  - Credentials retrieved based on active account for chat
-  - Fallback to legacy .env config when no account selected
-
-- **TokenRefreshService** - Per-account token refresh
-  - `refresh_instagram_token()` accepts `instagram_account_id`
-  - `refresh_all_instagram_tokens()` - Batch refresh for all accounts
-  - Maintains backward compatibility with legacy tokens
-
-#### Test Coverage
-- 24 new unit tests for InstagramAccountService
-- Tests for separation of concerns architecture
-- Tests for multi-account scenarios and edge cases
+- **CI Failures** - Resolved all blocking CI issues (#20)
+  - Fixed missing `asyncio` import, auto-formatted telegram_service.py
+  - Updated test suite for `/clear` → `/reset` rename; fixed assertion for dry_run_mode
+  - All 310 tests passing
+- **Ruff Linting Errors** - Fixed all 48 linting errors
+  - Removed 8 unused imports, fixed 18 unnecessary f-strings, fixed 7 boolean comparison patterns
+  - Reorganized imports in cli/main.py, removed 1 unused variable
+- **CI Test Failures** - Fixed ALL test failures (48 failures → 0)
+  - Updated CI environment variables for individual database components
+  - Fixed PostingService, HistoryRepository, CategoryMixRepository, TelegramService tests
+  - Converted integration tests to use mocks; skipped complex tests for future refactoring
+  - Final: 310 passed, 141 skipped, 0 failed
 
 ### Technical Details
 
 #### Database Migrations
+
 - `007_instagram_accounts.sql` - Creates `instagram_accounts` table
 - `008_api_tokens_account_fk.sql` - Adds FK to `api_tokens`, updates unique constraint
 - `009_chat_settings_active_account.sql` - Adds `active_instagram_account_id` to `chat_settings`
+- `010_add_verbose_notifications.sql` - Adds `show_verbose_notifications` column to `chat_settings`
 
 #### New Files
+
 - `src/models/instagram_account.py` - InstagramAccount SQLAlchemy model
 - `src/repositories/instagram_account_repository.py` - Full CRUD operations
 - `src/services/core/instagram_account_service.py` - Business logic layer
+- `src/services/core/telegram_commands.py` - Command handlers (~715 lines)
+- `src/services/core/telegram_callbacks.py` - Callback handlers
+- `src/services/core/telegram_autopost.py` - Auto-post handler
+- `src/services/core/telegram_settings.py` - Settings UI handlers
+- `src/services/core/telegram_accounts.py` - Account selection handlers
 - `tests/src/services/test_instagram_account_service.py` - Unit tests
+- `tests/src/services/test_telegram_commands.py` - Command handler tests
+- `tests/src/services/test_telegram_callbacks.py` - Callback handler tests
+- `tests/src/services/test_telegram_settings.py` - Settings UI tests
+- `tests/src/services/test_telegram_accounts.py` - Account handler tests
 
 #### Modified Files
+
 - `src/models/api_token.py` - Added instagram_account_id FK and relationship
-- `src/models/chat_settings.py` - Added active_instagram_account_id FK
+- `src/models/chat_settings.py` - Added active_instagram_account_id FK, show_verbose_notifications
 - `src/repositories/token_repository.py` - Per-account token methods
-- `src/services/core/telegram_service.py` - Account switching UI
+- `src/repositories/queue_repository.py` - Added `get_by_id_prefix()`
+- `src/repositories/chat_settings_repository.py` - Updated get_or_create defaults
+- `src/services/core/telegram_service.py` - Reduced to ~681 lines (core routing, initialization, captions)
+- `src/services/core/scheduler.py` - Added `extend_schedule()` method
 - `src/services/integrations/instagram_api.py` - Multi-account support
 - `src/services/integrations/token_refresh.py` - Per-account refresh
 - `cli/commands/instagram.py` - New CLI commands
@@ -1074,7 +886,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Posting Mode**: 100% manual via Telegram
 - **Instagram API**: Not required for Phase 1
 
-[Unreleased]: https://github.com/chrisrogers37/storyline-ai/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/chrisrogers37/storyline-ai/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/chrisrogers37/storyline-ai/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/chrisrogers37/storyline-ai/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/chrisrogers37/storyline-ai/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/chrisrogers37/storyline-ai/compare/v1.2.0...v1.3.0
