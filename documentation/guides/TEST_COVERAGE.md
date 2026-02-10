@@ -1,7 +1,8 @@
 # Test Coverage Report
 
 **Last Updated**: 2026-02-09
-**Total Tests**: 495
+**Total Tests**: 494 (351 passing, 143 skipped integration tests)
+**Test Files**: 36
 **Test Framework**: pytest 7.4.3
 **Coverage Target**: Core business logic and critical paths
 **Status**: ✅ Current through v1.6.0 + race condition handling
@@ -19,7 +20,7 @@
 | **Utilities** | 5 | ~50 | File hashing, image processing, validation, encryption |
 | **CLI** | 4 | ~45 | Command interface, user interactions |
 | **Integration** | 1 | ~13 | End-to-end Instagram posting workflow |
-| **TOTAL** | **35** | **495** | **Full Phase 2 + TelegramService refactor + race condition handling** |
+| **TOTAL** | **36** | **494** | **Full Phase 2 + TelegramService refactor + race condition handling** |
 
 ### Post-Phase 1.6 Test Additions (~220 new tests)
 

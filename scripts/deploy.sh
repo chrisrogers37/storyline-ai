@@ -5,7 +5,7 @@ set -e
 # Usage: ./scripts/deploy.sh [--skip-tests] [--skip-migrations]
 
 REMOTE_HOST="crogberrypi"
-REMOTE_USER="${REMOTE_USER:-pi}"
+REMOTE_USER="${REMOTE_USER:-crog}"
 REMOTE_PATH="~/storyline-ai"
 SKIP_TESTS=false
 SKIP_MIGRATIONS=false

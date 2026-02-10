@@ -8,6 +8,8 @@ Critical data to backup:
 3. **Configuration** - `.env` file with tokens
 4. **Tokens** - Encrypted in database, but backup separately
 
+> **Note on paths**: This guide uses `/home/pi/` as the example home directory. Replace with your actual home directory (e.g., `/home/crog/`).
+
 ---
 
 ## Database Backup

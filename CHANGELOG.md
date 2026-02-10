@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Documentation review and accuracy audit** - Cross-referenced all docs against codebase post-v1.6.0 refactor
+  - Corrected test counts, setting names, supported formats, and deploy script defaults
+  - Updated code examples in security review for post-refactor handler locations
+  - Archived 4 completed planning docs; standardized status markers (PENDING/IN PROGRESS/COMPLETED)
+
 ### Fixed
 
 - **Race Condition on Telegram Button Clicks** - Prevent duplicate operations from rapid double-clicks

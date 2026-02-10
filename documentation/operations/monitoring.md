@@ -4,6 +4,8 @@
 
 Storyline AI runs on a Raspberry Pi with systemd service management. This guide covers monitoring the service health and common metrics.
 
+> **Note on paths**: This guide uses `/home/pi/` as the example home directory. Replace with your actual home directory (e.g., `/home/crog/`).
+
 ---
 
 ## Service Status

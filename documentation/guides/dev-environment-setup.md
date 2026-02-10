@@ -198,73 +198,30 @@ Create a `.env.dev` for Mac development with test settings.
 
 ---
 
-### 6. Deployment Checklist Script
+### 6. Deployment Script
 
-Create `scripts/deploy-to-pi.sh` on your Mac:
+The project includes a deployment script at `scripts/deploy.sh` that handles the full workflow:
 
 ```bash
-#!/bin/bash
-set -e
+# Deploy to Pi (runs tests, pushes, pulls, installs deps, runs migrations, restarts service)
+./scripts/deploy.sh
 
-PI_HOST="crog@raspberrypi.local"
-PI_PATH="~/storyline-ai"
+# Skip local tests (faster, use when you've already verified)
+./scripts/deploy.sh --skip-tests
 
-echo "=== Storyline AI Deployment ==="
-echo ""
-
-# Step 1: Commit check
-if [[ -n $(git status -s) ]]; then
-    echo "WARNING: You have uncommitted changes!"
-    git status -s
-    read -p "Continue anyway? (y/N) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        exit 1
-    fi
-fi
-
-# Step 2: Push to git
-echo "Step 1: Pushing to git..."
-git push origin $(git branch --show-current)
-
-# Step 3: Pull on Pi
-echo "Step 2: Pulling on Pi..."
-ssh ${PI_HOST} "cd ${PI_PATH} && git pull"
-
-# Step 4: Check if migrations needed
-echo "Step 3: Checking for schema changes..."
-SCHEMA_CHANGED=$(ssh ${PI_HOST} "cd ${PI_PATH} && git diff HEAD~1 --name-only | grep -c 'setup_database.sql' || true")
-
-if [[ "$SCHEMA_CHANGED" -gt 0 ]]; then
-    echo "Schema changes detected!"
-    read -p "Run database reset? (y/N) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "Resetting database..."
-        ssh -t ${PI_HOST} "cd ${PI_PATH} && source venv/bin/activate && sl-db-reset-full"
-        echo "Re-indexing media..."
-        ssh -t ${PI_HOST} "cd ${PI_PATH} && source venv/bin/activate && storyline-cli index-media ~/storyline-ai/media/stories"
-    fi
-fi
-
-# Step 5: Restart service
-echo "Step 4: Restarting service..."
-ssh ${PI_HOST} "sudo systemctl restart storyline-ai"
-
-# Step 6: Verify
-echo "Step 5: Checking service status..."
-sleep 2
-ssh ${PI_HOST} "sudo systemctl status storyline-ai --no-pager | head -20"
-
-echo ""
-echo "=== Deployment Complete ==="
-echo "Run 'ssh ${PI_HOST}' and 'sl-logs' to monitor"
+# Skip database migrations
+./scripts/deploy.sh --skip-migrations
 ```
 
-Make it executable:
-```bash
-chmod +x scripts/deploy-to-pi.sh
-```
+The script:
+1. Checks for uncommitted changes (warns if present)
+2. Runs local tests (unless `--skip-tests`)
+3. Pushes to GitHub
+4. SSHs to Pi via `crogberrypi` alias
+5. Pulls latest code, installs dependencies
+6. Runs all SQL migrations idempotently
+7. Restarts the `storyline-ai` systemd service
+8. Verifies service health
 
 ---
 
@@ -316,9 +273,9 @@ Pi:   sl-restart
   - Update `PI_HOST` if your Pi has a different hostname
   - Run `source ~/.zshrc`
 
-- [ ] **Mac: Create deploy script**
-  - Copy script from Section 6 to `scripts/deploy-to-pi.sh`
-  - Run `chmod +x scripts/deploy-to-pi.sh`
+- [ ] **Mac: Verify deploy script**
+  - `scripts/deploy.sh` already exists in the repo
+  - Run `chmod +x scripts/deploy.sh` if needed
 
 - [ ] **Both: Update Makefile** (optional)
   - Replace database targets with cross-platform version
@@ -335,9 +292,8 @@ Pi:   sl-restart
 
 1. **Docker**: Containerize the app for identical environments
 2. **Ansible**: Automate Pi provisioning and deployment
-3. **GitHub Actions**: Auto-deploy on push to main
-4. **Tailscale**: VPN for accessing Pi from anywhere
+3. **GitHub Actions + Tailscale**: See `documentation/guides/github-actions-tailscale.md` for VPN-based automated deployment (documented but not yet active)
 
 ---
 
-*Last updated: 2026-01-10*
+*Last updated: 2026-02-10*

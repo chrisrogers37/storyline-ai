@@ -27,6 +27,10 @@ For current documentation, refer to:
 | `phase-1.5-telegram-enhancements.md` | Phase 1.5 planning | Phase 1.5 complete (v1.3.0) |
 | `instagram_automation_plan.md` | Original master planning doc | Superseded by `phases/` docs |
 | `01_instagram_api.md` | Phase 2 Instagram API planning | Phase 2 complete (v1.5.0) |
+| `telegram-service-refactor-plan.md` | TelegramService decomposition plan | Refactor complete (v1.6.0) - 3,500-line monolith split into 6 modules |
+| `verbose-settings-improvement-plan.md` | Verbose notifications expansion | Complete (v1.6.0) - `_is_verbose()` helper, 4 message type fixes |
+| `phase-1.7-inline-account-selector.md` | Inline account selection in posting workflow | Complete (v1.5.0) - Account switching without leaving post context |
+| `user-interactions-design.md` | InteractionService design for analytics | Complete (v1.4.0) - Command/callback/response logging |
 
 ## When to Reference Archive
 

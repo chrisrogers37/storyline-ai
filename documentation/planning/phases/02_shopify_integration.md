@@ -1,6 +1,6 @@
 # Phase 3: Shopify Integration
 
-**Status**: 📋 PLANNED
+**Status**: 📋 PENDING
 **Dependencies**: Phase 2 (Instagram API)
 **Estimated Duration**: 2-3 weeks
 
