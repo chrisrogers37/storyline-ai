@@ -34,7 +34,26 @@ class TelegramAutopostHandler:
 
         This uploads the media to Cloudinary and posts to Instagram via API.
         Includes CRITICAL safety gates to prevent accidental Facebook posting.
+
+        Uses operation locks to prevent duplicate auto-posts from rapid clicks.
+        Checks cancellation flags so terminal actions (Posted/Skip/Reject) can abort.
         """
+        lock = self.service.get_operation_lock(queue_id)
+        if lock.locked():
+            await query.answer("⏳ Already processing...", show_alert=False)
+            return
+
+        cancel_flag = self.service.get_cancel_flag(queue_id)
+        cancel_flag.clear()
+
+        async with lock:
+            try:
+                await self._locked_autopost(queue_id, user, query, cancel_flag)
+            finally:
+                self.service.cleanup_operation_state(queue_id)
+
+    async def _locked_autopost(self, queue_id, user, query, cancel_flag):
+        """Autopost implementation that runs under the operation lock."""
         queue_item = self.service.queue_repo.get_by_id(queue_id)
 
         if not queue_item:
@@ -65,6 +84,7 @@ class TelegramAutopostHandler:
                 query,
                 instagram_service,
                 cloud_service,
+                cancel_flag,
             )
         finally:
             # Ensure services are cleaned up to prevent connection pool exhaustion
@@ -80,6 +100,7 @@ class TelegramAutopostHandler:
         query,
         instagram_service,
         cloud_service,
+        cancel_flag=None,
     ):
         """Internal method to perform auto-post with pre-created services."""
         chat_id = query.message.chat_id
@@ -125,6 +146,16 @@ class TelegramAutopostHandler:
                 raise Exception("Cloudinary upload failed: No URL returned")
 
             logger.info(f"Uploaded to Cloudinary: {cloud_public_id}")
+
+            # Check cancellation after Cloudinary upload
+            if cancel_flag and cancel_flag.is_set():
+                logger.info(
+                    f"Auto-post cancelled after Cloudinary upload for {media_item.file_name}"
+                )
+                await query.edit_message_caption(
+                    caption="❌ Auto-post cancelled (another action was taken)"
+                )
+                return
 
             # Update media item with cloud info
             self.service.media_repo.update_cloud_info(
@@ -230,6 +261,16 @@ class TelegramAutopostHandler:
             # ============================================
             # REAL POSTING - Continue to Instagram API
             # ============================================
+            # Check cancellation before Instagram API call
+            if cancel_flag and cancel_flag.is_set():
+                logger.info(
+                    f"Auto-post cancelled before Instagram API for {media_item.file_name}"
+                )
+                await query.edit_message_caption(
+                    caption="❌ Auto-post cancelled (another action was taken)"
+                )
+                return
+
             # Step 2: Post to Instagram
             await query.edit_message_caption(
                 caption="⏳ *Posting to Instagram...*", parse_mode="Markdown"

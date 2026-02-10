@@ -3,7 +3,7 @@
 Welcome to the Storyline AI documentation hub. All project documentation is organized here by purpose.
 
 **Last Updated**: 2026-02-09
-**Current Version**: v1.5.0+
+**Current Version**: v1.6.0
 **Current Phase**: Phase 2 (Instagram API Automation) - ✅ COMPLETE | Phase 1.8 (Telegram UX) - ✅ COMPLETE
 
 ## 📁 Documentation Structure
@@ -100,11 +100,10 @@ documentation/
 - Production launch steps
 
 ### Testing Guide
-**[testing-guide.md](guides/testing-guide.md)** (primary)
-**[testing.md](guides/testing.md)** (auto-DB setup details)
-- How test database auto-creation works
+**[testing-guide.md](guides/testing-guide.md)**
+- Automatic test database setup and fixture architecture
 - Running tests (unit, integration, coverage)
-- Writing new tests (488 tests as of 2026-02-09)
+- Writing new tests (488 tests as of v1.6.0)
 - Test fixtures and patterns
 - CI/CD integration
 - Troubleshooting test failures
@@ -278,7 +277,7 @@ Current documentation status:
 |------|--------|-------|-------|
 | **Planning** | ✅ Current | 12 files | Phases 1-2.5 complete, 3-8 planned |
 | **Getting Started** | ✅ Current | 6 guides | Setup, deployment, testing, Instagram API |
-| **Testing** | ✅ Current | 2 guides | 488 tests documented |
+| **Testing** | ✅ Current | 1 guide | 488 tests documented |
 | **Updates** | ✅ Current | 3 files | Bugfixes, features |
 | **Archive** | ✅ Organized | 7 files | Historical docs preserved |
 | **Operations** | ✅ Current | 3 files | Monitoring, backup, troubleshooting |

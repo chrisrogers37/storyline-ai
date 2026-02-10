@@ -1,5 +1,7 @@
 """Telegram service - bot operations and callbacks."""
 
+import asyncio
+
 from telegram import Bot, BotCommand, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -65,6 +67,25 @@ class TelegramService(BaseService):
         self.ig_account_service = InstagramAccountService()
         self.bot = None
         self.application = None
+        self._operation_locks: dict[str, asyncio.Lock] = {}
+        self._cancel_flags: dict[str, asyncio.Event] = {}
+
+    def get_operation_lock(self, queue_id: str) -> asyncio.Lock:
+        """Get or create an asyncio lock for a queue item."""
+        if queue_id not in self._operation_locks:
+            self._operation_locks[queue_id] = asyncio.Lock()
+        return self._operation_locks[queue_id]
+
+    def get_cancel_flag(self, queue_id: str) -> asyncio.Event:
+        """Get or create a cancellation flag for a queue item."""
+        if queue_id not in self._cancel_flags:
+            self._cancel_flags[queue_id] = asyncio.Event()
+        return self._cancel_flags[queue_id]
+
+    def cleanup_operation_state(self, queue_id: str):
+        """Clean up lock and cancel flag after operation completes."""
+        self._operation_locks.pop(queue_id, None)
+        self._cancel_flags.pop(queue_id, None)
 
     @property
     def is_paused(self) -> bool:

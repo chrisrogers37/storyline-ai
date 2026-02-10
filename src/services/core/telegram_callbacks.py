@@ -39,7 +39,33 @@ class TelegramCallbackHandlers:
         Handles the common workflow: validate queue item, create history,
         delete from queue, update caption, and log interactions.
         For 'posted' status, also increments post count, creates lock, and updates user stats.
+
+        Uses operation locks to prevent duplicate actions from rapid button clicks.
         """
+        lock = self.service.get_operation_lock(queue_id)
+        if lock.locked():
+            await query.answer("⏳ Already processing this item...", show_alert=False)
+            return
+
+        async with lock:
+            try:
+                await self._do_complete_queue_action(
+                    queue_id, user, query, status, success, caption, callback_name
+                )
+            finally:
+                self.service.cleanup_operation_state(queue_id)
+
+    async def _do_complete_queue_action(
+        self,
+        queue_id: str,
+        user,
+        query,
+        status: str,
+        success: bool,
+        caption: str,
+        callback_name: str,
+    ):
+        """Internal implementation of queue action completion (runs under lock)."""
         queue_item = self.service.queue_repo.get_by_id(queue_id)
 
         if not queue_item:
@@ -106,6 +132,10 @@ class TelegramCallbackHandlers:
 
     async def handle_posted(self, queue_id: str, user, query):
         """Handle 'Posted' button click."""
+        # Signal any pending autopost to abort
+        cancel_flag = self.service.get_cancel_flag(queue_id)
+        cancel_flag.set()
+
         verbose = self.service._is_verbose(query.message.chat_id)
         display_name = self.service._get_display_name(user)
         if verbose:
@@ -125,6 +155,10 @@ class TelegramCallbackHandlers:
 
     async def handle_skipped(self, queue_id: str, user, query):
         """Handle 'Skip' button click."""
+        # Signal any pending autopost to abort
+        cancel_flag = self.service.get_cancel_flag(queue_id)
+        cancel_flag.set()
+
         display_name = self.service._get_display_name(user)
         caption = f"⏭️ Skipped by {display_name}"
 
@@ -341,6 +375,10 @@ class TelegramCallbackHandlers:
 
     async def handle_rejected(self, queue_id: str, user, query):
         """Handle confirmed rejection - permanently blocks media."""
+        # Signal any pending autopost to abort
+        cancel_flag = self.service.get_cancel_flag(queue_id)
+        cancel_flag.set()
+
         queue_item = self.service.queue_repo.get_by_id(queue_id)
 
         if not queue_item:

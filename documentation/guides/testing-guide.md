@@ -2,6 +2,8 @@
 
 This document explains how testing works in the Storyline AI project.
 
+**Current test count**: 488 tests (as of v1.6.0)
+
 ## Quick Start
 
 ```bash
@@ -13,19 +15,24 @@ make test-unit
 
 # Run tests without coverage (faster)
 make test-quick
+
+# Run a specific test file
+pytest tests/src/services/test_telegram_callbacks.py
+
+# Run a specific test method
+pytest tests/src/services/test_scheduler.py::TestSchedulerService::test_create_schedule
 ```
 
-## How Test Database Works
+## Automatic Test Database Setup
 
-The test suite **automatically creates and manages its own test database**. You don't need to manually create or configure it!
+The test suite **automatically creates and manages its own PostgreSQL test database**. No manual database setup is required.
 
-### What Happens When You Run Tests:
+### What Happens When You Run Tests
 
 1. **Setup Phase** (once per test run):
    - Connects to PostgreSQL using credentials from `.env.test`
    - Creates `storyline_ai_test` database if it doesn't exist
    - Creates all tables using SQLAlchemy models
-   - Prints confirmation: `✓ Created test database: storyline_ai_test`
 
 2. **Test Execution** (for each test):
    - Each test gets a fresh database session
@@ -36,22 +43,81 @@ The test suite **automatically creates and manages its own test database**. You 
    - Drops all tables
    - Terminates all connections
    - Drops the test database
-   - Prints confirmation: `✓ Dropped test database: storyline_ai_test`
 
-### Benefits:
+### Configuration (`.env.test`)
 
-✅ **Zero manual setup** - Just run `make test`
-✅ **CI/CD friendly** - Works in automated environments
-✅ **Fast test isolation** - Rollback transactions, not recreating tables
-✅ **Safe** - Never touches production data
-✅ **New developer friendly** - No setup instructions needed
+```bash
+# Database connection (test DB auto-created from this)
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres              # Must have CREATE DATABASE permission
+DB_PASSWORD=postgres
+TEST_DB_NAME=storyline_ai_test  # The database to auto-create
+
+# Test values for required settings
+TELEGRAM_BOT_TOKEN=test_bot_token
+TELEGRAM_CHANNEL_ID=-100123456789
+ADMIN_TELEGRAM_CHAT_ID=123456789
+DRY_RUN_MODE=true
+LOG_LEVEL=DEBUG
+```
+
+**Important**: The `DB_USER` must have permission to create databases. Using `postgres` superuser works out of the box.
+
+### Fixture Architecture (`tests/conftest.py`)
+
+```python
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_database():
+    """
+    Session-scoped fixture - runs once per test session.
+
+    1. Connects to 'postgres' database
+    2. Creates 'storyline_ai_test' database
+    3. Creates all tables via SQLAlchemy
+    4. Yields engine to tests
+    5. Drops everything after tests complete
+    """
+    create_test_database()  # CREATE DATABASE storyline_ai_test
+
+    engine = create_engine(settings.test_database_url)
+    Base.metadata.create_all(engine)  # CREATE TABLE users, media_items, etc.
+
+    yield engine
+
+    Base.metadata.drop_all(engine)  # DROP TABLE ...
+    drop_test_database()            # DROP DATABASE storyline_ai_test
+
+
+@pytest.fixture(scope="function")
+def test_db(setup_test_database):
+    """
+    Function-scoped fixture - runs for each test.
+
+    Provides clean database session with automatic rollback.
+    """
+    session = TestSessionLocal()
+    session.begin_nested()  # Start transaction
+
+    yield session
+
+    session.rollback()  # Rollback transaction (clean slate)
+    session.close()
+```
+
+Key design decisions:
+- **Session-scoped setup**: Database created once per test run, not per test
+- **Transaction rollback**: Each test rolled back for fast isolation
+- **Automatic cleanup**: Database dropped after all tests complete
+- **Error handling**: Terminates connections before dropping database
+- **Idempotent**: Safe to run multiple times
 
 ## Test Structure
 
 ```
 tests/
 ├── conftest.py              # Pytest configuration & fixtures
-├── cli/                     # CLI command tests
+├── cli/                     # CLI command tests (4 files)
 │   ├── test_media_commands.py
 │   ├── test_queue_commands.py
 │   ├── test_user_commands.py
@@ -104,7 +170,7 @@ Tests are marked with pytest markers for selective running:
 @pytest.mark.slow           # Slow tests (can be skipped in development)
 ```
 
-### Run Specific Test Types:
+Run specific test types:
 
 ```bash
 # Only unit tests
@@ -145,7 +211,7 @@ pytest -v -m "not slow"
 
 ## Writing Tests
 
-### Repository Tests Example:
+### Repository Tests
 
 ```python
 @pytest.mark.unit
@@ -163,7 +229,7 @@ class TestUserRepository:
         assert user.telegram_user_id == 123456789
 ```
 
-### Service Tests Example:
+### Service Tests
 
 ```python
 @pytest.mark.unit
@@ -173,7 +239,6 @@ class TestMediaIngestionService:
         service = MediaIngestionService(db=test_db)
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Create test file
             test_file = Path(temp_dir) / "test.jpg"
             test_file.write_bytes(b"fake image")
 
@@ -182,7 +247,7 @@ class TestMediaIngestionService:
             assert result["added"] >= 1
 ```
 
-### CLI Tests Example:
+### CLI Tests
 
 ```python
 from click.testing import CliRunner
@@ -197,93 +262,6 @@ class TestMediaCommands:
         assert result.exit_code == 0
 ```
 
-## Configuration
-
-Test configuration is in `.env.test`:
-
-```bash
-# Test Database (auto-created)
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres          # Must have CREATE DATABASE permission
-DB_PASSWORD=postgres
-TEST_DB_NAME=storyline_ai_test
-
-# Test Telegram (dummy values)
-TELEGRAM_BOT_TOKEN=test_bot_token
-TELEGRAM_CHANNEL_ID=-100123456789
-ADMIN_TELEGRAM_CHAT_ID=123456789
-
-# Always dry run in tests
-DRY_RUN_MODE=true
-LOG_LEVEL=DEBUG
-```
-
-**Important**: The `DB_USER` must have permission to create databases. Using `postgres` superuser works out of the box.
-
-## Coverage
-
-Test coverage is tracked with pytest-cov:
-
-```bash
-# Run with coverage report
-make test
-
-# Generate HTML coverage report
-pytest --cov=src --cov-report=html
-open htmlcov/index.html
-```
-
-## Troubleshooting
-
-### "FATAL: database 'storyline_ai_test' does not exist"
-
-This shouldn't happen - the test suite creates it automatically! If you see this:
-- Check PostgreSQL is running: `pg_ctl status`
-- Check credentials in `.env.test`
-- Verify `DB_USER` has CREATE DATABASE permission
-
-### "Could not connect to server"
-
-PostgreSQL isn't running:
-```bash
-# macOS (Homebrew)
-brew services start postgresql
-
-# Linux
-sudo systemctl start postgresql
-```
-
-### "Permission denied to create database"
-
-The `DB_USER` in `.env.test` lacks permissions:
-```bash
-# Option 1: Use postgres superuser (simplest)
-# Edit .env.test:
-DB_USER=postgres
-DB_PASSWORD=postgres
-
-# Option 2: Grant permissions to your user
-psql -U postgres -c "ALTER USER storyline_user CREATEDB;"
-```
-
-### Tests are slow
-
-Use faster options:
-```bash
-# Skip coverage calculation
-make test-quick
-
-# Run only unit tests
-make test-unit
-
-# Run only failed tests
-make test-failed
-
-# Parallel execution (requires pytest-xdist)
-pytest -v -n auto
-```
-
 ## Best Practices
 
 1. **Test Isolation**: Each test should be independent
@@ -293,18 +271,15 @@ pytest -v -n auto
 
 2. **Descriptive Names**: Use clear test names
    ```python
-   ✅ def test_create_user_with_valid_data(self):
-   ❌ def test_user1(self):
+   def test_create_user_with_valid_data(self):     # Good
+   def test_user1(self):                            # Bad
    ```
 
 3. **One Assertion Per Concept**: Keep tests focused
    ```python
-   ✅ def test_user_creation_sets_default_role(self):
+   def test_user_creation_sets_default_role(self):
        user = repo.create(telegram_user_id=123)
        assert user.role == "member"
-
-   ❌ def test_user_everything(self):
-       # Tests creation, updates, deletion all at once
    ```
 
 4. **Use Markers**: Tag your tests appropriately
@@ -322,35 +297,102 @@ pytest -v -n auto
        # Test without hitting Telegram API
    ```
 
-## Continuous Integration
+## Coverage
 
-In CI environments (GitHub Actions, etc.), tests run automatically:
+Test coverage is tracked with pytest-cov:
 
-```yaml
-# .github/workflows/test.yml example
-- name: Run tests
-  run: |
-    make install
-    make test
-  env:
-    # CI will use .env.test automatically
-    POSTGRES_HOST: localhost
-    POSTGRES_PORT: 5432
+```bash
+# Run with coverage report
+make test
+
+# Generate HTML coverage report
+pytest --cov=src --cov-report=html
+open htmlcov/index.html
 ```
 
-No special setup needed - the test database is created automatically!
-
-## Test Coverage Goals
+### Coverage Goals
 
 - **Repositories**: 100% (all CRUD operations)
 - **Services**: 80%+ (core business logic)
 - **Utilities**: 90%+ (pure functions)
 - **CLI**: 70%+ (happy paths + error cases)
 
-Check current coverage:
+## Continuous Integration
+
+In CI environments (GitHub Actions, etc.), tests run automatically. The test database is created automatically - no special setup needed.
+
+```yaml
+# .github/workflows/test.yml
+services:
+  postgres:
+    image: postgres:15
+    env:
+      POSTGRES_PASSWORD: postgres
+    options: >-
+      --health-cmd pg_isready
+      --health-interval 10s
+
+- name: Run tests
+  run: make test
+```
+
+## Troubleshooting
+
+### "Connection refused"
+
+PostgreSQL isn't running:
 ```bash
-make test
-# Look for coverage report at end
+# macOS (Homebrew)
+brew services start postgresql
+
+# Linux
+sudo systemctl start postgresql
+```
+
+### "Permission denied to create database"
+
+The `DB_USER` in `.env.test` lacks permissions:
+```bash
+# Option 1: Use postgres superuser (simplest)
+# Edit .env.test: DB_USER=postgres
+
+# Option 2: Grant permissions to your user
+psql -U postgres -c "ALTER USER storyline_user CREATEDB;"
+```
+
+### "FATAL: database 'storyline_ai_test' does not exist"
+
+This shouldn't happen since the test suite creates it automatically. If you see this:
+- Check PostgreSQL is running: `pg_ctl status`
+- Check credentials in `.env.test`
+- Verify `DB_USER` has CREATE DATABASE permission
+
+### Tests are slow
+
+```bash
+# Skip coverage calculation
+make test-quick
+
+# Run only unit tests
+make test-unit
+
+# Run only failed tests
+make test-failed
+
+# Parallel execution (requires pytest-xdist)
+pytest -v -n auto
+```
+
+### Want to inspect the test database?
+
+Run tests with `--pdb` to pause before cleanup:
+```bash
+pytest --pdb -x  # Stops at first failure, before cleanup
+```
+
+Then connect in another terminal:
+```bash
+psql -U postgres -d storyline_ai_test
 ```
 
 ---

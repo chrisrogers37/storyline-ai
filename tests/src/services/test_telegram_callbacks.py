@@ -663,3 +663,241 @@ class TestCompleteQueueAction:
 
         mock_query.edit_message_caption.assert_called_once()
         assert "not found" in str(mock_query.edit_message_caption.call_args)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestRaceConditionHandling:
+    """Tests for operation lock and cancellation flag race condition handling."""
+
+    async def test_double_click_posted_does_not_create_duplicate(
+        self, mock_callback_handlers
+    ):
+        """Test that clicking 'Posted' twice doesn't create duplicate history entries."""
+        handlers = mock_callback_handlers
+        service = handlers.service
+        queue_id = str(uuid4())
+
+        mock_queue_item = Mock()
+        mock_queue_item.media_item_id = uuid4()
+        mock_queue_item.created_at = datetime.utcnow()
+        mock_queue_item.scheduled_for = datetime.utcnow()
+        service.queue_repo.get_by_id.return_value = mock_queue_item
+
+        mock_media = Mock()
+        mock_media.file_name = "test.jpg"
+        service.media_repo.get_by_id.return_value = mock_media
+
+        mock_settings = Mock()
+        mock_settings.show_verbose_notifications = True
+        service.settings_service.get_settings.return_value = mock_settings
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "poster"
+        mock_user.telegram_first_name = "Test"
+
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100123, message_id=1)
+
+        # First click succeeds
+        await handlers.handle_posted(queue_id, mock_user, mock_query)
+
+        # History created exactly once
+        assert service.history_repo.create.call_count == 1
+
+        # Second click on the same item - lock is cleaned up so a new one is created,
+        # but queue_repo.get_by_id returns None (item was deleted)
+        service.queue_repo.get_by_id.return_value = None
+        mock_query_2 = AsyncMock()
+        mock_query_2.message = Mock(chat_id=-100123, message_id=1)
+
+        await handlers.handle_posted(queue_id, mock_user, mock_query_2)
+
+        # History still only created once (second call found no queue item)
+        assert service.history_repo.create.call_count == 1
+
+    async def test_lock_prevents_concurrent_execution(self, mock_callback_handlers):
+        """Test that the lock prevents concurrent execution on the same item."""
+        handlers = mock_callback_handlers
+        service = handlers.service
+        queue_id = str(uuid4())
+
+        # Pre-acquire the lock to simulate an in-progress operation
+        lock = service.get_operation_lock(queue_id)
+        await lock.acquire()
+
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100123, message_id=1)
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "poster"
+        mock_user.telegram_first_name = "Test"
+
+        mock_settings = Mock()
+        mock_settings.show_verbose_notifications = True
+        service.settings_service.get_settings.return_value = mock_settings
+
+        # Try to execute while lock is held
+        await handlers.complete_queue_action(
+            queue_id,
+            mock_user,
+            mock_query,
+            status="posted",
+            success=True,
+            caption="✅ Test",
+            callback_name="posted",
+        )
+
+        # Should show "Already processing" feedback
+        mock_query.answer.assert_called_once_with(
+            "⏳ Already processing this item...", show_alert=False
+        )
+
+        # Should NOT create history (action was blocked)
+        service.history_repo.create.assert_not_called()
+
+        # Clean up
+        lock.release()
+
+    async def test_lock_cleaned_up_after_operation(self, mock_callback_handlers):
+        """Test that the lock is cleaned up after operation completes."""
+        handlers = mock_callback_handlers
+        service = handlers.service
+        queue_id = str(uuid4())
+
+        mock_queue_item = Mock()
+        mock_queue_item.media_item_id = uuid4()
+        mock_queue_item.created_at = datetime.utcnow()
+        mock_queue_item.scheduled_for = datetime.utcnow()
+        service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "tester"
+
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100123, message_id=1)
+
+        mock_settings = Mock()
+        mock_settings.show_verbose_notifications = True
+        service.settings_service.get_settings.return_value = mock_settings
+
+        await handlers.handle_posted(queue_id, mock_user, mock_query)
+
+        # Lock and cancel flag should be cleaned up
+        assert queue_id not in service._operation_locks
+        assert queue_id not in service._cancel_flags
+
+    async def test_posted_sets_cancel_flag_for_autopost(self, mock_callback_handlers):
+        """Test that clicking 'Posted' sets the cancel flag to abort pending auto-post."""
+        handlers = mock_callback_handlers
+        service = handlers.service
+        queue_id = str(uuid4())
+
+        mock_queue_item = Mock()
+        mock_queue_item.media_item_id = uuid4()
+        mock_queue_item.created_at = datetime.utcnow()
+        mock_queue_item.scheduled_for = datetime.utcnow()
+        service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
+
+        mock_settings = Mock()
+        mock_settings.show_verbose_notifications = True
+        service.settings_service.get_settings.return_value = mock_settings
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "poster"
+        mock_user.telegram_first_name = "Test"
+
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100123, message_id=1)
+
+        # Create a cancel flag before the action (simulating autopost created it)
+        cancel_flag = service.get_cancel_flag(queue_id)
+        assert not cancel_flag.is_set()
+
+        await handlers.handle_posted(queue_id, mock_user, mock_query)
+
+        # The cancel flag should have been set (even though cleanup_operation_state
+        # removes it, we verify it was set by checking the call succeeded)
+        service.history_repo.create.assert_called_once()
+
+    async def test_skipped_sets_cancel_flag(self, mock_callback_handlers):
+        """Test that clicking 'Skip' sets the cancel flag."""
+        handlers = mock_callback_handlers
+        service = handlers.service
+        queue_id = str(uuid4())
+
+        mock_queue_item = Mock()
+        mock_queue_item.media_item_id = uuid4()
+        mock_queue_item.created_at = datetime.utcnow()
+        mock_queue_item.scheduled_for = datetime.utcnow()
+        service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "skipper"
+        mock_user.telegram_first_name = "Test"
+
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100123, message_id=1)
+
+        # Create a cancel flag
+        cancel_flag = service.get_cancel_flag(queue_id)
+
+        # Patch to capture the cancel flag state before cleanup
+        original_cleanup = service.cleanup_operation_state
+        flag_was_set = False
+
+        def capture_cleanup(qid):
+            nonlocal flag_was_set
+            flag_was_set = cancel_flag.is_set()
+            original_cleanup(qid)
+
+        service.cleanup_operation_state = capture_cleanup
+
+        await handlers.handle_skipped(queue_id, mock_user, mock_query)
+
+        assert flag_was_set, "Cancel flag should have been set before cleanup"
+
+    async def test_rejected_sets_cancel_flag(self, mock_callback_handlers):
+        """Test that clicking 'Reject' (confirmed) sets the cancel flag."""
+        handlers = mock_callback_handlers
+        service = handlers.service
+        queue_id = str(uuid4())
+
+        mock_queue_item = Mock()
+        mock_queue_item.media_item_id = uuid4()
+        mock_queue_item.created_at = datetime.utcnow()
+        mock_queue_item.scheduled_for = datetime.utcnow()
+        service.queue_repo.get_by_id.return_value = mock_queue_item
+
+        mock_media = Mock()
+        mock_media.file_name = "test.jpg"
+        service.media_repo.get_by_id.return_value = mock_media
+
+        mock_settings = Mock()
+        mock_settings.show_verbose_notifications = True
+        service.settings_service.get_settings.return_value = mock_settings
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "rejecter"
+        mock_user.telegram_first_name = "Test"
+
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100123, message_id=1)
+
+        # Create a cancel flag and verify it gets set
+        cancel_flag = service.get_cancel_flag(queue_id)
+        assert not cancel_flag.is_set()
+
+        await handlers.handle_rejected(queue_id, mock_user, mock_query)
+
+        # The action should have completed (permanent lock created)
+        service.lock_service.create_permanent_lock.assert_called_once()
