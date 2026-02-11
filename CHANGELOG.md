@@ -36,6 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Removed inline `sqlalchemy` and model imports from service layer
   - Service method now delegates to repository with identical query behavior
 
+- **Refactor callback dispatcher to dictionary dispatch** - Replace 90-line if-elif chain with two-tier dispatch
+  - Standard `(data, user, query)` handlers served via dictionary lookup (20 entries)
+  - Special-case handlers (non-standard signatures, sub-routing) in dedicated method (7 entries)
+  - Unknown callback actions now log a warning instead of being silently ignored
+
 - **Extract Telegram handler common utilities** - Deduplicate 4 repeated patterns across handler modules
   - Created `telegram_utils.py` with shared validation, keyboard builders, and state cleanup helpers
   - Replaced ~15 inline queue validation blocks with `validate_queue_item()` / `validate_queue_and_media()`

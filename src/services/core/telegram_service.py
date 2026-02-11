@@ -69,6 +69,7 @@ class TelegramService(BaseService):
         self.application = None
         self._operation_locks: dict[str, asyncio.Lock] = {}
         self._cancel_flags: dict[str, asyncio.Event] = {}
+        self._callback_dispatch: dict = {}
 
     def get_operation_lock(self, queue_id: str) -> asyncio.Lock:
         """Get or create an asyncio lock for a queue item."""
@@ -115,6 +116,9 @@ class TelegramService(BaseService):
         self.autopost = TelegramAutopostHandler(self)
         self.settings_handler = TelegramSettingsHandlers(self)
         self.accounts = TelegramAccountHandlers(self)
+
+        # Build callback dispatch table (must be after handlers are initialized)
+        self._callback_dispatch = self._build_callback_dispatch_table()
 
         # Register command handlers
         command_map = {
@@ -167,6 +171,94 @@ class TelegramService(BaseService):
         await self.bot.set_my_commands(commands)
 
         logger.info("Telegram bot initialized with command menu")
+
+    def _build_callback_dispatch_table(self) -> dict:
+        """Build the callback action dispatch table.
+
+        Returns a dictionary mapping action strings to handler coroutines.
+        All handlers in this table use the standard (data, user, query) signature.
+
+        Actions that need special signatures (context, sub-routing, etc.) are
+        NOT in this table -- they are handled in _handle_callback_special_cases().
+        """
+        return {
+            # Queue item actions (telegram_callbacks.py)
+            "posted": self.callbacks.handle_posted,
+            "skip": self.callbacks.handle_skipped,
+            "back": self.callbacks.handle_back,
+            "reject": self.callbacks.handle_reject_confirmation,
+            "confirm_reject": self.callbacks.handle_rejected,
+            "cancel_reject": self.callbacks.handle_cancel_reject,
+            "resume": self.callbacks.handle_resume_callback,
+            "clear": self.callbacks.handle_reset_callback,  # Legacy name for reset
+            # Auto-post (telegram_autopost.py)
+            "autopost": self.autopost.handle_autopost,
+            # Settings (telegram_settings.py)
+            "settings_toggle": self.settings_handler.handle_settings_toggle,
+            "schedule_action": self.settings_handler.handle_schedule_action,
+            "schedule_confirm": self.settings_handler.handle_schedule_confirm,
+            # Account management (telegram_accounts.py)
+            "switch_account": self.accounts.handle_account_switch,
+            "account_remove": self.accounts.handle_account_remove_confirm,
+            "account_remove_confirmed": self.accounts.handle_account_remove_execute,
+            "select_account": self.accounts.handle_post_account_selector,
+            "sap": self.accounts.handle_post_account_switch,
+            "btp": self.accounts.handle_back_to_post,
+        }
+
+    async def _handle_callback_special_cases(self, action, data, user, query, context):
+        """Handle callback actions that need special signatures or sub-routing.
+
+        Returns True if the action was handled, False if not recognized.
+
+        Special cases:
+        - settings_refresh: takes only (query)
+        - settings_edit: takes (data, user, query, context)
+        - settings_edit_cancel: takes (query, context)
+        - settings_close: takes only (query)
+        - settings_accounts: has sub-routing based on data value
+        - accounts_config: has sub-routing based on data value
+        - account_add_cancel: takes (user, query, context)
+        """
+        if action == "settings_refresh":
+            await self.settings_handler.refresh_settings_message(query)
+            return True
+
+        elif action == "settings_edit":
+            await self.settings_handler.handle_settings_edit_start(
+                data, user, query, context
+            )
+            return True
+
+        elif action == "settings_edit_cancel":
+            await self.settings_handler.handle_settings_edit_cancel(query, context)
+            return True
+
+        elif action == "settings_close":
+            await self.settings_handler.handle_settings_close(query)
+            return True
+
+        elif action == "settings_accounts":
+            if data == "select":
+                await self.accounts.handle_account_selection_menu(user, query)
+            elif data == "back":
+                await self.settings_handler.refresh_settings_message(query)
+            return True
+
+        elif action == "accounts_config":
+            if data == "add":
+                await self.accounts.handle_add_account_start(user, query, context)
+            elif data == "remove":
+                await self.accounts.handle_remove_account_menu(user, query)
+            elif data == "noop":
+                await query.answer()
+            return True
+
+        elif action == "account_add_cancel":
+            await self.accounts.handle_add_account_cancel(user, query, context)
+            return True
+
+        return False
 
     async def send_notification(
         self, queue_item_id: str, force_sent: bool = False
@@ -466,17 +558,21 @@ class TelegramService(BaseService):
         # Message not part of any conversation - ignore silently
 
     async def _handle_callback(self, update, context):
-        """Handle inline button callbacks."""
+        """Handle inline button callbacks.
+
+        Uses a two-tier dispatch approach:
+        1. Dictionary lookup for standard (data, user, query) handlers
+        2. Special-case method for handlers with non-standard signatures or sub-routing
+        """
         try:
             query = update.callback_query
 
-            # Debug: Log ALL callback data to diagnose routing issues
             logger.info(f"📞 Callback received: {query.data}")
 
             await query.answer()
 
             # Parse callback data
-            # Split on FIRST colon only, so data can contain multiple colons (e.g., sap:queue_id:account_id)
+            # Split on FIRST colon only, so data can contain colons (e.g., sap:queue_id:account_id)
             parts = query.data.split(":", 1)
             action = parts[0]
             data = parts[1] if len(parts) > 1 else None
@@ -486,74 +582,21 @@ class TelegramService(BaseService):
             # Get user info
             user = self._get_or_create_user(query.from_user)
 
-            # Queue item callbacks (dispatched to telegram_callbacks.py)
-            if action == "posted":
-                await self.callbacks.handle_posted(data, user, query)
-            elif action == "skip":
-                await self.callbacks.handle_skipped(data, user, query)
-            elif action == "autopost":
-                await self.autopost.handle_autopost(data, user, query)
-            elif action == "back":
-                await self.callbacks.handle_back(data, user, query)
-            elif action == "reject":
-                await self.callbacks.handle_reject_confirmation(data, user, query)
-            elif action == "confirm_reject":
-                await self.callbacks.handle_rejected(data, user, query)
-            elif action == "cancel_reject":
-                await self.callbacks.handle_cancel_reject(data, user, query)
-            # Resume callbacks (dispatched to telegram_callbacks.py)
-            elif action == "resume":
-                await self.callbacks.handle_resume_callback(data, user, query)
-            # Reset queue callbacks (callback data still uses "clear" for backwards compat)
-            elif action == "clear":
-                await self.callbacks.handle_reset_callback(data, user, query)
-            # Settings callbacks (dispatched to telegram_settings.py)
-            elif action == "settings_toggle":
-                await self.settings_handler.handle_settings_toggle(data, user, query)
-            elif action == "settings_refresh":
-                await self.settings_handler.refresh_settings_message(query)
-            elif action == "settings_edit":
-                await self.settings_handler.handle_settings_edit_start(
-                    data, user, query, context
-                )
-            elif action == "settings_edit_cancel":
-                await self.settings_handler.handle_settings_edit_cancel(query, context)
-            elif action == "settings_close":
-                await self.settings_handler.handle_settings_close(query)
-            # Schedule management callbacks (dispatched to telegram_settings.py)
-            elif action == "schedule_action":
-                await self.settings_handler.handle_schedule_action(data, user, query)
-            elif action == "schedule_confirm":
-                await self.settings_handler.handle_schedule_confirm(data, user, query)
-            # Instagram account selection callbacks (dispatched to telegram_accounts.py)
-            elif action == "settings_accounts":
-                if data == "select":
-                    await self.accounts.handle_account_selection_menu(user, query)
-                elif data == "back":
-                    await self.settings_handler.refresh_settings_message(query)
-            elif action == "switch_account":
-                await self.accounts.handle_account_switch(data, user, query)
-            # Instagram account configuration callbacks (dispatched to telegram_accounts.py)
-            elif action == "accounts_config":
-                if data == "add":
-                    await self.accounts.handle_add_account_start(user, query, context)
-                elif data == "remove":
-                    await self.accounts.handle_remove_account_menu(user, query)
-                elif data == "noop":
-                    await query.answer()
-            elif action == "account_remove":
-                await self.accounts.handle_account_remove_confirm(data, user, query)
-            elif action == "account_remove_confirmed":
-                await self.accounts.handle_account_remove_execute(data, user, query)
-            elif action == "account_add_cancel":
-                await self.accounts.handle_add_account_cancel(user, query, context)
-            # Inline account selection from posting workflow (Phase 1.7)
-            elif action == "select_account":
-                await self.accounts.handle_post_account_selector(data, user, query)
-            elif action == "sap":  # switch_account_post (shortened for callback limit)
-                await self.accounts.handle_post_account_switch(data, user, query)
-            elif action == "btp":  # back_to_post (shortened for callback limit)
-                await self.accounts.handle_back_to_post(data, user, query)
+            # Tier 1: Standard dispatch (data, user, query) handlers
+            handler = self._callback_dispatch.get(action)
+            if handler:
+                await handler(data, user, query)
+                return
+
+            # Tier 2: Special cases (non-standard signatures, sub-routing)
+            handled = await self._handle_callback_special_cases(
+                action, data, user, query, context
+            )
+            if handled:
+                return
+
+            logger.warning(f"Unknown callback action: {action}")
+
         finally:
             # Clean up open transactions to prevent "idle in transaction"
             self.cleanup_transactions()
