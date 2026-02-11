@@ -19,21 +19,19 @@ class TestHealthCheckService:
         service.history_repo = Mock()
         return service
 
-    @patch("src.services.core.health_check.get_db")
-    def test_check_database_healthy(self, mock_get_db, health_service):
+    @patch("src.services.core.health_check.BaseRepository")
+    def test_check_database_healthy(self, mock_base_repo, health_service):
         """Test database check returns healthy when DB is accessible."""
-        mock_db = Mock()
-        mock_get_db.return_value = iter([mock_db])
-
         result = health_service._check_database()
 
+        mock_base_repo.check_connection.assert_called_once()
         assert result["healthy"] is True
         assert "Database connection OK" in result["message"]
 
-    @patch("src.services.core.health_check.get_db")
-    def test_check_database_unhealthy(self, mock_get_db, health_service):
+    @patch("src.services.core.health_check.BaseRepository")
+    def test_check_database_unhealthy(self, mock_base_repo, health_service):
         """Test database check returns unhealthy when DB fails."""
-        mock_get_db.side_effect = Exception("Connection refused")
+        mock_base_repo.check_connection.side_effect = Exception("Connection refused")
 
         result = health_service._check_database()
 
@@ -154,13 +152,11 @@ class TestHealthCheckService:
         assert result["healthy"] is False
         assert "error" in result["message"].lower()
 
-    @patch("src.services.core.health_check.get_db")
+    @patch("src.services.core.health_check.BaseRepository")
     @patch("src.services.core.health_check.settings")
-    def test_check_all_all_healthy(self, mock_settings, mock_get_db, health_service):
+    def test_check_all_all_healthy(self, mock_settings, mock_base_repo, health_service):
         """Test check_all returns healthy when all checks pass."""
         # Setup mocks
-        mock_db = Mock()
-        mock_get_db.return_value = iter([mock_db])
         mock_settings.TELEGRAM_BOT_TOKEN = "123456:ABC"
         mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
         mock_settings.ENABLE_INSTAGRAM_API = False  # Disable Instagram API check
@@ -179,14 +175,10 @@ class TestHealthCheckService:
         assert "recent_posts" in result["checks"]
         assert "timestamp" in result
 
-    @patch("src.services.core.health_check.get_db")
+    @patch("src.services.core.health_check.BaseRepository")
     @patch("src.services.core.health_check.settings")
-    def test_check_all_some_unhealthy(self, mock_settings, mock_get_db, health_service):
+    def test_check_all_some_unhealthy(self, mock_settings, mock_base_repo, health_service):
         """Test check_all returns unhealthy when any check fails."""
-        # Database healthy
-        mock_db = Mock()
-        mock_get_db.return_value = iter([mock_db])
-
         # Telegram unhealthy
         mock_settings.TELEGRAM_BOT_TOKEN = ""
         mock_settings.TELEGRAM_CHANNEL_ID = None
@@ -209,11 +201,9 @@ class TestHealthCheckService:
         """Test check_all includes ISO timestamp."""
         # Mock all dependencies to avoid real checks
         with (
-            patch("src.services.core.health_check.get_db") as mock_get_db,
+            patch("src.services.core.health_check.BaseRepository"),
             patch("src.services.core.health_check.settings") as mock_settings,
         ):
-            mock_db = Mock()
-            mock_get_db.return_value = iter([mock_db])
             mock_settings.TELEGRAM_BOT_TOKEN = "token"
             mock_settings.TELEGRAM_CHANNEL_ID = -123
             health_service.queue_repo.count_pending.return_value = 0

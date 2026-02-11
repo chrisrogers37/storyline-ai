@@ -114,3 +114,22 @@ class BaseRepository:
         """Context manager exit - ensures session is closed."""
         self.close()
         return False  # Don't suppress exceptions
+
+    @staticmethod
+    def check_connection():
+        """
+        Verify database connectivity by executing a simple query.
+
+        Used by HealthCheckService to test the database connection
+        without violating the service/repository layer boundary.
+
+        Raises:
+            Exception: If database is unreachable or query fails
+        """
+        from sqlalchemy import text
+
+        db = next(get_db())
+        try:
+            db.execute(text("SELECT 1"))
+        finally:
+            db.close()
