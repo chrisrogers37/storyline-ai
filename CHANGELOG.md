@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Update all pinned dependencies to latest versions** - Bring all ==pinned packages current
+  - Tier 1 (patch): psycopg2-binary 2.9.9→2.9.11, python-dateutil 2.8.2→2.9.0.post0
+  - Tier 2 (minor): pydantic 2.5→2.12.5, pydantic-settings 2.1→2.12, SQLAlchemy 2.0.23→2.0.46, click 8.1→8.3, rich 13.7→14.3, python-dotenv 1.0→1.2, alembic 1.13→1.18
+  - Tier 3 (major): python-telegram-bot 20.7→22.6, httpx 0.25→0.28, Pillow 10.1→12.1, pytest 7.4→9.0, pytest-asyncio 0.21→1.3, pytest-cov 4.1→7.0, pytest-mock 3.12→3.15
+
 - **Documentation review and accuracy audit** - Cross-referenced all docs against codebase post-v1.6.0 refactor
   - Corrected test counts, setting names, supported formats, and deploy script defaults
   - Updated code examples in security review for post-refactor handler locations
