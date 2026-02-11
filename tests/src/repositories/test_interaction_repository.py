@@ -73,57 +73,6 @@ class TestInteractionRepository:
         assert added.interaction_name == "posted"
         assert added.context["media_filename"] == "test.jpg"
 
-    def test_get_by_user(self, interaction_repo, mock_db):
-        """Test getting interactions by user."""
-        mock_items = [MagicMock(), MagicMock(), MagicMock()]
-        mock_query = mock_db.query.return_value
-        mock_query.all.return_value = mock_items
-
-        result = interaction_repo.get_by_user("some-user-id")
-
-        assert len(result) == 3
-        mock_db.query.assert_called_with(UserInteraction)
-
-    def test_get_by_type(self, interaction_repo, mock_db):
-        """Test getting interactions by type."""
-        mock_items = [MagicMock(interaction_type="command")]
-        mock_query = mock_db.query.return_value
-        mock_query.all.return_value = mock_items
-
-        result = interaction_repo.get_by_type("command")
-
-        assert len(result) == 1
-        mock_db.query.assert_called_with(UserInteraction)
-
-    def test_get_by_name(self, interaction_repo, mock_db):
-        """Test getting interactions by name."""
-        mock_items = [
-            MagicMock(interaction_name="posted"),
-            MagicMock(interaction_name="posted"),
-        ]
-        mock_query = mock_db.query.return_value
-        mock_query.all.return_value = mock_items
-
-        result = interaction_repo.get_by_name("posted")
-
-        assert len(result) == 2
-
-    def test_count_by_user(self, interaction_repo, mock_db):
-        """Test counting interactions by user."""
-        mock_db.query.return_value.filter.return_value.scalar.return_value = 5
-
-        result = interaction_repo.count_by_user("some-user-id")
-
-        assert result == 5
-
-    def test_count_by_name(self, interaction_repo, mock_db):
-        """Test counting interactions by name."""
-        mock_db.query.return_value.filter.return_value.scalar.return_value = 3
-
-        result = interaction_repo.count_by_name("posted")
-
-        assert result == 3
-
     def test_get_user_stats(self, interaction_repo, mock_db):
         """Test getting aggregated user stats."""
         # Mock interactions returned by the query

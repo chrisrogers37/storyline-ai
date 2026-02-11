@@ -130,6 +130,8 @@ class QueueRepository(BaseRepository):
             self.db.refresh(queue_item)
         return queue_item
 
+    # NOTE: Unused in production as of 2026-02-10.
+    # Planned for automatic retry system when Instagram API posting fails.
     def schedule_retry(
         self, queue_id: str, error_message: str, retry_delay_minutes: int = 5
     ) -> PostingQueue:

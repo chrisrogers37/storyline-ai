@@ -101,6 +101,8 @@ class MediaRepository(BaseRepository):
         self.db.refresh(media_item)
         return media_item
 
+    # NOTE: Unused in production as of 2026-02-10.
+    # Planned for Phase 3 media editing UI (web frontend).
     def update_metadata(
         self,
         media_id: str,

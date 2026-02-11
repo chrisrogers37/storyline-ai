@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **Remove 13 confirmed dead repository methods** - Audit and clean up unused code from 4 repository files
+  - `category_mix_repository.py`: removed `get_category_ratio`, `get_mix_at_date`
+  - `interaction_repository.py`: removed `get_by_user`, `get_by_type`, `get_by_name`, `count_by_user`, `count_by_name`
+  - `history_repository.py`: removed `get_by_user_id`, `get_stats`
+  - `token_repository.py`: removed `get_all_for_service`, `get_expired_tokens`, `delete_token`, `delete_all_for_service`
+  - Annotated 5 future-use methods with `# NOTE: Unused in production` comments
+  - Cleaned up corresponding tests and unused imports (`func` from interaction_repository)
+
 ### Tests
 
 - **Add missing test files for 6 uncovered modules** - Create 64 new unit tests across 6 previously untested files

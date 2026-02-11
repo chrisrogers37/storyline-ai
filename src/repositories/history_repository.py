@@ -90,21 +90,6 @@ class HistoryRepository(BaseRepository):
 
         return query.all()
 
-    def get_by_user_id(
-        self, user_id: str, limit: Optional[int] = None
-    ) -> List[PostingHistory]:
-        """Get all history records for a specific user."""
-        query = (
-            self.db.query(PostingHistory)
-            .filter(PostingHistory.posted_by_user_id == user_id)
-            .order_by(PostingHistory.posted_at.desc())
-        )
-
-        if limit:
-            query = query.limit(limit)
-
-        return query.all()
-
     def create(self, params: HistoryCreateParams) -> PostingHistory:
         """Create a new history record."""
         from dataclasses import asdict
@@ -114,35 +99,6 @@ class HistoryRepository(BaseRepository):
         self.db.commit()
         self.db.refresh(history)
         return history
-
-    def get_stats(self, days: Optional[int] = 30) -> dict:
-        """Get posting statistics."""
-        since = datetime.utcnow() - timedelta(days=days) if days else datetime.min
-
-        total = (
-            self.db.query(func.count(PostingHistory.id))
-            .filter(PostingHistory.posted_at >= since)
-            .scalar()
-        )
-
-        successful = (
-            self.db.query(func.count(PostingHistory.id))
-            .filter(and_(PostingHistory.posted_at >= since, PostingHistory.success))
-            .scalar()
-        )
-
-        failed = (
-            self.db.query(func.count(PostingHistory.id))
-            .filter(and_(PostingHistory.posted_at >= since, ~PostingHistory.success))
-            .scalar()
-        )
-
-        return {
-            "total": total or 0,
-            "successful": successful or 0,
-            "failed": failed or 0,
-            "success_rate": (successful / total * 100) if total > 0 else 0,
-        }
 
     def get_recent_posts(self, hours: int = 24) -> List[PostingHistory]:
         """Get posts from the last N hours."""

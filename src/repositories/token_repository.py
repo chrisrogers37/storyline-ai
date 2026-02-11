@@ -98,12 +98,6 @@ class TokenRepository(BaseRepository):
         self.end_read_transaction()
         return result
 
-    def get_all_for_service(self, service_name: str) -> List[ApiToken]:
-        """Get all tokens for a service (access and refresh)."""
-        return (
-            self.db.query(ApiToken).filter(ApiToken.service_name == service_name).all()
-        )
-
     def create_or_update(
         self,
         service_name: str,
@@ -201,34 +195,3 @@ class TokenRepository(BaseRepository):
             .order_by(ApiToken.expires_at.asc())
             .all()
         )
-
-    def get_expired_tokens(self) -> List[ApiToken]:
-        """Get all expired tokens."""
-        now = datetime.utcnow()
-        return (
-            self.db.query(ApiToken)
-            .filter(
-                ApiToken.expires_at.isnot(None),
-                ApiToken.expires_at <= now,
-            )
-            .all()
-        )
-
-    def delete_token(self, service_name: str, token_type: str) -> bool:
-        """Delete a specific token."""
-        token = self.get_token(service_name, token_type)
-        if token:
-            self.db.delete(token)
-            self.db.commit()
-            return True
-        return False
-
-    def delete_all_for_service(self, service_name: str) -> int:
-        """Delete all tokens for a service. Returns count deleted."""
-        count = (
-            self.db.query(ApiToken)
-            .filter(ApiToken.service_name == service_name)
-            .delete()
-        )
-        self.db.commit()
-        return count
