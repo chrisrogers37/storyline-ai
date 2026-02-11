@@ -1,12 +1,11 @@
 """Health check service - system health monitoring."""
 
 from datetime import datetime, timedelta
-from sqlalchemy import text
 
 from src.services.base_service import BaseService
 from src.repositories.queue_repository import QueueRepository
 from src.repositories.history_repository import HistoryRepository
-from src.config.database import get_db
+from src.repositories.base_repository import BaseRepository
 from src.config.settings import settings
 from src.utils.logger import logger
 
@@ -73,8 +72,7 @@ class HealthCheckService(BaseService):
     def _check_database(self) -> dict:
         """Check database connectivity."""
         try:
-            db = next(get_db())
-            db.execute(text("SELECT 1"))
+            BaseRepository.check_connection()
             return {"healthy": True, "message": "Database connection OK"}
         except Exception as e:
             logger.error(f"Database health check failed: {e}")
