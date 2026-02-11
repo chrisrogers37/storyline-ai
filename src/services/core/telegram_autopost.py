@@ -7,6 +7,10 @@ from typing import TYPE_CHECKING
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from src.services.core.telegram_service import _escape_markdown
+from src.services.core.telegram_utils import (
+    build_error_recovery_keyboard,
+    validate_queue_item,
+)
 from src.config.settings import settings
 from src.utils.logger import logger
 from datetime import datetime
@@ -54,10 +58,8 @@ class TelegramAutopostHandler:
 
     async def _locked_autopost(self, queue_id, user, query, cancel_flag):
         """Autopost implementation that runs under the operation lock."""
-        queue_item = self.service.queue_repo.get_by_id(queue_id)
-
+        queue_item = await validate_queue_item(self.service, queue_id, query)
         if not queue_item:
-            await query.edit_message_caption(caption="⚠️ Queue item not found")
             return
 
         # Get media item
@@ -409,44 +411,14 @@ class TelegramAutopostHandler:
                 f"You can try again or use manual posting."
             )
 
-            # Rebuild keyboard with all buttons
-            keyboard = []
-            if settings.ENABLE_INSTAGRAM_API:
-                keyboard.append(
-                    [
-                        InlineKeyboardButton(
-                            "🔄 Retry Auto Post",
-                            callback_data=f"autopost:{queue_id}",
-                        ),
-                    ]
-                )
-            keyboard.extend(
-                [
-                    [
-                        InlineKeyboardButton(
-                            "✅ Posted", callback_data=f"posted:{queue_id}"
-                        ),
-                        InlineKeyboardButton(
-                            "⏭️ Skip", callback_data=f"skip:{queue_id}"
-                        ),
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            "📱 Open Instagram",
-                            url="https://www.instagram.com/",
-                        ),
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            "🚫 Reject", callback_data=f"reject:{queue_id}"
-                        ),
-                    ],
-                ]
+            # Rebuild keyboard with recovery options
+            reply_markup = build_error_recovery_keyboard(
+                queue_id, enable_instagram_api=settings.ENABLE_INSTAGRAM_API
             )
 
             await query.edit_message_caption(
                 caption=caption,
-                reply_markup=InlineKeyboardMarkup(keyboard),
+                reply_markup=reply_markup,
                 parse_mode="Markdown",
             )
 
