@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Tests
+
+- **Convert 74 skipped repository tests to unit tests** - Replace `test_db` integration fixtures with mock-based unit tests
+  - Pattern: `patch.object(Repo, '__init__')` + `MagicMock(spec=Session)` for chainable query mocking
+  - 67 new passing tests across 7 repository test files (media, queue, user, interaction, lock, history, service_run)
+  - Fixed method signatures to match actual repo APIs (e.g., `create(media_item_id=)` not `create(media_id=)`)
+  - Dropped 7 tests for non-existent methods (`get_or_create`, `get_never_posted`, `get_least_posted`, etc.)
+  - 9 integration-only tests remain skipped (complex multi-table queries, slot shifting)
+  - Added edge case tests: not-found paths, max retries exceeded, empty stats, permanent locks
+
 ### Changed
 
 - **Update all pinned dependencies to latest versions** - Bring all ==pinned packages current
