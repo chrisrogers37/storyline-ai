@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Tests
 
+- **Convert 45 skipped service tests to unit tests** - Replace integration fixtures with mock-based unit tests across 7 service test files
+  - Rewrote test_base_service.py, test_media_lock.py, test_posting.py, test_scheduler.py with correct method signatures
+  - Implemented 3 stub tests in test_telegram_commands.py (next_media_not_found, next_notification_failure, next_logs_interaction)
+  - Fixed is_paused/set_paused mocking for pause/resume tests (property reads from settings_service)
+  - Removed 12 duplicate @pytest.mark.skip decorators from test_instagram_api.py; added missing dependency patches
+  - Updated Instagram API tests for multi-account architecture (is_configured, post_story credential flow)
+  - Fixed time-dependent scheduler tests (days=2 to ensure future slots)
+
 - **Convert 74 skipped repository tests to unit tests** - Replace `test_db` integration fixtures with mock-based unit tests
   - Pattern: `patch.object(Repo, '__init__')` + `MagicMock(spec=Session)` for chainable query mocking
   - 67 new passing tests across 7 repository test files (media, queue, user, interaction, lock, history, service_run)

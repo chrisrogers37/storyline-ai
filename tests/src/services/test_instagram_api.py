@@ -27,21 +27,27 @@ class TestInstagramAPIService:
     @pytest.fixture
     def instagram_service(self):
         """Create InstagramAPIService with mocked dependencies."""
-        with patch("src.services.integrations.instagram_api.TokenRefreshService"):
-            with patch("src.services.integrations.instagram_api.CloudStorageService"):
-                with patch("src.services.integrations.instagram_api.HistoryRepository"):
-                    with patch("src.services.base_service.ServiceRunRepository"):
-                        from src.services.integrations.instagram_api import (
-                            InstagramAPIService,
-                        )
+        with (
+            patch("src.services.integrations.instagram_api.TokenRefreshService"),
+            patch("src.services.integrations.instagram_api.CloudStorageService"),
+            patch("src.services.integrations.instagram_api.HistoryRepository"),
+            patch("src.services.integrations.instagram_api.InstagramAccountService"),
+            patch("src.services.integrations.instagram_api.TokenRepository"),
+            patch("src.services.integrations.instagram_api.TokenEncryption"),
+            patch("src.services.integrations.instagram_api.SettingsService"),
+            patch("src.services.base_service.ServiceRunRepository"),
+        ):
+            from src.services.integrations.instagram_api import (
+                InstagramAPIService,
+            )
 
-                        service = InstagramAPIService()
-                        service.token_service = Mock()
-                        service.cloud_service = Mock()
-                        service.history_repo = Mock()
-                        service.track_execution = mock_track_execution
-                        service.set_result_summary = Mock()
-                        yield service
+            service = InstagramAPIService()
+            service.token_service = Mock()
+            service.cloud_service = Mock()
+            service.history_repo = Mock()
+            service.track_execution = mock_track_execution
+            service.set_result_summary = Mock()
+            yield service
 
     # ==================== get_rate_limit_remaining Tests ====================
 
@@ -124,12 +130,6 @@ class TestInstagramAPIService:
 
     # ==================== is_configured Tests ====================
 
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
     @patch("src.services.integrations.instagram_api.settings")
     def test_is_configured_all_settings(self, mock_settings, instagram_service):
         """Test is_configured returns True when all settings present."""
@@ -148,18 +148,16 @@ class TestInstagramAPIService:
 
         assert instagram_service.is_configured() is False
 
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
     @patch("src.services.integrations.instagram_api.settings")
     def test_is_configured_missing_account_id(self, mock_settings, instagram_service):
-        """Test is_configured returns False when account ID missing."""
+        """Test is_configured returns False when no active account and no legacy ID."""
         mock_settings.ENABLE_INSTAGRAM_API = True
         mock_settings.INSTAGRAM_ACCOUNT_ID = None
         mock_settings.FACEBOOK_APP_ID = "67890"
+        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
+
+        # No multi-account active, no legacy account ID
+        instagram_service.account_service.get_active_account.return_value = None
 
         assert instagram_service.is_configured() is False
 
@@ -261,12 +259,6 @@ class TestInstagramAPIService:
         with pytest.raises(RateLimitError, match="Rate limit exhausted"):
             await instagram_service.post_story("https://example.com/image.jpg")
 
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
     @pytest.mark.asyncio
     @patch("src.services.integrations.instagram_api.settings")
     async def test_post_story_no_token(self, mock_settings, instagram_service):
@@ -278,32 +270,22 @@ class TestInstagramAPIService:
         with pytest.raises(TokenExpiredError, match="No valid Instagram token"):
             await instagram_service.post_story("https://example.com/image.jpg")
 
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
     @pytest.mark.asyncio
     @patch("src.services.integrations.instagram_api.settings")
     async def test_post_story_no_account_id(self, mock_settings, instagram_service):
-        """Test post_story raises error when account ID not configured."""
+        """Test post_story raises error when no account configured."""
         mock_settings.INSTAGRAM_POSTS_PER_HOUR = 25
         mock_settings.INSTAGRAM_ACCOUNT_ID = None
+        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
         instagram_service.history_repo.count_by_method.return_value = 0
         instagram_service.token_service.get_token.return_value = "valid_token"
 
-        with pytest.raises(
-            InstagramAPIError, match="INSTAGRAM_ACCOUNT_ID not configured"
-        ):
+        # No multi-account active, no legacy account ID → (None, None, None)
+        instagram_service.account_service.get_active_account.return_value = None
+
+        with pytest.raises(TokenExpiredError, match="No valid Instagram token"):
             await instagram_service.post_story("https://example.com/image.jpg")
 
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
     @pytest.mark.asyncio
     @patch("src.services.integrations.instagram_api.settings")
     async def test_post_story_success(self, mock_settings, instagram_service):
@@ -346,12 +328,6 @@ class TestInstagramAPIService:
         assert result["container_id"] == "container_123"
         assert "timestamp" in result
 
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
     @pytest.mark.asyncio
     @patch("src.services.integrations.instagram_api.settings")
     async def test_post_story_network_error(self, mock_settings, instagram_service):

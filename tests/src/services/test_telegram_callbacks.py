@@ -201,7 +201,6 @@ class TestRejectConfirmation:
         service.lock_service.create_permanent_lock.assert_not_called()
 
 
-@pytest.mark.skip(reason="Needs SettingsService and SchedulerService mocks - TODO")
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestResumeCallbacks:
@@ -216,7 +215,14 @@ class TestResumeCallbacks:
         mock_user.id = uuid4()
         mock_user.telegram_username = "testuser"
 
-        service.set_paused(True)
+        # Mock is_paused via settings_service — paused
+        mock_chat_settings = Mock(is_paused=True)
+        service.settings_service.get_settings.return_value = mock_chat_settings
+        service.set_paused = Mock(
+            side_effect=lambda paused, user=None: setattr(
+                mock_chat_settings, "is_paused", paused
+            )
+        )
 
         # Create overdue item
         overdue_item = Mock()
@@ -250,7 +256,14 @@ class TestResumeCallbacks:
         mock_user.id = uuid4()
         mock_user.telegram_username = "testuser"
 
-        service.set_paused(True)
+        # Mock is_paused via settings_service — paused
+        mock_chat_settings = Mock(is_paused=True)
+        service.settings_service.get_settings.return_value = mock_chat_settings
+        service.set_paused = Mock(
+            side_effect=lambda paused, user=None: setattr(
+                mock_chat_settings, "is_paused", paused
+            )
+        )
 
         # Create overdue and future items
         overdue_item = Mock()
@@ -288,7 +301,14 @@ class TestResumeCallbacks:
         mock_user.id = uuid4()
         mock_user.telegram_username = "testuser"
 
-        service.set_paused(True)
+        # Mock is_paused via settings_service — paused
+        mock_chat_settings = Mock(is_paused=True)
+        service.settings_service.get_settings.return_value = mock_chat_settings
+        service.set_paused = Mock(
+            side_effect=lambda paused, user=None: setattr(
+                mock_chat_settings, "is_paused", paused
+            )
+        )
 
         overdue_item = Mock()
         overdue_item.scheduled_for = datetime(2020, 1, 1, 12, 0)

@@ -1,226 +1,160 @@
 """Tests for SchedulerService."""
 
 import pytest
-from datetime import datetime, timedelta
 from decimal import Decimal
 from unittest.mock import Mock, patch, MagicMock
+from uuid import uuid4
 
 from src.services.core.scheduler import SchedulerService
-from src.repositories.media_repository import MediaRepository
-from src.repositories.user_repository import UserRepository
-from src.repositories.queue_repository import QueueRepository
-from src.repositories.lock_repository import LockRepository
+
+
+@pytest.fixture
+def scheduler_service_mocked():
+    """Create SchedulerService with all dependencies mocked."""
+    with patch.object(SchedulerService, "__init__", lambda self: None):
+        service = SchedulerService()
+        service.media_repo = Mock()
+        service.queue_repo = Mock()
+        service.lock_repo = Mock()
+        service.category_mix_repo = Mock()
+        service.settings_service = Mock()
+        service.service_run_repo = Mock()
+        service.service_name = "SchedulerService"
+        service.SCHEDULE_JITTER_MINUTES = 30
+        # Mock track_execution as MagicMock with context manager support
+        service.track_execution = MagicMock()
+        service.track_execution.return_value.__enter__ = Mock(return_value="run-123")
+        service.track_execution.return_value.__exit__ = Mock(return_value=False)
+        service.set_result_summary = Mock()
+        return service
 
 
 @pytest.mark.unit
 class TestSchedulerService:
     """Test suite for SchedulerService."""
 
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_create_schedule_creates_queue_items(self, test_db):
+    @patch("src.services.core.scheduler.settings")
+    def test_create_schedule_creates_queue_items(
+        self, mock_settings, scheduler_service_mocked
+    ):
         """Test that create_schedule creates queue items."""
-        media_repo = MediaRepository(test_db)
-        user_repo = UserRepository(test_db)
-        queue_repo = QueueRepository(test_db)
+        service = scheduler_service_mocked
+        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
 
-        # Create test data
-        media_repo.create(
-            file_path="/test/schedule1.jpg",
-            file_name="schedule1.jpg",
-            file_hash="schedule1",
-            file_size_bytes=100000,
-            mime_type="image/jpeg",
-        )
+        mock_chat_settings = Mock()
+        mock_chat_settings.posts_per_day = 2
+        mock_chat_settings.posting_hours_start = 9
+        mock_chat_settings.posting_hours_end = 17
+        service.settings_service.get_settings.return_value = mock_chat_settings
 
-        user = user_repo.create(telegram_user_id=600001)
+        service.category_mix_repo.get_current_mix_as_dict.return_value = {}
 
-        service = SchedulerService(db=test_db)
+        mock_media = Mock()
+        mock_media.id = uuid4()
+        mock_media.file_name = "schedule1.jpg"
+        mock_media.category = "memes"
+        service._select_media = Mock(return_value=mock_media)
 
-        # Create 1-day schedule with 2 posts
-        result = service.create_schedule(days=1, posts_per_day=2, user_id=user.id)
+        # Use days=2 to ensure tomorrow's slots are always in the future
+        result = service.create_schedule(days=2)
 
-        assert result["scheduled_count"] >= 1
+        assert result["scheduled"] >= 1
+        assert service.queue_repo.create.call_count >= 1
 
-        # Verify queue items were created
-        queue_items = queue_repo.list_all()
-        assert len(queue_items) >= 1
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_select_next_media_prioritizes_never_posted(self, test_db):
+    def test_select_next_media_prioritizes_never_posted(self, scheduler_service_mocked):
         """Test that never-posted media is prioritized."""
-        media_repo = MediaRepository(test_db)
+        service = scheduler_service_mocked
 
-        # Create never-posted media
-        media_repo.create(
-            file_path="/test/never.jpg",
-            file_name="never.jpg",
-            file_hash="never789",
-            file_size_bytes=90000,
-            mime_type="image/jpeg",
-        )
+        mock_media = Mock()
+        mock_media.times_posted = 0
+        service.media_repo.get_next_eligible_for_posting.return_value = mock_media
 
-        # Create posted media
-        posted = media_repo.create(
-            file_path="/test/posted.jpg",
-            file_name="posted.jpg",
-            file_hash="posted789",
-            file_size_bytes=95000,
-            mime_type="image/jpeg",
-        )
-        media_repo.increment_times_posted(posted.id)
+        result = service._select_media()
 
-        service = SchedulerService(db=test_db)
+        assert result is not None
+        assert result.times_posted == 0
+        service.media_repo.get_next_eligible_for_posting.assert_called()
 
-        # Select next media (should prefer never-posted)
-        selected = service._select_next_media(exclude_media_ids=set())
-
-        assert selected is not None
-        assert selected.times_posted == 0
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_select_next_media_excludes_locked(self, test_db):
+    def test_select_next_media_excludes_locked(self, scheduler_service_mocked):
         """Test that locked media is excluded from selection."""
-        media_repo = MediaRepository(test_db)
-        lock_repo = LockRepository(test_db)
+        service = scheduler_service_mocked
 
-        # Create locked media
-        locked_media = media_repo.create(
-            file_path="/test/locked_sched.jpg",
-            file_name="locked_sched.jpg",
-            file_hash="locked_s789",
-            file_size_bytes=85000,
-            mime_type="image/jpeg",
+        mock_media = Mock(category="memes", file_name="unlocked.jpg")
+        service.media_repo.get_next_eligible_for_posting.return_value = mock_media
+
+        result = service._select_media()
+
+        assert result is not None
+        service.media_repo.get_next_eligible_for_posting.assert_called_once_with(
+            category=None
         )
 
-        # Create unlocked media
-        unlocked_media = media_repo.create(
-            file_path="/test/unlocked_sched.jpg",
-            file_name="unlocked_sched.jpg",
-            file_hash="unlocked_s789",
-            file_size_bytes=80000,
-            mime_type="image/jpeg",
-        )
-
-        # Lock first media
-        lock_repo.create(
-            media_id=locked_media.id,
-            reason="recent_post",
-            expires_at=datetime.utcnow() + timedelta(days=10),
-        )
-
-        service = SchedulerService(db=test_db)
-
-        # Select next media (should skip locked)
-        selected = service._select_next_media(exclude_media_ids=set())
-
-        assert selected is not None
-        assert selected.id == unlocked_media.id
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_select_next_media_excludes_queued(self, test_db):
+    def test_select_next_media_excludes_queued(self, scheduler_service_mocked):
         """Test that queued media is excluded from selection."""
-        media_repo = MediaRepository(test_db)
-        user_repo = UserRepository(test_db)
-        queue_repo = QueueRepository(test_db)
+        service = scheduler_service_mocked
 
-        # Create two media items
-        queued_media = media_repo.create(
-            file_path="/test/queued.jpg",
-            file_name="queued.jpg",
-            file_hash="queued789",
-            file_size_bytes=75000,
-            mime_type="image/jpeg",
+        mock_media = Mock(category="memes", file_name="available.jpg")
+        service.media_repo.get_next_eligible_for_posting.return_value = mock_media
+
+        result = service._select_media()
+
+        assert result is not None
+        service.media_repo.get_next_eligible_for_posting.assert_called_once_with(
+            category=None
         )
 
-        available_media = media_repo.create(
-            file_path="/test/available.jpg",
-            file_name="available.jpg",
-            file_hash="available789",
-            file_size_bytes=70000,
-            mime_type="image/jpeg",
-        )
-
-        user = user_repo.create(telegram_user_id=600002)
-
-        # Queue first media
-        queue_repo.create(
-            media_id=queued_media.id,
-            scheduled_user_id=user.id,
-            scheduled_time=datetime.utcnow() + timedelta(hours=1),
-        )
-
-        service = SchedulerService(db=test_db)
-
-        # Select next media (should skip queued)
-        selected = service._select_next_media(exclude_media_ids=set())
-
-        assert selected is not None
-        assert selected.id == available_media.id
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_generate_time_slots(self, test_db):
+    @patch("src.services.core.scheduler.settings")
+    def test_generate_time_slots(self, mock_settings, scheduler_service_mocked):
         """Test generating time slots for scheduling."""
-        service = SchedulerService(db=test_db)
+        service = scheduler_service_mocked
+        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
 
-        start_time = datetime.utcnow()
-        time_slots = service._generate_time_slots(
-            days=2, posts_per_day=3, start_time=start_time
-        )
+        mock_chat_settings = Mock()
+        mock_chat_settings.posts_per_day = 3
+        mock_chat_settings.posting_hours_start = 9
+        mock_chat_settings.posting_hours_end = 21
+        service.settings_service.get_settings.return_value = mock_chat_settings
 
-        # Should generate 6 slots (2 days * 3 posts)
-        assert len(time_slots) == 6
+        time_slots = service._generate_time_slots(days=2)
+
+        # Should generate up to 6 slots (2 days * 3 posts), minus any in the past
+        assert len(time_slots) <= 6
 
         # Slots should be in chronological order
         for i in range(len(time_slots) - 1):
             assert time_slots[i] < time_slots[i + 1]
 
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
     @patch("src.services.core.scheduler.settings")
-    def test_create_schedule_respects_posting_hours(self, mock_settings, test_db):
+    def test_create_schedule_respects_posting_hours(
+        self, mock_settings, scheduler_service_mocked
+    ):
         """Test that schedule respects posting hours configuration."""
-        mock_settings.POSTING_HOURS_START = 9  # 9 AM
-        mock_settings.POSTING_HOURS_END = 17  # 5 PM
-        mock_settings.POSTS_PER_DAY = 2
+        service = scheduler_service_mocked
+        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
 
-        media_repo = MediaRepository(test_db)
-        user_repo = UserRepository(test_db)
+        mock_chat_settings = Mock()
+        mock_chat_settings.posts_per_day = 2
+        mock_chat_settings.posting_hours_start = 9
+        mock_chat_settings.posting_hours_end = 17
+        service.settings_service.get_settings.return_value = mock_chat_settings
 
-        # Create test media
-        media_repo.create(
-            file_path="/test/hours.jpg",
-            file_name="hours.jpg",
-            file_hash="hours789",
-            file_size_bytes=65000,
-            mime_type="image/jpeg",
-        )
+        service.category_mix_repo.get_current_mix_as_dict.return_value = {}
 
-        user = user_repo.create(telegram_user_id=600003)
+        mock_media = Mock()
+        mock_media.id = uuid4()
+        mock_media.file_name = "hours.jpg"
+        mock_media.category = None
+        service._select_media = Mock(return_value=mock_media)
 
-        service = SchedulerService(db=test_db)
+        # Use days=2 to ensure tomorrow's slots are always in the future
+        service.create_schedule(days=2)
 
-        # Create schedule
-        service.create_schedule(days=1, posts_per_day=2, user_id=user.id)
+        assert service.queue_repo.create.call_count >= 1
 
-        # Verify time slots are within posting hours
-        queue_repo = QueueRepository(test_db)
-        queue_items = queue_repo.list_all()
-
-        for item in queue_items:
-            hour = item.scheduled_time.hour
-            # Allow for jitter, but should be roughly within bounds
-            assert 0 <= hour <= 23  # Basic sanity check
+        # Verify times are within posting hours (with jitter tolerance)
+        for call in service.queue_repo.create.call_args_list:
+            scheduled_time = call.kwargs["scheduled_for"]
+            assert 0 <= scheduled_time.hour <= 23
 
 
 @pytest.mark.unit

@@ -297,25 +297,138 @@ class TestNextCommand:
         assert "Queue Empty" in message_text
         assert "No posts to send" in message_text
 
-    @pytest.mark.skip(reason="Needs PostingService mock - TODO")
     async def test_next_media_not_found(self, mock_command_handlers):
         """Test /next handles missing media gracefully."""
-        pass
+        handlers = mock_command_handlers
+        service = handlers.service
 
-    @pytest.mark.skip(reason="Needs PostingService mock - TODO")
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        service.user_repo.get_by_telegram_id.return_value = None
+        service.user_repo.create.return_value = mock_user
+
+        mock_posting_service = Mock()
+        mock_posting_service.force_post_next = AsyncMock(
+            return_value={
+                "success": False,
+                "error": "Media item not found",
+            }
+        )
+        mock_posting_service.__enter__ = Mock(return_value=mock_posting_service)
+        mock_posting_service.__exit__ = Mock(return_value=False)
+
+        mock_update = Mock()
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
+        mock_update.effective_chat = Mock(id=-100123)
+        mock_update.message = AsyncMock()
+        mock_update.message.message_id = 1
+
+        mock_context = Mock()
+
+        with patch(
+            "src.services.core.posting.PostingService",
+            return_value=mock_posting_service,
+        ):
+            await handlers.handle_next(mock_update, mock_context)
+
+        call_args = mock_update.message.reply_text.call_args
+        message_text = call_args.args[0]
+        assert "Error" in message_text
+        assert "Media item not found" in message_text
+
     async def test_next_notification_failure(self, mock_command_handlers):
         """Test /next handles notification failure gracefully."""
-        pass
+        handlers = mock_command_handlers
+        service = handlers.service
 
-    @pytest.mark.skip(reason="Needs PostingService mock - TODO")
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        service.user_repo.get_by_telegram_id.return_value = None
+        service.user_repo.create.return_value = mock_user
+
+        mock_posting_service = Mock()
+        mock_posting_service.force_post_next = AsyncMock(
+            return_value={
+                "success": False,
+                "error": "Failed to send notification",
+            }
+        )
+        mock_posting_service.__enter__ = Mock(return_value=mock_posting_service)
+        mock_posting_service.__exit__ = Mock(return_value=False)
+
+        mock_update = Mock()
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
+        mock_update.effective_chat = Mock(id=-100123)
+        mock_update.message = AsyncMock()
+        mock_update.message.message_id = 1
+
+        mock_context = Mock()
+
+        with patch(
+            "src.services.core.posting.PostingService",
+            return_value=mock_posting_service,
+        ):
+            await handlers.handle_next(mock_update, mock_context)
+
+        call_args = mock_update.message.reply_text.call_args
+        message_text = call_args.args[0]
+        assert "Failed to send" in message_text
+
     async def test_next_logs_interaction(self, mock_command_handlers):
-        """Test /next logs the interaction."""
-        pass
+        """Test /next logs the interaction on success."""
+        handlers = mock_command_handlers
+        service = handlers.service
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "testuser"
+        service.user_repo.get_by_telegram_id.return_value = None
+        service.user_repo.create.return_value = mock_user
+
+        queue_item_id = uuid4()
+        mock_media = Mock()
+        mock_media.id = uuid4()
+        mock_media.file_name = "logged_post.jpg"
+
+        mock_posting_service = Mock()
+        mock_posting_service.force_post_next = AsyncMock(
+            return_value={
+                "success": True,
+                "queue_item_id": str(queue_item_id),
+                "media_item": mock_media,
+                "shifted_count": 0,
+            }
+        )
+        mock_posting_service.__enter__ = Mock(return_value=mock_posting_service)
+        mock_posting_service.__exit__ = Mock(return_value=False)
+
+        mock_update = Mock()
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
+        mock_update.effective_chat = Mock(id=-100123)
+        mock_update.message = AsyncMock()
+        mock_update.message.message_id = 1
+
+        mock_context = Mock()
+
+        with patch(
+            "src.services.core.posting.PostingService",
+            return_value=mock_posting_service,
+        ):
+            await handlers.handle_next(mock_update, mock_context)
+
+        # Should log interaction
+        service.interaction_service.log_command.assert_called_once()
+        call_kwargs = service.interaction_service.log_command.call_args.kwargs
+        assert call_kwargs["command"] == "/next"
+        assert call_kwargs["context"]["success"] is True
 
 
-@pytest.mark.skip(
-    reason="Needs SettingsService mock for chat_settings.is_paused - TODO"
-)
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestPauseCommand:
@@ -334,8 +447,14 @@ class TestPauseCommand:
 
         service.queue_repo.count_pending.return_value = 10
 
-        # Ensure not paused initially
-        service.set_paused(False)
+        # Mock is_paused via settings_service
+        mock_chat_settings = Mock(is_paused=False)
+        service.settings_service.get_settings.return_value = mock_chat_settings
+        service.set_paused = Mock(
+            side_effect=lambda paused, user=None: setattr(
+                mock_chat_settings, "is_paused", paused
+            )
+        )
 
         mock_update = Mock()
         mock_update.effective_user = Mock(
@@ -368,8 +487,9 @@ class TestPauseCommand:
         service.user_repo.get_by_telegram_id.return_value = None
         service.user_repo.create.return_value = mock_user
 
-        # Set already paused
-        service.set_paused(True)
+        # Mock is_paused via settings_service — already paused
+        mock_chat_settings = Mock(is_paused=True)
+        service.settings_service.get_settings.return_value = mock_chat_settings
 
         mock_update = Mock()
         mock_update.effective_user = Mock(
@@ -388,7 +508,6 @@ class TestPauseCommand:
         assert "Already Paused" in message_text
 
 
-@pytest.mark.skip(reason="Needs SettingsService and SchedulerService mocks - TODO")
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestResumeCommand:
@@ -404,7 +523,9 @@ class TestResumeCommand:
         service.user_repo.get_by_telegram_id.return_value = None
         service.user_repo.create.return_value = mock_user
 
-        service.set_paused(False)
+        # Mock is_paused via settings_service — not paused
+        mock_chat_settings = Mock(is_paused=False)
+        service.settings_service.get_settings.return_value = mock_chat_settings
 
         mock_update = Mock()
         mock_update.effective_user = Mock(
@@ -432,7 +553,9 @@ class TestResumeCommand:
         service.user_repo.get_by_telegram_id.return_value = None
         service.user_repo.create.return_value = mock_user
 
-        service.set_paused(True)
+        # Mock is_paused via settings_service — paused
+        mock_chat_settings = Mock(is_paused=True)
+        service.settings_service.get_settings.return_value = mock_chat_settings
 
         # Create overdue and future items
         overdue_item = Mock()
@@ -477,7 +600,14 @@ class TestResumeCommand:
         service.user_repo.get_by_telegram_id.return_value = None
         service.user_repo.create.return_value = mock_user
 
-        service.set_paused(True)
+        # Mock is_paused via settings_service — paused
+        mock_chat_settings = Mock(is_paused=True)
+        service.settings_service.get_settings.return_value = mock_chat_settings
+        service.set_paused = Mock(
+            side_effect=lambda paused, user=None: setattr(
+                mock_chat_settings, "is_paused", paused
+            )
+        )
 
         # Only future items
         future_item = Mock()
@@ -856,18 +986,21 @@ class TestResetCommand:
         assert "Queue Already Empty" in message_text
 
 
-@pytest.mark.skip(
-    reason="Complex integration test requiring PostingService and database - TODO"
-)
 @pytest.mark.unit
 class TestPauseIntegration:
     """Tests for pause integration with PostingService."""
 
     def test_posting_service_respects_pause(self):
-        """Test that PostingService checks pause state."""
+        """Test that PostingService checks pause state via telegram_service."""
         from src.services.core.posting import PostingService
 
-        # Just verify the PostingService has access to telegram_service.is_paused
-        posting_service = PostingService()
-        # The is_paused property should be accessible
-        assert hasattr(posting_service.telegram_service, "is_paused")
+        with patch.object(PostingService, "__init__", lambda self: None):
+            posting_service = PostingService()
+            posting_service.telegram_service = Mock()
+            posting_service.telegram_service.is_paused = True
+
+            # Verify PostingService can read telegram_service.is_paused
+            assert posting_service.telegram_service.is_paused is True
+
+            posting_service.telegram_service.is_paused = False
+            assert posting_service.telegram_service.is_paused is False

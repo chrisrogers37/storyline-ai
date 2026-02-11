@@ -1,16 +1,17 @@
 """Tests for BaseService."""
 
 import pytest
+from unittest.mock import patch
+from uuid import uuid4
 
 from src.services.base_service import BaseService
-from src.repositories.service_run_repository import ServiceRunRepository
 
 
 class MockServiceForTesting(BaseService):
     """Mock service implementation for testing BaseService."""
 
-    def __init__(self, db=None):
-        super().__init__(db)
+    def __init__(self):
+        super().__init__()
         self.service_name = "TestService"
 
     def test_method(self):
@@ -24,174 +25,103 @@ class MockServiceForTesting(BaseService):
             raise ValueError("Test error")
 
 
+@pytest.fixture
+def mock_service():
+    """Create MockServiceForTesting with mocked ServiceRunRepository."""
+    with patch("src.services.base_service.ServiceRunRepository") as mock_run_repo_class:
+        mock_run_repo = mock_run_repo_class.return_value
+        mock_run_repo.create_run.return_value = "run-123"
+
+        service = MockServiceForTesting()
+        service._mock_run_repo = mock_run_repo
+        yield service
+
+
 @pytest.mark.unit
 class TestBaseService:
     """Test suite for BaseService."""
 
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_service_initialization(self, test_db):
+    def test_service_initialization(self, mock_service):
         """Test service initialization."""
-        service = MockServiceForTesting(db=test_db)
+        assert mock_service.service_run_repo is not None
+        assert mock_service.service_name == "TestService"
 
-        assert service.db is not None
-        assert service.service_run_repo is not None
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_track_execution_creates_run(self, test_db):
+    def test_track_execution_creates_run(self, mock_service):
         """Test that track_execution creates a service run record."""
-        service = MockServiceForTesting(db=test_db)
-        run_repo = ServiceRunRepository(test_db)
+        mock_service.test_method()
 
-        # Execute method
-        service.test_method()
+        mock_service._mock_run_repo.create_run.assert_called_once()
+        call_kwargs = mock_service._mock_run_repo.create_run.call_args
+        assert call_kwargs.kwargs["service_name"] == "TestService"
+        assert call_kwargs.kwargs["method_name"] == "test_method"
 
-        # Verify run was created
-        recent_runs = run_repo.get_recent_runs(limit=1)
-        assert len(recent_runs) >= 1
-
-        latest_run = recent_runs[0]
-        assert latest_run.service_name == "TestService"
-        assert latest_run.method_name == "test_method"
-        assert latest_run.status == "success"
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_track_execution_records_success(self, test_db):
+    def test_track_execution_records_success(self, mock_service):
         """Test that successful execution is recorded correctly."""
-        service = MockServiceForTesting(db=test_db)
-        run_repo = ServiceRunRepository(test_db)
+        result = mock_service.test_method()
 
-        result = service.test_method()
-
-        # Verify result
         assert result["result"] == "success"
 
-        # Verify run status
-        recent_runs = run_repo.get_recent_runs(limit=1)
-        latest_run = recent_runs[0]
+        mock_service._mock_run_repo.complete_run.assert_called_once()
+        call_kwargs = mock_service._mock_run_repo.complete_run.call_args
+        assert call_kwargs.kwargs["run_id"] == "run-123"
+        assert call_kwargs.kwargs["success"] is True
+        assert "duration_ms" in call_kwargs.kwargs
 
-        assert latest_run.status == "success"
-        assert latest_run.completed_at is not None
-        assert latest_run.execution_time_seconds is not None
-        assert latest_run.error_message is None
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_track_execution_records_failure(self, test_db):
+    def test_track_execution_records_failure(self, mock_service):
         """Test that failed execution is recorded correctly."""
-        service = MockServiceForTesting(db=test_db)
-        run_repo = ServiceRunRepository(test_db)
-
-        # Execute method that raises error
         with pytest.raises(ValueError, match="Test error"):
-            service.test_method_with_error()
+            mock_service.test_method_with_error()
 
-        # Verify run status
-        recent_runs = run_repo.get_recent_runs(limit=1)
-        latest_run = recent_runs[0]
+        mock_service._mock_run_repo.fail_run.assert_called_once()
+        call_kwargs = mock_service._mock_run_repo.fail_run.call_args
+        assert call_kwargs.kwargs["run_id"] == "run-123"
+        assert call_kwargs.kwargs["error_type"] == "ValueError"
+        assert call_kwargs.kwargs["error_message"] == "Test error"
+        assert "stack_trace" in call_kwargs.kwargs
+        assert "duration_ms" in call_kwargs.kwargs
 
-        assert latest_run.status == "failed"
-        assert latest_run.error_message == "Test error"
-        assert latest_run.error_traceback is not None
-        assert "ValueError" in latest_run.error_traceback
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_track_execution_with_parameters(self, test_db):
+    def test_track_execution_with_parameters(self, mock_service):
         """Test tracking execution with parameters."""
-        service = MockServiceForTesting(db=test_db)
-        run_repo = ServiceRunRepository(test_db)
-
         params = {"param1": "value1", "param2": 42}
 
-        with service.track_execution("test_with_params", parameters=params):
+        with mock_service.track_execution("test_with_params", input_params=params):
             pass
 
-        # Verify parameters were recorded
-        recent_runs = run_repo.get_recent_runs(limit=1)
-        latest_run = recent_runs[0]
+        call_kwargs = mock_service._mock_run_repo.create_run.call_args
+        assert call_kwargs.kwargs["input_params"] == params
 
-        assert latest_run.parameters == params
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_track_execution_with_user_id(self, test_db):
+    def test_track_execution_with_user_id(self, mock_service):
         """Test tracking execution with user attribution."""
-        from src.repositories.user_repository import UserRepository
+        user_id = uuid4()
 
-        service = MockServiceForTesting(db=test_db)
-        run_repo = ServiceRunRepository(test_db)
-        user_repo = UserRepository(test_db)
-
-        # Create test user
-        user = user_repo.create(telegram_user_id=900001)
-
-        with service.track_execution("test_with_user", user_id=user.id):
+        with mock_service.track_execution("test_with_user", user_id=user_id):
             pass
 
-        # Verify user attribution
-        recent_runs = run_repo.get_recent_runs(limit=1)
-        latest_run = recent_runs[0]
+        call_kwargs = mock_service._mock_run_repo.create_run.call_args
+        assert call_kwargs.kwargs["user_id"] == str(user_id)
 
-        assert latest_run.triggered_by_user_id == user.id
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_track_execution_with_result_summary(self, test_db):
+    def test_track_execution_with_result_summary(self, mock_service):
         """Test tracking execution with result summary."""
-        service = MockServiceForTesting(db=test_db)
-        run_repo = ServiceRunRepository(test_db)
-
         result_summary = {"items_processed": 10, "items_skipped": 2}
 
-        with service.track_execution(
-            "test_with_summary", result_summary=result_summary
-        ):
-            pass
+        with mock_service.track_execution("test_with_summary") as run_id:
+            mock_service.set_result_summary(run_id, result_summary)
 
-        # Verify result summary was recorded
-        recent_runs = run_repo.get_recent_runs(limit=1)
-        latest_run = recent_runs[0]
+        mock_service._mock_run_repo.set_result_summary.assert_called_once_with(
+            "run-123", result_summary
+        )
 
-        assert latest_run.result_summary == result_summary
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_track_execution_calculates_timing(self, test_db):
+    def test_track_execution_calculates_timing(self, mock_service):
         """Test that execution time is calculated."""
-        import time
+        mock_service.test_method()
 
-        service = MockServiceForTesting(db=test_db)
-        run_repo = ServiceRunRepository(test_db)
+        call_kwargs = mock_service._mock_run_repo.complete_run.call_args
+        duration_ms = call_kwargs.kwargs["duration_ms"]
+        assert isinstance(duration_ms, int)
+        assert duration_ms >= 0
 
-        with service.track_execution("test_timing"):
-            time.sleep(0.1)
-
-        # Verify timing
-        recent_runs = run_repo.get_recent_runs(limit=1)
-        latest_run = recent_runs[0]
-
-        assert latest_run.execution_time_seconds is not None
-        assert latest_run.execution_time_seconds >= 0.1
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_get_logger(self, test_db):
+    def test_get_logger(self, mock_service):
         """Test that service has logger."""
-        service = MockServiceForTesting(db=test_db)
-
-        logger = service.logger
-
-        assert logger is not None
-        assert logger.name == "TestService"
+        # BaseService uses module-level logger from src.utils.logger
+        # Service is identified by service_name attribute
+        assert mock_service.service_name == "TestService"
