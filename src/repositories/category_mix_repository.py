@@ -29,18 +29,6 @@ class CategoryMixRepository(BaseRepository):
         current = self.get_current_mix()
         return {mix.category: mix.ratio for mix in current}
 
-    def get_category_ratio(self, category: str) -> Optional[Decimal]:
-        """Get current ratio for a specific category."""
-        mix = (
-            self.db.query(CategoryPostCaseMix)
-            .filter(
-                CategoryPostCaseMix.category == category,
-                CategoryPostCaseMix.is_current,
-            )
-            .first()
-        )
-        return mix.ratio if mix else None
-
     def get_history(self, category: Optional[str] = None) -> List[CategoryPostCaseMix]:
         """Get full history, optionally filtered by category."""
         query = self.db.query(CategoryPostCaseMix)
@@ -52,19 +40,6 @@ class CategoryMixRepository(BaseRepository):
             CategoryPostCaseMix.category,
             CategoryPostCaseMix.effective_from.desc(),
         ).all()
-
-    def get_mix_at_date(self, target_date: datetime) -> List[CategoryPostCaseMix]:
-        """Get the mix that was active at a specific date (for historical analysis)."""
-        return (
-            self.db.query(CategoryPostCaseMix)
-            .filter(
-                CategoryPostCaseMix.effective_from <= target_date,
-                (CategoryPostCaseMix.effective_to.is_(None))
-                | (CategoryPostCaseMix.effective_to > target_date),
-            )
-            .order_by(CategoryPostCaseMix.category)
-            .all()
-        )
 
     def set_mix(
         self,

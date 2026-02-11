@@ -76,40 +76,6 @@ class TestHistoryRepository:
         assert result[0].media_item_id == "some-media-id"
         mock_db.query.assert_called_with(PostingHistory)
 
-    def test_get_by_user_id(self, history_repo, mock_db):
-        """Test retrieving history by user ID."""
-        mock_records = [MagicMock(posted_by_user_id="some-user-id")]
-        mock_query = mock_db.query.return_value
-        mock_query.all.return_value = mock_records
-
-        result = history_repo.get_by_user_id("some-user-id")
-
-        assert len(result) == 1
-        assert result[0].posted_by_user_id == "some-user-id"
-
-    def test_get_stats(self, history_repo, mock_db):
-        """Test getting posting statistics."""
-        # get_stats makes 3 separate scalar queries
-        mock_db.query.return_value.filter.return_value.scalar.side_effect = [10, 8, 2]
-
-        stats = history_repo.get_stats(days=30)
-
-        assert stats["total"] == 10
-        assert stats["successful"] == 8
-        assert stats["failed"] == 2
-        assert stats["success_rate"] == 80.0
-
-    def test_get_stats_empty(self, history_repo, mock_db):
-        """Test stats with no posts returns zeros."""
-        mock_db.query.return_value.filter.return_value.scalar.side_effect = [0, 0, 0]
-
-        stats = history_repo.get_stats(days=30)
-
-        assert stats["total"] == 0
-        assert stats["successful"] == 0
-        assert stats["failed"] == 0
-        assert stats["success_rate"] == 0
-
     def test_get_all_with_filters(self, history_repo, mock_db):
         """Test listing history with status filter."""
         mock_records = [

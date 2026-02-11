@@ -164,23 +164,6 @@ class TestCategoryMixRepository:
         assert old_record.is_current is False
         assert old_record.effective_to is not None
 
-    def test_get_category_ratio(self, mix_repo, mock_db):
-        """Test getting ratio for specific category."""
-        mock_record = Mock(ratio=Decimal("0.7"))
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_record
-
-        result = mix_repo.get_category_ratio("memes")
-
-        assert result == Decimal("0.7")
-
-    def test_get_category_ratio_not_found(self, mix_repo, mock_db):
-        """Test getting ratio for non-existent category."""
-        mock_db.query.return_value.filter.return_value.first.return_value = None
-
-        result = mix_repo.get_category_ratio("unknown")
-
-        assert result is None
-
 
 @pytest.mark.unit
 class TestCategoryPostCaseMixModel:

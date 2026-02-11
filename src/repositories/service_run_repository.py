@@ -84,6 +84,8 @@ class ServiceRunRepository(BaseRepository):
             run.result_summary = summary
             self.db.commit()
 
+    # NOTE: Unused in production as of 2026-02-10, but used by test_base_service.py
+    # integration tests and planned for Phase 3 monitoring dashboard.
     def get_recent_runs(
         self, service_name: Optional[str] = None, limit: int = 100
     ) -> List[ServiceRun]:
@@ -95,6 +97,8 @@ class ServiceRunRepository(BaseRepository):
 
         return query.order_by(ServiceRun.started_at.desc()).limit(limit).all()
 
+    # NOTE: Unused in production as of 2026-02-10.
+    # Planned for Phase 3 monitoring dashboard and alerting system.
     def get_failed_runs(
         self, since_hours: int = 24, limit: int = 50
     ) -> List[ServiceRun]:

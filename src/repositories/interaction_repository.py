@@ -2,8 +2,6 @@
 
 from typing import Optional, List
 from datetime import datetime, timedelta
-from sqlalchemy import func
-
 from src.repositories.base_repository import BaseRepository
 from src.models.user_interaction import UserInteraction
 
@@ -45,60 +43,6 @@ class InteractionRepository(BaseRepository):
             .first()
         )
 
-    def get_by_user(
-        self,
-        user_id: str,
-        limit: int = 100,
-        offset: int = 0,
-    ) -> List[UserInteraction]:
-        """Get interactions for a specific user."""
-        return (
-            self.db.query(UserInteraction)
-            .filter(UserInteraction.user_id == user_id)
-            .order_by(UserInteraction.created_at.desc())
-            .offset(offset)
-            .limit(limit)
-            .all()
-        )
-
-    def get_by_type(
-        self,
-        interaction_type: str,
-        days: int = 30,
-        limit: int = 1000,
-    ) -> List[UserInteraction]:
-        """Get interactions by type within date range."""
-        since = datetime.utcnow() - timedelta(days=days)
-        return (
-            self.db.query(UserInteraction)
-            .filter(
-                UserInteraction.interaction_type == interaction_type,
-                UserInteraction.created_at >= since,
-            )
-            .order_by(UserInteraction.created_at.desc())
-            .limit(limit)
-            .all()
-        )
-
-    def get_by_name(
-        self,
-        interaction_name: str,
-        days: int = 30,
-        limit: int = 1000,
-    ) -> List[UserInteraction]:
-        """Get interactions by name within date range."""
-        since = datetime.utcnow() - timedelta(days=days)
-        return (
-            self.db.query(UserInteraction)
-            .filter(
-                UserInteraction.interaction_name == interaction_name,
-                UserInteraction.created_at >= since,
-            )
-            .order_by(UserInteraction.created_at.desc())
-            .limit(limit)
-            .all()
-        )
-
     def get_recent(
         self,
         days: int = 30,
@@ -112,30 +56,6 @@ class InteractionRepository(BaseRepository):
             .order_by(UserInteraction.created_at.desc())
             .limit(limit)
             .all()
-        )
-
-    def count_by_user(self, user_id: str, days: int = 30) -> int:
-        """Count interactions for a user within date range."""
-        since = datetime.utcnow() - timedelta(days=days)
-        return (
-            self.db.query(func.count(UserInteraction.id))
-            .filter(
-                UserInteraction.user_id == user_id,
-                UserInteraction.created_at >= since,
-            )
-            .scalar()
-        )
-
-    def count_by_name(self, interaction_name: str, days: int = 30) -> int:
-        """Count interactions by name within date range."""
-        since = datetime.utcnow() - timedelta(days=days)
-        return (
-            self.db.query(func.count(UserInteraction.id))
-            .filter(
-                UserInteraction.interaction_name == interaction_name,
-                UserInteraction.created_at >= since,
-            )
-            .scalar()
         )
 
     def get_user_stats(self, user_id: str, days: int = 30) -> dict:
