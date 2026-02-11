@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from src.config.settings import settings
+from src.repositories.history_repository import HistoryCreateParams
 from src.services.core.telegram_utils import (
     build_queue_action_keyboard,
     validate_queue_and_media,
@@ -79,16 +80,18 @@ class TelegramCallbackHandlers:
 
         # Create history record
         self.service.history_repo.create(
-            media_item_id=str(queue_item.media_item_id),
-            queue_item_id=queue_id,
-            queue_created_at=queue_item.created_at,
-            queue_deleted_at=datetime.utcnow(),
-            scheduled_for=queue_item.scheduled_for,
-            posted_at=datetime.utcnow(),
-            status=status,
-            success=success,
-            posted_by_user_id=str(user.id),
-            posted_by_telegram_username=user.telegram_username,
+            HistoryCreateParams(
+                media_item_id=str(queue_item.media_item_id),
+                queue_item_id=queue_id,
+                queue_created_at=queue_item.created_at,
+                queue_deleted_at=datetime.utcnow(),
+                scheduled_for=queue_item.scheduled_for,
+                posted_at=datetime.utcnow(),
+                status=status,
+                success=success,
+                posted_by_user_id=str(user.id),
+                posted_by_telegram_username=user.telegram_username,
+            )
         )
 
         # Posted-specific: track reposting and user stats
@@ -303,16 +306,18 @@ class TelegramCallbackHandlers:
 
         # Create history record
         self.service.history_repo.create(
-            media_item_id=str(queue_item.media_item_id),
-            queue_item_id=queue_id,
-            queue_created_at=queue_item.created_at,
-            queue_deleted_at=datetime.utcnow(),
-            scheduled_for=queue_item.scheduled_for,
-            posted_at=datetime.utcnow(),
-            status="rejected",
-            success=False,
-            posted_by_user_id=str(user.id),
-            posted_by_telegram_username=user.telegram_username,
+            HistoryCreateParams(
+                media_item_id=str(queue_item.media_item_id),
+                queue_item_id=queue_id,
+                queue_created_at=queue_item.created_at,
+                queue_deleted_at=datetime.utcnow(),
+                scheduled_for=queue_item.scheduled_for,
+                posted_at=datetime.utcnow(),
+                status="rejected",
+                success=False,
+                posted_by_user_id=str(user.id),
+                posted_by_telegram_username=user.telegram_username,
+            )
         )
 
         # Create PERMANENT lock (infinite TTL)

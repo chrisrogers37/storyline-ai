@@ -182,41 +182,14 @@ class InstagramAccountService(BaseService):
                 "instagram_username": instagram_username,
             },
         ) as run_id:
-            # Check if account already exists
-            existing = self.account_repo.get_by_instagram_id(instagram_account_id)
-            if existing:
-                raise ValueError(
-                    f"Account with ID {instagram_account_id} already exists "
-                    f"as '{existing.display_name}'"
-                )
+            self._validate_new_account(instagram_account_id, instagram_username)
 
-            # Also check by username
-            existing_by_username = self.account_repo.get_by_username(instagram_username)
-            if existing_by_username:
-                raise ValueError(
-                    f"Account @{instagram_username} already exists "
-                    f"as '{existing_by_username.display_name}'"
-                )
-
-            # Create account record
-            account = self.account_repo.create(
+            account = self._create_account_with_token(
                 display_name=display_name,
                 instagram_account_id=instagram_account_id,
                 instagram_username=instagram_username,
-            )
-
-            # Encrypt and store token linked to this account
-            encrypted_token = self.encryption.encrypt(access_token)
-            self.token_repo.create_or_update(
-                service_name="instagram",
-                token_type="access_token",
-                token_value=encrypted_token,
-                expires_at=token_expires_at,
-                instagram_account_id=str(account.id),
-                metadata={
-                    "account_id": instagram_account_id,
-                    "username": instagram_username,
-                },
+                access_token=access_token,
+                token_expires_at=token_expires_at,
             )
 
             # Optionally set as active
@@ -244,6 +217,62 @@ class InstagramAccountService(BaseService):
             )
 
             return account
+
+    def _validate_new_account(
+        self, instagram_account_id: str, instagram_username: str
+    ) -> None:
+        """Validate that an account doesn't already exist.
+
+        Raises:
+            ValueError: If account already exists by ID or username
+        """
+        existing = self.account_repo.get_by_instagram_id(instagram_account_id)
+        if existing:
+            raise ValueError(
+                f"Account with ID {instagram_account_id} already exists "
+                f"as '{existing.display_name}'"
+            )
+
+        existing_by_username = self.account_repo.get_by_username(instagram_username)
+        if existing_by_username:
+            raise ValueError(
+                f"Account @{instagram_username} already exists "
+                f"as '{existing_by_username.display_name}'"
+            )
+
+    def _create_account_with_token(
+        self,
+        display_name: str,
+        instagram_account_id: str,
+        instagram_username: str,
+        access_token: str,
+        token_expires_at: Optional[datetime] = None,
+    ) -> InstagramAccount:
+        """Create account record and store its encrypted token.
+
+        Returns:
+            Created InstagramAccount
+        """
+        account = self.account_repo.create(
+            display_name=display_name,
+            instagram_account_id=instagram_account_id,
+            instagram_username=instagram_username,
+        )
+
+        encrypted_token = self.encryption.encrypt(access_token)
+        self.token_repo.create_or_update(
+            service_name="instagram",
+            token_type="access_token",
+            token_value=encrypted_token,
+            expires_at=token_expires_at,
+            instagram_account_id=str(account.id),
+            metadata={
+                "account_id": instagram_account_id,
+                "username": instagram_username,
+            },
+        )
+
+        return account
 
     def update_account(
         self,

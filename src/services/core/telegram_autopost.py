@@ -6,12 +6,13 @@ from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
+from src.config.settings import settings
+from src.repositories.history_repository import HistoryCreateParams
 from src.services.core.telegram_service import _escape_markdown
 from src.services.core.telegram_utils import (
     build_error_recovery_keyboard,
     validate_queue_item,
 )
-from src.config.settings import settings
 from src.utils.logger import logger
 from datetime import datetime
 
@@ -306,18 +307,20 @@ class TelegramAutopostHandler:
 
             # Step 4: Create history record
             self.service.history_repo.create(
-                media_item_id=str(queue_item.media_item_id),
-                queue_item_id=queue_id,
-                queue_created_at=queue_item.created_at,
-                queue_deleted_at=datetime.utcnow(),
-                scheduled_for=queue_item.scheduled_for,
-                posted_at=datetime.utcnow(),
-                status="posted",
-                success=True,
-                posted_by_user_id=str(user.id),
-                posted_by_telegram_username=user.telegram_username,
-                posting_method="instagram_api",
-                instagram_story_id=story_id,
+                HistoryCreateParams(
+                    media_item_id=str(queue_item.media_item_id),
+                    queue_item_id=queue_id,
+                    queue_created_at=queue_item.created_at,
+                    queue_deleted_at=datetime.utcnow(),
+                    scheduled_for=queue_item.scheduled_for,
+                    posted_at=datetime.utcnow(),
+                    status="posted",
+                    success=True,
+                    posted_by_user_id=str(user.id),
+                    posted_by_telegram_username=user.telegram_username,
+                    posting_method="instagram_api",
+                    instagram_story_id=story_id,
+                )
             )
 
             # Update media item

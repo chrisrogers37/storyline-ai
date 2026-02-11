@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Refactored
 
+- **Decompose long functions into focused helpers** - Extract logic from 5 oversized methods
+  - `HistoryRepository.create()`: Bundle 16 parameters into `HistoryCreateParams` dataclass; update all 5 call sites
+  - `SchedulerService`: Extract shared `_fill_schedule_slots()` from duplicated loops in `create_schedule()` and `extend_schedule()`
+  - `InstagramAccountService.add_account()`: Extract `_validate_new_account()` and `_create_account_with_token()`
+  - `CloudStorageService.upload_media()`: Extract `_validate_file_path()` and `_build_upload_options()`
+
 - **Extract magic numbers into named constants** (#29) - Replace hardcoded values with descriptive constants
   - Created `src/config/constants.py` for shared constants (MIN/MAX_POSTS_PER_DAY, MIN/MAX_POSTING_HOUR)
   - Added class-level constants to SchedulerService, TelegramCommandHandlers, TelegramSettingsHandlers, SettingsService, InstagramAPIService, TelegramAccountHandlers

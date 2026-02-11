@@ -1,11 +1,41 @@
 """Posting history repository - CRUD operations for posting history."""
 
+from dataclasses import dataclass
 from typing import Optional, List
 from datetime import datetime, timedelta
 from sqlalchemy import func, and_
 
 from src.repositories.base_repository import BaseRepository
 from src.models.posting_history import PostingHistory
+
+
+@dataclass
+class HistoryCreateParams:
+    """Bundled parameters for creating a posting history record.
+
+    Required fields come first, optional fields have defaults.
+    """
+
+    # Required fields
+    media_item_id: str
+    queue_item_id: str
+    queue_created_at: datetime
+    queue_deleted_at: datetime
+    scheduled_for: datetime
+    posted_at: datetime
+    status: str
+    success: bool
+
+    # Optional fields with defaults
+    media_metadata: Optional[dict] = None
+    instagram_media_id: Optional[str] = None
+    instagram_permalink: Optional[str] = None
+    instagram_story_id: Optional[str] = None
+    posting_method: str = "telegram_manual"
+    posted_by_user_id: Optional[str] = None
+    posted_by_telegram_username: Optional[str] = None
+    error_message: Optional[str] = None
+    retry_count: int = 0
 
 
 class HistoryRepository(BaseRepository):
@@ -75,46 +105,11 @@ class HistoryRepository(BaseRepository):
 
         return query.all()
 
-    def create(
-        self,
-        media_item_id: str,
-        queue_item_id: str,
-        queue_created_at: datetime,
-        queue_deleted_at: datetime,
-        scheduled_for: datetime,
-        posted_at: datetime,
-        status: str,
-        success: bool,
-        media_metadata: Optional[dict] = None,
-        instagram_media_id: Optional[str] = None,
-        instagram_permalink: Optional[str] = None,
-        instagram_story_id: Optional[str] = None,
-        posting_method: str = "telegram_manual",
-        posted_by_user_id: Optional[str] = None,
-        posted_by_telegram_username: Optional[str] = None,
-        error_message: Optional[str] = None,
-        retry_count: int = 0,
-    ) -> PostingHistory:
+    def create(self, params: HistoryCreateParams) -> PostingHistory:
         """Create a new history record."""
-        history = PostingHistory(
-            media_item_id=media_item_id,
-            queue_item_id=queue_item_id,
-            queue_created_at=queue_created_at,
-            queue_deleted_at=queue_deleted_at,
-            scheduled_for=scheduled_for,
-            posted_at=posted_at,
-            status=status,
-            success=success,
-            media_metadata=media_metadata,
-            instagram_media_id=instagram_media_id,
-            instagram_permalink=instagram_permalink,
-            instagram_story_id=instagram_story_id,
-            posting_method=posting_method,
-            posted_by_user_id=posted_by_user_id,
-            posted_by_telegram_username=posted_by_telegram_username,
-            error_message=error_message,
-            retry_count=retry_count,
-        )
+        from dataclasses import asdict
+
+        history = PostingHistory(**asdict(params))
         self.db.add(history)
         self.db.commit()
         self.db.refresh(history)
