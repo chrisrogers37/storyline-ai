@@ -17,6 +17,8 @@ from src.utils.logger import logger
 class SchedulerService(BaseService):
     """Create and manage posting schedule."""
 
+    SCHEDULE_JITTER_MINUTES = 30
+
     def __init__(self):
         super().__init__()
         self.media_repo = MediaRepository()
@@ -262,7 +264,9 @@ class SchedulerService(BaseService):
                     post_date = base_date + timedelta(days=1)
 
                 # Add jitter
-                jitter_minutes = random.randint(-30, 30)
+                jitter_minutes = random.randint(
+                    -self.SCHEDULE_JITTER_MINUTES, self.SCHEDULE_JITTER_MINUTES
+                )
 
                 scheduled_time = datetime.combine(
                     post_date, datetime.min.time()
@@ -360,8 +364,10 @@ class SchedulerService(BaseService):
                     hour_offset -= 24
                     post_date = base_date + timedelta(days=1)
 
-                # Add ±30min jitter for unpredictability
-                jitter_minutes = random.randint(-30, 30)
+                # Add jitter for unpredictability (configurable via SCHEDULE_JITTER_MINUTES)
+                jitter_minutes = random.randint(
+                    -self.SCHEDULE_JITTER_MINUTES, self.SCHEDULE_JITTER_MINUTES
+                )
 
                 scheduled_time = datetime.combine(
                     post_date, datetime.min.time()

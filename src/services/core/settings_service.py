@@ -4,6 +4,12 @@ from typing import Optional, Any, Dict
 
 from src.services.base_service import BaseService
 from src.repositories.chat_settings_repository import ChatSettingsRepository
+from src.config.constants import (
+    MAX_POSTING_HOUR,
+    MAX_POSTS_PER_DAY,
+    MIN_POSTING_HOUR,
+    MIN_POSTS_PER_DAY,
+)
 from src.models.chat_settings import ChatSettings
 from src.models.user import User
 from src.utils.logger import logger
@@ -137,12 +143,16 @@ class SettingsService(BaseService):
             # Validate numeric settings
             if setting_name == "posts_per_day":
                 value = int(value)
-                if not 1 <= value <= 50:
-                    raise ValueError("posts_per_day must be between 1 and 50")
+                if not MIN_POSTS_PER_DAY <= value <= MAX_POSTS_PER_DAY:
+                    raise ValueError(
+                        f"posts_per_day must be between {MIN_POSTS_PER_DAY} and {MAX_POSTS_PER_DAY}"
+                    )
             elif setting_name in ("posting_hours_start", "posting_hours_end"):
                 value = int(value)
-                if not 0 <= value <= 23:
-                    raise ValueError("Hour must be between 0 and 23")
+                if not MIN_POSTING_HOUR <= value <= MAX_POSTING_HOUR:
+                    raise ValueError(
+                        f"Hour must be between {MIN_POSTING_HOUR} and {MAX_POSTING_HOUR}"
+                    )
 
             updated = self.settings_repo.update(
                 telegram_chat_id, **{setting_name: value}

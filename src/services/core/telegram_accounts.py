@@ -20,6 +20,8 @@ class TelegramAccountHandlers:
     Uses composition: receives a TelegramService reference for shared state.
     """
 
+    ID_DISPLAY_LENGTH = 8  # Truncate UUIDs for Telegram's 64-byte callback limit
+
     def __init__(self, service: TelegramService):
         self.service = service
 
@@ -629,8 +631,16 @@ class TelegramAccountHandlers:
                 label += f" (@{acc['username']})"
             # Use shortened callback format: sap:{queue_id}:{account_id}
             # Using first 8 chars of UUIDs to stay within 64 byte limit
-            short_queue_id = queue_id[:8] if len(queue_id) > 8 else queue_id
-            short_account_id = acc["id"][:8] if len(acc["id"]) > 8 else acc["id"]
+            short_queue_id = (
+                queue_id[: self.ID_DISPLAY_LENGTH]
+                if len(queue_id) > self.ID_DISPLAY_LENGTH
+                else queue_id
+            )
+            short_account_id = (
+                acc["id"][: self.ID_DISPLAY_LENGTH]
+                if len(acc["id"]) > self.ID_DISPLAY_LENGTH
+                else acc["id"]
+            )
             keyboard.append(
                 [
                     InlineKeyboardButton(
@@ -651,7 +661,11 @@ class TelegramAccountHandlers:
             )
 
         # Back button (no Add/Remove options in posting workflow)
-        short_queue_id = queue_id[:8] if len(queue_id) > 8 else queue_id
+        short_queue_id = (
+            queue_id[: self.ID_DISPLAY_LENGTH]
+            if len(queue_id) > self.ID_DISPLAY_LENGTH
+            else queue_id
+        )
         keyboard.append(
             [
                 InlineKeyboardButton(

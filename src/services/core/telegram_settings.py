@@ -6,6 +6,12 @@ from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
+from src.config.constants import (
+    MAX_POSTING_HOUR,
+    MAX_POSTS_PER_DAY,
+    MIN_POSTING_HOUR,
+    MIN_POSTS_PER_DAY,
+)
 from src.utils.logger import logger
 
 if TYPE_CHECKING:
@@ -183,7 +189,7 @@ class TelegramSettingsHandlers:
             await query.edit_message_text(
                 f"📊 *Edit Posts Per Day*\n\n"
                 f"Current value: *{chat_settings.posts_per_day}*\n\n"
-                f"Enter a number between 1 and 50:",
+                f"Enter a number between {MIN_POSTS_PER_DAY} and {MAX_POSTS_PER_DAY}:",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup(keyboard),
             )
@@ -204,7 +210,7 @@ class TelegramSettingsHandlers:
             await query.edit_message_text(
                 f"🕐 *Edit Posting Hours*\n\n"
                 f"Current window: *{chat_settings.posting_hours_start}:00 - {chat_settings.posting_hours_end}:00 UTC*\n\n"
-                f"Enter the *start hour* (0-23 UTC):",
+                f"Enter the *start hour* ({MIN_POSTING_HOUR}-{MAX_POSTING_HOUR} UTC):",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup(keyboard),
             )
@@ -228,7 +234,7 @@ class TelegramSettingsHandlers:
         if state == "awaiting_posts_per_day":
             try:
                 value = int(message_text)
-                if not 1 <= value <= 50:
+                if not MIN_POSTS_PER_DAY <= value <= MAX_POSTS_PER_DAY:
                     raise ValueError("Out of range")
 
                 # Update the setting
@@ -261,7 +267,7 @@ class TelegramSettingsHandlers:
                     message_id=context.user_data.get("settings_edit_message_id"),
                     text=(
                         "📊 *Edit Posts Per Day*\n\n"
-                        "❌ Invalid input. Please enter a number between 1 and 50:"
+                        f"❌ Invalid input. Please enter a number between {MIN_POSTS_PER_DAY} and {MAX_POSTS_PER_DAY}:"
                     ),
                     parse_mode="Markdown",
                     reply_markup=InlineKeyboardMarkup(keyboard),
@@ -272,7 +278,7 @@ class TelegramSettingsHandlers:
         elif state == "awaiting_hours_start":
             try:
                 value = int(message_text)
-                if not 0 <= value <= 23:
+                if not MIN_POSTING_HOUR <= value <= MAX_POSTING_HOUR:
                     raise ValueError("Out of range")
 
                 # Store start hour, ask for end hour
@@ -292,7 +298,7 @@ class TelegramSettingsHandlers:
                     text=(
                         f"🕐 *Edit Posting Hours*\n\n"
                         f"Start hour: *{value}:00 UTC*\n\n"
-                        f"Enter the *end hour* (0-23 UTC):"
+                        f"Enter the *end hour* ({MIN_POSTING_HOUR}-{MAX_POSTING_HOUR} UTC):"
                     ),
                     parse_mode="Markdown",
                     reply_markup=InlineKeyboardMarkup(keyboard),
@@ -311,7 +317,7 @@ class TelegramSettingsHandlers:
                     message_id=context.user_data.get("settings_edit_message_id"),
                     text=(
                         "🕐 *Edit Posting Hours*\n\n"
-                        "❌ Invalid input. Please enter a number between 0 and 23:"
+                        f"❌ Invalid input. Please enter a number between {MIN_POSTING_HOUR} and {MAX_POSTING_HOUR}:"
                     ),
                     parse_mode="Markdown",
                     reply_markup=InlineKeyboardMarkup(keyboard),
@@ -322,7 +328,7 @@ class TelegramSettingsHandlers:
         elif state == "awaiting_hours_end":
             try:
                 value = int(message_text)
-                if not 0 <= value <= 23:
+                if not MIN_POSTING_HOUR <= value <= MAX_POSTING_HOUR:
                     raise ValueError("Out of range")
 
                 start_hour = context.user_data.get("settings_edit_hours_start")
@@ -362,7 +368,7 @@ class TelegramSettingsHandlers:
                     text=(
                         f"🕐 *Edit Posting Hours*\n\n"
                         f"Start hour: *{context.user_data.get('settings_edit_hours_start')}:00 UTC*\n\n"
-                        f"❌ Invalid input. Please enter a number between 0 and 23:"
+                        f"❌ Invalid input. Please enter a number between {MIN_POSTING_HOUR} and {MAX_POSTING_HOUR}:"
                     ),
                     parse_mode="Markdown",
                     reply_markup=InlineKeyboardMarkup(keyboard),
