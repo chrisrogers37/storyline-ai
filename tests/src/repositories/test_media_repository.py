@@ -236,3 +236,41 @@ class TestMediaRepository:
             )
             if media1_index >= 0 and media2_index >= 0:
                 assert media1_index < media2_index
+
+
+@pytest.mark.unit
+class TestGetNextEligibleForPosting:
+    """Tests for MediaRepository.get_next_eligible_for_posting()."""
+
+    # NOTE: This method contains complex multi-table queries.
+    # Full testing requires integration tests with a real database.
+    # Unit tests should verify the method exists and accepts the correct parameters.
+    # Integration tests should verify the actual query logic.
+
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs real DB to verify multi-table query"
+    )
+    def test_returns_never_posted_first(self):
+        """Integration test: verify never-posted items are prioritized."""
+        pass
+
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs real DB to verify multi-table query"
+    )
+    def test_excludes_locked_items(self):
+        """Integration test: verify locked items are excluded."""
+        pass
+
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs real DB to verify multi-table query"
+    )
+    def test_excludes_queued_items(self):
+        """Integration test: verify already-queued items are excluded."""
+        pass
+
+    @pytest.mark.skip(
+        reason="TODO: Integration test - needs real DB to verify multi-table query"
+    )
+    def test_filters_by_category(self):
+        """Integration test: verify category filtering works."""
+        pass

@@ -377,3 +377,28 @@ class TestSchedulerCategoryAllocation:
         # Should only be called once (no fallback)
         scheduler_service._select_media_from_pool.assert_called_once_with(category=None)
         assert result is None
+
+    def test_select_media_from_pool_delegates_to_repository(self, scheduler_service):
+        """Test that _select_media_from_pool delegates to media_repo."""
+        mock_media = Mock(category="memes", file_name="test.jpg")
+        scheduler_service.media_repo.get_next_eligible_for_posting.return_value = (
+            mock_media
+        )
+
+        result = scheduler_service._select_media_from_pool(category="memes")
+
+        scheduler_service.media_repo.get_next_eligible_for_posting.assert_called_once_with(
+            category="memes"
+        )
+        assert result == mock_media
+
+    def test_select_media_from_pool_passes_none_category(self, scheduler_service):
+        """Test that _select_media_from_pool passes None category correctly."""
+        scheduler_service.media_repo.get_next_eligible_for_posting.return_value = None
+
+        result = scheduler_service._select_media_from_pool(category=None)
+
+        scheduler_service.media_repo.get_next_eligible_for_posting.assert_called_once_with(
+            category=None
+        )
+        assert result is None

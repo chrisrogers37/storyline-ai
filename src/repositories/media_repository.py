@@ -2,10 +2,12 @@
 
 from typing import Optional, List
 from datetime import datetime
-from sqlalchemy import func
+from sqlalchemy import func, and_, exists, select
 
 from src.repositories.base_repository import BaseRepository
 from src.models.media_item import MediaItem
+from src.models.posting_queue import PostingQueue
+from src.models.media_lock import MediaPostingLock
 
 
 class MediaRepository(BaseRepository):
@@ -209,3 +211,58 @@ class MediaRepository(BaseRepository):
         )
 
         return [(d.file_hash, d.count, d.paths) for d in duplicates]
+
+    def get_next_eligible_for_posting(
+        self, category: Optional[str] = None
+    ) -> Optional[MediaItem]:
+        """
+        Get the next eligible media item for posting.
+
+        Filters out inactive, locked, and already-queued items.
+        Prioritizes never-posted items, then least-posted, with random tie-breaking.
+
+        Args:
+            category: Filter by category, or None for all categories
+
+        Returns:
+            The highest-priority eligible MediaItem, or None if no eligible media exists
+        """
+        query = self.db.query(MediaItem).filter(MediaItem.is_active)
+
+        # Filter by category if specified
+        if category:
+            query = query.filter(MediaItem.category == category)
+
+        # Exclude already queued items
+        queued_subquery = exists(
+            select(PostingQueue.id).where(PostingQueue.media_item_id == MediaItem.id)
+        )
+        query = query.filter(~queued_subquery)
+
+        # Exclude locked items (both permanent and TTL locks)
+        now = datetime.utcnow()
+        locked_subquery = exists(
+            select(MediaPostingLock.id).where(
+                and_(
+                    MediaPostingLock.media_item_id == MediaItem.id,
+                    # Lock is active if: locked_until is NULL (permanent)
+                    # OR locked_until > now (TTL not expired)
+                    (MediaPostingLock.locked_until.is_(None))
+                    | (MediaPostingLock.locked_until > now),
+                )
+            )
+        )
+        query = query.filter(~locked_subquery)
+
+        # Sort by priority:
+        # 1. Never posted first (NULLS FIRST)
+        # 2. Then least posted
+        # 3. Then random (ensures variety when items are tied)
+        query = query.order_by(
+            MediaItem.last_posted_at.asc().nullsfirst(),
+            MediaItem.times_posted.asc(),
+            func.random(),
+        )
+
+        # Return top result
+        return query.first()
