@@ -225,11 +225,11 @@ class TelegramSettingsHandlers:
         message_text = update.message.text.strip()
         user = self.service._get_or_create_user(update.effective_user)
 
-        # Delete user's message to keep chat clean
+        # Delete user's message to keep chat clean (best-effort)
         try:
             await update.message.delete()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Could not delete user settings input message: {e}")
 
         if state == "awaiting_posts_per_day":
             try:

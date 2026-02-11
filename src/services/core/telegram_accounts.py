@@ -310,11 +310,11 @@ class TelegramAccountHandlers:
                     )
                     was_update = False
 
-                # Delete verifying message
+                # Delete verifying message (best-effort)
                 try:
                     await verifying_msg.delete()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Could not delete verifying message: {e}")
 
                 # Delete all tracked conversation messages
                 messages_to_delete = context.user_data.get("add_account_messages", [])
@@ -323,8 +323,10 @@ class TelegramAccountHandlers:
                         await context.bot.delete_message(
                             chat_id=chat_id, message_id=msg_id
                         )
-                    except Exception:
-                        pass  # Message may already be deleted
+                    except Exception as e:
+                        logger.debug(
+                            f"Could not delete conversation message {msg_id}: {e}"
+                        )
 
                 # Clear conversation state
                 context.user_data.pop("add_account_state", None)
@@ -420,11 +422,11 @@ class TelegramAccountHandlers:
                 )
 
             except Exception as e:
-                # Delete verifying message if it exists
+                # Delete verifying message if it exists (best-effort)
                 try:
                     await verifying_msg.delete()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Could not delete verifying message on error: {e}")
 
                 # Delete all tracked conversation messages
                 messages_to_delete = context.user_data.get("add_account_messages", [])
@@ -433,8 +435,10 @@ class TelegramAccountHandlers:
                         await context.bot.delete_message(
                             chat_id=chat_id, message_id=msg_id
                         )
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(
+                            f"Could not delete conversation message {msg_id} during error cleanup: {e}"
+                        )
 
                 # Clear state on error
                 context.user_data.pop("add_account_state", None)
@@ -488,8 +492,10 @@ class TelegramAccountHandlers:
             if msg_id != current_msg_id:
                 try:
                     await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(
+                        f"Could not delete conversation message {msg_id} during cancel: {e}"
+                    )
 
         context.user_data.pop("add_account_state", None)
         context.user_data.pop("add_account_data", None)
