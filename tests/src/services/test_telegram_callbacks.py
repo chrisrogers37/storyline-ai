@@ -159,7 +159,8 @@ class TestRejectConfirmation:
         # Should create history record with status='rejected'
         service.history_repo.create.assert_called_once()
         history_call = service.history_repo.create.call_args
-        assert history_call.kwargs.get("status") == "rejected"
+        params = history_call.args[0]
+        assert params.status == "rejected"
 
     async def test_cancel_reject_restores_original_buttons(
         self, mock_callback_handlers

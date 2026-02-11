@@ -85,34 +85,10 @@ class CloudStorageService(BaseService):
             method_name="upload_media",
             input_params={"file_path": file_path, "folder": folder},
         ) as run_id:
-            path = Path(file_path)
-
-            if not path.exists():
-                raise MediaUploadError(
-                    f"File not found: {file_path}",
-                    file_path=file_path,
-                    provider="cloudinary",
-                )
-
-            if not path.is_file():
-                raise MediaUploadError(
-                    f"Path is not a file: {file_path}",
-                    file_path=file_path,
-                    provider="cloudinary",
-                )
+            path = self._validate_file_path(file_path)
 
             try:
-                # Determine resource type based on file extension
-                resource_type = self._get_resource_type(path)
-
-                upload_options = {
-                    "folder": folder,
-                    "resource_type": resource_type,
-                    "overwrite": True,
-                }
-
-                if public_id:
-                    upload_options["public_id"] = public_id
+                upload_options = self._build_upload_options(path, folder, public_id)
 
                 logger.info(f"Uploading {path.name} to Cloudinary ({folder}/)")
 
@@ -156,6 +132,54 @@ class CloudStorageService(BaseService):
                     file_path=file_path,
                     provider="cloudinary",
                 )
+
+    def _validate_file_path(self, file_path: str) -> Path:
+        """Validate file path exists and is a file.
+
+        Returns:
+            Path object for the validated file
+
+        Raises:
+            MediaUploadError: If path doesn't exist or isn't a file
+        """
+        path = Path(file_path)
+
+        if not path.exists():
+            raise MediaUploadError(
+                f"File not found: {file_path}",
+                file_path=file_path,
+                provider="cloudinary",
+            )
+
+        if not path.is_file():
+            raise MediaUploadError(
+                f"Path is not a file: {file_path}",
+                file_path=file_path,
+                provider="cloudinary",
+            )
+
+        return path
+
+    def _build_upload_options(
+        self, path: Path, folder: str, public_id: Optional[str] = None
+    ) -> dict:
+        """Build Cloudinary upload options dict.
+
+        Returns:
+            Dict of upload options for cloudinary.uploader.upload()
+        """
+        resource_type = self._get_resource_type(path)
+
+        options = {
+            "folder": folder,
+            "resource_type": resource_type,
+            "overwrite": True,
+        }
+
+        if public_id:
+            options["public_id"] = public_id
+
+        return options
 
     def delete_media(self, public_id: str) -> bool:
         """

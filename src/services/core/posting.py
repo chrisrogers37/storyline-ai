@@ -10,7 +10,7 @@ from src.services.core.media_lock import MediaLockService
 from src.services.core.settings_service import SettingsService
 from src.repositories.queue_repository import QueueRepository
 from src.repositories.media_repository import MediaRepository
-from src.repositories.history_repository import HistoryRepository
+from src.repositories.history_repository import HistoryCreateParams, HistoryRepository
 from src.config.settings import settings
 from src.utils.logger import logger
 
@@ -423,17 +423,19 @@ class PostingService(BaseService):
         if result["success"]:
             # Create history record with instagram_api method
             self.history_repo.create(
-                media_item_id=media_item_id,
-                queue_item_id=queue_item_id,
-                queue_created_at=queue_item.created_at,
-                queue_deleted_at=datetime.utcnow(),
-                scheduled_for=queue_item.scheduled_for,
-                posted_at=datetime.utcnow(),
-                status="posted",
-                success=True,
-                posting_method="instagram_api",
-                instagram_story_id=result.get("story_id"),
-                retry_count=queue_item.retry_count,
+                HistoryCreateParams(
+                    media_item_id=media_item_id,
+                    queue_item_id=queue_item_id,
+                    queue_created_at=queue_item.created_at,
+                    queue_deleted_at=datetime.utcnow(),
+                    scheduled_for=queue_item.scheduled_for,
+                    posted_at=datetime.utcnow(),
+                    status="posted",
+                    success=True,
+                    posting_method="instagram_api",
+                    instagram_story_id=result.get("story_id"),
+                    retry_count=queue_item.retry_count,
+                )
             )
 
             # Update media item and create lock
@@ -514,19 +516,21 @@ class PostingService(BaseService):
 
         # Create history record
         self.history_repo.create(
-            media_item_id=str(queue_item.media_item_id),
-            queue_item_id=queue_item_id,
-            queue_created_at=queue_item.created_at,
-            queue_deleted_at=datetime.utcnow(),
-            scheduled_for=queue_item.scheduled_for,
-            posted_at=datetime.utcnow(),
-            status="posted" if success else "failed",
-            success=success,
-            posted_by_user_id=posted_by_user_id,
-            error_message=error_message,
-            retry_count=queue_item.retry_count,
-            posting_method=posting_method,
-            instagram_story_id=instagram_story_id,
+            HistoryCreateParams(
+                media_item_id=str(queue_item.media_item_id),
+                queue_item_id=queue_item_id,
+                queue_created_at=queue_item.created_at,
+                queue_deleted_at=datetime.utcnow(),
+                scheduled_for=queue_item.scheduled_for,
+                posted_at=datetime.utcnow(),
+                status="posted" if success else "failed",
+                success=success,
+                posted_by_user_id=posted_by_user_id,
+                error_message=error_message,
+                retry_count=queue_item.retry_count,
+                posting_method=posting_method,
+                instagram_story_id=instagram_story_id,
+            )
         )
 
         # If successful, update media item and create lock

@@ -71,35 +71,9 @@ class SchedulerService(BaseService):
                         f"Category allocation: {self._summarize_allocation(slot_categories)}"
                     )
 
-                for i, scheduled_time in enumerate(time_slots):
-                    # Get target category for this slot (if ratios are configured)
-                    target_category = slot_categories[i] if slot_categories else None
-
-                    # Select media for this slot
-                    media_item = self._select_media(category=target_category)
-
-                    if not media_item:
-                        logger.warning(
-                            f"No eligible media found for slot {scheduled_time}"
-                        )
-                        skipped_count += 1
-                        continue
-
-                    # Add to queue
-                    self.queue_repo.create(
-                        media_item_id=str(media_item.id), scheduled_for=scheduled_time
-                    )
-
-                    # Track category breakdown
-                    item_category = media_item.category or "uncategorized"
-                    category_breakdown[item_category] = (
-                        category_breakdown.get(item_category, 0) + 1
-                    )
-
-                    logger.info(
-                        f"Scheduled {media_item.file_name} [{item_category}] for {scheduled_time}"
-                    )
-                    scheduled_count += 1
+                scheduled_count, skipped_count, category_breakdown = (
+                    self._fill_schedule_slots(time_slots, slot_categories)
+                )
 
             except Exception as e:
                 error_message = str(e)
@@ -174,35 +148,9 @@ class SchedulerService(BaseService):
                         f"Category allocation: {self._summarize_allocation(slot_categories)}"
                     )
 
-                for i, scheduled_time in enumerate(time_slots):
-                    # Get target category for this slot (if ratios are configured)
-                    target_category = slot_categories[i] if slot_categories else None
-
-                    # Select media for this slot
-                    media_item = self._select_media(category=target_category)
-
-                    if not media_item:
-                        logger.warning(
-                            f"No eligible media found for slot {scheduled_time}"
-                        )
-                        skipped_count += 1
-                        continue
-
-                    # Add to queue
-                    self.queue_repo.create(
-                        media_item_id=str(media_item.id), scheduled_for=scheduled_time
-                    )
-
-                    # Track category breakdown
-                    item_category = media_item.category or "uncategorized"
-                    category_breakdown[item_category] = (
-                        category_breakdown.get(item_category, 0) + 1
-                    )
-
-                    logger.info(
-                        f"Scheduled {media_item.file_name} [{item_category}] for {scheduled_time}"
-                    )
-                    scheduled_count += 1
+                scheduled_count, skipped_count, category_breakdown = (
+                    self._fill_schedule_slots(time_slots, slot_categories)
+                )
 
             except Exception as e:
                 error_message = str(e)
@@ -222,6 +170,51 @@ class SchedulerService(BaseService):
             self.set_result_summary(run_id, result)
 
             return result
+
+    def _fill_schedule_slots(
+        self,
+        time_slots: list[datetime],
+        slot_categories: List[Optional[str]],
+    ) -> tuple[int, int, dict]:
+        """
+        Fill time slots with media items and add to queue.
+
+        Args:
+            time_slots: List of scheduled times to fill
+            slot_categories: Category assignment per slot (empty list = no category filtering)
+
+        Returns:
+            Tuple of (scheduled_count, skipped_count, category_breakdown)
+        """
+        scheduled_count = 0
+        skipped_count = 0
+        category_breakdown = {}
+
+        for i, scheduled_time in enumerate(time_slots):
+            target_category = slot_categories[i] if slot_categories else None
+
+            media_item = self._select_media(category=target_category)
+
+            if not media_item:
+                logger.warning(f"No eligible media found for slot {scheduled_time}")
+                skipped_count += 1
+                continue
+
+            self.queue_repo.create(
+                media_item_id=str(media_item.id), scheduled_for=scheduled_time
+            )
+
+            item_category = media_item.category or "uncategorized"
+            category_breakdown[item_category] = (
+                category_breakdown.get(item_category, 0) + 1
+            )
+
+            logger.info(
+                f"Scheduled {media_item.file_name} [{item_category}] for {scheduled_time}"
+            )
+            scheduled_count += 1
+
+        return scheduled_count, skipped_count, category_breakdown
 
     def _generate_time_slots_from_date(self, start_date, days: int) -> list[datetime]:
         """
