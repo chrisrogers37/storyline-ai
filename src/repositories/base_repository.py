@@ -29,8 +29,11 @@ class BaseRepository:
         try:
             if not self._db.is_active:
                 self._db.rollback()
-        except Exception:
-            pass
+        except Exception as e:
+            # Suppressed: rollback during session recovery is best-effort.
+            # If this fails, the session may be unusable, but raising here
+            # would mask the original error that caused the bad state.
+            logger.debug(f"Suppressed error during session recovery rollback: {e}")
         return self._db
 
     def commit(self):
@@ -63,8 +66,10 @@ class BaseRepository:
             # If commit fails on a read-only transaction, rollback
             try:
                 self._db.rollback()
-            except Exception:
-                pass
+            except Exception as e:
+                # Suppressed: rollback after failed read-commit is best-effort.
+                # The connection may already be closed or invalidated.
+                logger.debug(f"Suppressed error during read-transaction rollback: {e}")
 
     def close(self):
         """
@@ -79,22 +84,26 @@ class BaseRepository:
             try:
                 next(self._db_generator)
             except StopIteration:
-                pass
+                pass  # Expected: generator already exhausted from __init__
         except Exception as e:
             logger.warning(f"Error closing database session: {e}")
         finally:
             # Also explicitly close just in case
             try:
                 self._db.close()
-            except Exception:
-                pass
+            except Exception as e:
+                # Suppressed: session.close() during cleanup is best-effort.
+                # The session may already be closed or the pool invalidated.
+                logger.debug(f"Suppressed error during session close: {e}")
 
     def __del__(self):
         """Cleanup when repository is garbage collected."""
         try:
             self.close()
         except Exception:
-            # Suppress errors during garbage collection
+            # Suppressed intentionally: during garbage collection / interpreter shutdown,
+            # logging infrastructure may already be torn down. Attempting to log here
+            # could itself raise errors. The close() method already has its own logging.
             pass
 
     def __enter__(self):
