@@ -69,6 +69,9 @@ def mock_telegram_service():
         service.settings_handler = TelegramSettingsHandlers(service)
         service.accounts = TelegramAccountHandlers(service)
 
+        # Build callback dispatch table (mirrors initialize() setup)
+        service._callback_dispatch = service._build_callback_dispatch_table()
+
         yield service
 
 
