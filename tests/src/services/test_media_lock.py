@@ -1,168 +1,105 @@
 """Tests for MediaLockService."""
 
 import pytest
-from datetime import datetime, timedelta
+from unittest.mock import Mock, patch
+from contextlib import contextmanager
+from uuid import uuid4
 
 from src.services.core.media_lock import MediaLockService
-from src.repositories.media_repository import MediaRepository
-from src.repositories.lock_repository import LockRepository
+
+
+@contextmanager
+def mock_track_execution(*args, **kwargs):
+    """Mock context manager for track_execution."""
+    yield "mock_run_id"
+
+
+@pytest.fixture
+def lock_service():
+    """Create MediaLockService with mocked dependencies."""
+    with patch.object(MediaLockService, "__init__", lambda self: None):
+        service = MediaLockService()
+        service.lock_repo = Mock()
+        service.service_run_repo = Mock()
+        service.service_name = "MediaLockService"
+        service.track_execution = mock_track_execution
+        service.set_result_summary = Mock()
+        return service
 
 
 @pytest.mark.unit
 class TestMediaLockService:
     """Test suite for MediaLockService."""
 
-    @pytest.mark.skip(
-        reason="TODO: Convert to unit test with mocks - currently uses test_db integration"
-    )
-    def test_create_lock(self, test_db):
+    def test_create_lock(self, lock_service):
         """Test creating a media lock."""
-        media_repo = MediaRepository(test_db)
+        media_id = str(uuid4())
+        lock_service.lock_repo.is_locked.return_value = False
 
-        media = media_repo.create(
-            file_path="/test/lock_test.jpg",
-            file_name="lock_test.jpg",
-            file_hash="lock_test789",
-            file_size_bytes=100000,
-            mime_type="image/jpeg",
-        )
+        with patch("src.services.core.media_lock.settings") as mock_settings:
+            mock_settings.REPOST_TTL_DAYS = 30
+            result = lock_service.create_lock(media_id, ttl_days=30)
 
-        service = MediaLockService(db=test_db)
+        assert result is True
+        lock_service.lock_repo.create.assert_called_once()
+        call_kwargs = lock_service.lock_repo.create.call_args.kwargs
+        assert call_kwargs["media_item_id"] == media_id
+        assert call_kwargs["lock_reason"] == "recent_post"
 
-        lock = service.create_lock(
-            media_id=media.id, reason="test_lock", lock_duration_days=30
-        )
-
-        assert lock is not None
-        assert lock.media_id == media.id
-        assert lock.reason == "test_lock"
-
-    @pytest.mark.skip(
-        reason="TODO: Convert to unit test with mocks - currently uses test_db integration"
-    )
-    def test_is_locked(self, test_db):
+    def test_is_locked(self, lock_service):
         """Test checking if media is locked."""
-        media_repo = MediaRepository(test_db)
-        LockRepository(test_db)
+        media_id = str(uuid4())
 
-        media = media_repo.create(
-            file_path="/test/is_locked.jpg",
-            file_name="is_locked.jpg",
-            file_hash="is_locked789",
-            file_size_bytes=95000,
-            mime_type="image/jpeg",
-        )
+        # Not locked
+        lock_service.lock_repo.is_locked.return_value = False
+        assert lock_service.is_locked(media_id) is False
 
-        service = MediaLockService(db=test_db)
+        # Locked
+        lock_service.lock_repo.is_locked.return_value = True
+        assert lock_service.is_locked(media_id) is True
 
-        # Initially not locked
-        assert service.is_locked(media.id) is False
-
-        # Create lock
-        service.create_lock(media.id, "test", lock_duration_days=10)
-
-        # Now should be locked
-        assert service.is_locked(media.id) is True
-
-    @pytest.mark.skip(
-        reason="TODO: Convert to unit test with mocks - currently uses test_db integration"
-    )
-    def test_cleanup_expired_locks(self, test_db):
+    def test_cleanup_expired_locks(self, lock_service):
         """Test cleaning up expired locks."""
-        media_repo = MediaRepository(test_db)
-        lock_repo = LockRepository(test_db)
+        lock_service.lock_repo.cleanup_expired.return_value = 3
 
-        media = media_repo.create(
-            file_path="/test/cleanup.jpg",
-            file_name="cleanup.jpg",
-            file_hash="cleanup789",
-            file_size_bytes=90000,
-            mime_type="image/jpeg",
-        )
+        result = lock_service.cleanup_expired_locks()
 
-        # Create expired lock
-        lock_repo.create(
-            media_id=media.id,
-            reason="expired",
-            expires_at=datetime.utcnow() - timedelta(days=1),
-        )
+        lock_service.lock_repo.cleanup_expired.assert_called_once()
+        assert result == 3
 
-        service = MediaLockService(db=test_db)
-
-        result = service.cleanup_expired_locks()
-
-        assert result["deleted_count"] >= 1
-
-    @pytest.mark.skip(
-        reason="TODO: Convert to unit test with mocks - currently uses test_db integration"
-    )
-    def test_remove_lock(self, test_db):
+    def test_remove_lock(self, lock_service):
         """Test manually removing a lock."""
-        media_repo = MediaRepository(test_db)
+        lock_id = str(uuid4())
+        lock_service.lock_repo.delete.return_value = True
 
-        media = media_repo.create(
-            file_path="/test/remove_lock.jpg",
-            file_name="remove_lock.jpg",
-            file_hash="remove789",
-            file_size_bytes=85000,
-            mime_type="image/jpeg",
-        )
+        result = lock_service.remove_lock(lock_id)
 
-        service = MediaLockService(db=test_db)
+        assert result is True
+        lock_service.lock_repo.delete.assert_called_once_with(lock_id)
 
-        # Create lock
-        lock = service.create_lock(media.id, "manual", lock_duration_days=5)
-
-        # Remove lock
-        service.remove_lock(lock.id)
-
-        # Verify removed
-        assert service.is_locked(media.id) is False
-
-    @pytest.mark.skip(
-        reason="TODO: Convert to unit test with mocks - currently uses test_db integration"
-    )
-    def test_get_active_locks(self, test_db):
+    def test_get_active_locks(self, lock_service):
         """Test retrieving active locks."""
-        media_repo = MediaRepository(test_db)
+        media_id = str(uuid4())
+        mock_lock = Mock()
+        lock_service.lock_repo.get_active_lock.return_value = mock_lock
 
-        media = media_repo.create(
-            file_path="/test/active_locks.jpg",
-            file_name="active_locks.jpg",
-            file_hash="active789",
-            file_size_bytes=80000,
-            mime_type="image/jpeg",
-        )
+        result = lock_service.get_active_lock(media_id)
 
-        service = MediaLockService(db=test_db)
+        assert result == mock_lock
+        lock_service.lock_repo.get_active_lock.assert_called_once_with(media_id)
 
-        # Create active lock
-        service.create_lock(media.id, "active_test", lock_duration_days=15)
-
-        active_locks = service.get_active_locks()
-
-        assert len(active_locks) >= 1
-
-    @pytest.mark.skip(
-        reason="TODO: Convert to unit test with mocks - currently uses test_db integration"
-    )
-    def test_lock_after_posting(self, test_db):
+    def test_lock_after_posting(self, lock_service):
         """Test creating lock after posting media."""
-        media_repo = MediaRepository(test_db)
+        media_id = str(uuid4())
+        lock_service.lock_repo.is_locked.return_value = False
 
-        media = media_repo.create(
-            file_path="/test/post_lock.jpg",
-            file_name="post_lock.jpg",
-            file_hash="postlock789",
-            file_size_bytes=75000,
-            mime_type="image/jpeg",
-        )
+        with patch("src.services.core.media_lock.settings") as mock_settings:
+            mock_settings.REPOST_TTL_DAYS = 30
+            result = lock_service.create_lock(media_id)
 
-        service = MediaLockService(db=test_db)
-
-        # Lock after posting (default 30 days)
-        lock = service.lock_after_posting(media.id)
-
-        assert lock is not None
-        assert lock.reason == "recent_post"
-        assert service.is_locked(media.id) is True
+        assert result is True
+        lock_service.lock_repo.create.assert_called_once()
+        call_kwargs = lock_service.lock_repo.create.call_args.kwargs
+        assert call_kwargs["media_item_id"] == media_id
+        assert call_kwargs["lock_reason"] == "recent_post"
+        assert call_kwargs["ttl_days"] == 30

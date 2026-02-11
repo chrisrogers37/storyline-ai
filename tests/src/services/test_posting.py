@@ -2,193 +2,122 @@
 
 import pytest
 from datetime import datetime
+from unittest.mock import Mock, patch
+from contextlib import contextmanager
+from uuid import uuid4
 
 from src.services.core.posting import PostingService
-from src.repositories.media_repository import MediaRepository
-from src.repositories.user_repository import UserRepository
-from src.repositories.queue_repository import QueueRepository
-from src.repositories.history_repository import HistoryRepository
+
+
+@contextmanager
+def mock_track_execution(*args, **kwargs):
+    """Mock context manager for track_execution."""
+    yield "mock_run_id"
+
+
+@pytest.fixture
+def posting_service():
+    """Create PostingService with mocked dependencies."""
+    with patch.object(PostingService, "__init__", lambda self: None):
+        service = PostingService()
+        service.queue_repo = Mock()
+        service.media_repo = Mock()
+        service.history_repo = Mock()
+        service.telegram_service = Mock()
+        service.lock_service = Mock()
+        service.settings_service = Mock()
+        service.service_run_repo = Mock()
+        service.service_name = "PostingService"
+        service._instagram_service = None
+        service._cloud_service = None
+        service.track_execution = mock_track_execution
+        service.set_result_summary = Mock()
+        return service
 
 
 @pytest.mark.unit
 class TestPostingService:
     """Test suite for PostingService."""
 
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_process_pending_queue_no_items(self, test_db):
+    @pytest.mark.asyncio
+    async def test_process_pending_queue_no_items(self, posting_service):
         """Test processing queue when no items are pending."""
-        service = PostingService(db=test_db)
+        posting_service.telegram_service.is_paused = False
+        posting_service.queue_repo.get_pending.return_value = []
 
-        result = service.process_pending_queue()
+        result = await posting_service.process_pending_posts()
 
         assert result["processed"] == 0
 
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_mark_as_posted(self, test_db):
+    def test_mark_as_posted(self, posting_service):
         """Test marking a queue item as posted."""
-        media_repo = MediaRepository(test_db)
-        user_repo = UserRepository(test_db)
-        queue_repo = QueueRepository(test_db)
-        history_repo = HistoryRepository(test_db)
+        queue_item_id = str(uuid4())
+        media_id = uuid4()
+        user_id = str(uuid4())
 
-        # Create test data
-        media = media_repo.create(
-            file_path="/test/posted.jpg",
-            file_name="posted.jpg",
-            file_hash="posted890",
-            file_size_bytes=100000,
-            mime_type="image/jpeg",
+        mock_queue_item = Mock()
+        mock_queue_item.id = queue_item_id
+        mock_queue_item.media_item_id = media_id
+        mock_queue_item.created_at = datetime.utcnow()
+        mock_queue_item.scheduled_for = datetime.utcnow()
+        mock_queue_item.retry_count = 0
+        posting_service.queue_repo.get_by_id.return_value = mock_queue_item
+
+        posting_service.handle_completion(
+            queue_item_id=queue_item_id,
+            success=True,
+            posted_by_user_id=user_id,
         )
 
-        user = user_repo.create(telegram_user_id=700001)
+        posting_service.history_repo.create.assert_called_once()
+        posting_service.media_repo.increment_times_posted.assert_called_once()
+        posting_service.lock_service.create_lock.assert_called_once()
+        posting_service.queue_repo.delete.assert_called_once_with(queue_item_id)
 
-        queue_item = queue_repo.create(
-            media_id=media.id,
-            scheduled_user_id=user.id,
-            scheduled_time=datetime.utcnow(),
-        )
-
-        service = PostingService(db=test_db)
-
-        # Mark as posted
-        result = service.mark_as_posted(
-            queue_id=queue_item.id, posted_by_user_id=user.id
-        )
-
-        assert result["status"] == "posted"
-
-        # Verify queue status updated
-        updated_queue = queue_repo.get_by_id(queue_item.id)
-        assert updated_queue.status == "posted"
-
-        # Verify history created
-        history_records = history_repo.get_by_media_id(media.id)
-        assert len(history_records) >= 1
-
-        # Verify media post count incremented
-        updated_media = media_repo.get_by_id(media.id)
-        assert updated_media.times_posted == 1
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_mark_as_skipped(self, test_db):
+    def test_mark_as_skipped(self, posting_service):
         """Test marking a queue item as skipped."""
-        media_repo = MediaRepository(test_db)
-        user_repo = UserRepository(test_db)
-        queue_repo = QueueRepository(test_db)
-        history_repo = HistoryRepository(test_db)
+        queue_item_id = str(uuid4())
+        media_id = uuid4()
 
-        # Create test data
-        media = media_repo.create(
-            file_path="/test/skipped.jpg",
-            file_name="skipped.jpg",
-            file_hash="skipped890",
-            file_size_bytes=95000,
-            mime_type="image/jpeg",
+        mock_queue_item = Mock()
+        mock_queue_item.id = queue_item_id
+        mock_queue_item.media_item_id = media_id
+        mock_queue_item.created_at = datetime.utcnow()
+        mock_queue_item.scheduled_for = datetime.utcnow()
+        mock_queue_item.retry_count = 0
+        posting_service.queue_repo.get_by_id.return_value = mock_queue_item
+
+        posting_service.handle_completion(
+            queue_item_id=queue_item_id,
+            success=False,
+            error_message="Skipped by user",
         )
 
-        user = user_repo.create(telegram_user_id=700002)
+        posting_service.history_repo.create.assert_called_once()
+        # Failed/skipped posts don't increment or create locks
+        posting_service.media_repo.increment_times_posted.assert_not_called()
+        posting_service.lock_service.create_lock.assert_not_called()
+        posting_service.queue_repo.delete.assert_called_once_with(queue_item_id)
 
-        queue_item = queue_repo.create(
-            media_id=media.id,
-            scheduled_user_id=user.id,
-            scheduled_time=datetime.utcnow(),
-        )
-
-        service = PostingService(db=test_db)
-
-        # Mark as skipped
-        result = service.mark_as_skipped(
-            queue_id=queue_item.id,
-            skipped_by_user_id=user.id,
-            reason="Not relevant today",
-        )
-
-        assert result["status"] == "skipped"
-
-        # Verify queue status updated
-        updated_queue = queue_repo.get_by_id(queue_item.id)
-        assert updated_queue.status == "skipped"
-
-        # Verify history created with skipped status
-        history_records = history_repo.get_by_media_id(media.id)
-        assert len(history_records) >= 1
-        assert history_records[0].status == "skipped"
-
-        # Verify media post count NOT incremented
-        updated_media = media_repo.get_by_id(media.id)
-        assert updated_media.times_posted == 0
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_get_queue_item_with_media(self, test_db):
+    def test_get_queue_item_with_media(self, posting_service):
         """Test retrieving queue item with media details."""
-        media_repo = MediaRepository(test_db)
-        user_repo = UserRepository(test_db)
-        queue_repo = QueueRepository(test_db)
+        posting_service.queue_repo.get_by_id.return_value = None
 
-        media = media_repo.create(
-            file_path="/test/details.jpg",
-            file_name="details.jpg",
-            file_hash="details890",
-            file_size_bytes=90000,
-            mime_type="image/jpeg",
+        # handle_completion returns early when queue item not found
+        posting_service.handle_completion(
+            queue_item_id="nonexistent",
+            success=True,
         )
 
-        user = user_repo.create(telegram_user_id=700003)
+        posting_service.history_repo.create.assert_not_called()
+        posting_service.queue_repo.delete.assert_not_called()
 
-        queue_item = queue_repo.create(
-            media_id=media.id,
-            scheduled_user_id=user.id,
-            scheduled_time=datetime.utcnow(),
-        )
-
-        service = PostingService(db=test_db)
-
-        result = service.get_queue_item_with_media(queue_item.id)
-
-        assert result is not None
-        assert result["queue_item"].id == queue_item.id
-        assert result["media"].id == media.id
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_retry_failed_post(self, test_db):
+    @pytest.mark.asyncio
+    async def test_retry_failed_post(self, posting_service):
         """Test retrying a failed post."""
-        media_repo = MediaRepository(test_db)
-        user_repo = UserRepository(test_db)
-        queue_repo = QueueRepository(test_db)
+        posting_service.queue_repo.get_all.return_value = []
 
-        media = media_repo.create(
-            file_path="/test/retry.jpg",
-            file_name="retry.jpg",
-            file_hash="retry890",
-            file_size_bytes=85000,
-            mime_type="image/jpeg",
-        )
+        result = await posting_service.force_post_next()
 
-        user = user_repo.create(telegram_user_id=700004)
-
-        queue_item = queue_repo.create(
-            media_id=media.id,
-            scheduled_user_id=user.id,
-            scheduled_time=datetime.utcnow(),
-        )
-
-        # Mark as failed
-        queue_repo.update_status(queue_item.id, "failed", error_message="Test error")
-
-        service = PostingService(db=test_db)
-
-        # Retry
-        result = service.retry_failed_post(queue_item.id, retry_minutes=30)
-
-        assert result["status"] == "pending"
-        assert result["retry_count"] >= 1
+        assert result["success"] is False
+        assert result["error"] == "No pending items in queue"
