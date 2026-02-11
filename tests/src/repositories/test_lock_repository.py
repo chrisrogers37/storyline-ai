@@ -1,231 +1,127 @@
 """Tests for LockRepository."""
 
 import pytest
-from datetime import datetime, timedelta
+from unittest.mock import MagicMock, patch
+
+from sqlalchemy.orm import Session
 
 from src.repositories.lock_repository import LockRepository
-from src.repositories.media_repository import MediaRepository
+from src.models.media_lock import MediaPostingLock
+
+
+@pytest.fixture
+def mock_db():
+    """Create a mock database session with chainable query."""
+    session = MagicMock(spec=Session)
+    mock_query = MagicMock()
+    session.query.return_value = mock_query
+    mock_query.filter.return_value = mock_query
+    mock_query.order_by.return_value = mock_query
+    mock_query.limit.return_value = mock_query
+    return session
+
+
+@pytest.fixture
+def lock_repo(mock_db):
+    """Create LockRepository with mocked database session."""
+    with patch.object(LockRepository, "__init__", lambda self: None):
+        repo = LockRepository()
+        repo._db = mock_db
+        return repo
 
 
 @pytest.mark.unit
 class TestLockRepository:
     """Test suite for LockRepository."""
 
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_create_lock(self, test_db):
-        """Test creating a media lock."""
-        media_repo = MediaRepository(test_db)
-        lock_repo = LockRepository(test_db)
-
-        # Create media
-        media = media_repo.create(
-            file_path="/test/locked.jpg",
-            file_name="locked.jpg",
-            file_hash="locked123",
-            file_size_bytes=100000,
-            mime_type="image/jpeg",
+    def test_create_lock_with_ttl(self, lock_repo, mock_db):
+        """Test creating a TTL media lock."""
+        lock_repo.create(
+            media_item_id="some-media-id",
+            ttl_days=30,
+            lock_reason="recent_post",
         )
 
-        # Create lock
-        expires_at = datetime.utcnow() + timedelta(days=30)
-        lock = lock_repo.create(
-            media_id=media.id, reason="recent_post", expires_at=expires_at
+        mock_db.add.assert_called_once()
+        mock_db.commit.assert_called_once()
+        mock_db.refresh.assert_called_once()
+
+        added_lock = mock_db.add.call_args[0][0]
+        assert isinstance(added_lock, MediaPostingLock)
+        assert added_lock.media_item_id == "some-media-id"
+        assert added_lock.lock_reason == "recent_post"
+        assert added_lock.locked_until is not None
+
+    def test_create_permanent_lock(self, lock_repo, mock_db):
+        """Test creating a permanent lock (ttl_days=None)."""
+        lock_repo.create(
+            media_item_id="some-media-id",
+            ttl_days=None,
+            lock_reason="permanent_reject",
+            created_by_user_id="some-user-id",
         )
 
-        assert lock.id is not None
-        assert lock.media_id == media.id
-        assert lock.reason == "recent_post"
-        assert lock.expires_at == expires_at
+        added_lock = mock_db.add.call_args[0][0]
+        assert added_lock.locked_until is None
+        assert added_lock.lock_reason == "permanent_reject"
+        assert added_lock.created_by_user_id == "some-user-id"
 
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_is_locked_active_lock(self, test_db):
+    def test_is_locked_active_lock(self, lock_repo, mock_db):
         """Test checking if media is locked with active lock."""
-        media_repo = MediaRepository(test_db)
-        lock_repo = LockRepository(test_db)
+        mock_lock = MagicMock(spec=MediaPostingLock)
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_lock
 
-        media = media_repo.create(
-            file_path="/test/active_lock.jpg",
-            file_name="active_lock.jpg",
-            file_hash="active123",
-            file_size_bytes=90000,
-            mime_type="image/jpeg",
-        )
+        result = lock_repo.is_locked("some-media-id")
 
-        # Create active lock (expires in future)
-        lock_repo.create(
-            media_id=media.id,
-            reason="recent_post",
-            expires_at=datetime.utcnow() + timedelta(days=10),
-        )
+        assert result is True
 
-        is_locked = lock_repo.is_locked(media.id)
-
-        assert is_locked is True
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_is_locked_expired_lock(self, test_db):
-        """Test checking if media is locked with expired lock."""
-        media_repo = MediaRepository(test_db)
-        lock_repo = LockRepository(test_db)
-
-        media = media_repo.create(
-            file_path="/test/expired_lock.jpg",
-            file_name="expired_lock.jpg",
-            file_hash="expired123",
-            file_size_bytes=85000,
-            mime_type="image/jpeg",
-        )
-
-        # Create expired lock (expires in past)
-        lock_repo.create(
-            media_id=media.id,
-            reason="recent_post",
-            expires_at=datetime.utcnow() - timedelta(days=1),
-        )
-
-        is_locked = lock_repo.is_locked(media.id)
-
-        assert is_locked is False
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_is_locked_no_lock(self, test_db):
+    def test_is_locked_no_lock(self, lock_repo, mock_db):
         """Test checking if media is locked with no lock."""
-        media_repo = MediaRepository(test_db)
-        lock_repo = LockRepository(test_db)
+        mock_db.query.return_value.filter.return_value.first.return_value = None
 
-        media = media_repo.create(
-            file_path="/test/no_lock.jpg",
-            file_name="no_lock.jpg",
-            file_hash="nolock123",
-            file_size_bytes=80000,
-            mime_type="image/jpeg",
-        )
+        result = lock_repo.is_locked("some-media-id")
 
-        is_locked = lock_repo.is_locked(media.id)
+        assert result is False
 
-        assert is_locked is False
+    def test_get_all_active(self, lock_repo, mock_db):
+        """Test retrieving all active locks."""
+        mock_locks = [
+            MagicMock(spec=MediaPostingLock),
+            MagicMock(spec=MediaPostingLock),
+        ]
+        mock_query = mock_db.query.return_value
+        mock_query.all.return_value = mock_locks
 
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_get_active_locks(self, test_db):
-        """Test retrieving active locks."""
-        media_repo = MediaRepository(test_db)
-        lock_repo = LockRepository(test_db)
+        result = lock_repo.get_all_active()
 
-        media = media_repo.create(
-            file_path="/test/active.jpg",
-            file_name="active.jpg",
-            file_hash="active456",
-            file_size_bytes=75000,
-            mime_type="image/jpeg",
-        )
+        assert len(result) == 2
+        mock_db.query.assert_called_with(MediaPostingLock)
 
-        # Create active lock
-        lock_repo.create(
-            media_id=media.id,
-            reason="recent_post",
-            expires_at=datetime.utcnow() + timedelta(days=5),
-        )
-
-        active_locks = lock_repo.get_active_locks()
-
-        assert len(active_locks) >= 1
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_cleanup_expired(self, test_db):
+    def test_cleanup_expired(self, lock_repo, mock_db):
         """Test cleaning up expired locks."""
-        media_repo = MediaRepository(test_db)
-        lock_repo = LockRepository(test_db)
+        mock_db.query.return_value.filter.return_value.delete.return_value = 3
 
-        media = media_repo.create(
-            file_path="/test/cleanup.jpg",
-            file_name="cleanup.jpg",
-            file_hash="cleanup123",
-            file_size_bytes=70000,
-            mime_type="image/jpeg",
-        )
+        result = lock_repo.cleanup_expired()
 
-        # Create expired lock
-        expired_lock = lock_repo.create(
-            media_id=media.id,
-            reason="recent_post",
-            expires_at=datetime.utcnow() - timedelta(hours=1),
-        )
+        assert result == 3
+        mock_db.commit.assert_called_once()
 
-        # Cleanup
-        deleted_count = lock_repo.cleanup_expired()
-
-        assert deleted_count >= 1
-
-        # Verify lock is deleted
-        remaining_lock = lock_repo.get_by_id(expired_lock.id)
-        assert remaining_lock is None
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_delete_lock(self, test_db):
+    def test_delete_lock(self, lock_repo, mock_db):
         """Test deleting a specific lock."""
-        media_repo = MediaRepository(test_db)
-        lock_repo = LockRepository(test_db)
+        mock_lock = MagicMock(spec=MediaPostingLock)
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_lock
 
-        media = media_repo.create(
-            file_path="/test/delete_lock.jpg",
-            file_name="delete_lock.jpg",
-            file_hash="dellock123",
-            file_size_bytes=65000,
-            mime_type="image/jpeg",
-        )
+        result = lock_repo.delete("some-lock-id")
 
-        lock = lock_repo.create(
-            media_id=media.id,
-            reason="manual_hold",
-            expires_at=datetime.utcnow() + timedelta(days=7),
-        )
+        assert result is True
+        mock_db.delete.assert_called_once_with(mock_lock)
+        mock_db.commit.assert_called_once()
 
-        lock_id = lock.id
+    def test_delete_lock_not_found(self, lock_repo, mock_db):
+        """Test deleting a non-existent lock."""
+        mock_db.query.return_value.filter.return_value.first.return_value = None
 
-        # Delete
-        lock_repo.delete(lock_id)
+        result = lock_repo.delete("nonexistent-id")
 
-        # Verify deleted
-        deleted_lock = lock_repo.get_by_id(lock_id)
-        assert deleted_lock is None
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_get_by_media_id(self, test_db):
-        """Test retrieving locks by media ID."""
-        media_repo = MediaRepository(test_db)
-        lock_repo = LockRepository(test_db)
-
-        media = media_repo.create(
-            file_path="/test/by_media_lock.jpg",
-            file_name="by_media_lock.jpg",
-            file_hash="bymedia123",
-            file_size_bytes=60000,
-            mime_type="image/jpeg",
-        )
-
-        lock_repo.create(
-            media_id=media.id,
-            reason="seasonal",
-            expires_at=datetime.utcnow() + timedelta(days=90),
-        )
-
-        locks = lock_repo.get_by_media_id(media.id)
-
-        assert len(locks) >= 1
-        assert locks[0].media_id == media.id
+        assert result is False
+        mock_db.delete.assert_not_called()

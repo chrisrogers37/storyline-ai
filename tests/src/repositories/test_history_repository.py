@@ -1,199 +1,135 @@
 """Tests for HistoryRepository."""
 
 import pytest
+from unittest.mock import MagicMock, patch
+from datetime import datetime
 
-from src.repositories.history_repository import HistoryRepository
-from src.repositories.media_repository import MediaRepository
-from src.repositories.user_repository import UserRepository
+from sqlalchemy.orm import Session
+
+from src.repositories.history_repository import HistoryRepository, HistoryCreateParams
+from src.models.posting_history import PostingHistory
+
+
+@pytest.fixture
+def mock_db():
+    """Create a mock database session with chainable query."""
+    session = MagicMock(spec=Session)
+    mock_query = MagicMock()
+    session.query.return_value = mock_query
+    mock_query.filter.return_value = mock_query
+    mock_query.order_by.return_value = mock_query
+    mock_query.limit.return_value = mock_query
+    return session
+
+
+@pytest.fixture
+def history_repo(mock_db):
+    """Create HistoryRepository with mocked database session."""
+    with patch.object(HistoryRepository, "__init__", lambda self: None):
+        repo = HistoryRepository()
+        repo._db = mock_db
+        return repo
 
 
 @pytest.mark.unit
 class TestHistoryRepository:
     """Test suite for HistoryRepository."""
 
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_create_history_record(self, test_db):
-        """Test creating a posting history record."""
-        media_repo = MediaRepository(test_db)
-        user_repo = UserRepository(test_db)
-        history_repo = HistoryRepository(test_db)
-
-        # Create dependencies
-        media = media_repo.create(
-            file_path="/test/history.jpg",
-            file_name="history.jpg",
-            file_hash="history123",
-            file_size_bytes=100000,
-            mime_type="image/jpeg",
-        )
-
-        user = user_repo.create(telegram_user_id=400001)
-
-        # Create history record
-        history = history_repo.create(
-            media_id=media.id,
-            posted_by_user_id=user.id,
+    def test_create_history_record(self, history_repo, mock_db):
+        """Test creating a posting history record using HistoryCreateParams."""
+        now = datetime.utcnow()
+        params = HistoryCreateParams(
+            media_item_id="some-media-id",
+            queue_item_id="some-queue-id",
+            queue_created_at=now,
+            queue_deleted_at=now,
+            scheduled_for=now,
+            posted_at=now,
             status="posted",
-            media_snapshot={"file_name": "history.jpg"},
+            success=True,
+            posted_by_user_id="some-user-id",
+            media_metadata={"file_name": "history.jpg"},
         )
 
-        assert history.id is not None
-        assert history.media_id == media.id
-        assert history.posted_by_user_id == user.id
-        assert history.status == "posted"
+        history_repo.create(params)
 
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_get_by_media_id(self, test_db):
+        mock_db.add.assert_called_once()
+        mock_db.commit.assert_called_once()
+        mock_db.refresh.assert_called_once()
+
+        added = mock_db.add.call_args[0][0]
+        assert isinstance(added, PostingHistory)
+        assert added.media_item_id == "some-media-id"
+        assert added.status == "posted"
+        assert added.success is True
+        assert added.posted_by_user_id == "some-user-id"
+
+    def test_get_by_media_id(self, history_repo, mock_db):
         """Test retrieving history by media ID."""
-        media_repo = MediaRepository(test_db)
-        user_repo = UserRepository(test_db)
-        history_repo = HistoryRepository(test_db)
+        mock_records = [MagicMock(media_item_id="some-media-id")]
+        mock_query = mock_db.query.return_value
+        mock_query.all.return_value = mock_records
 
-        media = media_repo.create(
-            file_path="/test/history2.jpg",
-            file_name="history2.jpg",
-            file_hash="history234",
-            file_size_bytes=90000,
-            mime_type="image/jpeg",
-        )
+        result = history_repo.get_by_media_id("some-media-id")
 
-        user = user_repo.create(telegram_user_id=400002)
+        assert len(result) == 1
+        assert result[0].media_item_id == "some-media-id"
+        mock_db.query.assert_called_with(PostingHistory)
 
-        # Create multiple history records
-        history_repo.create(
-            media_id=media.id, posted_by_user_id=user.id, status="posted"
-        )
-
-        records = history_repo.get_by_media_id(media.id)
-
-        assert len(records) >= 1
-        assert records[0].media_id == media.id
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_get_by_user_id(self, test_db):
+    def test_get_by_user_id(self, history_repo, mock_db):
         """Test retrieving history by user ID."""
-        media_repo = MediaRepository(test_db)
-        user_repo = UserRepository(test_db)
-        history_repo = HistoryRepository(test_db)
+        mock_records = [MagicMock(posted_by_user_id="some-user-id")]
+        mock_query = mock_db.query.return_value
+        mock_query.all.return_value = mock_records
 
-        media = media_repo.create(
-            file_path="/test/history3.jpg",
-            file_name="history3.jpg",
-            file_hash="history345",
-            file_size_bytes=85000,
-            mime_type="image/jpeg",
-        )
+        result = history_repo.get_by_user_id("some-user-id")
 
-        user = user_repo.create(telegram_user_id=400003)
+        assert len(result) == 1
+        assert result[0].posted_by_user_id == "some-user-id"
 
-        history_repo.create(
-            media_id=media.id, posted_by_user_id=user.id, status="posted"
-        )
-
-        records = history_repo.get_by_user_id(user.id)
-
-        assert len(records) >= 1
-        assert records[0].posted_by_user_id == user.id
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_get_stats(self, test_db):
+    def test_get_stats(self, history_repo, mock_db):
         """Test getting posting statistics."""
-        media_repo = MediaRepository(test_db)
-        user_repo = UserRepository(test_db)
-        history_repo = HistoryRepository(test_db)
+        # get_stats makes 3 separate scalar queries
+        mock_db.query.return_value.filter.return_value.scalar.side_effect = [10, 8, 2]
 
-        media = media_repo.create(
-            file_path="/test/stats.jpg",
-            file_name="stats.jpg",
-            file_hash="stats123",
-            file_size_bytes=95000,
-            mime_type="image/jpeg",
-        )
+        stats = history_repo.get_stats(days=30)
 
-        user = user_repo.create(telegram_user_id=400004)
+        assert stats["total"] == 10
+        assert stats["successful"] == 8
+        assert stats["failed"] == 2
+        assert stats["success_rate"] == 80.0
 
-        # Create posted record
-        history_repo.create(
-            media_id=media.id, posted_by_user_id=user.id, status="posted"
-        )
+    def test_get_stats_empty(self, history_repo, mock_db):
+        """Test stats with no posts returns zeros."""
+        mock_db.query.return_value.filter.return_value.scalar.side_effect = [0, 0, 0]
 
-        stats = history_repo.get_stats()
+        stats = history_repo.get_stats(days=30)
 
-        assert stats["total_posts"] >= 1
-        assert stats["total_users"] >= 1
+        assert stats["total"] == 0
+        assert stats["successful"] == 0
+        assert stats["failed"] == 0
+        assert stats["success_rate"] == 0
 
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_get_recent(self, test_db):
-        """Test getting recent posting history."""
-        media_repo = MediaRepository(test_db)
-        user_repo = UserRepository(test_db)
-        history_repo = HistoryRepository(test_db)
-
-        media = media_repo.create(
-            file_path="/test/recent.jpg",
-            file_name="recent.jpg",
-            file_hash="recent123",
-            file_size_bytes=80000,
-            mime_type="image/jpeg",
-        )
-
-        user = user_repo.create(telegram_user_id=400005)
-
-        history_repo.create(
-            media_id=media.id, posted_by_user_id=user.id, status="posted"
-        )
-
-        recent = history_repo.get_recent(days=7, limit=10)
-
-        assert len(recent) >= 1
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_list_all_with_filters(self, test_db):
+    def test_get_all_with_filters(self, history_repo, mock_db):
         """Test listing history with status filter."""
-        media_repo = MediaRepository(test_db)
-        user_repo = UserRepository(test_db)
-        history_repo = HistoryRepository(test_db)
+        mock_records = [
+            MagicMock(status="posted"),
+            MagicMock(status="posted"),
+        ]
+        mock_query = mock_db.query.return_value
+        mock_query.all.return_value = mock_records
 
-        media1 = media_repo.create(
-            file_path="/test/filter_posted.jpg",
-            file_name="filter_posted.jpg",
-            file_hash="filter_p123",
-            file_size_bytes=70000,
-            mime_type="image/jpeg",
-        )
+        result = history_repo.get_all(status="posted", days=7, limit=10)
 
-        media2 = media_repo.create(
-            file_path="/test/filter_skipped.jpg",
-            file_name="filter_skipped.jpg",
-            file_hash="filter_s123",
-            file_size_bytes=75000,
-            mime_type="image/jpeg",
-        )
+        assert len(result) == 2
+        mock_db.query.assert_called_with(PostingHistory)
 
-        user = user_repo.create(telegram_user_id=400006)
+    def test_get_recent_posts(self, history_repo, mock_db):
+        """Test getting posts from the last N hours."""
+        mock_records = [MagicMock(), MagicMock()]
+        mock_query = mock_db.query.return_value
+        mock_query.all.return_value = mock_records
 
-        history_repo.create(
-            media_id=media1.id, posted_by_user_id=user.id, status="posted"
-        )
+        result = history_repo.get_recent_posts(hours=24)
 
-        history_repo.create(
-            media_id=media2.id, posted_by_user_id=user.id, status="skipped"
-        )
-
-        # Filter by status
-        posted_records = history_repo.list_all(status="posted", limit=10)
-        posted_statuses = [r.status for r in posted_records]
-
-        assert all(status == "posted" for status in posted_statuses)
+        assert len(result) == 2

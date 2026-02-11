@@ -1,166 +1,166 @@
 """Tests for ServiceRunRepository."""
 
 import pytest
+from unittest.mock import MagicMock, patch
+
+from sqlalchemy.orm import Session
 
 from src.repositories.service_run_repository import ServiceRunRepository
-from src.repositories.user_repository import UserRepository
+from src.models.service_run import ServiceRun
+
+
+@pytest.fixture
+def mock_db():
+    """Create a mock database session with chainable query."""
+    session = MagicMock(spec=Session)
+    mock_query = MagicMock()
+    session.query.return_value = mock_query
+    mock_query.filter.return_value = mock_query
+    mock_query.order_by.return_value = mock_query
+    mock_query.limit.return_value = mock_query
+    return session
+
+
+@pytest.fixture
+def run_repo(mock_db):
+    """Create ServiceRunRepository with mocked database session."""
+    with patch.object(ServiceRunRepository, "__init__", lambda self: None):
+        repo = ServiceRunRepository()
+        repo._db = mock_db
+        return repo
 
 
 @pytest.mark.unit
 class TestServiceRunRepository:
     """Test suite for ServiceRunRepository."""
 
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_create_run(self, test_db):
-        """Test creating a service run record."""
-        run_repo = ServiceRunRepository(test_db)
+    def test_create_run(self, run_repo, mock_db):
+        """Test creating a service run record returns run_id string."""
+        mock_run = MagicMock()
+        mock_run.id = "test-run-uuid"
 
-        run = run_repo.create_run(
+        # Mock refresh to keep the mock_run in place
+        def mock_refresh(obj):
+            pass
+
+        mock_db.refresh.side_effect = mock_refresh
+
+        # The create_run method creates a ServiceRun, adds it, and returns str(run.id)
+        # Since we can't control the internal ServiceRun creation,
+        # we verify the db operations were called
+        result = run_repo.create_run(
             service_name="TestService",
             method_name="test_method",
-            parameters={"param1": "value1"},
+            input_params={"param1": "value1"},
         )
 
-        assert run.id is not None
-        assert run.service_name == "TestService"
-        assert run.method_name == "test_method"
-        assert run.status == "running"
+        mock_db.add.assert_called_once()
+        mock_db.commit.assert_called_once()
+        mock_db.refresh.assert_called_once()
 
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_complete_run_success(self, test_db):
-        """Test completing a service run successfully."""
-        run_repo = ServiceRunRepository(test_db)
+        added_run = mock_db.add.call_args[0][0]
+        assert isinstance(added_run, ServiceRun)
+        assert added_run.service_name == "TestService"
+        assert added_run.method_name == "test_method"
+        assert added_run.input_params == {"param1": "value1"}
+        assert added_run.triggered_by == "system"
 
-        run = run_repo.create_run(
-            service_name="TestService", method_name="success_method"
-        )
+        # Result should be a string (the run ID)
+        assert isinstance(result, str)
 
-        # Complete successfully
-        completed_run = run_repo.complete_run(
-            run.id, status="success", result_summary={"items_processed": 10}
-        )
-
-        assert completed_run.status == "success"
-        assert completed_run.completed_at is not None
-        assert completed_run.execution_time_seconds is not None
-        assert completed_run.error_message is None
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_complete_run_failure(self, test_db):
-        """Test completing a service run with failure."""
-        run_repo = ServiceRunRepository(test_db)
-
-        run = run_repo.create_run(
-            service_name="TestService", method_name="failing_method"
-        )
-
-        # Complete with failure
-        completed_run = run_repo.complete_run(
-            run.id,
-            status="failed",
-            error_message="Something went wrong",
-            error_traceback="Traceback (most recent call last)...",
-        )
-
-        assert completed_run.status == "failed"
-        assert completed_run.error_message == "Something went wrong"
-        assert completed_run.error_traceback is not None
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_get_recent_runs(self, test_db):
-        """Test retrieving recent service runs."""
-        run_repo = ServiceRunRepository(test_db)
-
-        # Create multiple runs
-        run_repo.create_run(service_name="ServiceA", method_name="methodA")
-        run_repo.create_run(service_name="ServiceB", method_name="methodB")
-
-        recent_runs = run_repo.get_recent_runs(limit=10)
-
-        assert len(recent_runs) >= 2
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_get_failed_runs(self, test_db):
-        """Test retrieving failed service runs."""
-        run_repo = ServiceRunRepository(test_db)
-
-        # Create and fail a run
-        run = run_repo.create_run(
-            service_name="FailingService", method_name="bad_method"
-        )
-        run_repo.complete_run(run.id, status="failed", error_message="Test failure")
-
-        failed_runs = run_repo.get_failed_runs(hours=24)
-
-        assert len(failed_runs) >= 1
-        assert all(r.status == "failed" for r in failed_runs)
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_get_runs_by_service(self, test_db):
-        """Test retrieving runs for a specific service."""
-        run_repo = ServiceRunRepository(test_db)
-
-        # Create runs for different services
-        run_repo.create_run(service_name="SpecificService", method_name="method1")
-        run_repo.create_run(service_name="OtherService", method_name="method2")
-
-        specific_runs = run_repo.get_runs_by_service("SpecificService", limit=10)
-
-        assert len(specific_runs) >= 1
-        assert all(r.service_name == "SpecificService" for r in specific_runs)
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_get_runs_by_user(self, test_db):
-        """Test retrieving runs triggered by a specific user."""
-        user_repo = UserRepository(test_db)
-        run_repo = ServiceRunRepository(test_db)
-
-        user = user_repo.create(telegram_user_id=500001)
-
-        # Create run with user attribution
+    def test_create_run_with_user(self, run_repo, mock_db):
+        """Test creating a run with user attribution."""
         run_repo.create_run(
             service_name="UserService",
             method_name="user_method",
-            triggered_by_user_id=user.id,
+            user_id="some-user-id",
+            triggered_by="user",
         )
 
-        user_runs = run_repo.get_runs_by_user(user.id, limit=10)
+        added_run = mock_db.add.call_args[0][0]
+        assert added_run.user_id == "some-user-id"
+        assert added_run.triggered_by == "user"
 
-        assert len(user_runs) >= 1
-        assert all(r.triggered_by_user_id == user.id for r in user_runs)
+    def test_complete_run_success(self, run_repo, mock_db):
+        """Test completing a service run successfully."""
+        mock_run = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_run
 
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_execution_time_calculation(self, test_db):
-        """Test that execution time is calculated correctly."""
-        run_repo = ServiceRunRepository(test_db)
-
-        run = run_repo.create_run(
-            service_name="TimedService", method_name="timed_method"
+        run_repo.complete_run(
+            run_id="some-run-id",
+            success=True,
+            duration_ms=1500,
+            result_summary={"items_processed": 10},
         )
 
-        # Simulate some processing time
-        import time
+        assert mock_run.status == "completed"
+        assert mock_run.success is True
+        assert mock_run.duration_ms == 1500
+        assert mock_run.result_summary == {"items_processed": 10}
+        assert mock_run.completed_at is not None
+        mock_db.commit.assert_called_once()
 
-        time.sleep(0.1)
+    def test_fail_run(self, run_repo, mock_db):
+        """Test marking a service run as failed."""
+        mock_run = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_run
 
-        # Complete the run
-        completed_run = run_repo.complete_run(run.id, status="success")
+        run_repo.fail_run(
+            run_id="some-run-id",
+            error_type="ValueError",
+            error_message="Something went wrong",
+            stack_trace="Traceback (most recent call last)...",
+            duration_ms=500,
+        )
 
-        assert completed_run.execution_time_seconds is not None
-        assert completed_run.execution_time_seconds >= 0.1
+        assert mock_run.status == "failed"
+        assert mock_run.success is False
+        assert mock_run.error_type == "ValueError"
+        assert mock_run.error_message == "Something went wrong"
+        assert mock_run.stack_trace == "Traceback (most recent call last)..."
+        assert mock_run.duration_ms == 500
+        assert mock_run.completed_at is not None
+        mock_db.commit.assert_called_once()
+
+    def test_get_recent_runs(self, run_repo, mock_db):
+        """Test retrieving recent service runs."""
+        mock_runs = [MagicMock(), MagicMock()]
+        mock_query = mock_db.query.return_value
+        mock_query.all.return_value = mock_runs
+
+        result = run_repo.get_recent_runs(limit=10)
+
+        assert len(result) == 2
+        mock_db.query.assert_called_with(ServiceRun)
+
+    def test_get_recent_runs_by_service(self, run_repo, mock_db):
+        """Test retrieving runs for a specific service."""
+        mock_runs = [MagicMock(service_name="SpecificService")]
+        mock_query = mock_db.query.return_value
+        mock_query.all.return_value = mock_runs
+
+        result = run_repo.get_recent_runs(service_name="SpecificService", limit=10)
+
+        assert len(result) == 1
+        assert result[0].service_name == "SpecificService"
+
+    def test_get_failed_runs(self, run_repo, mock_db):
+        """Test retrieving failed service runs."""
+        mock_runs = [MagicMock(status="failed")]
+        mock_query = mock_db.query.return_value
+        mock_query.all.return_value = mock_runs
+
+        result = run_repo.get_failed_runs(since_hours=24)
+
+        assert len(result) == 1
+        assert result[0].status == "failed"
+
+    def test_set_result_summary(self, run_repo, mock_db):
+        """Test updating the result summary for a run."""
+        mock_run = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_run
+
+        run_repo.set_result_summary("some-run-id", {"processed": 5})
+
+        assert mock_run.result_summary == {"processed": 5}
+        mock_db.commit.assert_called_once()
