@@ -7,6 +7,11 @@ from typing import TYPE_CHECKING
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from src.config.settings import settings
+from src.services.core.telegram_utils import (
+    build_queue_action_keyboard,
+    validate_queue_and_media,
+    validate_queue_item,
+)
 from src.utils.logger import logger
 from datetime import datetime, timedelta
 
@@ -66,10 +71,8 @@ class TelegramCallbackHandlers:
         callback_name: str,
     ):
         """Internal implementation of queue action completion (runs under lock)."""
-        queue_item = self.service.queue_repo.get_by_id(queue_id)
-
+        queue_item = await validate_queue_item(self.service, queue_id, query)
         if not queue_item:
-            await query.edit_message_caption(caption="⚠️ Queue item not found")
             return
 
         media_item = self.service.media_repo.get_by_id(str(queue_item.media_item_id))
@@ -174,65 +177,28 @@ class TelegramCallbackHandlers:
 
     async def handle_back(self, queue_id: str, user, query):
         """Handle 'Back' button - restore original queue item message."""
-        queue_item = self.service.queue_repo.get_by_id(queue_id)
-
+        queue_item, media_item = await validate_queue_and_media(
+            self.service, queue_id, query
+        )
         if not queue_item:
-            await query.edit_message_caption(caption="⚠️ Queue item not found")
-            return
-
-        media_item = self.service.media_repo.get_by_id(str(queue_item.media_item_id))
-
-        if not media_item:
-            await query.edit_message_caption(caption="⚠️ Media item not found")
             return
 
         # Rebuild original caption
         caption = self.service._build_caption(media_item, queue_item)
 
-        # Rebuild original keyboard (including Auto Post if enabled)
-        keyboard = []
-        if settings.ENABLE_INSTAGRAM_API:
-            keyboard.append(
-                [
-                    InlineKeyboardButton(
-                        "🤖 Auto Post to Instagram",
-                        callback_data=f"autopost:{queue_id}",
-                    ),
-                ]
-            )
-        keyboard.extend(
-            [
-                [
-                    InlineKeyboardButton(
-                        "✅ Posted", callback_data=f"posted:{queue_id}"
-                    ),
-                    InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{queue_id}"),
-                ],
-                [
-                    InlineKeyboardButton(
-                        "📱 Open Instagram", url="https://www.instagram.com/"
-                    ),
-                ],
-                [
-                    InlineKeyboardButton(
-                        "🚫 Reject", callback_data=f"reject:{queue_id}"
-                    ),
-                ],
-            ]
+        # Rebuild original keyboard
+        reply_markup = build_queue_action_keyboard(
+            queue_id, enable_instagram_api=settings.ENABLE_INSTAGRAM_API
         )
 
-        await query.edit_message_caption(
-            caption=caption, reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        await query.edit_message_caption(caption=caption, reply_markup=reply_markup)
 
         logger.info(f"Returned to queue item by {self.service._get_display_name(user)}")
 
     async def handle_reject_confirmation(self, queue_id: str, user, query):
         """Show confirmation dialog before permanently rejecting media."""
-        queue_item = self.service.queue_repo.get_by_id(queue_id)
-
+        queue_item = await validate_queue_item(self.service, queue_id, query)
         if not queue_item:
-            await query.edit_message_caption(caption="⚠️ Queue item not found")
             return
 
         # Get media item for filename
@@ -280,17 +246,10 @@ class TelegramCallbackHandlers:
 
     async def handle_cancel_reject(self, queue_id: str, user, query):
         """Cancel rejection and restore original buttons."""
-        queue_item = self.service.queue_repo.get_by_id(queue_id)
-
+        queue_item, media_item = await validate_queue_and_media(
+            self.service, queue_id, query
+        )
         if not queue_item:
-            await query.edit_message_caption(caption="⚠️ Queue item not found")
-            return
-
-        # Get media item for caption rebuild
-        media_item = self.service.media_repo.get_by_id(str(queue_item.media_item_id))
-
-        if not media_item:
-            await query.edit_message_caption(caption="⚠️ Media item not found")
             return
 
         chat_id = query.message.chat_id
@@ -306,58 +265,14 @@ class TelegramCallbackHandlers:
         # Get chat settings for enable_instagram_api check (use DB, not env var)
         chat_settings = self.service.settings_service.get_settings(chat_id)
 
-        # Rebuild original keyboard (including Auto Post if enabled)
-        keyboard = []
-        if chat_settings.enable_instagram_api:
-            keyboard.append(
-                [
-                    InlineKeyboardButton(
-                        "🤖 Auto Post to Instagram",
-                        callback_data=f"autopost:{queue_id}",
-                    ),
-                ]
-            )
-
-        # Status action buttons (grouped together)
-        keyboard.extend(
-            [
-                [
-                    InlineKeyboardButton(
-                        "✅ Posted", callback_data=f"posted:{queue_id}"
-                    ),
-                    InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{queue_id}"),
-                ],
-                [
-                    InlineKeyboardButton(
-                        "🚫 Reject", callback_data=f"reject:{queue_id}"
-                    ),
-                ],
-            ]
+        # Rebuild original keyboard
+        reply_markup = build_queue_action_keyboard(
+            queue_id,
+            enable_instagram_api=chat_settings.enable_instagram_api,
+            active_account=active_account,
         )
 
-        # Instagram-related buttons (grouped together)
-        account_label = (
-            f"📸 {active_account.display_name}" if active_account else "📸 No Account"
-        )
-        keyboard.extend(
-            [
-                [
-                    InlineKeyboardButton(
-                        account_label,
-                        callback_data=f"select_account:{queue_id}",
-                    ),
-                ],
-                [
-                    InlineKeyboardButton(
-                        "📱 Open Instagram", url="https://www.instagram.com/"
-                    ),
-                ],
-            ]
-        )
-
-        await query.edit_message_caption(
-            caption=caption, reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        await query.edit_message_caption(caption=caption, reply_markup=reply_markup)
 
         # Log interaction
         self.service.interaction_service.log_callback(
@@ -379,10 +294,8 @@ class TelegramCallbackHandlers:
         cancel_flag = self.service.get_cancel_flag(queue_id)
         cancel_flag.set()
 
-        queue_item = self.service.queue_repo.get_by_id(queue_id)
-
+        queue_item = await validate_queue_item(self.service, queue_id, query)
         if not queue_item:
-            await query.edit_message_caption(caption="⚠️ Queue item not found")
             return
 
         # Get media item for filename

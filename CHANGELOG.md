@@ -31,10 +31,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Removed direct `sqlalchemy` and `get_db` imports from `HealthCheckService`
   - No services now access the database directly; all queries go through repositories
 
-- **Route scheduler media selection through repository layer** - Fix architecture violation (ARCH-2)
+- **Route scheduler media selection through repository layer** (#32) - Fix architecture violation (ARCH-2)
   - Moved `_select_media_from_pool()` query logic from `SchedulerService` to `MediaRepository.get_next_eligible_for_posting()`
   - Removed inline `sqlalchemy` and model imports from service layer
   - Service method now delegates to repository with identical query behavior
+
+- **Extract Telegram handler common utilities** - Deduplicate 4 repeated patterns across handler modules
+  - Created `telegram_utils.py` with shared validation, keyboard builders, and state cleanup helpers
+  - Replaced ~15 inline queue validation blocks with `validate_queue_item()` / `validate_queue_and_media()`
+  - Replaced ~3 keyboard constructions with `build_queue_action_keyboard()` / `build_error_recovery_keyboard()`
+  - Replaced ~6 cancel keyboard constructions with shared `CANCEL_KEYBOARD` constant
+  - Replaced ~6 state cleanup blocks with `clear_settings_edit_state()` / `clear_add_account_state()`
 
 ### Fixed
 

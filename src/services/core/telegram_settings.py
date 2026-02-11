@@ -12,6 +12,7 @@ from src.config.constants import (
     MIN_POSTING_HOUR,
     MIN_POSTS_PER_DAY,
 )
+from src.services.core.telegram_utils import CANCEL_KEYBOARD, clear_settings_edit_state
 from src.utils.logger import logger
 
 if TYPE_CHECKING:
@@ -178,20 +179,12 @@ class TelegramSettingsHandlers:
             context.user_data["settings_edit_chat_id"] = chat_id
             context.user_data["settings_edit_message_id"] = query.message.message_id
 
-            keyboard = [
-                [
-                    InlineKeyboardButton(
-                        "❌ Cancel", callback_data="settings_edit_cancel"
-                    )
-                ]
-            ]
-
             await query.edit_message_text(
                 f"📊 *Edit Posts Per Day*\n\n"
                 f"Current value: *{chat_settings.posts_per_day}*\n\n"
                 f"Enter a number between {MIN_POSTS_PER_DAY} and {MAX_POSTS_PER_DAY}:",
                 parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup(keyboard),
+                reply_markup=CANCEL_KEYBOARD,
             )
 
         elif setting_name == "hours":
@@ -199,20 +192,12 @@ class TelegramSettingsHandlers:
             context.user_data["settings_edit_chat_id"] = chat_id
             context.user_data["settings_edit_message_id"] = query.message.message_id
 
-            keyboard = [
-                [
-                    InlineKeyboardButton(
-                        "❌ Cancel", callback_data="settings_edit_cancel"
-                    )
-                ]
-            ]
-
             await query.edit_message_text(
                 f"🕐 *Edit Posting Hours*\n\n"
                 f"Current window: *{chat_settings.posting_hours_start}:00 - {chat_settings.posting_hours_end}:00 UTC*\n\n"
                 f"Enter the *start hour* ({MIN_POSTING_HOUR}-{MAX_POSTING_HOUR} UTC):",
                 parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup(keyboard),
+                reply_markup=CANCEL_KEYBOARD,
             )
 
     async def handle_settings_edit_message(self, update, context):
@@ -243,8 +228,7 @@ class TelegramSettingsHandlers:
                 )
 
                 # Clear state and refresh settings
-                context.user_data.pop("settings_edit_state", None)
-                context.user_data.pop("settings_edit_chat_id", None)
+                clear_settings_edit_state(context)
 
                 # Rebuild settings message
                 await self.send_settings_message_by_chat_id(chat_id, context)
@@ -255,13 +239,6 @@ class TelegramSettingsHandlers:
 
             except ValueError:
                 # Show error, keep waiting for valid input
-                keyboard = [
-                    [
-                        InlineKeyboardButton(
-                            "❌ Cancel", callback_data="settings_edit_cancel"
-                        )
-                    ]
-                ]
                 await context.bot.edit_message_text(
                     chat_id=chat_id,
                     message_id=context.user_data.get("settings_edit_message_id"),
@@ -270,7 +247,7 @@ class TelegramSettingsHandlers:
                         f"❌ Invalid input. Please enter a number between {MIN_POSTS_PER_DAY} and {MAX_POSTS_PER_DAY}:"
                     ),
                     parse_mode="Markdown",
-                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    reply_markup=CANCEL_KEYBOARD,
                 )
 
             return True
@@ -285,13 +262,6 @@ class TelegramSettingsHandlers:
                 context.user_data["settings_edit_hours_start"] = value
                 context.user_data["settings_edit_state"] = "awaiting_hours_end"
 
-                keyboard = [
-                    [
-                        InlineKeyboardButton(
-                            "❌ Cancel", callback_data="settings_edit_cancel"
-                        )
-                    ]
-                ]
                 await context.bot.edit_message_text(
                     chat_id=chat_id,
                     message_id=context.user_data.get("settings_edit_message_id"),
@@ -301,17 +271,10 @@ class TelegramSettingsHandlers:
                         f"Enter the *end hour* ({MIN_POSTING_HOUR}-{MAX_POSTING_HOUR} UTC):"
                     ),
                     parse_mode="Markdown",
-                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    reply_markup=CANCEL_KEYBOARD,
                 )
 
             except ValueError:
-                keyboard = [
-                    [
-                        InlineKeyboardButton(
-                            "❌ Cancel", callback_data="settings_edit_cancel"
-                        )
-                    ]
-                ]
                 await context.bot.edit_message_text(
                     chat_id=chat_id,
                     message_id=context.user_data.get("settings_edit_message_id"),
@@ -320,7 +283,7 @@ class TelegramSettingsHandlers:
                         f"❌ Invalid input. Please enter a number between {MIN_POSTING_HOUR} and {MAX_POSTING_HOUR}:"
                     ),
                     parse_mode="Markdown",
-                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    reply_markup=CANCEL_KEYBOARD,
                 )
 
             return True
@@ -342,10 +305,7 @@ class TelegramSettingsHandlers:
                 )
 
                 # Clear state
-                context.user_data.pop("settings_edit_state", None)
-                context.user_data.pop("settings_edit_chat_id", None)
-                context.user_data.pop("settings_edit_hours_start", None)
-                context.user_data.pop("settings_edit_message_id", None)
+                clear_settings_edit_state(context)
 
                 # Rebuild settings message
                 await self.send_settings_message_by_chat_id(chat_id, context)
@@ -355,13 +315,6 @@ class TelegramSettingsHandlers:
                 )
 
             except ValueError:
-                keyboard = [
-                    [
-                        InlineKeyboardButton(
-                            "❌ Cancel", callback_data="settings_edit_cancel"
-                        )
-                    ]
-                ]
                 await context.bot.edit_message_text(
                     chat_id=chat_id,
                     message_id=context.user_data.get("settings_edit_message_id"),
@@ -371,7 +324,7 @@ class TelegramSettingsHandlers:
                         f"❌ Invalid input. Please enter a number between {MIN_POSTING_HOUR} and {MAX_POSTING_HOUR}:"
                     ),
                     parse_mode="Markdown",
-                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    reply_markup=CANCEL_KEYBOARD,
                 )
 
             return True
@@ -381,10 +334,7 @@ class TelegramSettingsHandlers:
     async def handle_settings_edit_cancel(self, query, context):
         """Cancel settings edit and return to settings menu."""
         # Clear edit state
-        context.user_data.pop("settings_edit_state", None)
-        context.user_data.pop("settings_edit_chat_id", None)
-        context.user_data.pop("settings_edit_hours_start", None)
-        context.user_data.pop("settings_edit_message_id", None)
+        clear_settings_edit_state(context)
 
         # Refresh settings message
         await self.refresh_settings_message(query, show_answer=False)

@@ -6,6 +6,12 @@ from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
+from src.services.core.telegram_utils import (
+    build_queue_action_keyboard,
+    clear_add_account_state,
+    validate_queue_and_media,
+    validate_queue_item,
+)
 from src.utils.logger import logger
 
 if TYPE_CHECKING:
@@ -329,10 +335,7 @@ class TelegramAccountHandlers:
                         )
 
                 # Clear conversation state
-                context.user_data.pop("add_account_state", None)
-                context.user_data.pop("add_account_data", None)
-                context.user_data.pop("add_account_chat_id", None)
-                context.user_data.pop("add_account_messages", None)
+                clear_add_account_state(context)
 
                 # Log interaction
                 self.service.interaction_service.log_callback(
@@ -441,10 +444,7 @@ class TelegramAccountHandlers:
                         )
 
                 # Clear state on error
-                context.user_data.pop("add_account_state", None)
-                context.user_data.pop("add_account_data", None)
-                context.user_data.pop("add_account_chat_id", None)
-                context.user_data.pop("add_account_messages", None)
+                clear_add_account_state(context)
 
                 keyboard = [
                     [
@@ -497,10 +497,7 @@ class TelegramAccountHandlers:
                         f"Could not delete conversation message {msg_id} during cancel: {e}"
                     )
 
-        context.user_data.pop("add_account_state", None)
-        context.user_data.pop("add_account_data", None)
-        context.user_data.pop("add_account_chat_id", None)
-        context.user_data.pop("add_account_messages", None)
+        clear_add_account_state(context)
 
         await query.answer("Cancelled")
         await self.handle_account_selection_menu(user, query)
@@ -619,9 +616,8 @@ class TelegramAccountHandlers:
         chat_id = query.message.chat_id
 
         # Get queue item to preserve context
-        queue_item = self.service.queue_repo.get_by_id(queue_id)
+        queue_item = await validate_queue_item(self.service, queue_id, query)
         if not queue_item:
-            await query.edit_message_caption(caption="⚠️ Queue item not found")
             return
 
         # Get all accounts
@@ -797,14 +793,10 @@ class TelegramAccountHandlers:
 
         Used after account selection or when returning from submenu.
         """
-        queue_item = self.service.queue_repo.get_by_id(queue_id)
+        queue_item, media_item = await validate_queue_and_media(
+            self.service, queue_id, query
+        )
         if not queue_item:
-            await query.edit_message_caption(caption="⚠️ Queue item not found")
-            return
-
-        media_item = self.service.media_repo.get_by_id(str(queue_item.media_item_id))
-        if not media_item:
-            await query.edit_message_caption(caption="⚠️ Media item not found")
             return
 
         chat_id = query.message.chat_id
@@ -819,55 +811,10 @@ class TelegramAccountHandlers:
 
         # Rebuild keyboard with account selector
         chat_settings = self.service.settings_service.get_settings(chat_id)
-        keyboard = []
-
-        if chat_settings.enable_instagram_api:
-            keyboard.append(
-                [
-                    InlineKeyboardButton(
-                        "🤖 Auto Post to Instagram",
-                        callback_data=f"autopost:{queue_id}",
-                    ),
-                ]
-            )
-
-        # Status action buttons (grouped together)
-        keyboard.extend(
-            [
-                [
-                    InlineKeyboardButton(
-                        "✅ Posted", callback_data=f"posted:{queue_id}"
-                    ),
-                    InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{queue_id}"),
-                ],
-                [
-                    InlineKeyboardButton(
-                        "🚫 Reject", callback_data=f"reject:{queue_id}"
-                    ),
-                ],
-            ]
+        reply_markup = build_queue_action_keyboard(
+            queue_id,
+            enable_instagram_api=chat_settings.enable_instagram_api,
+            active_account=active_account,
         )
 
-        # Instagram-related buttons (grouped together)
-        account_label = (
-            f"📸 {active_account.display_name}" if active_account else "📸 No Account"
-        )
-        keyboard.extend(
-            [
-                [
-                    InlineKeyboardButton(
-                        account_label,
-                        callback_data=f"select_account:{queue_id}",
-                    ),
-                ],
-                [
-                    InlineKeyboardButton(
-                        "📱 Open Instagram", url="https://www.instagram.com/"
-                    ),
-                ],
-            ]
-        )
-
-        await query.edit_message_caption(
-            caption=caption, reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        await query.edit_message_caption(caption=caption, reply_markup=reply_markup)
