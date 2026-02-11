@@ -177,7 +177,9 @@ class TestHealthCheckService:
 
     @patch("src.services.core.health_check.BaseRepository")
     @patch("src.services.core.health_check.settings")
-    def test_check_all_some_unhealthy(self, mock_settings, mock_base_repo, health_service):
+    def test_check_all_some_unhealthy(
+        self, mock_settings, mock_base_repo, health_service
+    ):
         """Test check_all returns unhealthy when any check fails."""
         # Telegram unhealthy
         mock_settings.TELEGRAM_BOT_TOKEN = ""
