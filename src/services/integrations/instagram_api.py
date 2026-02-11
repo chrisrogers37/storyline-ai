@@ -48,6 +48,7 @@ class InstagramAPIService(BaseService):
     META_GRAPH_BASE = "https://graph.facebook.com/v18.0"
     CONTAINER_STATUS_POLL_INTERVAL = 2  # seconds
     CONTAINER_STATUS_MAX_POLLS = 30  # max ~60 seconds wait
+    MIN_ACCOUNT_ID_LENGTH = 10  # Instagram account IDs are typically 15-17 digits
 
     def __init__(self):
         super().__init__()
@@ -516,7 +517,7 @@ class InstagramAPIService(BaseService):
             }
 
         # Length check (informational only - IDs vary from 15-17+ digits)
-        if len(account_id_str) < 10:
+        if len(account_id_str) < self.MIN_ACCOUNT_ID_LENGTH:
             return {
                 "valid": False,
                 "account_id": account_id_str,

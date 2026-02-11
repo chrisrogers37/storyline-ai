@@ -24,6 +24,8 @@ class TelegramCommandHandlers:
     and accesses shared state via self.service.
     """
 
+    MAX_LOCKS_DISPLAY = 10
+
     def __init__(self, service: TelegramService):
         self.service = service
 
@@ -588,13 +590,13 @@ class TelegramCommandHandlers:
             return
 
         lines = [f"🔒 *Permanently Locked* ({len(permanent)})\n"]
-        for i, lock in enumerate(permanent[:10], 1):  # Show max 10
+        for i, lock in enumerate(permanent[: self.MAX_LOCKS_DISPLAY], 1):
             media = self.service.media_repo.get_by_id(str(lock.media_item_id))
             filename = media.file_name if media else "Unknown"
             lines.append(f"{i}. {filename[:30]}")
 
-        if len(permanent) > 10:
-            lines.append(f"\n... and {len(permanent) - 10} more")
+        if len(permanent) > self.MAX_LOCKS_DISPLAY:
+            lines.append(f"\n... and {len(permanent) - self.MAX_LOCKS_DISPLAY} more")
 
         await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 

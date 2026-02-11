@@ -14,6 +14,10 @@ from src.utils.logger import logger
 class HealthCheckService(BaseService):
     """System health monitoring."""
 
+    QUEUE_BACKLOG_THRESHOLD = 50
+    MAX_PENDING_AGE_HOURS = 24
+    RECENT_POSTS_WINDOW_HOURS = 48
+
     def __init__(self):
         super().__init__()
         self.queue_repo = QueueRepository()
@@ -170,7 +174,7 @@ class HealthCheckService(BaseService):
             oldest_pending = self.queue_repo.get_oldest_pending()
 
             # Alert if queue is backing up
-            if pending_count > 50:
+            if pending_count > self.QUEUE_BACKLOG_THRESHOLD:
                 return {
                     "healthy": False,
                     "message": f"Queue backlog: {pending_count} items pending",
@@ -180,7 +184,7 @@ class HealthCheckService(BaseService):
             # Alert if oldest item is very old
             if oldest_pending:
                 age = datetime.utcnow() - oldest_pending.created_at
-                if age > timedelta(hours=24):
+                if age > timedelta(hours=self.MAX_PENDING_AGE_HOURS):
                     return {
                         "healthy": False,
                         "message": f"Oldest item pending for {age.total_seconds() / 3600:.1f} hours",
@@ -199,12 +203,14 @@ class HealthCheckService(BaseService):
     def _check_recent_posts(self) -> dict:
         """Check if posts have been made recently."""
         try:
-            recent_posts = self.history_repo.get_recent_posts(hours=48)
+            recent_posts = self.history_repo.get_recent_posts(
+                hours=self.RECENT_POSTS_WINDOW_HOURS
+            )
 
             if not recent_posts:
                 return {
                     "healthy": False,
-                    "message": "No posts in last 48 hours",
+                    "message": f"No posts in last {self.RECENT_POSTS_WINDOW_HOURS} hours",
                     "recent_count": 0,
                 }
 
@@ -212,7 +218,7 @@ class HealthCheckService(BaseService):
 
             return {
                 "healthy": True,
-                "message": f"{len(successful_posts)}/{len(recent_posts)} successful in last 48h",
+                "message": f"{len(successful_posts)}/{len(recent_posts)} successful in last {self.RECENT_POSTS_WINDOW_HOURS}h",
                 "recent_count": len(recent_posts),
                 "successful_count": len(successful_posts),
             }
