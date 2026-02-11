@@ -413,55 +413,16 @@ class SchedulerService(BaseService):
         """
         Select media from a specific pool (category or all).
 
+        Delegates to MediaRepository.get_next_eligible_for_posting() which handles
+        filtering out locked, queued, and inactive items with proper priority sorting.
+
         Args:
             category: Filter by category, or None for all
 
         Returns:
             MediaItem or None
         """
-        from sqlalchemy import and_, exists, select, func
-        from src.models.media_item import MediaItem
-        from src.models.posting_queue import PostingQueue
-        from src.models.media_lock import MediaPostingLock
-
-        query = self.media_repo.db.query(MediaItem).filter(MediaItem.is_active)
-
-        # Filter by category if specified
-        if category:
-            query = query.filter(MediaItem.category == category)
-
-        # Exclude already queued items
-        queued_subquery = exists(
-            select(PostingQueue.id).where(PostingQueue.media_item_id == MediaItem.id)
-        )
-        query = query.filter(~queued_subquery)
-
-        # Exclude locked items (both permanent and TTL locks)
-        now = datetime.utcnow()
-        locked_subquery = exists(
-            select(MediaPostingLock.id).where(
-                and_(
-                    MediaPostingLock.media_item_id == MediaItem.id,
-                    # Lock is active if: locked_until is NULL (permanent) OR locked_until > now (TTL not expired)
-                    (MediaPostingLock.locked_until.is_(None))
-                    | (MediaPostingLock.locked_until > now),
-                )
-            )
-        )
-        query = query.filter(~locked_subquery)
-
-        # Sort by priority:
-        # 1. Never posted first (NULLS FIRST)
-        # 2. Then least posted
-        # 3. Then random (ensures variety when items are tied on above criteria)
-        query = query.order_by(
-            MediaItem.last_posted_at.asc().nullsfirst(),
-            MediaItem.times_posted.asc(),
-            func.random(),
-        )
-
-        # Return top result (randomness is built into the query)
-        return query.first()
+        return self.media_repo.get_next_eligible_for_posting(category=category)
 
     def check_availability(self, media_id: str) -> bool:
         """

@@ -14,6 +14,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Updated code examples in security review for post-refactor handler locations
   - Archived 4 completed planning docs; standardized status markers (PENDING/IN PROGRESS/COMPLETED)
 
+### Refactored
+
+- **Extract magic numbers into named constants** (#29) - Replace hardcoded values with descriptive constants
+  - Created `src/config/constants.py` for shared constants (MIN/MAX_POSTS_PER_DAY, MIN/MAX_POSTING_HOUR)
+  - Added class-level constants to SchedulerService, TelegramCommandHandlers, TelegramSettingsHandlers, SettingsService, InstagramAPIService, TelegramAccountHandlers
+  - All validation logic now references named constants with clear error messages
+
+- **Replace silent error swallowing with debug logging** (#30) - Add diagnostic visibility to suppressed exceptions
+  - Added `logger.debug()` to 9 bare `except Exception: pass` blocks across 3 files
+  - Covers repository lifecycle cleanup, Telegram message deletion, and session recovery
+  - `__del__` method intentionally kept as `pass` (logging unsafe during garbage collection)
+
+- **Route health check database query through repository layer** (#31) - Fix architecture violation (ARCH-1)
+  - Added `BaseRepository.check_connection()` static method for DB connectivity checks
+  - Removed direct `sqlalchemy` and `get_db` imports from `HealthCheckService`
+  - No services now access the database directly; all queries go through repositories
+
+- **Route scheduler media selection through repository layer** - Fix architecture violation (ARCH-2)
+  - Moved `_select_media_from_pool()` query logic from `SchedulerService` to `MediaRepository.get_next_eligible_for_posting()`
+  - Removed inline `sqlalchemy` and model imports from service layer
+  - Service method now delegates to repository with identical query behavior
+
 ### Fixed
 
 - **Race Condition on Telegram Button Clicks** - Prevent duplicate operations from rapid double-clicks
