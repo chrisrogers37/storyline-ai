@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Tests
 
+- **Add missing test files for 6 uncovered modules** - Create 64 new unit tests across 6 previously untested files
+  - `test_telegram_autopost.py` (6 tests): Safety gates, dry-run mode, Cloudinary failure, operation locks
+  - `test_instagram_commands.py` (11 tests): CLI commands for status, add/list/deactivate/reactivate accounts
+  - `test_base_repository.py` (14 tests): Session lifecycle, commit/rollback, context manager, check_connection
+  - `test_chat_settings_repository.py` (7 tests): CRUD, .env bootstrap, pause tracking
+  - `test_instagram_account_repository.py` (12 tests): Account CRUD, activate/deactivate, prefix lookup
+  - `test_token_repository.py` (14 tests): Token CRUD, UPSERT, expiry, multi-account filter chains
+  - Fixed plan's lazy-import patch paths (must patch at source module for `from ... import` inside function bodies)
+  - Total test suite: 528 passed, 38 skipped, 0 failures
+
 - **Convert 45 skipped service tests to unit tests** - Replace integration fixtures with mock-based unit tests across 7 service test files
   - Rewrote test_base_service.py, test_media_lock.py, test_posting.py, test_scheduler.py with correct method signatures
   - Implemented 3 stub tests in test_telegram_commands.py (next_media_not_found, next_notification_failure, next_logs_interaction)
