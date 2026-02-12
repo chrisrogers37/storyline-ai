@@ -223,6 +223,49 @@ class TestMediaRepositorySyncMethods:
 
 
 @pytest.mark.unit
+class TestMediaRepositoryBackfillMethods:
+    """Tests for backfill-related repository methods added in Phase 05."""
+
+    def test_get_by_instagram_media_id(self, media_repo, mock_db):
+        """Returns item by Instagram media ID."""
+        mock_item = MagicMock(instagram_media_id="17841405793087218")
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_item
+
+        result = media_repo.get_by_instagram_media_id("17841405793087218")
+
+        assert result is mock_item
+        mock_db.query.assert_called_with(MediaItem)
+
+    def test_get_by_instagram_media_id_not_found(self, media_repo, mock_db):
+        """Returns None when no item with given Instagram media ID."""
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+
+        result = media_repo.get_by_instagram_media_id("nonexistent")
+
+        assert result is None
+
+    def test_get_backfilled_instagram_media_ids(self, media_repo, mock_db):
+        """Returns set of all backfilled Instagram media IDs."""
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            ("id_1",),
+            ("id_2",),
+            ("id_3",),
+        ]
+
+        result = media_repo.get_backfilled_instagram_media_ids()
+
+        assert result == {"id_1", "id_2", "id_3"}
+
+    def test_get_backfilled_instagram_media_ids_empty(self, media_repo, mock_db):
+        """Returns empty set when no backfilled items."""
+        mock_db.query.return_value.filter.return_value.all.return_value = []
+
+        result = media_repo.get_backfilled_instagram_media_ids()
+
+        assert result == set()
+
+
+@pytest.mark.unit
 class TestGetNextEligibleForPosting:
     """Tests for MediaRepository.get_next_eligible_for_posting().
 
