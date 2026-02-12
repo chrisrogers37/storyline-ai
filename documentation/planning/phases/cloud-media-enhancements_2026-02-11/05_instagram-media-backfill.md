@@ -1,5 +1,8 @@
 # Phase 05: Instagram Media Backfill
 
+**Status**: 🔧 IN PROGRESS
+**Started**: 2026-02-12
+
 **PR Title**: feat: add Instagram media backfill service
 **Risk Level**: Medium (new external API integration with rate limits, media download, and storage)
 **Estimated Effort**: Large (6 new files, 6 modified files, ~38 new tests)

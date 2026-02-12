@@ -47,6 +47,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Enhanced health check with provider connectivity testing
   - Database migration `012_chat_settings_media_sync.sql` for per-chat sync toggle
 
+- **Instagram Media Backfill** - Pull existing media from Instagram back into the system (Phase 05 of Cloud Media Enhancements)
+  - New `InstagramBackfillService` for fetching feed posts, live stories, and carousel albums from Instagram Graph API
+  - New CLI commands: `backfill-instagram` (with --limit, --media-type, --since, --dry-run, --account-id), `backfill-status`
+  - New Telegram command: `/backfill [limit] [dry]`
+  - Carousel album expansion: downloads each child image/video individually
+  - Cursor-based pagination for large media libraries
+  - Duplicate prevention via `instagram_media_id` tracking column
+  - Content-level dedup via SHA256 hash comparison
+  - Date filtering with early termination (--since flag)
+  - Dry-run mode for previewing without downloading
+  - Multi-account support via --account-id flag
+  - New exception hierarchy: `BackfillError`, `BackfillMediaExpiredError`, `BackfillMediaNotFoundError`
+  - Database migration 013: `instagram_media_id` and `backfilled_at` columns on `media_items`
+
 ### Changed
 
 - **Posting pipeline decoupled from filesystem** - All media access now goes through provider abstraction
