@@ -57,6 +57,7 @@ class HealthCheckService(BaseService):
             "instagram_api": self._check_instagram_api(),
             "queue": self._check_queue(),
             "recent_posts": self._check_recent_posts(),
+            "media_sync": self._check_media_sync(),
         }
 
         # Determine overall status
@@ -223,3 +224,80 @@ class HealthCheckService(BaseService):
 
         except Exception as e:
             return {"healthy": False, "message": f"Recent posts check error: {str(e)}"}
+
+    def _check_media_sync(self) -> dict:
+        """Check media sync health."""
+        if not settings.MEDIA_SYNC_ENABLED:
+            return {
+                "healthy": True,
+                "message": "Disabled via config",
+                "enabled": False,
+            }
+
+        try:
+            from src.services.core.media_sync import MediaSyncService
+
+            sync_service = MediaSyncService()
+            last_sync = sync_service.get_last_sync_info()
+
+            if not last_sync:
+                return {
+                    "healthy": False,
+                    "message": "No sync runs recorded yet",
+                    "enabled": True,
+                }
+
+            if not last_sync["success"]:
+                return {
+                    "healthy": False,
+                    "message": f"Last sync failed: {last_sync.get('status', 'unknown')}",
+                    "enabled": True,
+                    "last_run": last_sync["started_at"],
+                }
+
+            # Check if last sync is stale (more than 3x interval)
+            if last_sync["completed_at"]:
+                stale_threshold = timedelta(
+                    seconds=settings.MEDIA_SYNC_INTERVAL_SECONDS * 3
+                )
+                completed = datetime.fromisoformat(last_sync["completed_at"])
+                if datetime.utcnow() - completed > stale_threshold:
+                    return {
+                        "healthy": False,
+                        "message": (
+                            f"Last sync was {last_sync['completed_at']} "
+                            f"(stale, expected every {settings.MEDIA_SYNC_INTERVAL_SECONDS}s)"
+                        ),
+                        "enabled": True,
+                        "last_run": last_sync["started_at"],
+                    }
+
+            result_summary = last_sync.get("result", {}) or {}
+            errors = result_summary.get("errors", 0)
+
+            if errors > 0:
+                return {
+                    "healthy": True,
+                    "message": (
+                        f"Last sync OK with {errors} error(s) "
+                        f"at {last_sync['started_at']}"
+                    ),
+                    "enabled": True,
+                    "last_run": last_sync["started_at"],
+                    "last_result": result_summary,
+                }
+
+            return {
+                "healthy": True,
+                "message": f"Last sync OK at {last_sync['started_at']}",
+                "enabled": True,
+                "last_run": last_sync["started_at"],
+                "last_result": result_summary,
+            }
+
+        except Exception as e:
+            return {
+                "healthy": False,
+                "message": f"Sync check error: {str(e)}",
+                "enabled": True,
+            }

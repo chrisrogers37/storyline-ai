@@ -59,6 +59,12 @@ class Settings(BaseSettings):
     # Security (Phase 2 - required for token encryption)
     ENCRYPTION_KEY: Optional[str] = None  # Fernet key for encrypting tokens in DB
 
+    # Media Sync Engine (Phase 03 Cloud Media)
+    MEDIA_SYNC_ENABLED: bool = False
+    MEDIA_SYNC_INTERVAL_SECONDS: int = 300  # 5 minutes
+    MEDIA_SOURCE_TYPE: str = "local"  # 'local' or 'google_drive'
+    MEDIA_SOURCE_ROOT: str = ""  # Root path (local) or folder ID (google_drive)
+
     # Development Settings
     DRY_RUN_MODE: bool = False
     LOG_LEVEL: str = "INFO"

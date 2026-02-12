@@ -34,6 +34,8 @@ storyline-cli check-health
 storyline-cli instagram-status
 storyline-cli validate-image <path>
 storyline-cli category-mix-history
+storyline-cli sync-media
+storyline-cli sync-status
 
 # Tests - always safe
 pytest

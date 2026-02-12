@@ -138,6 +138,91 @@ class TestMediaRepository:
 
 
 @pytest.mark.unit
+class TestMediaRepositorySyncMethods:
+    """Tests for sync-related repository methods added in Phase 03."""
+
+    def test_get_active_by_source_type(self, media_repo, mock_db):
+        """Returns only active items for given source type."""
+        mock_items = [MagicMock(source_type="local", is_active=True)]
+        mock_db.query.return_value.filter.return_value.all.return_value = mock_items
+
+        result = media_repo.get_active_by_source_type("local")
+
+        assert len(result) == 1
+        mock_db.query.assert_called_with(MediaItem)
+
+    def test_get_inactive_by_source_identifier(self, media_repo, mock_db):
+        """Returns inactive item by source_type + identifier."""
+        mock_item = MagicMock(
+            source_type="local",
+            source_identifier="/media/old.jpg",
+            is_active=False,
+        )
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_item
+
+        result = media_repo.get_inactive_by_source_identifier("local", "/media/old.jpg")
+
+        assert result is mock_item
+
+    def test_get_inactive_by_source_identifier_not_found(self, media_repo, mock_db):
+        """Returns None when no inactive match found."""
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+
+        result = media_repo.get_inactive_by_source_identifier("local", "/nonexistent")
+
+        assert result is None
+
+    def test_reactivate_sets_is_active_true(self, media_repo, mock_db):
+        """Reactivates item and sets updated_at."""
+        mock_item = MagicMock()
+        mock_item.is_active = False
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_item
+
+        media_repo.reactivate("some-id")
+
+        assert mock_item.is_active is True
+        assert mock_item.updated_at is not None
+        mock_db.commit.assert_called_once()
+        mock_db.refresh.assert_called_once_with(mock_item)
+
+    def test_update_source_info_updates_fields(self, media_repo, mock_db):
+        """Updates file_path, file_name, and source_identifier."""
+        mock_item = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_item
+
+        media_repo.update_source_info(
+            media_id="item-1",
+            file_path="/new/path.jpg",
+            file_name="new_name.jpg",
+            source_identifier="/new/path.jpg",
+        )
+
+        assert mock_item.file_path == "/new/path.jpg"
+        assert mock_item.file_name == "new_name.jpg"
+        assert mock_item.source_identifier == "/new/path.jpg"
+        assert mock_item.updated_at is not None
+        mock_db.commit.assert_called_once()
+
+    def test_update_source_info_partial_update(self, media_repo, mock_db):
+        """Only updates fields that are not None."""
+        mock_item = MagicMock()
+        mock_item.file_path = "/original/path.jpg"
+        mock_item.source_identifier = "/original/id"
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_item
+
+        media_repo.update_source_info(
+            media_id="item-1",
+            file_name="only_name_changed.jpg",
+        )
+
+        assert mock_item.file_name == "only_name_changed.jpg"
+        # file_path and source_identifier should not be changed
+        assert mock_item.file_path == "/original/path.jpg"
+        assert mock_item.source_identifier == "/original/id"
+        mock_db.commit.assert_called_once()
+
+
+@pytest.mark.unit
 class TestGetNextEligibleForPosting:
     """Tests for MediaRepository.get_next_eligible_for_posting().
 

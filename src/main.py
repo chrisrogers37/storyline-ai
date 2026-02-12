@@ -11,6 +11,7 @@ from src.utils.validators import ConfigValidator
 from src.services.core.posting import PostingService
 from src.services.core.telegram_service import TelegramService
 from src.services.core.media_lock import MediaLockService
+from src.services.core.media_sync import MediaSyncService
 
 # Track session statistics
 session_start_time = None
@@ -85,6 +86,35 @@ async def transaction_cleanup_loop(services: list):
                 pass  # Suppress cleanup errors
 
 
+async def media_sync_loop(sync_service: MediaSyncService):
+    """Run media sync loop - reconcile provider files with database on schedule."""
+    logger.info(
+        f"Starting media sync loop "
+        f"(interval: {settings.MEDIA_SYNC_INTERVAL_SECONDS}s, "
+        f"source: {settings.MEDIA_SOURCE_TYPE})"
+    )
+
+    while True:
+        try:
+            result = sync_service.sync(triggered_by="scheduler")
+
+            if result.total_processed > 0 or result.errors > 0:
+                logger.info(
+                    f"Media sync completed: "
+                    f"{result.new} new, {result.updated} updated, "
+                    f"{result.deactivated} deactivated, "
+                    f"{result.reactivated} reactivated, "
+                    f"{result.errors} errors"
+                )
+
+        except Exception as e:
+            logger.error(f"Error in media sync loop: {e}", exc_info=True)
+        finally:
+            sync_service.cleanup_transactions()
+
+        await asyncio.sleep(settings.MEDIA_SYNC_INTERVAL_SECONDS)
+
+
 async def main_async():
     """Main async application entry point."""
     global session_start_time
@@ -109,6 +139,11 @@ async def main_async():
     telegram_service = TelegramService()
     lock_service = MediaLockService()
 
+    # Initialize media sync (if enabled)
+    sync_service = None
+    if settings.MEDIA_SYNC_ENABLED:
+        sync_service = MediaSyncService()
+
     # Initialize Telegram bot
     await telegram_service.initialize()
 
@@ -122,14 +157,27 @@ async def main_async():
         asyncio.create_task(run_scheduler_loop(posting_service)),
         asyncio.create_task(cleanup_locks_loop(lock_service)),
         asyncio.create_task(telegram_service.start_polling()),
-        asyncio.create_task(transaction_cleanup_loop(all_services)),
     ]
+
+    # Add media sync loop if enabled
+    if sync_service:
+        all_services.append(sync_service)
+        tasks.append(asyncio.create_task(media_sync_loop(sync_service)))
+
+    tasks.append(asyncio.create_task(transaction_cleanup_loop(all_services)))
 
     logger.info("✓ All services started")
     logger.info(
         f"✓ Phase: {'Hybrid (API + Telegram)' if settings.ENABLE_INSTAGRAM_API else 'Telegram-Only'}"
     )
     logger.info(f"✓ Dry run mode: {settings.DRY_RUN_MODE}")
+    if settings.MEDIA_SYNC_ENABLED:
+        logger.info(
+            f"✓ Media sync: {settings.MEDIA_SOURCE_TYPE} "
+            f"(every {settings.MEDIA_SYNC_INTERVAL_SECONDS}s)"
+        )
+    else:
+        logger.info("✓ Media sync: disabled")
     logger.info(f"✓ Posts per day: {settings.POSTS_PER_DAY}")
     logger.info(
         f"✓ Posting hours: {settings.POSTING_HOURS_START}-{settings.POSTING_HOURS_END} UTC"
