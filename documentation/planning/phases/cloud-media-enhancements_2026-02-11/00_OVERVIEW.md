@@ -25,7 +25,7 @@ Cloud Storage → pull bytes → push to Cloudinary (temp) → Instagram API
 | # | Title | Risk | Effort | Files | Tests | Dependencies |
 |---|-------|------|--------|-------|-------|-------------|
 | 01 | ~~Media Source Provider Abstraction~~ ✅ PR #41 | Low | Medium | 8 new, 7 modified | ~30 | None (foundation) |
-| 02 | [Google Drive Provider](02_google-drive-provider.md) | Medium | Large | 5 new, 4 modified | ~42 | Phase 01 |
+| 02 | ~~Google Drive Provider~~ ✅ PR #42 | Medium | Large | 5 new, 5 modified | ~43 | Phase 01 |
 | 03 | [Scheduled Media Sync Engine](03_scheduled-media-sync-engine.md) | Low | Medium | 3 new, 5 modified | ~38 | Phase 01, 02 |
 | 04 | [Media Source Config & Health](04_media-source-config-and-health.md) | Low | Medium | 2 new, 6 modified | ~15 | Phase 01, 02, 03 |
 | 05 | [Instagram Media Backfill](05_instagram-media-backfill.md) | Medium | Large | 6 new, 6 modified | ~43 | Phase 01, existing IG API |
