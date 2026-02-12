@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Media Source Provider Abstraction** - Foundation for cloud media sources (Phase 01 of Cloud Media Enhancements)
+  - `MediaSourceProvider` abstract interface for file access across local, cloud, and remote sources
+  - `MediaFileInfo` dataclass for provider-agnostic file metadata
+  - `LocalMediaProvider` wrapping filesystem operations behind the provider interface
+  - `MediaSourceFactory` for creating provider instances by source type
+  - `source_type` and `source_identifier` columns on `media_items` table (migration 011)
+  - `get_by_source_identifier()` repository method for provider-based lookups
+  - Unified `upload_media()` method on CloudStorageService accepting file path or raw bytes
+
+### Changed
+
+- **Posting pipeline decoupled from filesystem** - All media access now goes through provider abstraction
+  - TelegramService sends photos via provider download + BytesIO (not `open(file_path)`)
+  - TelegramAutopostHandler uploads to Cloudinary via provider download + bytes
+  - PostingService uses provider for Instagram API upload flow
+  - Media type detection uses `mime_type` column instead of file extension parsing
+
 ### Removed
 
 - **Remove 13 confirmed dead repository methods** - Audit and clean up unused code from 4 repository files

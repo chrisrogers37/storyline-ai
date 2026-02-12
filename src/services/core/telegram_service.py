@@ -360,14 +360,22 @@ class TelegramService(BaseService):
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         try:
-            # Send photo with buttons
-            with open(media_item.file_path, "rb") as photo:
-                message = await self.bot.send_photo(
-                    chat_id=self.channel_id,
-                    photo=photo,
-                    caption=caption,
-                    reply_markup=reply_markup,
-                )
+            # Get file bytes via provider (supports local and future cloud sources)
+            from io import BytesIO
+
+            from src.services.media_sources.factory import MediaSourceFactory
+
+            provider = MediaSourceFactory.get_provider_for_media_item(media_item)
+            file_bytes = provider.download_file(media_item.source_identifier)
+
+            photo_buffer = BytesIO(file_bytes)
+            photo_buffer.name = media_item.file_name  # Telegram needs filename hint
+            message = await self.bot.send_photo(
+                chat_id=self.channel_id,
+                photo=photo_buffer,
+                caption=caption,
+                reply_markup=reply_markup,
+            )
 
             # Save telegram message ID
             self.queue_repo.set_telegram_message(

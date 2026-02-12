@@ -197,6 +197,9 @@ class TestAutopostDryRun:
         mock_media.id = uuid4()
         mock_media.file_path = "/test/story.jpg"
         mock_media.file_name = "story.jpg"
+        mock_media.source_type = "local"
+        mock_media.source_identifier = "/test/story.jpg"
+        mock_media.mime_type = "image/jpeg"
         service.media_repo.get_by_id.return_value = mock_media
 
         mock_chat_settings = Mock()
@@ -211,6 +214,9 @@ class TestAutopostDryRun:
         mock_query = AsyncMock()
         mock_query.message = Mock(chat_id=-100123, message_id=1)
 
+        mock_provider = Mock()
+        mock_provider.download_file.return_value = b"fake image bytes"
+
         with (
             patch(
                 "src.services.integrations.instagram_api.InstagramAPIService"
@@ -218,6 +224,10 @@ class TestAutopostDryRun:
             patch(
                 "src.services.integrations.cloud_storage.CloudStorageService"
             ) as mock_cloud_class,
+            patch(
+                "src.services.media_sources.factory.MediaSourceFactory.get_provider_for_media_item",
+                return_value=mock_provider,
+            ),
         ):
             mock_ig_instance = mock_ig_class.return_value
             mock_ig_instance.safety_check_before_post.return_value = {

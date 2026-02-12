@@ -36,6 +36,12 @@ class MediaItem(Base):
     file_hash = Column(Text, nullable=False, index=True)  # SHA256 of content
     mime_type = Column(String(100))
 
+    # Media source (provider abstraction - Phase 01 Cloud Media)
+    source_type = Column(String(50), nullable=False, default="local")
+    source_identifier = Column(
+        Text
+    )  # Provider-specific ID (path for local, file_id for Drive)
+
     # Routing logic: determines auto vs manual posting
     requires_interaction = Column(
         Boolean, default=False

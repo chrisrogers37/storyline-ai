@@ -177,6 +177,8 @@ class MediaIngestionService(BaseService):
             mime_type=mime_type,
             category=category,
             indexed_by_user_id=user_id,
+            source_type="local",
+            source_identifier=str(file_path),
         )
 
         category_info = f" [{category}]" if category else ""

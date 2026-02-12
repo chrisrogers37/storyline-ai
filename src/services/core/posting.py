@@ -387,8 +387,13 @@ class PostingService(BaseService):
 
         if not cloud_url:
             logger.info(f"Uploading {media_item.file_name} to cloud storage")
+            from src.services.media_sources.factory import MediaSourceFactory
+
+            provider = MediaSourceFactory.get_provider_for_media_item(media_item)
+            file_bytes = provider.download_file(media_item.source_identifier)
             upload_result = self.cloud_service.upload_media(
-                file_path=media_item.file_path,
+                file_bytes=file_bytes,
+                filename=media_item.file_name,
                 folder="storyline/stories",
             )
             cloud_url = upload_result["url"]

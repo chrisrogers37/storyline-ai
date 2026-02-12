@@ -231,6 +231,101 @@ class TestCloudStorageService:
         with pytest.raises(MediaUploadError, match="Cloudinary upload failed"):
             cloud_service.upload_media(str(temp_image_file))
 
+    # ==================== upload_media with file_bytes Tests ====================
+
+    @patch("src.services.integrations.cloud_storage.cloudinary")
+    def test_upload_media_with_bytes_success(self, mock_cloudinary, cloud_service):
+        """Test successful upload using file_bytes instead of file_path."""
+        mock_cloudinary.uploader.upload.return_value = {
+            "secure_url": "https://res.cloudinary.com/test/image/upload/bytes_image.jpg",
+            "public_id": "storyline/bytes_image",
+            "bytes": 5000,
+            "format": "jpg",
+            "width": 1080,
+            "height": 1920,
+        }
+
+        result = cloud_service.upload_media(
+            file_bytes=b"fake jpeg content",
+            filename="test.jpg",
+        )
+
+        assert (
+            result["url"]
+            == "https://res.cloudinary.com/test/image/upload/bytes_image.jpg"
+        )
+        assert result["public_id"] == "storyline/bytes_image"
+        assert result["size_bytes"] == 5000
+        assert "uploaded_at" in result
+        assert "expires_at" in result
+
+    @patch("src.services.integrations.cloud_storage.cloudinary")
+    def test_upload_media_with_bytes_video_resource_type(
+        self, mock_cloudinary, cloud_service
+    ):
+        """Test that video filename triggers video resource type for bytes upload."""
+        mock_cloudinary.uploader.upload.return_value = {
+            "secure_url": "https://example.com/video.mp4",
+            "public_id": "test_video",
+            "bytes": 50000,
+            "format": "mp4",
+        }
+
+        cloud_service.upload_media(file_bytes=b"fake video", filename="clip.mp4")
+
+        call_kwargs = mock_cloudinary.uploader.upload.call_args[1]
+        assert call_kwargs["resource_type"] == "video"
+
+    @patch("src.services.integrations.cloud_storage.cloudinary")
+    def test_upload_media_with_bytes_custom_folder(
+        self, mock_cloudinary, cloud_service
+    ):
+        """Test bytes upload with custom folder."""
+        mock_cloudinary.uploader.upload.return_value = {
+            "secure_url": "https://example.com/image.jpg",
+            "public_id": "custom/image",
+            "bytes": 1000,
+            "format": "jpg",
+        }
+
+        cloud_service.upload_media(
+            file_bytes=b"content", filename="img.jpg", folder="custom"
+        )
+
+        call_kwargs = mock_cloudinary.uploader.upload.call_args[1]
+        assert call_kwargs["folder"] == "custom"
+
+    @patch("src.services.integrations.cloud_storage.cloudinary")
+    def test_upload_media_with_bytes_error_handling(
+        self, mock_cloudinary, cloud_service
+    ):
+        """Test bytes upload handles Cloudinary errors."""
+        mock_cloudinary.exceptions = MagicMock()
+        mock_cloudinary.exceptions.Error = Exception
+        mock_cloudinary.uploader.upload.side_effect = Exception("Upload failed")
+
+        with pytest.raises(MediaUploadError, match="Cloudinary upload failed"):
+            cloud_service.upload_media(file_bytes=b"content", filename="img.jpg")
+
+    def test_upload_media_both_path_and_bytes_raises(self, cloud_service):
+        """Test that providing both file_path and file_bytes raises ValueError."""
+        with pytest.raises(ValueError, match="not both"):
+            cloud_service.upload_media(
+                file_path="/some/path.jpg",
+                file_bytes=b"content",
+                filename="img.jpg",
+            )
+
+    def test_upload_media_neither_path_nor_bytes_raises(self, cloud_service):
+        """Test that providing neither file_path nor file_bytes raises ValueError."""
+        with pytest.raises(ValueError, match="either file_path or file_bytes"):
+            cloud_service.upload_media()
+
+    def test_upload_media_bytes_without_filename_raises(self, cloud_service):
+        """Test that file_bytes without filename raises ValueError."""
+        with pytest.raises(ValueError, match="filename is required"):
+            cloud_service.upload_media(file_bytes=b"content")
+
     # ==================== delete_media Tests ====================
 
     @patch("src.services.integrations.cloud_storage.cloudinary")

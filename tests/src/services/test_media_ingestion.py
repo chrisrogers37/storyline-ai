@@ -164,6 +164,8 @@ class TestMediaIngestionService:
                 call_kwargs = ingestion_service.media_repo.create.call_args.kwargs
                 assert call_kwargs["file_hash"] == "abc123hash"
                 assert call_kwargs["indexed_by_user_id"] == "user-123"
+                assert call_kwargs["source_type"] == "local"
+                assert call_kwargs["source_identifier"] == str(Path(tmp.name))
             finally:
                 os.unlink(tmp.name)
 
@@ -324,5 +326,7 @@ class TestMediaIngestionService:
                 ingestion_service.media_repo.create.assert_called_once()
                 call_kwargs = ingestion_service.media_repo.create.call_args.kwargs
                 assert call_kwargs["category"] == "memes"
+                assert call_kwargs["source_type"] == "local"
+                assert "source_identifier" in call_kwargs
             finally:
                 os.unlink(tmp.name)
