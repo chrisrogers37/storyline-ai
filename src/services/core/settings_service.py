@@ -21,6 +21,7 @@ TOGGLEABLE_SETTINGS = {
     "enable_instagram_api",
     "is_paused",
     "show_verbose_notifications",
+    "media_sync_enabled",
 }
 NUMERIC_SETTINGS = {"posts_per_day", "posting_hours_start", "posting_hours_end"}
 
@@ -193,5 +194,6 @@ class SettingsService(BaseService):
             "posting_hours_start": settings.posting_hours_start,
             "posting_hours_end": settings.posting_hours_end,
             "show_verbose_notifications": settings.show_verbose_notifications,
+            "media_sync_enabled": settings.media_sync_enabled,
             "updated_at": settings.updated_at,
         }

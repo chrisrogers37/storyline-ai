@@ -136,6 +136,7 @@ class TelegramService(BaseService):
             "cleanup": self.commands.handle_cleanup,
             "help": self.commands.handle_help,
             "dryrun": self.commands.handle_dryrun,
+            "sync": self.commands.handle_sync,
             "settings": self.settings_handler.handle_settings,
         }
         for cmd, handler in command_map.items():
@@ -167,6 +168,7 @@ class TelegramService(BaseService):
             BotCommand("cleanup", "Delete recent bot messages"),
             BotCommand("settings", "Configure bot settings"),
             BotCommand("dryrun", "Toggle dry-run mode"),
+            BotCommand("sync", "Sync media from configured source"),
         ]
         await self.bot.set_my_commands(commands)
 

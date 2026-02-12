@@ -226,7 +226,7 @@ class HealthCheckService(BaseService):
             return {"healthy": False, "message": f"Recent posts check error: {str(e)}"}
 
     def _check_media_sync(self) -> dict:
-        """Check media sync health."""
+        """Check media sync health including provider connectivity."""
         if not settings.MEDIA_SYNC_ENABLED:
             return {
                 "healthy": True,
@@ -236,15 +236,53 @@ class HealthCheckService(BaseService):
 
         try:
             from src.services.core.media_sync import MediaSyncService
+            from src.services.media_sources.factory import MediaSourceFactory
 
+            # Check provider connectivity
+            source_type = settings.MEDIA_SOURCE_TYPE
+            source_root = settings.MEDIA_SOURCE_ROOT
+            if source_type == "local" and not source_root:
+                source_root = settings.MEDIA_DIR
+
+            provider_healthy = False
+            provider_message = ""
+            try:
+                if source_type == "local":
+                    provider = MediaSourceFactory.create(
+                        source_type, base_path=source_root
+                    )
+                elif source_type == "google_drive":
+                    provider = MediaSourceFactory.create(
+                        source_type, root_folder_id=source_root
+                    )
+                else:
+                    provider = MediaSourceFactory.create(source_type)
+
+                provider_healthy = provider.is_configured()
+                if not provider_healthy:
+                    provider_message = f"Provider '{source_type}' not accessible"
+            except Exception as e:
+                provider_message = f"Provider error: {str(e)[:100]}"
+
+            if not provider_healthy:
+                return {
+                    "healthy": False,
+                    "message": provider_message
+                    or f"Provider '{source_type}' not configured",
+                    "enabled": True,
+                    "source_type": source_type,
+                }
+
+            # Check last sync run
             sync_service = MediaSyncService()
             last_sync = sync_service.get_last_sync_info()
 
             if not last_sync:
                 return {
                     "healthy": False,
-                    "message": "No sync runs recorded yet",
+                    "message": f"No sync runs recorded yet (source: {source_type})",
                     "enabled": True,
+                    "source_type": source_type,
                 }
 
             if not last_sync["success"]:
@@ -252,15 +290,16 @@ class HealthCheckService(BaseService):
                     "healthy": False,
                     "message": f"Last sync failed: {last_sync.get('status', 'unknown')}",
                     "enabled": True,
+                    "source_type": source_type,
                     "last_run": last_sync["started_at"],
                 }
 
             # Check if last sync is stale (more than 3x interval)
             if last_sync["completed_at"]:
+                completed = datetime.fromisoformat(last_sync["completed_at"])
                 stale_threshold = timedelta(
                     seconds=settings.MEDIA_SYNC_INTERVAL_SECONDS * 3
                 )
-                completed = datetime.fromisoformat(last_sync["completed_at"])
                 if datetime.utcnow() - completed > stale_threshold:
                     return {
                         "healthy": False,
@@ -269,6 +308,7 @@ class HealthCheckService(BaseService):
                             f"(stale, expected every {settings.MEDIA_SYNC_INTERVAL_SECONDS}s)"
                         ),
                         "enabled": True,
+                        "source_type": source_type,
                         "last_run": last_sync["started_at"],
                     }
 
@@ -279,18 +319,19 @@ class HealthCheckService(BaseService):
                 return {
                     "healthy": True,
                     "message": (
-                        f"Last sync OK with {errors} error(s) "
-                        f"at {last_sync['started_at']}"
+                        f"Last sync OK with {errors} error(s) (source: {source_type})"
                     ),
                     "enabled": True,
+                    "source_type": source_type,
                     "last_run": last_sync["started_at"],
                     "last_result": result_summary,
                 }
 
             return {
                 "healthy": True,
-                "message": f"Last sync OK at {last_sync['started_at']}",
+                "message": f"OK (source: {source_type}, last: {last_sync['started_at'][:16]})",
                 "enabled": True,
+                "source_type": source_type,
                 "last_run": last_sync["started_at"],
                 "last_result": result_summary,
             }

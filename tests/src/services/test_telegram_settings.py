@@ -79,6 +79,7 @@ class TestBuildSettingsKeyboard:
             "posting_hours_start": 9,
             "posting_hours_end": 21,
             "show_verbose_notifications": True,
+            "media_sync_enabled": False,
         }
         mock_settings_handlers.service.ig_account_service.get_accounts_for_display.return_value = {
             "active_account_id": "some-id",
@@ -102,6 +103,7 @@ class TestBuildSettingsKeyboard:
             "posting_hours_start": 9,
             "posting_hours_end": 21,
             "show_verbose_notifications": False,
+            "media_sync_enabled": False,
         }
         mock_settings_handlers.service.ig_account_service.get_accounts_for_display.return_value = {
             "active_account_id": None,
@@ -126,6 +128,7 @@ class TestBuildSettingsKeyboard:
             "posting_hours_start": 9,
             "posting_hours_end": 21,
             "show_verbose_notifications": True,
+            "media_sync_enabled": False,
         }
         mock_settings_handlers.service.ig_account_service.get_accounts_for_display.return_value = {
             "active_account_id": None,
@@ -149,6 +152,7 @@ class TestBuildSettingsKeyboard:
             "posting_hours_start": 9,
             "posting_hours_end": 21,
             "show_verbose_notifications": True,
+            "media_sync_enabled": False,
         }
         mock_settings_handlers.service.ig_account_service.get_accounts_for_display.return_value = {
             "active_account_id": None,
@@ -174,6 +178,7 @@ class TestBuildSettingsKeyboard:
             "posting_hours_start": 9,
             "posting_hours_end": 21,
             "show_verbose_notifications": True,
+            "media_sync_enabled": False,
         }
         mock_settings_handlers.service.ig_account_service.get_accounts_for_display.return_value = {
             "active_account_id": None,
@@ -204,6 +209,7 @@ class TestSettingsCommand:
             "posting_hours_start": 9,
             "posting_hours_end": 21,
             "show_verbose_notifications": True,
+            "media_sync_enabled": False,
         }
         mock_settings_handlers.service.ig_account_service.get_accounts_for_display.return_value = {
             "active_account_id": None,
@@ -248,6 +254,7 @@ class TestSettingsCommand:
             "posting_hours_start": 9,
             "posting_hours_end": 21,
             "show_verbose_notifications": True,
+            "media_sync_enabled": False,
         }
         mock_settings_handlers.service.ig_account_service.get_accounts_for_display.return_value = {
             "active_account_id": None,
@@ -273,3 +280,57 @@ class TestSettingsCommand:
         await mock_settings_handlers.handle_settings_close(mock_query)
 
         mock_query.message.delete.assert_called_once()
+
+
+@pytest.mark.unit
+class TestMediaSyncToggleButton:
+    """Tests for Media Sync toggle button in settings keyboard."""
+
+    def test_media_sync_toggle_button_shows_on(self, mock_settings_handlers):
+        """Settings keyboard shows 'Media Sync: ON' when enabled."""
+        mock_settings_handlers.service.settings_service.get_settings_display.return_value = {
+            "dry_run_mode": False,
+            "enable_instagram_api": False,
+            "is_paused": False,
+            "posts_per_day": 3,
+            "posting_hours_start": 9,
+            "posting_hours_end": 21,
+            "show_verbose_notifications": True,
+            "media_sync_enabled": True,
+        }
+        mock_settings_handlers.service.ig_account_service.get_accounts_for_display.return_value = {
+            "active_account_id": None,
+            "active_account_name": "Not selected",
+        }
+
+        _, markup = mock_settings_handlers.build_settings_message_and_keyboard(-100123)
+
+        all_buttons = [btn for row in markup.inline_keyboard for btn in row]
+        sync_buttons = [b for b in all_buttons if "Media Sync" in b.text]
+        assert len(sync_buttons) == 1
+        assert "ON" in sync_buttons[0].text
+        assert sync_buttons[0].callback_data == "settings_toggle:media_sync_enabled"
+
+    def test_media_sync_toggle_button_shows_off(self, mock_settings_handlers):
+        """Settings keyboard shows 'Media Sync: OFF' when disabled."""
+        mock_settings_handlers.service.settings_service.get_settings_display.return_value = {
+            "dry_run_mode": False,
+            "enable_instagram_api": False,
+            "is_paused": False,
+            "posts_per_day": 3,
+            "posting_hours_start": 9,
+            "posting_hours_end": 21,
+            "show_verbose_notifications": True,
+            "media_sync_enabled": False,
+        }
+        mock_settings_handlers.service.ig_account_service.get_accounts_for_display.return_value = {
+            "active_account_id": None,
+            "active_account_name": "Not selected",
+        }
+
+        _, markup = mock_settings_handlers.build_settings_message_and_keyboard(-100123)
+
+        all_buttons = [btn for row in markup.inline_keyboard for btn in row]
+        sync_buttons = [b for b in all_buttons if "Media Sync" in b.text]
+        assert len(sync_buttons) == 1
+        assert "OFF" in sync_buttons[0].text

@@ -48,6 +48,9 @@ class ChatSettings(Base):
     # Notification settings
     show_verbose_notifications = Column(Boolean, default=True)
 
+    # Media sync (Phase 04 Cloud Media)
+    media_sync_enabled = Column(Boolean, default=False)
+
     # Active Instagram account (for multi-account support)
     active_instagram_account_id = Column(
         UUID(as_uuid=True),
