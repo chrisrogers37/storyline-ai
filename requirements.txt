@@ -25,6 +25,11 @@ python-dateutil==2.9.0.post0
 # Cloud Storage (Phase 2)
 cloudinary>=1.36.0
 
+# Google Drive (Cloud Media Phase 02)
+google-api-python-client>=2.100.0
+google-auth>=2.23.0
+google-auth-oauthlib>=1.1.0
+
 # Security (Phase 2)
 cryptography>=41.0.0
 

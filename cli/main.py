@@ -3,6 +3,11 @@
 import click
 from rich.console import Console
 
+from cli.commands.google_drive import (
+    connect_google_drive,
+    disconnect_google_drive,
+    google_drive_status,
+)
 from cli.commands.health import check_health
 from cli.commands.instagram import (
     add_instagram_account,
@@ -54,6 +59,9 @@ cli.add_command(add_instagram_account)
 cli.add_command(list_instagram_accounts)
 cli.add_command(deactivate_instagram_account)
 cli.add_command(reactivate_instagram_account)
+cli.add_command(connect_google_drive)
+cli.add_command(google_drive_status)
+cli.add_command(disconnect_google_drive)
 
 
 if __name__ == "__main__":

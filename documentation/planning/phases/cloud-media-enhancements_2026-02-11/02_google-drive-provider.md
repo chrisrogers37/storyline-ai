@@ -1,8 +1,10 @@
 # Phase 02: Google Drive Provider
 
+**Status**: 🔧 IN PROGRESS
+**Started**: 2026-02-12
 **PR Title**: feat: add Google Drive media source provider
 **Risk Level**: Medium (new external integration, new dependencies, credential storage)
-**Estimated Effort**: Large (5 new files, 4 modified files, ~42 new tests)
+**Estimated Effort**: Large (5 new files, 5 modified files, ~42 new tests)
 **Branch**: `enhance/cloud-media-enhancements/phase-02-google-drive-provider`
 
 ---
@@ -98,8 +100,12 @@ class GoogleDriveRateLimitError(GoogleDriveError):
         self.retry_after_seconds = retry_after_seconds
 
 
-class GoogleDriveFileNotFoundError(GoogleDriveError):
-    """File or folder not found or not accessible."""
+class GoogleDriveFileNotFoundError(GoogleDriveError, FileNotFoundError):
+    """File or folder not found or not accessible.
+
+    Inherits from both GoogleDriveError and FileNotFoundError so callers
+    catching either type will handle it correctly (satisfies ABC contract).
+    """
 
     def __init__(
         self,
@@ -277,8 +283,9 @@ class GoogleDriveProvider(MediaSourceProvider):
             return buffer.read()
         except HttpError as e:
             if e.resp.status == 404:
-                raise FileNotFoundError(
-                    f"Google Drive file not found: {file_identifier}"
+                raise GoogleDriveFileNotFoundError(
+                    f"Google Drive file not found: {file_identifier}",
+                    file_id=file_identifier,
                 )
             self._handle_http_error(e, context=f"download_file({file_identifier})")
             raise
@@ -351,8 +358,9 @@ class GoogleDriveProvider(MediaSourceProvider):
             return hashlib.sha256(file_bytes).hexdigest()
         except HttpError as e:
             if e.resp.status == 404:
-                raise FileNotFoundError(
-                    f"Google Drive file not found: {file_identifier}"
+                raise GoogleDriveFileNotFoundError(
+                    f"Google Drive file not found: {file_identifier}",
+                    file_id=file_identifier,
                 )
             self._handle_http_error(e, context=f"calculate_file_hash({file_identifier})")
             raise
@@ -545,6 +553,29 @@ class GoogleDriveProvider(MediaSourceProvider):
         else:
             logger.error(f"Google Drive API error ({status}) in {context}: {reason}")
             raise GoogleDriveError(f"API error: {reason}", status_code=status)
+```
+
+---
+
+### Step 3.5: Add `delete_token` to TokenRepository
+
+#### Modify: `src/repositories/token_repository.py`
+
+Add a `delete_token` method to support credential removal without services reaching into the DB session directly:
+
+```python
+def delete_token(self, service_name: str, token_type: str) -> bool:
+    """Delete a token by service name and type.
+
+    Returns:
+        True if a token was deleted, False if not found.
+    """
+    token = self.get_token(service_name, token_type)
+    if not token:
+        return False
+    self.db.delete(token)
+    self.db.commit()
+    return True
 ```
 
 ---
@@ -748,17 +779,14 @@ class GoogleDriveService(BaseService):
     def disconnect(self) -> bool:
         """Remove stored Google Drive credentials."""
         with self.track_execution(method_name="disconnect") as run_id:
-            db_token = self.token_repo.get_token(
+            deleted = self.token_repo.delete_token(
                 self.SERVICE_NAME, self.TOKEN_TYPE_SERVICE_ACCOUNT
             )
 
-            if not db_token:
+            if not deleted:
                 logger.info("No Google Drive credentials to remove")
                 self.set_result_summary(run_id, {"success": False, "reason": "no_credentials"})
                 return False
-
-            self.token_repo.db.delete(db_token)
-            self.token_repo.db.commit()
 
             logger.info("Google Drive credentials removed")
             self.set_result_summary(run_id, {"success": True})
@@ -886,7 +914,7 @@ class MediaSourceFactory:
     def get_provider_for_media_item(cls, media_item) -> MediaSourceProvider:
         """Get the appropriate provider for an existing media item.
         Falls back to 'local' if source_type is not set."""
-        source_type = getattr(media_item, "source_type", None) or "local"
+        source_type = media_item.source_type or "local"
         return cls.create(source_type)
 
     @classmethod
@@ -1170,10 +1198,11 @@ ruff format --check src/ tests/ cli/
 | `tests/src/services/media_sources/test_google_drive_provider.py` | Provider tests (~28) |
 | `tests/src/services/test_google_drive_service.py` | Service tests (~14) |
 
-### Modified Files (4)
+### Modified Files (5)
 | File | Changes |
 |------|---------|
 | `requirements.txt` | Add 3 Google API dependencies |
 | `src/exceptions/__init__.py` | Export 4 new exceptions |
+| `src/repositories/token_repository.py` | Add `delete_token()` method |
 | `src/services/media_sources/factory.py` | Register google_drive with lazy import + DB credential loading |
 | `cli/main.py` | Import + register 3 new CLI commands |
