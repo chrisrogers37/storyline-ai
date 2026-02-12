@@ -57,42 +57,69 @@ class CloudStorageService(BaseService):
 
     def upload_media(
         self,
-        file_path: str,
+        file_path: Optional[str] = None,
+        file_bytes: Optional[bytes] = None,
+        filename: Optional[str] = None,
         folder: str = "storyline",
         public_id: Optional[str] = None,
     ) -> dict:
         """
-        Upload media file to Cloudinary.
+        Upload media to Cloudinary from a local file path or raw bytes.
+
+        Provide either file_path (for local files) or file_bytes + filename
+        (for cloud-sourced media). Exactly one of file_path or file_bytes
+        must be provided.
 
         Args:
-            file_path: Local path to media file
+            file_path: Local path to media file (mutually exclusive with file_bytes)
+            file_bytes: Raw file bytes (mutually exclusive with file_path)
+            filename: Display filename, required when using file_bytes
             folder: Cloudinary folder/prefix for organization
             public_id: Optional custom identifier (auto-generated if not provided)
 
         Returns:
-            dict with:
-                - url: Public URL for the uploaded media
-                - public_id: Cloudinary identifier for deletion
-                - uploaded_at: When the upload occurred
-                - expires_at: When the URL should be considered expired
-                - size_bytes: File size in bytes
-                - format: File format (jpg, png, etc.)
+            dict with url, public_id, uploaded_at, expires_at, size_bytes, format
 
         Raises:
             MediaUploadError: If upload fails
+            ValueError: If both or neither of file_path/file_bytes are provided
         """
+        from io import BytesIO
+
+        if file_path and file_bytes:
+            raise ValueError("Provide file_path or file_bytes, not both")
+        if not file_path and not file_bytes:
+            raise ValueError("Provide either file_path or file_bytes")
+        if file_bytes and not filename:
+            raise ValueError("filename is required when using file_bytes")
+
+        # Resolve upload source and display name
+        if file_bytes:
+            upload_source = BytesIO(file_bytes)
+            display_name = filename
+            type_hint_path = Path(filename)
+        else:
+            path = self._validate_file_path(file_path)
+            upload_source = str(path)
+            display_name = path.name
+            type_hint_path = path
+
         with self.track_execution(
             method_name="upload_media",
-            input_params={"file_path": file_path, "folder": folder},
+            input_params={
+                "file_path": file_path,
+                "filename": filename,
+                "folder": folder,
+            },
         ) as run_id:
-            path = self._validate_file_path(file_path)
-
             try:
-                upload_options = self._build_upload_options(path, folder, public_id)
+                upload_options = self._build_upload_options(
+                    type_hint_path, folder, public_id
+                )
 
-                logger.info(f"Uploading {path.name} to Cloudinary ({folder}/)")
+                logger.info(f"Uploading {display_name} to Cloudinary ({folder}/)")
 
-                result = cloudinary.uploader.upload(str(path), **upload_options)
+                result = cloudinary.uploader.upload(upload_source, **upload_options)
 
                 uploaded_at = datetime.utcnow()
                 expires_at = uploaded_at + timedelta(
@@ -111,7 +138,7 @@ class CloudStorageService(BaseService):
                 }
 
                 logger.info(
-                    f"Successfully uploaded {path.name} to Cloudinary: {result['public_id']}"
+                    f"Successfully uploaded {display_name} to Cloudinary: {result['public_id']}"
                 )
 
                 self.set_result_summary(
@@ -129,7 +156,7 @@ class CloudStorageService(BaseService):
                 logger.error(f"Cloudinary upload failed: {e}")
                 raise MediaUploadError(
                     f"Cloudinary upload failed: {e}",
-                    file_path=file_path,
+                    file_path=file_path or filename,
                     provider="cloudinary",
                 )
 
