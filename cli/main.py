@@ -3,6 +3,7 @@
 import click
 from rich.console import Console
 
+from cli.commands.backfill import backfill_instagram, backfill_status
 from cli.commands.google_drive import (
     connect_google_drive,
     disconnect_google_drive,
@@ -65,6 +66,8 @@ cli.add_command(google_drive_status)
 cli.add_command(disconnect_google_drive)
 cli.add_command(sync_media)
 cli.add_command(sync_status)
+cli.add_command(backfill_instagram)
+cli.add_command(backfill_status)
 
 
 if __name__ == "__main__":
