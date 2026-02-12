@@ -28,6 +28,27 @@ class MediaRepository(BaseRepository):
         """Get all media items with the same hash (duplicate content)."""
         return self.db.query(MediaItem).filter(MediaItem.file_hash == file_hash).all()
 
+    def get_by_source_identifier(
+        self, source_type: str, source_identifier: str
+    ) -> Optional[MediaItem]:
+        """Get media item by provider-specific source identifier.
+
+        Args:
+            source_type: Provider type (e.g., 'local', 'google_drive')
+            source_identifier: Provider-specific unique ID
+
+        Returns:
+            MediaItem if found, None otherwise
+        """
+        return (
+            self.db.query(MediaItem)
+            .filter(
+                MediaItem.source_type == source_type,
+                MediaItem.source_identifier == source_identifier,
+            )
+            .first()
+        )
+
     def get_all(
         self,
         is_active: Optional[bool] = None,
@@ -79,6 +100,8 @@ class MediaRepository(BaseRepository):
         tags: Optional[List[str]] = None,
         custom_metadata: Optional[dict] = None,
         indexed_by_user_id: Optional[str] = None,
+        source_type: str = "local",
+        source_identifier: Optional[str] = None,
     ) -> MediaItem:
         """Create a new media item."""
         media_item = MediaItem(
@@ -95,6 +118,8 @@ class MediaRepository(BaseRepository):
             tags=tags,
             custom_metadata=custom_metadata,
             indexed_by_user_id=indexed_by_user_id,
+            source_type=source_type,
+            source_identifier=source_identifier or file_path,
         )
         self.db.add(media_item)
         self.db.commit()
