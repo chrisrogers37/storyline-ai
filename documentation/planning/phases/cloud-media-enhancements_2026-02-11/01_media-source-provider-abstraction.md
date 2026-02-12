@@ -1,5 +1,8 @@
 # Phase 01: Media Source Provider Abstraction
 
+**Status**: ✅ COMPLETE
+**Started**: 2026-02-12
+**Completed**: 2026-02-12
 **PR Title**: refactor: introduce media source provider abstraction layer
 **Risk Level**: Low (internal refactor, no new external integrations)
 **Estimated Effort**: Medium (8 new files, 7 modified files)
@@ -440,8 +443,7 @@ class MediaSourceFactory:
         Returns:
             Configured MediaSourceProvider instance.
         """
-        source_type = getattr(media_item, "source_type", None) or "local"
-        return cls.create(source_type)
+        return cls.create(media_item.source_type or "local")
 
     @classmethod
     def register_provider(
@@ -503,101 +505,32 @@ Key: `source_identifier` defaults to `file_path` when not provided, so existing 
 
 ---
 
-### Step 4: CloudStorageService — Add Bytes Upload
+### Step 4: CloudStorageService — Extend `upload_media` for Bytes
 
 #### Modify: `src/services/integrations/cloud_storage.py`
 
-**Add `upload_media_bytes()` method after `upload_media` (after line 135):**
+**Refactor `upload_media()` to accept either a file path or raw bytes (no separate method).**
 
+Change signature from:
 ```python
-    def upload_media_bytes(
-        self,
-        file_bytes: bytes,
-        filename: str,
-        folder: str = "storyline",
-        public_id: Optional[str] = None,
-    ) -> dict:
-        """Upload media bytes to Cloudinary (provider-agnostic).
-
-        Unlike upload_media() which reads from a local file path, this method
-        accepts raw bytes. Use this when media comes from a cloud provider
-        where the file is not on the local filesystem.
-
-        Args:
-            file_bytes: Raw file bytes to upload
-            filename: Original filename (used for resource type detection)
-            folder: Cloudinary folder/prefix for organization
-            public_id: Optional custom identifier (auto-generated if not provided)
-
-        Returns:
-            dict with url, public_id, uploaded_at, expires_at, size_bytes, format
-
-        Raises:
-            MediaUploadError: If upload fails
-        """
-        from io import BytesIO
-
-        with self.track_execution(
-            method_name="upload_media_bytes",
-            input_params={"filename": filename, "folder": folder},
-        ) as run_id:
-            try:
-                path = Path(filename)
-                resource_type = self._get_resource_type(path)
-
-                upload_options = {
-                    "folder": folder,
-                    "resource_type": resource_type,
-                    "overwrite": True,
-                }
-
-                if public_id:
-                    upload_options["public_id"] = public_id
-
-                logger.info(f"Uploading {filename} bytes to Cloudinary ({folder}/)")
-
-                file_buffer = BytesIO(file_bytes)
-                result = cloudinary.uploader.upload(file_buffer, **upload_options)
-
-                uploaded_at = datetime.utcnow()
-                expires_at = uploaded_at + timedelta(
-                    hours=settings.CLOUD_UPLOAD_RETENTION_HOURS
-                )
-
-                upload_result = {
-                    "url": result["secure_url"],
-                    "public_id": result["public_id"],
-                    "uploaded_at": uploaded_at,
-                    "expires_at": expires_at,
-                    "size_bytes": result.get("bytes", 0),
-                    "format": result.get("format", ""),
-                    "width": result.get("width"),
-                    "height": result.get("height"),
-                }
-
-                logger.info(
-                    f"Successfully uploaded {filename} to Cloudinary: {result['public_id']}"
-                )
-
-                self.set_result_summary(
-                    run_id,
-                    {
-                        "success": True,
-                        "public_id": result["public_id"],
-                        "size_bytes": result.get("bytes", 0),
-                    },
-                )
-
-                return upload_result
-
-            except cloudinary.exceptions.Error as e:
-                logger.error(f"Cloudinary upload failed: {e}")
-                raise MediaUploadError(
-                    f"Cloudinary upload failed: {e}",
-                    file_path=filename,
-                    provider="cloudinary",
-                )
+def upload_media(self, file_path: str, folder: str = "storyline", public_id: Optional[str] = None) -> dict:
 ```
+
+To:
+```python
+def upload_media(
+    self,
+    file_path: Optional[str] = None,
+    file_bytes: Optional[bytes] = None,
+    filename: Optional[str] = None,
+    folder: str = "storyline",
+    public_id: Optional[str] = None,
+) -> dict:
+```
+
+**Internal logic**: If `file_bytes` is provided, wrap in `BytesIO` and use `filename` for resource type detection. Otherwise, validate and open `file_path` as before. Exactly one of `file_path` or `file_bytes` must be provided.
+
+Existing callers using `upload_media(file_path=...)` continue to work unchanged. New callers pass `upload_media(file_bytes=..., filename=...)`.
 
 Cloudinary's Python SDK accepts `BytesIO` objects as the first argument to `upload()`. This is documented behavior.
 
@@ -656,8 +589,7 @@ See full replacement file in the implementation plan appendix. The refactored se
             from io import BytesIO
 
             provider = MediaSourceFactory.get_provider_for_media_item(media_item)
-            source_id = getattr(media_item, "source_identifier", None) or media_item.file_path
-            file_bytes = provider.download_file(source_id)
+            file_bytes = provider.download_file(media_item.source_identifier)
 
             photo_buffer = BytesIO(file_bytes)
             photo_buffer.name = media_item.file_name  # Telegram needs filename hint
@@ -688,10 +620,9 @@ New:
             from src.services.media_sources.factory import MediaSourceFactory
 
             provider = MediaSourceFactory.get_provider_for_media_item(media_item)
-            source_id = getattr(media_item, "source_identifier", None) or media_item.file_path
-            file_bytes = provider.download_file(source_id)
+            file_bytes = provider.download_file(media_item.source_identifier)
 
-            upload_result = cloud_service.upload_media_bytes(
+            upload_result = cloud_service.upload_media(
                 file_bytes=file_bytes,
                 filename=media_item.file_name,
                 folder="instagram_stories",
@@ -742,9 +673,8 @@ New:
             from src.services.media_sources.factory import MediaSourceFactory
 
             provider = MediaSourceFactory.get_provider_for_media_item(media_item)
-            source_id = getattr(media_item, "source_identifier", None) or media_item.file_path
-            file_bytes = provider.download_file(source_id)
-            upload_result = self.cloud_service.upload_media_bytes(
+            file_bytes = provider.download_file(media_item.source_identifier)
+            upload_result = self.cloud_service.upload_media(
                 file_bytes=file_bytes,
                 filename=media_item.file_name,
                 folder="storyline/stories",
@@ -798,11 +728,11 @@ assert "source_identifier" in call_kwargs
 
 #### `tests/src/services/test_cloud_storage.py`
 
-Add 4 new tests:
-- `test_upload_media_bytes_success`
-- `test_upload_media_bytes_video_resource_type`
-- `test_upload_media_bytes_custom_folder`
-- `test_upload_media_bytes_error_handling`
+Add 4 new tests for bytes path:
+- `test_upload_media_with_bytes_success`
+- `test_upload_media_with_bytes_video_resource_type`
+- `test_upload_media_with_bytes_custom_folder`
+- `test_upload_media_with_bytes_error_handling`
 
 ### Verification Commands
 
@@ -837,8 +767,8 @@ ruff format --check src/ tests/
 |----------|-------------------|
 | Large video file (50MB+) | `download_file()` loads into memory. Acceptable for Phase 01; streaming can be added later. |
 | File deleted between index and post | `download_file()` raises `FileNotFoundError`. PostingService should catch and mark queue item as failed. |
-| Media item with NULL source_type | Factory falls back to `"local"` via `getattr(media_item, "source_type", None) or "local"` |
-| Media item with NULL source_identifier | Pipeline falls back to `file_path` via `getattr(media_item, "source_identifier", None) or media_item.file_path` |
+| Media item with NULL source_type | Factory falls back to `"local"` via `media_item.source_type or "local"` |
+| Media item with NULL source_identifier | Should not occur — migration backfills all records. Model default ensures new records get `source_identifier`. |
 | Cloudinary BytesIO upload with empty bytes | Cloudinary will reject — same error handling as existing file upload path |
 | Migration on DB with existing records | `source_type` defaults to `'local'`, `source_identifier` backfilled from `file_path` |
 
@@ -853,7 +783,7 @@ ruff format --check src/ tests/
 - [ ] `MediaSourceFactory.create("google_drive")` raises `ValueError` (not yet registered)
 - [ ] `MediaIngestionService.scan_directory()` returns identical results to before refactor
 - [ ] Telegram `send_notification` sends photos correctly via BytesIO
-- [ ] Autopost flow uploads to Cloudinary via `upload_media_bytes`
+- [ ] Autopost flow uploads to Cloudinary via `upload_media(file_bytes=...)`
 - [ ] Media type detection uses `mime_type` column (not file extension)
 - [ ] All existing tests pass without modification (except 2 updated assertions)
 - [ ] `ruff check` and `ruff format --check` pass
@@ -865,7 +795,7 @@ ruff format --check src/ tests/
 
 1. **Do NOT remove `file_path` column or its unique constraint.** It's still needed for backwards compatibility with local media and as the primary identifier for existing records.
 
-2. **Do NOT remove the existing `upload_media(file_path)` method from CloudStorageService.** Keep both `upload_media` and `upload_media_bytes` — the original may still be used by other code paths or tests.
+2. **Do NOT break existing callers of `upload_media(file_path=...)`.** The unified method must remain backwards-compatible with existing `file_path` callers.
 
 3. **Do NOT make providers extend `BaseService`.** Providers are lightweight data-access objects, not tracked services. They don't need `track_execution` or `set_result_summary`.
 
@@ -873,7 +803,7 @@ ruff format --check src/ tests/
 
 5. **Do NOT change the external API of `scan_directory()`.** It still accepts a directory path string and returns the same dict. The refactor is internal only.
 
-6. **Do NOT use `media_item.source_identifier` without fallback.** Always use `getattr(media_item, "source_identifier", None) or media_item.file_path` to handle records that predate the migration.
+6. **Do NOT skip the migration backfill.** All existing records must have `source_identifier` populated from `file_path`. After migration, `media_item.source_identifier` is used directly without fallback.
 
 ---
 
@@ -900,7 +830,7 @@ ruff format --check src/ tests/
 | `src/services/core/media_ingestion.py` | Use LocalMediaProvider internally; pass source fields to repo |
 | `src/services/core/telegram_service.py` | Replace `open(file_path)` with provider download + BytesIO |
 | `src/services/core/telegram_autopost.py` | Use `upload_media_bytes`; use `mime_type` for type detection |
-| `src/services/integrations/cloud_storage.py` | Add `upload_media_bytes()` method |
+| `src/services/integrations/cloud_storage.py` | Extend `upload_media()` to accept `file_bytes` |
 | `src/services/core/posting.py` | Use provider download + `upload_media_bytes` in `_post_via_instagram` |
 
 ### Updated Tests (2)
