@@ -163,6 +163,19 @@ class TokenRepository(BaseRepository):
             self.db.refresh(token)
             return token
 
+    def delete_token(self, service_name: str, token_type: str) -> bool:
+        """Delete a token by service name and type.
+
+        Returns:
+            True if a token was deleted, False if not found.
+        """
+        token = self.get_token(service_name, token_type)
+        if not token:
+            return False
+        self.db.delete(token)
+        self.db.commit()
+        return True
+
     def update_last_refreshed(self, service_name: str, token_type: str) -> bool:
         """Update the last_refreshed_at timestamp."""
         token = self.get_token(service_name, token_type)

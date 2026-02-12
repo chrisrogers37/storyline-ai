@@ -9,33 +9,52 @@ from src.utils.logger import logger
 class MediaSourceFactory:
     """Factory for creating MediaSourceProvider instances.
 
-    Currently supports:
+    Supports:
         - 'local': LocalMediaProvider (filesystem-based)
-
-    Future phases will add:
-        - 'google_drive': GoogleDriveProvider
-        - 's3': S3Provider
+        - 'google_drive': GoogleDriveProvider (Google Drive API)
     """
 
     _providers: dict[str, type[MediaSourceProvider]] = {
         "local": LocalMediaProvider,
     }
 
+    _google_drive_registered: bool = False
+
+    @classmethod
+    def _ensure_google_drive_registered(cls) -> None:
+        """Lazily register GoogleDriveProvider to avoid import errors
+        when google-api-python-client is not installed."""
+        if cls._google_drive_registered:
+            return
+        try:
+            from src.services.media_sources.google_drive_provider import (
+                GoogleDriveProvider,
+            )
+
+            cls._providers["google_drive"] = GoogleDriveProvider
+            cls._google_drive_registered = True
+        except ImportError:
+            logger.debug(
+                "google-api-python-client not installed, "
+                "Google Drive provider unavailable"
+            )
+
     @classmethod
     def create(cls, source_type: str, **kwargs) -> MediaSourceProvider:
         """Create a provider instance for the given source type.
 
         Args:
-            source_type: Provider type string (e.g., 'local', 'google_drive').
-            **kwargs: Provider-specific configuration. For 'local', accepts
-                'base_path' (defaults to settings.MEDIA_DIR).
-
-        Returns:
-            Configured MediaSourceProvider instance.
+            source_type: 'local' or 'google_drive'
+            **kwargs: Provider-specific config.
+                local: 'base_path' (defaults to settings.MEDIA_DIR)
+                google_drive: 'root_folder_id', plus 'service_account_info'
+                    or 'oauth_credentials'. If no auth provided, loads from DB.
 
         Raises:
             ValueError: If source_type is not supported.
         """
+        cls._ensure_google_drive_registered()
+
         if source_type not in cls._providers:
             supported = ", ".join(sorted(cls._providers.keys()))
             raise ValueError(
@@ -49,27 +68,38 @@ class MediaSourceFactory:
             base_path = kwargs.get("base_path", settings.MEDIA_DIR)
             return provider_class(base_path=base_path)
 
+        if source_type == "google_drive":
+            root_folder_id = kwargs.get("root_folder_id")
+            service_account_info = kwargs.get("service_account_info")
+            oauth_credentials = kwargs.get("oauth_credentials")
+
+            if not service_account_info and not oauth_credentials:
+                from src.services.integrations.google_drive import (
+                    GoogleDriveService,
+                )
+
+                gdrive_service = GoogleDriveService()
+                return gdrive_service.get_provider(root_folder_id)
+
+            return provider_class(
+                root_folder_id=root_folder_id,
+                service_account_info=service_account_info,
+                oauth_credentials=oauth_credentials,
+            )
+
         return provider_class(**kwargs)
 
     @classmethod
     def get_provider_for_media_item(cls, media_item) -> MediaSourceProvider:
         """Get the appropriate provider for an existing media item.
-
-        Uses the media_item's source_type to create the correct provider.
-        Falls back to 'local' if source_type is not set.
-
-        Args:
-            media_item: A MediaItem model instance.
-
-        Returns:
-            Configured MediaSourceProvider instance.
-        """
-        return cls.create(media_item.source_type or "local")
+        Falls back to 'local' if source_type is not set."""
+        source_type = media_item.source_type or "local"
+        return cls.create(source_type)
 
     @classmethod
     def register_provider(
         cls, source_type: str, provider_class: type[MediaSourceProvider]
     ) -> None:
-        """Register a new provider type (used by future phases)."""
+        """Register a new provider type."""
         cls._providers[source_type] = provider_class
         logger.info(f"Registered media source provider: {source_type}")

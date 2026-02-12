@@ -18,6 +18,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `get_by_source_identifier()` repository method for provider-based lookups
   - Unified `upload_media()` method on CloudStorageService accepting file path or raw bytes
 
+- **Google Drive Media Source Provider** - Cloud media integration via Google Drive API v3 (Phase 02 of Cloud Media Enhancements)
+  - `GoogleDriveProvider` implementing `MediaSourceProvider` for Drive API file access
+  - Service account authentication for server-to-server access (folder shared with service account)
+  - Subfolder-as-category convention matching local filesystem behavior
+  - Uses Drive's `md5Checksum` for dedup (avoids downloading just to hash)
+  - Chunked downloads via `MediaIoBaseDownload` for large files
+  - `GoogleDriveService` orchestration with encrypted credential storage via `api_tokens` table
+  - Google Drive exception hierarchy: `GoogleDriveError`, `GoogleDriveAuthError`, `GoogleDriveRateLimitError`, `GoogleDriveFileNotFoundError`
+  - `MediaSourceFactory` lazy registration of Google Drive provider (no crash if SDK not installed)
+  - CLI commands: `connect-google-drive`, `google-drive-status`, `disconnect-google-drive`
+  - `delete_token()` method added to `TokenRepository` for proper credential cleanup
+
 ### Changed
 
 - **Posting pipeline decoupled from filesystem** - All media access now goes through provider abstraction

@@ -35,7 +35,7 @@ class TestMediaSourceFactory:
     def test_create_unsupported_type(self):
         """Test creating provider with unsupported type raises ValueError."""
         with pytest.raises(ValueError, match="Unsupported media source type"):
-            MediaSourceFactory.create("google_drive")
+            MediaSourceFactory.create("dropbox")
 
     def test_create_unsupported_type_lists_supported(self):
         """Test error message lists supported types."""
