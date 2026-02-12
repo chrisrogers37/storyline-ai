@@ -160,6 +160,7 @@ class TestHealthCheckService:
         mock_settings.TELEGRAM_BOT_TOKEN = "123456:ABC"
         mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
         mock_settings.ENABLE_INSTAGRAM_API = False  # Disable Instagram API check
+        mock_settings.MEDIA_SYNC_ENABLED = False  # Disable media sync check
         health_service.queue_repo.count_pending.return_value = 5
         health_service.queue_repo.get_oldest_pending.return_value = None
         mock_post = Mock(success=True)
@@ -173,6 +174,7 @@ class TestHealthCheckService:
         assert "instagram_api" in result["checks"]
         assert "queue" in result["checks"]
         assert "recent_posts" in result["checks"]
+        assert "media_sync" in result["checks"]
         assert "timestamp" in result
 
     @patch("src.services.core.health_check.BaseRepository")
@@ -217,3 +219,85 @@ class TestHealthCheckService:
             assert "timestamp" in result
             # Verify it's a valid ISO timestamp
             datetime.fromisoformat(result["timestamp"])
+
+    # ==================== Media Sync Health Check Tests ====================
+
+    @patch("src.services.core.health_check.settings")
+    def test_check_media_sync_disabled(self, mock_settings, health_service):
+        """Returns healthy with enabled=False when sync disabled."""
+        mock_settings.MEDIA_SYNC_ENABLED = False
+
+        result = health_service._check_media_sync()
+
+        assert result["healthy"] is True
+        assert result["enabled"] is False
+        assert "Disabled" in result["message"]
+
+    @patch("src.services.core.health_check.settings")
+    def test_check_media_sync_healthy(self, mock_settings, health_service):
+        """Returns healthy when last sync succeeded recently."""
+        mock_settings.MEDIA_SYNC_ENABLED = True
+        mock_settings.MEDIA_SYNC_INTERVAL_SECONDS = 300
+
+        mock_sync_info = {
+            "started_at": datetime.utcnow().isoformat(),
+            "completed_at": datetime.utcnow().isoformat(),
+            "success": True,
+            "status": "completed",
+            "result": {"new": 2, "errors": 0},
+            "duration_ms": 1500,
+            "triggered_by": "scheduler",
+        }
+
+        with patch("src.services.core.media_sync.MediaSyncService") as mock_sync_class:
+            mock_sync_class.return_value.get_last_sync_info.return_value = (
+                mock_sync_info
+            )
+
+            result = health_service._check_media_sync()
+
+        assert result["healthy"] is True
+        assert result["enabled"] is True
+        assert "OK" in result["message"]
+
+    @patch("src.services.core.health_check.settings")
+    def test_check_media_sync_no_runs(self, mock_settings, health_service):
+        """Returns unhealthy when no sync runs recorded."""
+        mock_settings.MEDIA_SYNC_ENABLED = True
+
+        with patch("src.services.core.media_sync.MediaSyncService") as mock_sync_class:
+            mock_sync_class.return_value.get_last_sync_info.return_value = None
+
+            result = health_service._check_media_sync()
+
+        assert result["healthy"] is False
+        assert result["enabled"] is True
+        assert "No sync runs" in result["message"]
+
+    @patch("src.services.core.health_check.settings")
+    def test_check_media_sync_stale(self, mock_settings, health_service):
+        """Returns unhealthy when last sync is stale (>3x interval)."""
+        mock_settings.MEDIA_SYNC_ENABLED = True
+        mock_settings.MEDIA_SYNC_INTERVAL_SECONDS = 300  # 5 min
+
+        # Last sync was 30 minutes ago (6x the interval)
+        old_time = datetime.utcnow() - timedelta(minutes=30)
+        mock_sync_info = {
+            "started_at": old_time.isoformat(),
+            "completed_at": old_time.isoformat(),
+            "success": True,
+            "status": "completed",
+            "result": {"new": 0, "errors": 0},
+            "duration_ms": 500,
+            "triggered_by": "scheduler",
+        }
+
+        with patch("src.services.core.media_sync.MediaSyncService") as mock_sync_class:
+            mock_sync_class.return_value.get_last_sync_info.return_value = (
+                mock_sync_info
+            )
+
+            result = health_service._check_media_sync()
+
+        assert result["healthy"] is False
+        assert "stale" in result["message"]

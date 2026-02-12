@@ -49,6 +49,105 @@ class MediaRepository(BaseRepository):
             .first()
         )
 
+    def get_active_by_source_type(self, source_type: str) -> List[MediaItem]:
+        """Get all active media items for a given source type.
+
+        Used by MediaSyncService to build a lookup dict of known items
+        for reconciliation against the provider's file listing.
+
+        Args:
+            source_type: Provider type string (e.g., 'local', 'google_drive')
+
+        Returns:
+            List of active MediaItem instances for the given source type
+        """
+        return (
+            self.db.query(MediaItem)
+            .filter(
+                MediaItem.source_type == source_type,
+                MediaItem.is_active == True,  # noqa: E712
+            )
+            .all()
+        )
+
+    def get_inactive_by_source_identifier(
+        self, source_type: str, source_identifier: str
+    ) -> Optional[MediaItem]:
+        """Get an inactive media item by source identifier.
+
+        Used by MediaSyncService to detect reappeared files that were
+        previously deactivated.
+
+        Args:
+            source_type: Provider type string
+            source_identifier: Provider-specific unique ID
+
+        Returns:
+            Inactive MediaItem if found, None otherwise
+        """
+        return (
+            self.db.query(MediaItem)
+            .filter(
+                MediaItem.source_type == source_type,
+                MediaItem.source_identifier == source_identifier,
+                MediaItem.is_active == False,  # noqa: E712
+            )
+            .first()
+        )
+
+    def reactivate(self, media_id: str) -> MediaItem:
+        """Reactivate a previously deactivated media item.
+
+        Used when a file reappears in the provider after being removed.
+
+        Args:
+            media_id: UUID of the media item to reactivate
+
+        Returns:
+            Reactivated MediaItem
+        """
+        media_item = self.get_by_id(media_id)
+        if media_item:
+            media_item.is_active = True
+            media_item.updated_at = datetime.utcnow()
+            self.db.commit()
+            self.db.refresh(media_item)
+        return media_item
+
+    def update_source_info(
+        self,
+        media_id: str,
+        file_path: Optional[str] = None,
+        file_name: Optional[str] = None,
+        source_identifier: Optional[str] = None,
+    ) -> MediaItem:
+        """Update source-related fields for a media item (rename/move tracking).
+
+        Used by MediaSyncService when a file's name or path changes but
+        its content hash remains the same.
+
+        Args:
+            media_id: UUID of the media item
+            file_path: New file path (synthetic path for cloud sources)
+            file_name: New display filename
+            source_identifier: New provider-specific identifier
+
+        Returns:
+            Updated MediaItem
+        """
+        media_item = self.get_by_id(media_id)
+        if media_item:
+            if file_path is not None:
+                media_item.file_path = file_path
+            if file_name is not None:
+                media_item.file_name = file_name
+            if source_identifier is not None:
+                media_item.source_identifier = source_identifier
+            media_item.updated_at = datetime.utcnow()
+            self.db.commit()
+            self.db.refresh(media_item)
+        return media_item
+
     def get_all(
         self,
         is_active: Optional[bool] = None,
@@ -206,6 +305,7 @@ class MediaRepository(BaseRepository):
         media_item = self.get_by_id(media_id)
         if media_item:
             media_item.is_active = False
+            media_item.updated_at = datetime.utcnow()
             self.db.commit()
             self.db.refresh(media_item)
         return media_item

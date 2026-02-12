@@ -30,6 +30,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - CLI commands: `connect-google-drive`, `google-drive-status`, `disconnect-google-drive`
   - `delete_token()` method added to `TokenRepository` for proper credential cleanup
 
+- **Scheduled Media Sync Engine** - Automatic reconciliation of media sources with database (Phase 03 of Cloud Media Enhancements)
+  - `MediaSyncService` with full sync algorithm: new file indexing, deleted file deactivation, rename/move detection via hash matching, reactivation of reappeared files
+  - `SyncResult` dataclass for tracking sync outcomes (new, updated, deactivated, reactivated, unchanged, errors)
+  - Background `media_sync_loop` in `src/main.py` following existing asyncio loop pattern
+  - Health check integration: `media_sync` check in `check-health` command
+  - CLI commands: `sync-media` (manual trigger), `sync-status` (last sync info)
+  - New settings: `MEDIA_SYNC_ENABLED`, `MEDIA_SYNC_INTERVAL_SECONDS`, `MEDIA_SOURCE_TYPE`, `MEDIA_SOURCE_ROOT`
+  - New repository methods: `get_active_by_source_type()`, `get_inactive_by_source_identifier()`, `reactivate()`, `update_source_info()`
+
 ### Changed
 
 - **Posting pipeline decoupled from filesystem** - All media access now goes through provider abstraction

@@ -26,6 +26,7 @@ from cli.commands.media import (
     validate,
 )
 from cli.commands.queue import reset_queue, create_schedule, list_queue, process_queue
+from cli.commands.sync import sync_media, sync_status
 from cli.commands.users import list_users, promote_user
 from src import __version__
 
@@ -62,6 +63,8 @@ cli.add_command(reactivate_instagram_account)
 cli.add_command(connect_google_drive)
 cli.add_command(google_drive_status)
 cli.add_command(disconnect_google_drive)
+cli.add_command(sync_media)
+cli.add_command(sync_status)
 
 
 if __name__ == "__main__":
