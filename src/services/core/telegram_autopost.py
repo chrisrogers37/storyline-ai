@@ -137,8 +137,14 @@ class TelegramAutopostHandler:
             )
 
             # Step 1: Upload to Cloudinary (uses passed-in cloud_service)
+            from src.services.media_sources.factory import MediaSourceFactory
+
+            provider = MediaSourceFactory.get_provider_for_media_item(media_item)
+            file_bytes = provider.download_file(media_item.source_identifier)
+
             upload_result = cloud_service.upload_media(
-                file_path=media_item.file_path,
+                file_bytes=file_bytes,
+                filename=media_item.file_name,
                 folder="instagram_stories",
             )
 
@@ -205,7 +211,8 @@ class TelegramAutopostHandler:
                     # Apply the same transformation we'd use for Instagram
                     media_type = (
                         "VIDEO"
-                        if media_item.file_path.lower().endswith((".mp4", ".mov"))
+                        if media_item.mime_type
+                        and media_item.mime_type.startswith("video")
                         else "IMAGE"
                     )
                     if media_type == "IMAGE":
