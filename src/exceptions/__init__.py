@@ -13,6 +13,11 @@ from src.exceptions.instagram import (
     TokenExpiredError,
     MediaUploadError,
 )
+from src.exceptions.backfill import (
+    BackfillError,
+    BackfillMediaExpiredError,
+    BackfillMediaNotFoundError,
+)
 
 __all__ = [
     "StorylineError",
@@ -24,4 +29,7 @@ __all__ = [
     "RateLimitError",
     "TokenExpiredError",
     "MediaUploadError",
+    "BackfillError",
+    "BackfillMediaExpiredError",
+    "BackfillMediaNotFoundError",
 ]

@@ -28,6 +28,32 @@ class MediaRepository(BaseRepository):
         """Get all media items with the same hash (duplicate content)."""
         return self.db.query(MediaItem).filter(MediaItem.file_hash == file_hash).all()
 
+    def get_by_instagram_media_id(self, instagram_media_id: str) -> Optional[MediaItem]:
+        """Get media item by Instagram Graph API media ID.
+
+        Used by InstagramBackfillService to check if an Instagram media item
+        has already been backfilled into the system.
+        """
+        return (
+            self.db.query(MediaItem)
+            .filter(MediaItem.instagram_media_id == instagram_media_id)
+            .first()
+        )
+
+    def get_backfilled_instagram_media_ids(self) -> set:
+        """Get all Instagram media IDs that have been backfilled.
+
+        Returns a set for O(1) lookup during backfill operations.
+        This avoids N+1 queries when checking each item during batch backfill.
+        """
+        results = (
+            self.db.query(MediaItem.instagram_media_id)
+            .filter(MediaItem.instagram_media_id.isnot(None))
+            .all()
+        )
+        self.end_read_transaction()
+        return {r[0] for r in results}
+
     def get_by_source_identifier(
         self, source_type: str, source_identifier: str
     ) -> Optional[MediaItem]:

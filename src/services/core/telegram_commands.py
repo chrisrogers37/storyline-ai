@@ -293,6 +293,7 @@ class TelegramCommandHandlers:
             "/resume - Resume posting\n"
             "/dryrun - Toggle dry run mode\n"
             "/sync - Sync media from source\n"
+            "/backfill - Backfill media from Instagram\n"
             "/status - System health check\n"
             "/cleanup - Delete recent bot messages\n\n"
             "*Info Commands:*\n"
@@ -862,3 +863,90 @@ class TelegramCommandHandlers:
                 parse_mode="Markdown",
             )
             logger.error(f"Manual sync failed: {e}", exc_info=True)
+
+    async def handle_backfill(self, update, context):
+        """Handle /backfill command -- trigger Instagram media backfill.
+
+        Usage:
+            /backfill          - Backfill all feed posts
+            /backfill 50       - Backfill up to 50 items
+            /backfill dry      - Preview without downloading
+            /backfill 50 dry   - Preview up to 50 items
+        """
+        user = self.service._get_or_create_user(update.effective_user)
+        chat_id = update.effective_chat.id
+
+        # Parse optional arguments
+        args = context.args or []
+        limit = None
+        dry_run = False
+
+        for arg in args:
+            if arg.isdigit():
+                limit = int(arg)
+            elif arg.lower() == "dry":
+                dry_run = True
+
+        mode = "DRY RUN" if dry_run else "LIVE"
+        limit_str = str(limit) if limit else "all"
+
+        status_msg = await update.message.reply_text(
+            f"🔄 *Instagram Media Backfill* ({mode})\n\n"
+            f"Fetching feed posts from Instagram...\n"
+            f"Limit: {limit_str}\n\n"
+            f"_This may take a while for large accounts._",
+            parse_mode="Markdown",
+        )
+
+        try:
+            from src.services.integrations.instagram_backfill import (
+                InstagramBackfillService,
+            )
+
+            backfill_service = InstagramBackfillService()
+            result = await backfill_service.backfill(
+                telegram_chat_id=chat_id,
+                limit=limit,
+                media_type="feed",
+                dry_run=dry_run,
+                triggered_by="telegram",
+            )
+
+            action = "Would download" if dry_run else "Downloaded"
+            status_emoji = "🏁" if not dry_run else "👀"
+
+            lines = [
+                f"{status_emoji} *Backfill {'Preview' if dry_run else 'Complete'}*\n",
+                f"📥 {action}: {result.downloaded}",
+                f"⏭️ Skipped (duplicate): {result.skipped_duplicate}",
+                f"🚫 Skipped (unsupported): {result.skipped_unsupported}",
+            ]
+
+            if result.failed > 0:
+                lines.append(f"❌ Failed: {result.failed}")
+
+            lines.append(f"📊 Total API items: {result.total_api_items}")
+
+            if result.error_details:
+                lines.append("\n⚠️ *Errors:*")
+                for e in result.error_details[:3]:
+                    lines.append(f"  - {e[:80]}")
+
+            await status_msg.edit_text(
+                "\n".join(lines),
+                parse_mode="Markdown",
+            )
+
+        except Exception as e:
+            await status_msg.edit_text(
+                f"❌ *Backfill failed*\n\n{str(e)[:200]}",
+                parse_mode="Markdown",
+            )
+            logger.error(f"Backfill from Telegram failed: {e}", exc_info=True)
+
+        self.service.interaction_service.log_command(
+            user_id=str(user.id),
+            command="/backfill",
+            telegram_chat_id=chat_id,
+            telegram_message_id=update.message.message_id,
+        )

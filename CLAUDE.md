@@ -36,6 +36,8 @@ storyline-cli validate-image <path>
 storyline-cli category-mix-history
 storyline-cli sync-media
 storyline-cli sync-status
+storyline-cli backfill-instagram --dry-run
+storyline-cli backfill-status
 
 # Tests - always safe
 pytest
@@ -407,6 +409,7 @@ Three tables work together for multi-account support:
 | `/settings` | Configure bot settings | `telegram_settings.py` |
 | `/dryrun` | Toggle dry-run mode | `telegram_commands.py` |
 | `/sync` | Trigger manual media sync | `telegram_commands.py` |
+| `/backfill` | Backfill media from Instagram | `telegram_commands.py` |
 
 ### Telegram Callback Actions
 
@@ -699,6 +702,7 @@ VALUES (2, 'Add new column to media_items');
 | 010 | `010_add_verbose_notifications.sql` | Verbose notifications toggle |
 | 011 | `011_media_source_columns.sql` | Source type/identifier columns on media_items |
 | 012 | `012_chat_settings_media_sync.sql` | Per-chat media sync toggle |
+| 013 | `013_media_backfill_columns.sql` | Instagram backfill tracking columns |
 
 ### 5. Pre-Commit Checklist (CRITICAL)
 

@@ -63,6 +63,10 @@ class MediaItem(Base):
     cloud_uploaded_at = Column(DateTime)  # When uploaded to cloud
     cloud_expires_at = Column(DateTime)  # When cloud URL expires
 
+    # Instagram backfill tracking (Phase 05 Cloud Media)
+    instagram_media_id = Column(Text, unique=True, index=True)  # Instagram Graph API media ID
+    backfilled_at = Column(DateTime)  # When this item was backfilled from Instagram
+
     # Tracking
     times_posted = Column(Integer, default=0)
     last_posted_at = Column(DateTime)
