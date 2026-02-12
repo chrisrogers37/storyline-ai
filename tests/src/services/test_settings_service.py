@@ -195,6 +195,8 @@ class TestSettingsServiceUnit:
         mock_settings.posts_per_day = 10
         mock_settings.posting_hours_start = 14
         mock_settings.posting_hours_end = 2
+        mock_settings.show_verbose_notifications = True
+        mock_settings.media_sync_enabled = False
         mock_settings.updated_at = datetime.utcnow()
 
         mock_repo = Mock()
@@ -212,10 +214,41 @@ class TestSettingsServiceUnit:
             "posts_per_day",
             "posting_hours_start",
             "posting_hours_end",
+            "show_verbose_notifications",
+            "media_sync_enabled",
             "updated_at",
         ]
         for key in expected_keys:
             assert key in display, f"Missing key: {key}"
+
+    def test_media_sync_enabled_is_toggleable(self):
+        """media_sync_enabled should be in TOGGLEABLE_SETTINGS."""
+        assert "media_sync_enabled" in TOGGLEABLE_SETTINGS
+
+    def test_get_settings_display_includes_media_sync(self):
+        """get_settings_display should include media_sync_enabled value."""
+        service = SettingsService()
+
+        mock_settings = Mock(spec=ChatSettings)
+        mock_settings.dry_run_mode = False
+        mock_settings.enable_instagram_api = False
+        mock_settings.is_paused = False
+        mock_settings.paused_at = None
+        mock_settings.paused_by_user_id = None
+        mock_settings.posts_per_day = 3
+        mock_settings.posting_hours_start = 14
+        mock_settings.posting_hours_end = 2
+        mock_settings.show_verbose_notifications = True
+        mock_settings.media_sync_enabled = True
+        mock_settings.updated_at = datetime.utcnow()
+
+        mock_repo = Mock()
+        mock_repo.get_or_create.return_value = mock_settings
+        service.settings_repo = mock_repo
+
+        display = service.get_settings_display(-100)
+
+        assert display["media_sync_enabled"] is True
 
 
 # =============================================================================

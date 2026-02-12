@@ -52,6 +52,7 @@ class ChatSettingsRepository(BaseRepository):
             posting_hours_start=env_settings.POSTING_HOURS_START,
             posting_hours_end=env_settings.POSTING_HOURS_END,
             show_verbose_notifications=True,
+            media_sync_enabled=env_settings.MEDIA_SYNC_ENABLED,
         )
         self.db.add(chat_settings)
         self.db.commit()

@@ -86,13 +86,25 @@ async def transaction_cleanup_loop(services: list):
                 pass  # Suppress cleanup errors
 
 
-async def media_sync_loop(sync_service: MediaSyncService):
-    """Run media sync loop - reconcile provider files with database on schedule."""
+async def media_sync_loop(
+    sync_service: MediaSyncService,
+    telegram_service=None,
+):
+    """Run media sync loop - reconcile provider files with database on schedule.
+
+    Args:
+        sync_service: The MediaSyncService instance
+        telegram_service: Optional TelegramService for error notifications
+    """
     logger.info(
         f"Starting media sync loop "
         f"(interval: {settings.MEDIA_SYNC_INTERVAL_SECONDS}s, "
         f"source: {settings.MEDIA_SOURCE_TYPE})"
     )
+
+    # Track consecutive failures for notification suppression
+    consecutive_failures = 0
+    last_error_notified = None
 
     while True:
         try:
@@ -107,12 +119,69 @@ async def media_sync_loop(sync_service: MediaSyncService):
                     f"{result.errors} errors"
                 )
 
+            # Reset failure counter on success
+            if result.errors == 0:
+                consecutive_failures = 0
+                last_error_notified = None
+
+            # Notify on sync errors (first occurrence or every 10th consecutive)
+            elif result.errors > 0 and telegram_service:
+                consecutive_failures += 1
+                error_summary = "; ".join(result.error_details[:3])
+
+                if consecutive_failures == 1 or consecutive_failures % 10 == 0:
+                    await _notify_sync_error(
+                        telegram_service,
+                        f"⚠️ *Media Sync Errors*\n\n"
+                        f"Sync completed with {result.errors} error(s).\n"
+                        f"Consecutive failures: {consecutive_failures}\n\n"
+                        f"Details: {error_summary[:300]}",
+                    )
+
         except Exception as e:
             logger.error(f"Error in media sync loop: {e}", exc_info=True)
+
+            consecutive_failures += 1
+            error_str = str(e)
+
+            if telegram_service and (
+                consecutive_failures == 1 or error_str != last_error_notified
+            ):
+                last_error_notified = error_str
+                await _notify_sync_error(
+                    telegram_service,
+                    f"🔴 *Media Sync Failed*\n\n"
+                    f"Error: `{type(e).__name__}`\n"
+                    f"Details: {str(e)[:200]}\n\n"
+                    f"Consecutive failures: {consecutive_failures}\n"
+                    f"Sync will retry in {settings.MEDIA_SYNC_INTERVAL_SECONDS}s.",
+                )
+
         finally:
             sync_service.cleanup_transactions()
 
         await asyncio.sleep(settings.MEDIA_SYNC_INTERVAL_SECONDS)
+
+
+async def _notify_sync_error(telegram_service, message: str):
+    """Send sync error notification to admin channel if verbose notifications enabled.
+
+    Consolidated helper — checks verbose setting, sends message, suppresses errors.
+    """
+    try:
+        chat_settings = telegram_service.settings_service.get_settings(
+            telegram_service.channel_id
+        )
+        if not chat_settings.show_verbose_notifications:
+            return
+
+        await telegram_service.bot.send_message(
+            chat_id=settings.TELEGRAM_CHANNEL_ID,
+            text=message,
+            parse_mode="Markdown",
+        )
+    except Exception as e:
+        logger.warning(f"Failed to send sync error notification: {e}")
 
 
 async def main_async():
@@ -162,7 +231,11 @@ async def main_async():
     # Add media sync loop if enabled
     if sync_service:
         all_services.append(sync_service)
-        tasks.append(asyncio.create_task(media_sync_loop(sync_service)))
+        tasks.append(
+            asyncio.create_task(
+                media_sync_loop(sync_service, telegram_service=telegram_service)
+            )
+        )
 
     tasks.append(asyncio.create_task(transaction_cleanup_loop(all_services)))
 

@@ -406,6 +406,7 @@ Three tables work together for multi-account support:
 | `/cleanup` | Delete recent bot messages | `telegram_commands.py` |
 | `/settings` | Configure bot settings | `telegram_settings.py` |
 | `/dryrun` | Toggle dry-run mode | `telegram_commands.py` |
+| `/sync` | Trigger manual media sync | `telegram_commands.py` |
 
 ### Telegram Callback Actions
 
@@ -696,6 +697,8 @@ VALUES (2, 'Add new column to media_items');
 | 008 | `008_api_tokens_account_fk.sql` | Token-account linking |
 | 009 | `009_chat_settings_active_account.sql` | Per-chat account selection |
 | 010 | `010_add_verbose_notifications.sql` | Verbose notifications toggle |
+| 011 | `011_media_source_columns.sql` | Source type/identifier columns on media_items |
+| 012 | `012_chat_settings_media_sync.sql` | Per-chat media sync toggle |
 
 ### 5. Pre-Commit Checklist (CRITICAL)
 

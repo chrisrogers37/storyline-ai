@@ -94,6 +94,12 @@ class TelegramSettingsHandlers:
             ],
             [
                 InlineKeyboardButton(
+                    f"🔄 Media Sync: {'ON' if settings_data['media_sync_enabled'] else 'OFF'}",
+                    callback_data="settings_toggle:media_sync_enabled",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
                     "🔄 Regenerate", callback_data="schedule_action:regenerate"
                 ),
                 InlineKeyboardButton(

@@ -39,6 +39,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - New settings: `MEDIA_SYNC_ENABLED`, `MEDIA_SYNC_INTERVAL_SECONDS`, `MEDIA_SOURCE_TYPE`, `MEDIA_SOURCE_ROOT`
   - New repository methods: `get_active_by_source_type()`, `get_inactive_by_source_identifier()`, `reactivate()`, `update_source_info()`
 
+- **Media Source Configuration & Health** - Telegram UI integration for media sync engine (Phase 04 of Cloud Media Enhancements)
+  - Media sync toggle in `/settings` menu (per-chat, persisted to `chat_settings`)
+  - New `/sync` command for manual media sync from Telegram
+  - Enhanced `/status` output with media sync health section
+  - Proactive Telegram notifications on sync errors (respects verbose setting)
+  - Enhanced health check with provider connectivity testing
+  - Database migration `012_chat_settings_media_sync.sql` for per-chat sync toggle
+
 ### Changed
 
 - **Posting pipeline decoupled from filesystem** - All media access now goes through provider abstraction

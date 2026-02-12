@@ -1,5 +1,9 @@
 # Phase 04: Media Source Configuration & Health
 
+**Status**: ✅ COMPLETE
+**Started**: 2026-02-12
+**Completed**: 2026-02-12
+**PR**: #44
 **PR Title**: feat: add media source configuration UI and sync health monitoring
 **Risk Level**: Low
 **Estimated Effort**: Medium (2 new files, 6 modified files, ~15 new tests)
@@ -701,11 +705,12 @@ async def media_sync_loop(
                 error_summary = "; ".join(result.error_details[:3])
 
                 if consecutive_failures == 1 or consecutive_failures % 10 == 0:
-                    await _send_sync_error_notification(
+                    await _notify_sync_error(
                         telegram_service,
-                        result,
-                        consecutive_failures,
-                        error_summary,
+                        f"⚠️ *Media Sync Errors*\n\n"
+                        f"Sync completed with {result.errors} error(s).\n"
+                        f"Consecutive failures: {consecutive_failures}\n\n"
+                        f"Details: {error_summary[:300]}",
                     )
 
         except Exception as e:
@@ -719,8 +724,13 @@ async def media_sync_loop(
                 or error_str != last_error_notified
             ):
                 last_error_notified = error_str
-                await _send_sync_error_notification_exception(
-                    telegram_service, e, consecutive_failures
+                await _notify_sync_error(
+                    telegram_service,
+                    f"🔴 *Media Sync Failed*\n\n"
+                    f"Error: `{type(e).__name__}`\n"
+                    f"Details: {str(e)[:200]}\n\n"
+                    f"Consecutive failures: {consecutive_failures}\n"
+                    f"Sync will retry in {settings.MEDIA_SYNC_INTERVAL_SECONDS}s.",
                 )
 
         finally:
@@ -729,59 +739,17 @@ async def media_sync_loop(
         await asyncio.sleep(settings.MEDIA_SYNC_INTERVAL_SECONDS)
 
 
-async def _send_sync_error_notification(
-    telegram_service,
-    result,
-    consecutive_failures: int,
-    error_summary: str,
-):
-    """Send sync error notification to admin channel."""
+async def _notify_sync_error(telegram_service, message: str):
+    """Send sync error notification to admin channel if verbose notifications enabled.
+
+    Consolidated helper — checks verbose setting, sends message, suppresses errors.
+    """
     try:
         chat_settings = telegram_service.settings_service.get_settings(
             telegram_service.channel_id
         )
         if not chat_settings.show_verbose_notifications:
             return
-
-        message = (
-            f"⚠️ *Media Sync Errors*\n\n"
-            f"Sync completed with {result.errors} error(s).\n"
-            f"Consecutive failures: {consecutive_failures}\n\n"
-            f"Details: {error_summary[:300]}"
-        )
-
-        await telegram_service.bot.send_message(
-            chat_id=settings.TELEGRAM_CHANNEL_ID,
-            text=message,
-            parse_mode="Markdown",
-        )
-    except Exception as e:
-        logger.warning(f"Failed to send sync error notification: {e}")
-
-
-async def _send_sync_error_notification_exception(
-    telegram_service,
-    error: Exception,
-    consecutive_failures: int,
-):
-    """Send sync exception notification to admin channel."""
-    try:
-        chat_settings = telegram_service.settings_service.get_settings(
-            telegram_service.channel_id
-        )
-        if not chat_settings.show_verbose_notifications:
-            return
-
-        error_type = type(error).__name__
-        error_msg = str(error)[:200]
-
-        message = (
-            f"🔴 *Media Sync Failed*\n\n"
-            f"Error: `{error_type}`\n"
-            f"Details: {error_msg}\n\n"
-            f"Consecutive failures: {consecutive_failures}\n"
-            f"Sync will retry in {settings.MEDIA_SYNC_INTERVAL_SECONDS}s."
-        )
 
         await telegram_service.bot.send_message(
             chat_id=settings.TELEGRAM_CHANNEL_ID,

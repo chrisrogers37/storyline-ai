@@ -91,6 +91,47 @@ class TelegramCommandHandlers:
         else:
             ig_status = "❌ Disabled"
 
+        # Media sync status
+        sync_status_line = ""
+        try:
+            from src.services.core.media_sync import MediaSyncService
+
+            sync_service = MediaSyncService()
+            last_sync = sync_service.get_last_sync_info()
+            chat_settings = self.service.settings_service.get_settings(
+                update.effective_chat.id
+            )
+
+            if not chat_settings.media_sync_enabled:
+                sync_status_line = "🔄 Media Sync: ❌ Disabled"
+            elif not last_sync:
+                sync_status_line = "🔄 Media Sync: ⏳ No syncs yet"
+            elif last_sync["success"]:
+                result = last_sync.get("result", {}) or {}
+                new_count = result.get("new", 0)
+                total = sum(
+                    result.get(k, 0)
+                    for k in [
+                        "new",
+                        "updated",
+                        "deactivated",
+                        "reactivated",
+                        "unchanged",
+                    ]
+                )
+                sync_status_line = (
+                    f"🔄 Media Sync: ✅ OK"
+                    f"\n   └─ Last: {last_sync['started_at'][:16]} "
+                    f"({total} items, {new_count} new)"
+                )
+            else:
+                sync_status_line = (
+                    f"🔄 Media Sync: ⚠️ Last sync failed"
+                    f"\n   └─ {last_sync.get('started_at', 'N/A')[:16]}"
+                )
+        except Exception:
+            sync_status_line = "🔄 Media Sync: ❓ Check failed"
+
         status_msg = (
             f"📊 *Storyline AI Status*\n\n"
             f"*System:*\n"
@@ -99,6 +140,8 @@ class TelegramCommandHandlers:
             f"🧪 Dry Run: {dry_run_status}\n\n"
             f"*Instagram API:*\n"
             f"📸 {ig_status}\n\n"
+            f"*Media Source:*\n"
+            f"{sync_status_line}\n\n"
             f"*Queue & Media:*\n"
             f"📋 Queue: {pending_count} pending\n"
             f"📁 Library: {media_count} active\n"
@@ -249,6 +292,7 @@ class TelegramCommandHandlers:
             "/pause - Pause automatic posting\n"
             "/resume - Resume posting\n"
             "/dryrun - Toggle dry run mode\n"
+            "/sync - Sync media from source\n"
             "/status - System health check\n"
             "/cleanup - Delete recent bot messages\n\n"
             "*Info Commands:*\n"
@@ -715,3 +759,106 @@ class TelegramCommandHandlers:
             await update.message.delete()  # Also delete the user's /cleanup command
         except Exception:
             pass  # Ignore errors if already deleted
+
+    async def handle_sync(self, update, context):
+        """Handle /sync command - trigger manual media sync and report results.
+
+        Usage:
+            /sync - Run a manual media sync against the configured provider
+        """
+        user = self.service._get_or_create_user(update.effective_user)
+        chat_id = update.effective_chat.id
+
+        # Check if sync is configured
+        source_type = settings.MEDIA_SOURCE_TYPE
+        source_root = settings.MEDIA_SOURCE_ROOT
+
+        if not source_root and source_type == "local":
+            source_root = settings.MEDIA_DIR
+
+        if not source_root:
+            await update.message.reply_text(
+                "⚠️ *Media Sync Not Configured*\n\n"
+                "No media source root is set.\n"
+                "Configure `MEDIA_SOURCE_ROOT` in `.env` or connect a Google Drive.",
+                parse_mode="Markdown",
+            )
+            self.service.interaction_service.log_command(
+                user_id=str(user.id),
+                command="/sync",
+                context={"error": "not_configured"},
+                telegram_chat_id=chat_id,
+                telegram_message_id=update.message.message_id,
+            )
+            return
+
+        # Send "syncing..." message
+        status_msg = await update.message.reply_text(
+            f"🔄 *Syncing media...*\n\n"
+            f"Source: `{source_type}`\n"
+            f"Root: `{source_root[:40]}{'...' if len(source_root) > 40 else ''}`",
+            parse_mode="Markdown",
+        )
+
+        try:
+            from src.services.core.media_sync import MediaSyncService
+
+            sync_service = MediaSyncService()
+            result = sync_service.sync(
+                source_type=source_type,
+                source_root=source_root,
+                triggered_by="telegram",
+            )
+
+            # Build result message
+            lines = ["✅ *Sync Complete*\n"]
+
+            if result.new > 0:
+                lines.append(f"📥 New: {result.new}")
+            if result.updated > 0:
+                lines.append(f"✏️ Updated: {result.updated}")
+            if result.deactivated > 0:
+                lines.append(f"🗑️ Removed: {result.deactivated}")
+            if result.reactivated > 0:
+                lines.append(f"♻️ Restored: {result.reactivated}")
+
+            lines.append(f"📁 Unchanged: {result.unchanged}")
+
+            if result.errors > 0:
+                lines.append(f"⚠️ Errors: {result.errors}")
+
+            lines.append(f"\n📊 Total: {result.total_processed}")
+
+            await status_msg.edit_text(
+                "\n".join(lines),
+                parse_mode="Markdown",
+            )
+
+            # Log interaction
+            self.service.interaction_service.log_command(
+                user_id=str(user.id),
+                command="/sync",
+                context=result.to_dict(),
+                telegram_chat_id=chat_id,
+                telegram_message_id=update.message.message_id,
+            )
+
+            logger.info(
+                f"Manual sync triggered by {self.service._get_display_name(user)}: "
+                f"{result.new} new, {result.updated} updated, "
+                f"{result.deactivated} deactivated"
+            )
+
+        except ValueError as e:
+            await status_msg.edit_text(
+                f"❌ *Sync Failed*\n\n{str(e)}",
+                parse_mode="Markdown",
+            )
+            logger.error(f"Manual sync failed (config): {e}")
+
+        except Exception as e:
+            await status_msg.edit_text(
+                f"❌ *Sync Failed*\n\n{str(e)[:200]}",
+                parse_mode="Markdown",
+            )
+            logger.error(f"Manual sync failed: {e}", exc_info=True)
