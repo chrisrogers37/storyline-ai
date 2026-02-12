@@ -38,7 +38,9 @@ class MediaItem(Base):
 
     # Media source (provider abstraction - Phase 01 Cloud Media)
     source_type = Column(String(50), nullable=False, default="local")
-    source_identifier = Column(Text)  # Provider-specific ID (path for local, file_id for Drive)
+    source_identifier = Column(
+        Text
+    )  # Provider-specific ID (path for local, file_id for Drive)
 
     # Routing logic: determines auto vs manual posting
     requires_interaction = Column(

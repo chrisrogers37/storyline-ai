@@ -9,8 +9,6 @@ These tests verify the end-to-end Instagram posting flow:
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
 from datetime import datetime, timedelta
-import tempfile
-from pathlib import Path
 
 
 @pytest.mark.integration

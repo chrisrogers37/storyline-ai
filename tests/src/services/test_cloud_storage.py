@@ -250,7 +250,10 @@ class TestCloudStorageService:
             filename="test.jpg",
         )
 
-        assert result["url"] == "https://res.cloudinary.com/test/image/upload/bytes_image.jpg"
+        assert (
+            result["url"]
+            == "https://res.cloudinary.com/test/image/upload/bytes_image.jpg"
+        )
         assert result["public_id"] == "storyline/bytes_image"
         assert result["size_bytes"] == 5000
         assert "uploaded_at" in result
