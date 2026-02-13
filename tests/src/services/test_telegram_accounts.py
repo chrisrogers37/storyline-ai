@@ -378,3 +378,436 @@ class TestAccountSelectionMenu:
         mock_account_handlers.service.ig_account_service.deactivate_account.assert_called_once_with(
             "acc1", mock_user
         )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestAddAccountFlow:
+    """Tests for the add-account conversation state machine."""
+
+    def _make_update(self, text="test input", chat_id=-100123, message_id=42):
+        """Build a mock Telegram Update for message handling."""
+        update = AsyncMock()
+        update.message.text = text
+        update.message.message_id = message_id
+        update.message.reply_text = AsyncMock(
+            return_value=Mock(message_id=message_id + 1)
+        )
+        update.message.delete = AsyncMock()
+        update.effective_chat.id = chat_id
+        update.effective_user = Mock(id=999, username="tester", first_name="Test")
+        return update
+
+    def _make_context(self, state=None, data=None):
+        """Build a mock Telegram context with add-account state."""
+        context = Mock()
+        context.user_data = {}
+        if state:
+            context.user_data["add_account_state"] = state
+            context.user_data["add_account_data"] = data or {}
+            context.user_data["add_account_messages"] = [10]
+            context.user_data["add_account_chat_id"] = -100123
+        context.bot = AsyncMock()
+        context.bot.send_message = AsyncMock(
+            return_value=Mock(message_id=100, delete=AsyncMock())
+        )
+        context.bot.delete_message = AsyncMock()
+        return context
+
+    # --- Dispatcher tests ---
+
+    async def test_handle_add_account_message_not_in_flow(self, mock_account_handlers):
+        """Returns False when no add_account_state in user_data."""
+        update = self._make_update()
+        context = self._make_context()  # No state set
+
+        result = await mock_account_handlers.handle_add_account_message(update, context)
+        assert result is False
+
+    # --- Display name (Step 1) ---
+
+    async def test_handle_display_name_input_advances_state(
+        self, mock_account_handlers
+    ):
+        """Saves display name and advances to awaiting_account_id."""
+        update = self._make_update(text="My Brand")
+        context = self._make_context(state="awaiting_display_name")
+
+        result = await mock_account_handlers.handle_add_account_message(update, context)
+
+        assert result is True
+        assert context.user_data["add_account_state"] == "awaiting_account_id"
+        assert context.user_data["add_account_data"]["display_name"] == "My Brand"
+        # Verify reply was sent with Step 2 prompt
+        update.message.reply_text.assert_called_once()
+        call_text = update.message.reply_text.call_args.kwargs.get(
+            "text", update.message.reply_text.call_args.args[0]
+        )
+        assert "Step 2 of 3" in call_text
+
+    # --- Account ID (Step 2) ---
+
+    async def test_handle_account_id_input_validates_numeric(
+        self, mock_account_handlers
+    ):
+        """Rejects non-numeric account ID input."""
+        update = self._make_update(text="not-a-number")
+        context = self._make_context(state="awaiting_account_id")
+
+        result = await mock_account_handlers.handle_add_account_message(update, context)
+
+        assert result is True
+        # State should NOT advance
+        assert context.user_data["add_account_state"] == "awaiting_account_id"
+        update.message.reply_text.assert_called_once()
+        call_text = update.message.reply_text.call_args.kwargs.get(
+            "text", update.message.reply_text.call_args.args[0]
+        )
+        assert "numeric" in call_text
+
+    async def test_handle_account_id_input_saves_and_advances(
+        self, mock_account_handlers
+    ):
+        """Saves numeric account ID and advances to awaiting_token."""
+        update = self._make_update(text="123456789")
+        context = self._make_context(
+            state="awaiting_account_id",
+            data={"display_name": "Test"},
+        )
+
+        result = await mock_account_handlers.handle_add_account_message(update, context)
+
+        assert result is True
+        assert context.user_data["add_account_state"] == "awaiting_token"
+        assert context.user_data["add_account_data"]["account_id"] == "123456789"
+        call_text = update.message.reply_text.call_args.kwargs.get(
+            "text", update.message.reply_text.call_args.args[0]
+        )
+        assert "Step 3 of 3" in call_text
+
+    # --- Token (Step 3) ---
+
+    async def test_handle_token_input_creates_account(self, mock_account_handlers):
+        """Creates new account when API validates and account doesn't exist."""
+        update = self._make_update(text="EAABtest123token")
+        context = self._make_context(
+            state="awaiting_token",
+            data={"display_name": "Brand", "account_id": "12345"},
+        )
+
+        mock_user = Mock(
+            id=uuid4(), telegram_username="tester", telegram_first_name="Test"
+        )
+        mock_account_handlers.service._get_or_create_user = Mock(return_value=mock_user)
+        mock_account_handlers.service._get_display_name = Mock(return_value="@tester")
+
+        mock_account = Mock(
+            id=uuid4(), display_name="Brand", instagram_username="brand_ig"
+        )
+        mock_account_handlers.service.ig_account_service.get_account_by_instagram_id.return_value = None
+        mock_account_handlers.service.ig_account_service.add_account.return_value = (
+            mock_account
+        )
+        mock_account_handlers.service.ig_account_service.get_accounts_for_display.return_value = {
+            "accounts": [
+                {
+                    "id": str(mock_account.id),
+                    "display_name": "Brand",
+                    "username": "brand_ig",
+                }
+            ],
+            "active_account_id": str(mock_account.id),
+        }
+
+        # Mock httpx response
+        mock_response = Mock(status_code=200)
+        mock_response.json.return_value = {"username": "brand_ig"}
+        mock_http_client = AsyncMock()
+        mock_http_client.get = AsyncMock(return_value=mock_response)
+
+        with patch(
+            "src.services.core.telegram_accounts.httpx.AsyncClient"
+        ) as mock_client:
+            mock_client.return_value.__aenter__ = AsyncMock(
+                return_value=mock_http_client
+            )
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            result = await mock_account_handlers.handle_add_account_message(
+                update, context
+            )
+
+        assert result is True
+        mock_account_handlers.service.ig_account_service.add_account.assert_called_once()
+        # Verify success message sent
+        context.bot.send_message.assert_called()
+        success_call = context.bot.send_message.call_args
+        assert "Added @brand_ig" in success_call.kwargs["text"]
+
+    async def test_handle_token_input_updates_existing_account(
+        self, mock_account_handlers
+    ):
+        """Updates token when account already exists."""
+        update = self._make_update(text="EAABtest123token")
+        context = self._make_context(
+            state="awaiting_token",
+            data={"display_name": "Brand", "account_id": "12345"},
+        )
+
+        mock_user = Mock(
+            id=uuid4(), telegram_username="tester", telegram_first_name="Test"
+        )
+        mock_account_handlers.service._get_or_create_user = Mock(return_value=mock_user)
+        mock_account_handlers.service._get_display_name = Mock(return_value="@tester")
+
+        existing_account = Mock(
+            id=uuid4(), display_name="Brand", instagram_username="brand_ig"
+        )
+        mock_account_handlers.service.ig_account_service.get_account_by_instagram_id.return_value = existing_account
+        mock_account_handlers.service.ig_account_service.update_account_token.return_value = existing_account
+        mock_account_handlers.service.ig_account_service.get_accounts_for_display.return_value = {
+            "accounts": [
+                {
+                    "id": str(existing_account.id),
+                    "display_name": "Brand",
+                    "username": "brand_ig",
+                }
+            ],
+            "active_account_id": str(existing_account.id),
+        }
+
+        mock_response = Mock(status_code=200)
+        mock_response.json.return_value = {"username": "brand_ig"}
+        mock_http_client = AsyncMock()
+        mock_http_client.get = AsyncMock(return_value=mock_response)
+
+        with patch(
+            "src.services.core.telegram_accounts.httpx.AsyncClient"
+        ) as mock_client:
+            mock_client.return_value.__aenter__ = AsyncMock(
+                return_value=mock_http_client
+            )
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            result = await mock_account_handlers.handle_add_account_message(
+                update, context
+            )
+
+        assert result is True
+        mock_account_handlers.service.ig_account_service.update_account_token.assert_called_once()
+        # Verify update success message
+        success_call = context.bot.send_message.call_args
+        assert "Updated token for @brand_ig" in success_call.kwargs["text"]
+
+    async def test_handle_token_input_api_error_shows_error(
+        self, mock_account_handlers
+    ):
+        """Verifies bug fix: API error message is shown, not deletion error."""
+        update = self._make_update(text="bad_token")
+        context = self._make_context(
+            state="awaiting_token",
+            data={"display_name": "Brand", "account_id": "12345"},
+        )
+
+        mock_user = Mock(id=uuid4())
+        mock_account_handlers.service._get_or_create_user = Mock(return_value=mock_user)
+
+        # API returns error
+        mock_response = Mock(status_code=400)
+        mock_response.json.return_value = {
+            "error": {"message": "Invalid OAuth access token"}
+        }
+        mock_http_client = AsyncMock()
+        mock_http_client.get = AsyncMock(return_value=mock_response)
+
+        with patch(
+            "src.services.core.telegram_accounts.httpx.AsyncClient"
+        ) as mock_client:
+            mock_client.return_value.__aenter__ = AsyncMock(
+                return_value=mock_http_client
+            )
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            result = await mock_account_handlers.handle_add_account_message(
+                update, context
+            )
+
+        assert result is True
+        # Verify error message shows the user-friendly OAuth error, NOT a deletion error
+        error_call = context.bot.send_message.call_args
+        error_text = error_call.kwargs["text"]
+        assert "Failed to add account" in error_text
+        assert "Invalid or expired access token" in error_text
+
+    async def test_handle_token_input_deletes_token_message(
+        self, mock_account_handlers
+    ):
+        """Verifies the token message is deleted for security."""
+        update = self._make_update(text="secret_token")
+        context = self._make_context(
+            state="awaiting_token",
+            data={"display_name": "Brand", "account_id": "12345"},
+        )
+
+        mock_user = Mock(id=uuid4())
+        mock_account_handlers.service._get_or_create_user = Mock(return_value=mock_user)
+
+        # Make API call fail so we can check deletion happened first
+        mock_response = Mock(status_code=400)
+        mock_response.json.return_value = {"error": {"message": "Bad token"}}
+        mock_http_client = AsyncMock()
+        mock_http_client.get = AsyncMock(return_value=mock_response)
+
+        with patch(
+            "src.services.core.telegram_accounts.httpx.AsyncClient"
+        ) as mock_client:
+            mock_client.return_value.__aenter__ = AsyncMock(
+                return_value=mock_http_client
+            )
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            await mock_account_handlers.handle_add_account_message(update, context)
+
+        # Token message should be deleted for security
+        update.message.delete.assert_called_once()
+
+    # --- Cleanup helper ---
+
+    async def test_cleanup_conversation_messages_deletes_tracked(
+        self, mock_account_handlers
+    ):
+        """Deletes all tracked messages from the chat."""
+        context = self._make_context()
+        context.user_data["add_account_messages"] = [10, 20, 30]
+
+        await mock_account_handlers._cleanup_conversation_messages(
+            context, chat_id=-100123
+        )
+
+        assert context.bot.delete_message.call_count == 3
+        deleted_ids = [
+            call.kwargs["message_id"]
+            for call in context.bot.delete_message.call_args_list
+        ]
+        assert deleted_ids == [10, 20, 30]
+
+    async def test_cleanup_conversation_messages_excludes_message(
+        self, mock_account_handlers
+    ):
+        """Skips the excluded message ID during cleanup."""
+        context = self._make_context()
+        context.user_data["add_account_messages"] = [10, 20, 30]
+
+        await mock_account_handlers._cleanup_conversation_messages(
+            context, chat_id=-100123, exclude_message_id=20
+        )
+
+        assert context.bot.delete_message.call_count == 2
+        deleted_ids = [
+            call.kwargs["message_id"]
+            for call in context.bot.delete_message.call_args_list
+        ]
+        assert 20 not in deleted_ids
+
+    # --- Keyboard builder ---
+
+    async def test_build_account_config_keyboard_with_accounts(
+        self, mock_account_handlers
+    ):
+        """Keyboard includes account rows, add, remove, and back buttons."""
+        account_data = {
+            "accounts": [
+                {"id": "acc1", "display_name": "Main", "username": "main_ig"},
+                {"id": "acc2", "display_name": "Brand", "username": "brand_ig"},
+            ],
+            "active_account_id": "acc1",
+        }
+
+        markup = mock_account_handlers._build_account_config_keyboard(account_data)
+
+        buttons = [btn for row in markup.inline_keyboard for btn in row]
+        button_texts = [b.text for b in buttons]
+
+        # Active account has checkmark
+        assert any("✅" in t and "Main" in t for t in button_texts)
+        # Inactive account does not
+        assert any("Brand" in t and "✅" not in t for t in button_texts)
+        # Action buttons present
+        assert any("Add Account" in t for t in button_texts)
+        assert any("Remove Account" in t for t in button_texts)
+        assert any("Back to Settings" in t for t in button_texts)
+
+    async def test_build_account_config_keyboard_no_accounts(
+        self, mock_account_handlers
+    ):
+        """Keyboard shows placeholder when no accounts exist."""
+        account_data = {"accounts": [], "active_account_id": None}
+
+        markup = mock_account_handlers._build_account_config_keyboard(account_data)
+
+        buttons = [btn for row in markup.inline_keyboard for btn in row]
+        button_texts = [b.text for b in buttons]
+
+        assert any("No accounts configured" in t for t in button_texts)
+        assert any("Add Account" in t for t in button_texts)
+        # Remove button should NOT appear
+        assert not any("Remove Account" in t for t in button_texts)
+
+    # --- Interaction logging ---
+
+    async def test_handle_token_input_logs_interaction(self, mock_account_handlers):
+        """Verifies log_callback receives correct action and context dict."""
+        update = self._make_update(text="EAABtest123token")
+        context = self._make_context(
+            state="awaiting_token",
+            data={"display_name": "Brand", "account_id": "12345"},
+        )
+
+        mock_user = Mock(
+            id=uuid4(), telegram_username="tester", telegram_first_name="Test"
+        )
+        mock_account_handlers.service._get_or_create_user = Mock(return_value=mock_user)
+        mock_account_handlers.service._get_display_name = Mock(return_value="@tester")
+
+        mock_account = Mock(
+            id=uuid4(), display_name="Brand", instagram_username="brand_ig"
+        )
+        mock_account_handlers.service.ig_account_service.get_account_by_instagram_id.return_value = None
+        mock_account_handlers.service.ig_account_service.add_account.return_value = (
+            mock_account
+        )
+        mock_account_handlers.service.ig_account_service.get_accounts_for_display.return_value = {
+            "accounts": [
+                {
+                    "id": str(mock_account.id),
+                    "display_name": "Brand",
+                    "username": "brand_ig",
+                }
+            ],
+            "active_account_id": str(mock_account.id),
+        }
+
+        mock_response = Mock(status_code=200)
+        mock_response.json.return_value = {"username": "brand_ig"}
+        mock_http_client = AsyncMock()
+        mock_http_client.get = AsyncMock(return_value=mock_response)
+
+        with patch(
+            "src.services.core.telegram_accounts.httpx.AsyncClient"
+        ) as mock_client:
+            mock_client.return_value.__aenter__ = AsyncMock(
+                return_value=mock_http_client
+            )
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            await mock_account_handlers.handle_add_account_message(update, context)
+
+        # Verify interaction logged with correct params
+        mock_account_handlers.service.interaction_service.log_callback.assert_called_once()
+        log_call = (
+            mock_account_handlers.service.interaction_service.log_callback.call_args
+        )
+        assert log_call.kwargs["callback_name"] == "add_account"
+        assert log_call.kwargs["context"]["display_name"] == "Brand"
+        assert log_call.kwargs["context"]["username"] == "brand_ig"
+        assert log_call.kwargs["context"]["was_update"] is False
