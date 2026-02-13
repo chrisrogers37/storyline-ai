@@ -84,8 +84,8 @@ class ServiceRunRepository(BaseRepository):
             run.result_summary = summary
             self.db.commit()
 
-    # NOTE: Unused in production as of 2026-02-10, but used by test_base_service.py
-    # integration tests and planned for Phase 3 monitoring dashboard.
+    # Used by InstagramBackfillService.get_backfill_status() and
+    # MediaSyncService.get_last_sync_info(), plus test_base_service.py integration tests.
     def get_recent_runs(
         self, service_name: Optional[str] = None, limit: int = 100
     ) -> List[ServiceRun]:
