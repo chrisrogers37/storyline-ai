@@ -986,6 +986,267 @@ class TestResetCommand:
         assert "Queue Already Empty" in message_text
 
 
+# ==================== Status Helper Tests ====================
+
+
+@pytest.mark.unit
+class TestGetNextPostDisplay:
+    """Tests for _get_next_post_display helper."""
+
+    def test_with_pending_items(self, mock_command_handlers):
+        """Test returns formatted time when items are pending."""
+        handlers = mock_command_handlers
+        mock_item = Mock()
+        mock_item.scheduled_for = datetime(2026, 3, 15, 14, 30)
+        handlers.service.queue_repo.get_pending.return_value = [mock_item]
+
+        result = handlers._get_next_post_display()
+        assert result == "14:30 UTC"
+
+    def test_empty_queue(self, mock_command_handlers):
+        """Test returns 'None scheduled' when queue is empty."""
+        handlers = mock_command_handlers
+        handlers.service.queue_repo.get_pending.return_value = []
+
+        result = handlers._get_next_post_display()
+        assert result == "None scheduled"
+
+
+@pytest.mark.unit
+class TestGetLastPostedDisplay:
+    """Tests for _get_last_posted_display helper."""
+
+    def test_recent_post_hours_ago(self, mock_command_handlers):
+        """Test shows hours ago for recent posts."""
+        handlers = mock_command_handlers
+        mock_post = Mock()
+        mock_post.posted_at = datetime.utcnow().replace(
+            hour=max(datetime.utcnow().hour - 3, 0)
+        )
+
+        # Use a fixed time difference to avoid test flakiness
+        with patch("src.services.core.telegram_commands.datetime") as mock_dt:
+            mock_dt.utcnow.return_value = datetime(2026, 3, 15, 15, 0, 0)
+            mock_post.posted_at = datetime(2026, 3, 15, 12, 0, 0)
+            result = handlers._get_last_posted_display([mock_post])
+
+        assert result == "3h ago"
+
+    def test_very_recent_post(self, mock_command_handlers):
+        """Test shows '< 1h ago' for very recent posts."""
+        handlers = mock_command_handlers
+        mock_post = Mock()
+
+        with patch("src.services.core.telegram_commands.datetime") as mock_dt:
+            mock_dt.utcnow.return_value = datetime(2026, 3, 15, 15, 0, 0)
+            mock_post.posted_at = datetime(2026, 3, 15, 14, 45, 0)
+            result = handlers._get_last_posted_display([mock_post])
+
+        assert result == "< 1h ago"
+
+    def test_no_posts(self, mock_command_handlers):
+        """Test returns 'Never' when no posts exist."""
+        handlers = mock_command_handlers
+        result = handlers._get_last_posted_display([])
+        assert result == "Never"
+
+
+@pytest.mark.unit
+class TestGetInstagramApiStatus:
+    """Tests for _get_instagram_api_status helper."""
+
+    def test_enabled_with_rate_limit(self, mock_command_handlers):
+        """Test shows enabled status with rate limit remaining."""
+        handlers = mock_command_handlers
+
+        mock_ig = Mock()
+        mock_ig.get_rate_limit_remaining.return_value = 20
+        mock_ig.__enter__ = Mock(return_value=mock_ig)
+        mock_ig.__exit__ = Mock(return_value=False)
+
+        with (
+            patch("src.services.core.telegram_commands.settings") as mock_settings,
+            patch(
+                "src.services.integrations.instagram_api.InstagramAPIService",
+                return_value=mock_ig,
+            ),
+        ):
+            mock_settings.ENABLE_INSTAGRAM_API = True
+            mock_settings.INSTAGRAM_POSTS_PER_HOUR = 25
+            result = handlers._get_instagram_api_status()
+
+        assert "Enabled" in result
+        assert "20/25" in result
+
+    def test_disabled(self, mock_command_handlers):
+        """Test shows disabled status."""
+        handlers = mock_command_handlers
+
+        with patch("src.services.core.telegram_commands.settings") as mock_settings:
+            mock_settings.ENABLE_INSTAGRAM_API = False
+            result = handlers._get_instagram_api_status()
+
+        assert "Disabled" in result
+
+
+@pytest.mark.unit
+class TestGetSyncStatusLine:
+    """Tests for _get_sync_status_line helper."""
+
+    def test_sync_disabled(self, mock_command_handlers):
+        """Test shows disabled when media sync is off."""
+        handlers = mock_command_handlers
+        mock_chat_settings = Mock(media_sync_enabled=False)
+        handlers.service.settings_service.get_settings.return_value = mock_chat_settings
+
+        mock_sync = Mock()
+        mock_sync.get_last_sync_info.return_value = None
+        mock_sync.__enter__ = Mock(return_value=mock_sync)
+        mock_sync.__exit__ = Mock(return_value=False)
+
+        with patch(
+            "src.services.core.media_sync.MediaSyncService",
+            return_value=mock_sync,
+        ):
+            result = handlers._get_sync_status_line(-100123)
+
+        assert "Disabled" in result
+
+    def test_no_syncs_yet(self, mock_command_handlers):
+        """Test shows 'No syncs yet' when no history."""
+        handlers = mock_command_handlers
+        mock_chat_settings = Mock(media_sync_enabled=True)
+        handlers.service.settings_service.get_settings.return_value = mock_chat_settings
+
+        mock_sync = Mock()
+        mock_sync.get_last_sync_info.return_value = None
+
+        with patch(
+            "src.services.core.media_sync.MediaSyncService",
+            return_value=mock_sync,
+        ):
+            result = handlers._get_sync_status_line(-100123)
+
+        assert "No syncs yet" in result
+
+    def test_successful_sync(self, mock_command_handlers):
+        """Test shows OK with counts for successful sync."""
+        handlers = mock_command_handlers
+        mock_chat_settings = Mock(media_sync_enabled=True)
+        handlers.service.settings_service.get_settings.return_value = mock_chat_settings
+
+        mock_sync = Mock()
+        mock_sync.get_last_sync_info.return_value = {
+            "success": True,
+            "started_at": "2026-03-15T10:00:00Z",
+            "result": {
+                "new": 5,
+                "updated": 2,
+                "deactivated": 0,
+                "reactivated": 1,
+                "unchanged": 42,
+            },
+        }
+
+        with patch(
+            "src.services.core.media_sync.MediaSyncService",
+            return_value=mock_sync,
+        ):
+            result = handlers._get_sync_status_line(-100123)
+
+        assert "OK" in result
+        assert "50 items" in result
+        assert "5 new" in result
+
+    def test_failed_sync(self, mock_command_handlers):
+        """Test shows warning for failed sync."""
+        handlers = mock_command_handlers
+        mock_chat_settings = Mock(media_sync_enabled=True)
+        handlers.service.settings_service.get_settings.return_value = mock_chat_settings
+
+        mock_sync = Mock()
+        mock_sync.get_last_sync_info.return_value = {
+            "success": False,
+            "started_at": "2026-03-15T10:00:00Z",
+        }
+
+        with patch(
+            "src.services.core.media_sync.MediaSyncService",
+            return_value=mock_sync,
+        ):
+            result = handlers._get_sync_status_line(-100123)
+
+        assert "failed" in result
+
+    def test_exception_shows_check_failed(self, mock_command_handlers):
+        """Test exception returns 'Check failed'."""
+        handlers = mock_command_handlers
+
+        with patch(
+            "src.services.core.media_sync.MediaSyncService",
+            side_effect=Exception("Import error"),
+        ):
+            result = handlers._get_sync_status_line(-100123)
+
+        assert "Check failed" in result
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestStatusCommand:
+    """Tests for handle_status end-to-end."""
+
+    async def test_sends_formatted_status_message(self, mock_command_handlers):
+        """Test /status sends a formatted message with all sections."""
+        handlers = mock_command_handlers
+        service = handlers.service
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        service.user_repo.get_by_telegram_id.return_value = None
+        service.user_repo.create.return_value = mock_user
+
+        # Set up repo returns
+        service.queue_repo.count_pending.return_value = 5
+        service.queue_repo.get_pending.return_value = []
+        service.history_repo.get_recent_posts.return_value = []
+        service.media_repo.get_all.return_value = [Mock(), Mock(), Mock()]
+        service.lock_repo.get_permanent_locks.return_value = [Mock()]
+
+        mock_update = Mock()
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
+        mock_update.effective_chat = Mock(id=-100123)
+        mock_update.message = AsyncMock()
+        mock_update.message.message_id = 1
+
+        mock_context = Mock()
+
+        with (
+            patch("src.services.core.telegram_commands.settings") as mock_settings,
+            patch(
+                "src.services.core.media_sync.MediaSyncService",
+                side_effect=Exception("not configured"),
+            ),
+        ):
+            mock_settings.DRY_RUN_MODE = False
+            mock_settings.ENABLE_INSTAGRAM_API = False
+            await handlers.handle_status(mock_update, mock_context)
+
+        call_args = mock_update.message.reply_text.call_args
+        message_text = call_args.args[0]
+
+        assert "Storyline AI Status" in message_text
+        assert "Queue: 5 pending" in message_text
+        assert "Library: 3 active" in message_text
+        assert "Locked: 1" in message_text
+        assert "None scheduled" in message_text
+
+        # Should log interaction
+        service.interaction_service.log_command.assert_called_once()
+
+
 @pytest.mark.unit
 class TestPauseIntegration:
     """Tests for pause integration with PostingService."""

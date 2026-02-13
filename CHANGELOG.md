@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Extract sub-methods from long handlers** - Decomposed `_do_autopost()` and `handle_status()` into focused helpers
+  - `_do_autopost()` reduced from 353 to ~50 lines via `AutopostContext` dataclass + 7 extracted helpers (`_get_account_display`, `_upload_to_cloudinary`, `_handle_dry_run`, `_execute_instagram_post`, `_record_successful_post`, `_send_success_message`, `_handle_autopost_error`)
+  - `handle_status()` reduced from 115 to ~50 lines via 4 extracted helpers (`_get_next_post_display`, `_get_last_posted_display`, `_get_instagram_api_status`, `_get_sync_status_line`)
+  - 27 new tests covering all extracted methods
+
 - **BackfillContext dataclass for parameter reduction** - Introduced `BackfillContext` to bundle shared state across backfill call chain
   - Reduces `_backfill_feed` from 9 to 3 params, `_backfill_stories` from 8 to 2, `_process_media_item` from 8 to 3, `_process_carousel` from 7 to 2, `_download_and_index` from 7 to 6
   - Removed unused `username` parameter from `_download_and_index`

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -18,6 +19,29 @@ from datetime import datetime
 
 if TYPE_CHECKING:
     from src.services.core.telegram_service import TelegramService
+
+
+@dataclass
+class AutopostContext:
+    """Shared state passed through the autopost call chain.
+
+    Bundles parameters that are constant for a single _do_autopost() invocation
+    and shared across _upload_to_cloudinary, _handle_dry_run,
+    _execute_instagram_post, _record_successful_post, etc.
+    """
+
+    queue_id: str
+    queue_item: object
+    media_item: object
+    user: object
+    query: object
+    chat_id: int
+    chat_settings: object
+    cloud_service: object
+    instagram_service: object
+    cancel_flag: object = None
+    cloud_url: str | None = None
+    cloud_public_id: str | None = None
 
 
 class TelegramAutopostHandler:
@@ -105,10 +129,11 @@ class TelegramAutopostHandler:
         cloud_service,
         cancel_flag=None,
     ):
-        """Internal method to perform auto-post with pre-created services."""
-        chat_id = query.message.chat_id
+        """Internal method to perform auto-post with pre-created services.
 
-        # Get settings from database (not .env)
+        Orchestrates: safety check → upload → dry-run check → post → record.
+        """
+        chat_id = query.message.chat_id
         chat_settings = self.service.settings_service.get_settings(chat_id)
 
         # Run comprehensive safety check
@@ -127,323 +152,326 @@ class TelegramAutopostHandler:
             logger.error(f"Auto-post safety check failed: {safety_result['errors']}")
             return
 
-        # ============================================
-        # UPLOAD TO CLOUDINARY (runs in both dry run and real mode)
-        # ============================================
+        ctx = AutopostContext(
+            queue_id=queue_id,
+            queue_item=queue_item,
+            media_item=media_item,
+            user=user,
+            query=query,
+            chat_id=chat_id,
+            chat_settings=chat_settings,
+            cloud_service=cloud_service,
+            instagram_service=instagram_service,
+            cancel_flag=cancel_flag,
+        )
+
         try:
-            # Update message to show progress
-            await query.edit_message_caption(
-                caption="⏳ *Uploading to Cloudinary...*", parse_mode="Markdown"
-            )
-
-            # Step 1: Upload to Cloudinary (uses passed-in cloud_service)
-            from src.services.media_sources.factory import MediaSourceFactory
-
-            provider = MediaSourceFactory.get_provider_for_media_item(media_item)
-            file_bytes = provider.download_file(media_item.source_identifier)
-
-            upload_result = cloud_service.upload_media(
-                file_bytes=file_bytes,
-                filename=media_item.file_name,
-                folder="instagram_stories",
-            )
-
-            cloud_url = upload_result.get("url")
-            cloud_public_id = upload_result.get("public_id")
-
-            if not cloud_url:
-                raise Exception("Cloudinary upload failed: No URL returned")
-
-            logger.info(f"Uploaded to Cloudinary: {cloud_public_id}")
-
-            # Check cancellation after Cloudinary upload
-            if cancel_flag and cancel_flag.is_set():
-                logger.info(
-                    f"Auto-post cancelled after Cloudinary upload for {media_item.file_name}"
-                )
-                await query.edit_message_caption(
-                    caption="❌ Auto-post cancelled (another action was taken)"
-                )
+            if not await self._upload_to_cloudinary(ctx):
                 return
 
-            # Update media item with cloud info
-            self.service.media_repo.update_cloud_info(
-                media_id=str(media_item.id),
-                cloud_url=cloud_url,
-                cloud_public_id=cloud_public_id,
-                cloud_uploaded_at=datetime.utcnow(),
-            )
-
-            # ============================================
-            # DRY RUN MODE - Stop before Instagram API
-            # ============================================
-            if chat_settings.dry_run_mode:
-                # Dry run: only show Test Again and Back buttons
-                # Don't show Posted/Skip/Reject to prevent accidental marking
-                keyboard = [
-                    [
-                        InlineKeyboardButton(
-                            "🔄 Test Again",
-                            callback_data=f"autopost:{queue_id}",
-                        ),
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            "↩️ Back to Queue Item",
-                            callback_data=f"back:{queue_id}",
-                        ),
-                    ],
-                ]
-
-                # Fetch account username from API (cached)
-                account_info = await instagram_service.get_account_info(
-                    telegram_chat_id=chat_id
-                )
-                if account_info.get("username"):
-                    account_display = f"@{account_info['username']}"
-                else:
-                    account_display = "Unknown account"
-
-                # Check verbose setting (reuse already-loaded chat_settings)
-                verbose = self.service._is_verbose(chat_id, chat_settings=chat_settings)
-
-                if verbose:
-                    # Apply the same transformation we'd use for Instagram
-                    media_type = (
-                        "VIDEO"
-                        if media_item.mime_type
-                        and media_item.mime_type.startswith("video")
-                        else "IMAGE"
-                    )
-                    if media_type == "IMAGE":
-                        preview_url = cloud_service.get_story_optimized_url(cloud_url)
-                    else:
-                        preview_url = cloud_url
-
-                    caption = (
-                        f"🧪 DRY RUN - Cloudinary Upload Complete\n\n"
-                        f"📁 File: {media_item.file_name}\n"
-                        f"📸 Account: {account_display}\n\n"
-                        f"✅ Cloudinary upload: Success\n"
-                        f"🔗 Preview (with blur): {preview_url}\n\n"
-                        f"⏸️ Stopped before Instagram API\n"
-                        f"(DRY_RUN_MODE=true)\n\n"
-                        f"• No Instagram post made\n"
-                        f"• No history recorded\n"
-                        f"• No TTL lock created\n"
-                        f"• Queue item preserved\n\n"
-                        f"Tested by: {self.service._get_display_name(user)}"
-                    )
-                else:
-                    caption = (
-                        f"🧪 DRY RUN ✅\n\n"
-                        f"📸 Account: {account_display}\n"
-                        f"Tested by: {self.service._get_display_name(user)}"
-                    )
-                await query.edit_message_caption(
-                    caption=caption,
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                )
-
-                # Log interaction (dry run - but Cloudinary worked)
-                self.service.interaction_service.log_callback(
-                    user_id=str(user.id),
-                    callback_name="autopost",
-                    context={
-                        "queue_item_id": queue_id,
-                        "media_id": str(queue_item.media_item_id),
-                        "media_filename": media_item.file_name,
-                        "cloud_url": cloud_url,
-                        "cloud_public_id": cloud_public_id,
-                        "dry_run": True,
-                    },
-                    telegram_chat_id=query.message.chat_id,
-                    telegram_message_id=query.message.message_id,
-                )
-
-                logger.info(
-                    f"[DRY RUN] Cloudinary upload complete, stopped before Instagram API. "
-                    f"User: {self.service._get_display_name(user)}, "
-                    f"File: {media_item.file_name}"
-                )
+            if ctx.chat_settings.dry_run_mode:
+                await self._handle_dry_run(ctx)
                 return
 
-            # ============================================
-            # REAL POSTING - Continue to Instagram API
-            # ============================================
-            # Check cancellation before Instagram API call
-            if cancel_flag and cancel_flag.is_set():
-                logger.info(
-                    f"Auto-post cancelled before Instagram API for {media_item.file_name}"
-                )
-                await query.edit_message_caption(
-                    caption="❌ Auto-post cancelled (another action was taken)"
-                )
+            story_id = await self._execute_instagram_post(ctx)
+            if story_id is None:
                 return
 
-            # Step 2: Post to Instagram
-            await query.edit_message_caption(
-                caption="⏳ *Posting to Instagram...*", parse_mode="Markdown"
-            )
-
-            # Determine media type
-            media_type = (
-                "VIDEO"
-                if media_item.file_path.lower().endswith((".mp4", ".mov"))
-                else "IMAGE"
-            )
-
-            # Apply 9:16 Story transformation (blurred background padding)
-            if media_type == "IMAGE":
-                story_url = cloud_service.get_story_optimized_url(cloud_url)
-            else:
-                # Videos don't need the same transformation
-                story_url = cloud_url
-
-            post_result = await instagram_service.post_story(
-                media_url=story_url,
-                media_type=media_type,
-                telegram_chat_id=chat_id,
-            )
-
-            story_id = post_result.get("story_id")
-            logger.info(f"Posted to Instagram: story_id={story_id}")
-
-            # Step 3: Cleanup Cloudinary (optional - can keep for debugging)
-            # cloud_service.delete_media(cloud_public_id)
-
-            # Step 4: Create history record
-            self.service.history_repo.create(
-                HistoryCreateParams(
-                    media_item_id=str(queue_item.media_item_id),
-                    queue_item_id=queue_id,
-                    queue_created_at=queue_item.created_at,
-                    queue_deleted_at=datetime.utcnow(),
-                    scheduled_for=queue_item.scheduled_for,
-                    posted_at=datetime.utcnow(),
-                    status="posted",
-                    success=True,
-                    posted_by_user_id=str(user.id),
-                    posted_by_telegram_username=user.telegram_username,
-                    posting_method="instagram_api",
-                    instagram_story_id=story_id,
-                )
-            )
-
-            # Update media item
-            self.service.media_repo.increment_times_posted(
-                str(queue_item.media_item_id)
-            )
-
-            # Create 30-day lock to prevent reposting
-            self.service.lock_service.create_lock(str(queue_item.media_item_id))
-
-            # Delete from queue
-            self.service.queue_repo.delete(queue_id)
-
-            # Update user stats
-            self.service.user_repo.increment_posts(str(user.id))
-
-            # Success message (reuse already-loaded chat_settings)
-            verbose = self.service._is_verbose(chat_id, chat_settings=chat_settings)
-
-            # Fetch account username from API (cached)
-            account_info = await instagram_service.get_account_info(
-                telegram_chat_id=chat_id
-            )
-            if account_info.get("username"):
-                account_display = f"@{account_info['username']}"
-            else:
-                account_display = "Unknown account"
-
-            if verbose:
-                # Verbose ON: Show detailed info
-                escaped_filename = _escape_markdown(media_item.file_name)
-                caption = (
-                    f"✅ *Posted to Instagram!*\n\n"
-                    f"📁 {escaped_filename}\n"
-                    f"📸 Account: {account_display}\n"
-                    f"🆔 Story ID: {story_id[:20]}...\n\n"
-                    f"Posted by: {self.service._get_display_name(user)}"
-                )
-            else:
-                # Verbose OFF: Show minimal info (always include user)
-                caption = (
-                    f"✅ Posted to {account_display} by "
-                    f"{self.service._get_display_name(user)}"
-                )
-
-            await query.edit_message_caption(caption=caption, parse_mode="Markdown")
-
-            # Log interaction
-            self.service.interaction_service.log_callback(
-                user_id=str(user.id),
-                callback_name="autopost",
-                context={
-                    "queue_item_id": queue_id,
-                    "media_id": str(queue_item.media_item_id),
-                    "media_filename": media_item.file_name,
-                    "instagram_story_id": story_id,
-                    "dry_run": False,
-                    "success": True,
-                },
-                telegram_chat_id=query.message.chat_id,
-                telegram_message_id=query.message.message_id,
-            )
-
-            # Log outgoing bot response
-            self.service.interaction_service.log_bot_response(
-                response_type="caption_update",
-                context={
-                    "caption": caption,
-                    "action": "autopost_success",
-                    "media_filename": media_item.file_name,
-                    "instagram_story_id": story_id,
-                    "edited": True,
-                },
-                telegram_chat_id=query.message.chat_id,
-                telegram_message_id=query.message.message_id,
-            )
-
-            logger.info(
-                f"Auto-posted to Instagram by {self.service._get_display_name(user)}: "
-                f"{media_item.file_name} (story_id={story_id})"
-            )
+            self._record_successful_post(ctx, story_id)
+            await self._send_success_message(ctx, story_id)
 
         except Exception as e:
-            # Error handling
-            error_msg = str(e)
-            logger.error(f"Auto-post failed: {error_msg}", exc_info=True)
+            await self._handle_autopost_error(ctx, e)
+
+    # ==================== Extracted Helpers ====================
+
+    async def _get_account_display(self, ctx: AutopostContext) -> str:
+        """Get formatted account display string for messages."""
+        try:
+            account_info = await ctx.instagram_service.get_account_info(
+                telegram_chat_id=ctx.chat_id
+            )
+            return f"@{account_info.get('username', 'Unknown')}"
+        except Exception:
+            return "Unknown account"
+
+    async def _upload_to_cloudinary(self, ctx: AutopostContext) -> bool:
+        """Upload media to Cloudinary for Instagram posting.
+
+        Sets ctx.cloud_url and ctx.cloud_public_id.
+        Returns False if cancelled, True on success.
+        """
+        await ctx.query.edit_message_caption(
+            caption="⏳ *Uploading to Cloudinary...*", parse_mode="Markdown"
+        )
+
+        from src.services.media_sources.factory import MediaSourceFactory
+
+        provider = MediaSourceFactory.get_provider_for_media_item(ctx.media_item)
+        file_bytes = provider.download_file(ctx.media_item.source_identifier)
+
+        upload_result = ctx.cloud_service.upload_media(
+            file_bytes=file_bytes,
+            filename=ctx.media_item.file_name,
+            folder="instagram_stories",
+        )
+
+        ctx.cloud_url = upload_result.get("url")
+        ctx.cloud_public_id = upload_result.get("public_id")
+
+        if not ctx.cloud_url:
+            raise Exception("Cloudinary upload failed: No URL returned")
+
+        logger.info(f"Uploaded to Cloudinary: {ctx.cloud_public_id}")
+
+        if ctx.cancel_flag and ctx.cancel_flag.is_set():
+            logger.info(
+                f"Auto-post cancelled after Cloudinary upload for {ctx.media_item.file_name}"
+            )
+            await ctx.query.edit_message_caption(
+                caption="❌ Auto-post cancelled (another action was taken)"
+            )
+            return False
+
+        self.service.media_repo.update_cloud_info(
+            media_id=str(ctx.media_item.id),
+            cloud_url=ctx.cloud_url,
+            cloud_public_id=ctx.cloud_public_id,
+            cloud_uploaded_at=datetime.utcnow(),
+        )
+
+        return True
+
+    async def _handle_dry_run(self, ctx: AutopostContext) -> None:
+        """Handle dry-run mode: log what would happen, cleanup cloud, show message."""
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    "🔄 Test Again",
+                    callback_data=f"autopost:{ctx.queue_id}",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    "↩️ Back to Queue Item",
+                    callback_data=f"back:{ctx.queue_id}",
+                ),
+            ],
+        ]
+
+        account_display = await self._get_account_display(ctx)
+        verbose = self.service._is_verbose(ctx.chat_id, chat_settings=ctx.chat_settings)
+
+        if verbose:
+            media_type = (
+                "VIDEO"
+                if ctx.media_item.mime_type
+                and ctx.media_item.mime_type.startswith("video")
+                else "IMAGE"
+            )
+            if media_type == "IMAGE":
+                preview_url = ctx.cloud_service.get_story_optimized_url(ctx.cloud_url)
+            else:
+                preview_url = ctx.cloud_url
 
             caption = (
-                f"❌ *Auto Post Failed*\n\n"
-                f"Error: {error_msg[:200]}\n\n"
-                f"You can try again or use manual posting."
+                f"🧪 DRY RUN - Cloudinary Upload Complete\n\n"
+                f"📁 File: {ctx.media_item.file_name}\n"
+                f"📸 Account: {account_display}\n\n"
+                f"✅ Cloudinary upload: Success\n"
+                f"🔗 Preview (with blur): {preview_url}\n\n"
+                f"⏸️ Stopped before Instagram API\n"
+                f"(DRY_RUN_MODE=true)\n\n"
+                f"• No Instagram post made\n"
+                f"• No history recorded\n"
+                f"• No TTL lock created\n"
+                f"• Queue item preserved\n\n"
+                f"Tested by: {self.service._get_display_name(ctx.user)}"
+            )
+        else:
+            caption = (
+                f"🧪 DRY RUN ✅\n\n"
+                f"📸 Account: {account_display}\n"
+                f"Tested by: {self.service._get_display_name(ctx.user)}"
+            )
+        await ctx.query.edit_message_caption(
+            caption=caption,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+
+        self.service.interaction_service.log_callback(
+            user_id=str(ctx.user.id),
+            callback_name="autopost",
+            context={
+                "queue_item_id": ctx.queue_id,
+                "media_id": str(ctx.queue_item.media_item_id),
+                "media_filename": ctx.media_item.file_name,
+                "cloud_url": ctx.cloud_url,
+                "cloud_public_id": ctx.cloud_public_id,
+                "dry_run": True,
+            },
+            telegram_chat_id=ctx.query.message.chat_id,
+            telegram_message_id=ctx.query.message.message_id,
+        )
+
+        logger.info(
+            f"[DRY RUN] Cloudinary upload complete, stopped before Instagram API. "
+            f"User: {self.service._get_display_name(ctx.user)}, "
+            f"File: {ctx.media_item.file_name}"
+        )
+
+    async def _execute_instagram_post(self, ctx: AutopostContext) -> str | None:
+        """Post media to Instagram via the Graph API.
+
+        Returns:
+            Instagram story_id string, or None if cancelled.
+        """
+        if ctx.cancel_flag and ctx.cancel_flag.is_set():
+            logger.info(
+                f"Auto-post cancelled before Instagram API for {ctx.media_item.file_name}"
+            )
+            await ctx.query.edit_message_caption(
+                caption="❌ Auto-post cancelled (another action was taken)"
+            )
+            return None
+
+        await ctx.query.edit_message_caption(
+            caption="⏳ *Posting to Instagram...*", parse_mode="Markdown"
+        )
+
+        media_type = (
+            "VIDEO"
+            if ctx.media_item.file_path.lower().endswith((".mp4", ".mov"))
+            else "IMAGE"
+        )
+
+        if media_type == "IMAGE":
+            story_url = ctx.cloud_service.get_story_optimized_url(ctx.cloud_url)
+        else:
+            story_url = ctx.cloud_url
+
+        post_result = await ctx.instagram_service.post_story(
+            media_url=story_url,
+            media_type=media_type,
+            telegram_chat_id=ctx.chat_id,
+        )
+
+        story_id = post_result.get("story_id")
+        logger.info(f"Posted to Instagram: story_id={story_id}")
+        return story_id
+
+    def _record_successful_post(self, ctx: AutopostContext, story_id: str) -> None:
+        """Record a successful Instagram post in all relevant tables."""
+        self.service.history_repo.create(
+            HistoryCreateParams(
+                media_item_id=str(ctx.queue_item.media_item_id),
+                queue_item_id=ctx.queue_id,
+                queue_created_at=ctx.queue_item.created_at,
+                queue_deleted_at=datetime.utcnow(),
+                scheduled_for=ctx.queue_item.scheduled_for,
+                posted_at=datetime.utcnow(),
+                status="posted",
+                success=True,
+                posted_by_user_id=str(ctx.user.id),
+                posted_by_telegram_username=ctx.user.telegram_username,
+                posting_method="instagram_api",
+                instagram_story_id=story_id,
+            )
+        )
+        self.service.media_repo.increment_times_posted(
+            str(ctx.queue_item.media_item_id)
+        )
+        self.service.lock_service.create_lock(str(ctx.queue_item.media_item_id))
+        self.service.queue_repo.delete(ctx.queue_id)
+        self.service.user_repo.increment_posts(str(ctx.user.id))
+
+    async def _send_success_message(self, ctx: AutopostContext, story_id: str) -> None:
+        """Send success message and log interaction after a successful post."""
+        verbose = self.service._is_verbose(ctx.chat_id, chat_settings=ctx.chat_settings)
+        account_display = await self._get_account_display(ctx)
+
+        if verbose:
+            escaped_filename = _escape_markdown(ctx.media_item.file_name)
+            caption = (
+                f"✅ *Posted to Instagram!*\n\n"
+                f"📁 {escaped_filename}\n"
+                f"📸 Account: {account_display}\n"
+                f"🆔 Story ID: {story_id[:20]}...\n\n"
+                f"Posted by: {self.service._get_display_name(ctx.user)}"
+            )
+        else:
+            caption = (
+                f"✅ Posted to {account_display} by "
+                f"{self.service._get_display_name(ctx.user)}"
             )
 
-            # Rebuild keyboard with recovery options
-            reply_markup = build_error_recovery_keyboard(
-                queue_id, enable_instagram_api=settings.ENABLE_INSTAGRAM_API
-            )
+        await ctx.query.edit_message_caption(caption=caption, parse_mode="Markdown")
 
-            await query.edit_message_caption(
-                caption=caption,
-                reply_markup=reply_markup,
-                parse_mode="Markdown",
-            )
+        self.service.interaction_service.log_callback(
+            user_id=str(ctx.user.id),
+            callback_name="autopost",
+            context={
+                "queue_item_id": ctx.queue_id,
+                "media_id": str(ctx.queue_item.media_item_id),
+                "media_filename": ctx.media_item.file_name,
+                "instagram_story_id": story_id,
+                "dry_run": False,
+                "success": True,
+            },
+            telegram_chat_id=ctx.query.message.chat_id,
+            telegram_message_id=ctx.query.message.message_id,
+        )
 
-            # Log interaction (failure)
-            self.service.interaction_service.log_callback(
-                user_id=str(user.id),
-                callback_name="autopost",
-                context={
-                    "queue_item_id": queue_id,
-                    "media_id": str(queue_item.media_item_id),
-                    "media_filename": media_item.file_name,
-                    "dry_run": False,
-                    "success": False,
-                    "error": error_msg[:200],
-                },
-                telegram_chat_id=query.message.chat_id,
-                telegram_message_id=query.message.message_id,
-            )
+        self.service.interaction_service.log_bot_response(
+            response_type="caption_update",
+            context={
+                "caption": caption,
+                "action": "autopost_success",
+                "media_filename": ctx.media_item.file_name,
+                "instagram_story_id": story_id,
+                "edited": True,
+            },
+            telegram_chat_id=ctx.query.message.chat_id,
+            telegram_message_id=ctx.query.message.message_id,
+        )
+
+        logger.info(
+            f"Auto-posted to Instagram by {self.service._get_display_name(ctx.user)}: "
+            f"{ctx.media_item.file_name} (story_id={story_id})"
+        )
+
+    async def _handle_autopost_error(self, ctx: AutopostContext, e: Exception) -> None:
+        """Handle auto-post failure: show error message with recovery options."""
+        error_msg = str(e)
+        logger.error(f"Auto-post failed: {error_msg}", exc_info=True)
+
+        caption = (
+            f"❌ *Auto Post Failed*\n\n"
+            f"Error: {error_msg[:200]}\n\n"
+            f"You can try again or use manual posting."
+        )
+
+        reply_markup = build_error_recovery_keyboard(
+            ctx.queue_id, enable_instagram_api=settings.ENABLE_INSTAGRAM_API
+        )
+
+        await ctx.query.edit_message_caption(
+            caption=caption,
+            reply_markup=reply_markup,
+            parse_mode="Markdown",
+        )
+
+        self.service.interaction_service.log_callback(
+            user_id=str(ctx.user.id),
+            callback_name="autopost",
+            context={
+                "queue_item_id": ctx.queue_id,
+                "media_id": str(ctx.queue_item.media_item_id),
+                "media_filename": ctx.media_item.file_name,
+                "dry_run": False,
+                "success": False,
+                "error": error_msg[:200],
+            },
+            telegram_chat_id=ctx.query.message.chat_id,
+            telegram_message_id=ctx.query.message.message_id,
+        )
