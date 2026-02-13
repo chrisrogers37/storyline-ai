@@ -82,6 +82,7 @@ class TestSettingsDatabaseUrl:
             "ADMIN_TELEGRAM_CHAT_ID": 12345,
             "DB_USER": "storyline_user",
             "DB_NAME": "storyline_ai",
+            "TEST_DB_NAME": "storyline_ai_test",
         }
         defaults.update(overrides)
         return Settings(_env_file=None, **defaults)
