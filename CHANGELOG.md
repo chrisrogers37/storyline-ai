@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Config tests: `test_constants.py` (7 tests), `test_settings.py` (22 tests) — default values, `database_url` property
   - All tests are pure unit tests (no database required)
 
+### Fixed
+
+- **Instagram backfill timestamp parsing on Python 3.10** - `+0000` timezone format isn't supported by `datetime.fromisoformat()` in Python 3.10, causing silent parse failures in `_is_after_date` and `_download_and_index`
+- **CI FutureWarning crash** - Filter `FutureWarning` from `google.api_core` in pytest config to prevent test collection errors on Python 3.10
+
 - **CLI unit tests for user, queue, and media commands** - Converted 17 skipped integration test placeholders to 24 working unit tests
   - `test_user_commands.py`: 6 tests (list users, empty DB, no-username fallback, promote, nonexistent user, invalid role)
   - `test_queue_commands.py`: 7 tests (create schedule, no media, default days, list queue, empty queue, process queue, force post)
