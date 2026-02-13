@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Refactored add-account state machine** - Decomposed 315-line `handle_add_account_message()` into focused helpers
+  - Extracted `_handle_display_name_input()`, `_handle_account_id_input()`, `_handle_token_input()` step handlers
+  - Extracted `_validate_instagram_credentials()` for API call + account create/update
+  - Extracted `_cleanup_conversation_messages()` deduplicating 3 identical cleanup loops
+  - Extracted `_build_account_config_keyboard()` deduplicating 2 keyboard builders (returns `InlineKeyboardMarkup`)
+  - Simplified `handle_account_selection_menu()` and `handle_add_account_cancel()` using shared helpers
+
+### Fixed
+
+- **Exception-shadowing bug in add-account error handling** - Inner `except Exception as e:` during message deletion overwrote the outer API error variable, causing error messages to display deletion errors instead of the actual API failure
+
 ### Added
 
 - **Media Source Provider Abstraction** - Foundation for cloud media sources (Phase 01 of Cloud Media Enhancements)
