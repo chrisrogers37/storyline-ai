@@ -15,6 +15,7 @@ from src.exceptions import (
     TokenExpiredError,
 )
 from src.services.integrations.instagram_backfill import (
+    BackfillContext,
     BackfillResult,
     InstagramBackfillService,
 )
@@ -77,6 +78,46 @@ class TestBackfillResult:
         assert result.to_dict()["dry_run"] is True
 
 
+# ==================== BackfillContext Tests ====================
+
+
+@pytest.mark.unit
+class TestBackfillContext:
+    """Tests for the BackfillContext dataclass."""
+
+    def test_creation(self):
+        result = BackfillResult()
+        ctx = BackfillContext(
+            token="abc",
+            ig_account_id="ig_99",
+            username="testuser",
+            dry_run=True,
+            known_ig_ids={"id1"},
+            storage_dir=Path("/tmp/test"),
+            result=result,
+        )
+        assert ctx.token == "abc"
+        assert ctx.ig_account_id == "ig_99"
+        assert ctx.dry_run is True
+
+    def test_mutable_fields_shared(self):
+        known = set()
+        result = BackfillResult()
+        ctx = BackfillContext(
+            token="t",
+            ig_account_id="ig",
+            username=None,
+            dry_run=False,
+            known_ig_ids=known,
+            storage_dir=Path("/tmp"),
+            result=result,
+        )
+        ctx.known_ig_ids.add("new_id")
+        assert "new_id" in known
+        ctx.result.downloaded += 1
+        assert result.downloaded == 1
+
+
 # ==================== Fixtures ====================
 
 
@@ -99,6 +140,32 @@ def mock_backfill_service():
         service.set_result_summary = MagicMock()
 
         yield service
+
+
+@pytest.fixture
+def make_ctx():
+    """Factory fixture to create BackfillContext with sensible defaults."""
+
+    def _make(
+        token="tok",
+        ig_account_id="ig_123",
+        username="user",
+        dry_run=False,
+        known_ig_ids=None,
+        storage_dir=None,
+        result=None,
+    ):
+        return BackfillContext(
+            token=token,
+            ig_account_id=ig_account_id,
+            username=username,
+            dry_run=dry_run,
+            known_ig_ids=known_ig_ids if known_ig_ids is not None else set(),
+            storage_dir=storage_dir or Path("/tmp"),
+            result=result or BackfillResult(),
+        )
+
+    return _make
 
 
 # ==================== Credential Tests ====================
@@ -206,11 +273,9 @@ class TestGetCredentials:
 class TestBackfillFeed:
     """Tests for feed media backfill."""
 
-    async def test_downloads_images(self, mock_backfill_service):
+    async def test_downloads_images(self, mock_backfill_service, make_ctx):
         """IMAGE items are downloaded and indexed."""
-        result = BackfillResult()
-        known_ig_ids = set()
-        storage_dir = Path("/tmp/test_backfill")
+        ctx = make_ctx(storage_dir=Path("/tmp/test_backfill"))
 
         mock_backfill_service._fetch_media_page = AsyncMock(
             return_value={
@@ -227,27 +292,16 @@ class TestBackfillFeed:
         )
         mock_backfill_service._download_and_index = AsyncMock()
 
-        await mock_backfill_service._backfill_feed(
-            token="tok",
-            ig_account_id="ig_123",
-            username="user",
-            limit=None,
-            since=None,
-            dry_run=False,
-            known_ig_ids=known_ig_ids,
-            storage_dir=storage_dir,
-            result=result,
-        )
+        await mock_backfill_service._backfill_feed(ctx, limit=None, since=None)
 
-        assert result.downloaded == 1
-        assert result.total_api_items == 1
-        assert "img_1" in known_ig_ids
+        assert ctx.result.downloaded == 1
+        assert ctx.result.total_api_items == 1
+        assert "img_1" in ctx.known_ig_ids
         mock_backfill_service._download_and_index.assert_called_once()
 
-    async def test_skips_duplicates(self, mock_backfill_service):
+    async def test_skips_duplicates(self, mock_backfill_service, make_ctx):
         """Items already in known_ig_ids are skipped."""
-        result = BackfillResult()
-        known_ig_ids = {"existing_id"}
+        ctx = make_ctx(known_ig_ids={"existing_id"})
 
         mock_backfill_service._fetch_media_page = AsyncMock(
             return_value={
@@ -262,25 +316,14 @@ class TestBackfillFeed:
             }
         )
 
-        await mock_backfill_service._backfill_feed(
-            token="tok",
-            ig_account_id="ig_123",
-            username="user",
-            limit=None,
-            since=None,
-            dry_run=False,
-            known_ig_ids=known_ig_ids,
-            storage_dir=Path("/tmp"),
-            result=result,
-        )
+        await mock_backfill_service._backfill_feed(ctx, limit=None, since=None)
 
-        assert result.skipped_duplicate == 1
-        assert result.downloaded == 0
+        assert ctx.result.skipped_duplicate == 1
+        assert ctx.result.downloaded == 0
 
-    async def test_handles_pagination(self, mock_backfill_service):
+    async def test_handles_pagination(self, mock_backfill_service, make_ctx):
         """Multiple pages fetched via cursor."""
-        result = BackfillResult()
-        known_ig_ids = set()
+        ctx = make_ctx()
 
         page1 = {
             "data": [
@@ -298,26 +341,15 @@ class TestBackfillFeed:
         mock_backfill_service._fetch_media_page = AsyncMock(side_effect=[page1, page2])
         mock_backfill_service._download_and_index = AsyncMock()
 
-        await mock_backfill_service._backfill_feed(
-            token="tok",
-            ig_account_id="ig_123",
-            username="user",
-            limit=None,
-            since=None,
-            dry_run=False,
-            known_ig_ids=known_ig_ids,
-            storage_dir=Path("/tmp"),
-            result=result,
-        )
+        await mock_backfill_service._backfill_feed(ctx, limit=None, since=None)
 
-        assert result.downloaded == 2
-        assert result.total_api_items == 2
+        assert ctx.result.downloaded == 2
+        assert ctx.result.total_api_items == 2
         assert mock_backfill_service._fetch_media_page.call_count == 2
 
-    async def test_respects_limit(self, mock_backfill_service):
+    async def test_respects_limit(self, mock_backfill_service, make_ctx):
         """Stops after limit items."""
-        result = BackfillResult()
-        known_ig_ids = set()
+        ctx = make_ctx()
 
         mock_backfill_service._fetch_media_page = AsyncMock(
             return_value={
@@ -343,24 +375,13 @@ class TestBackfillFeed:
         )
         mock_backfill_service._download_and_index = AsyncMock()
 
-        await mock_backfill_service._backfill_feed(
-            token="tok",
-            ig_account_id="ig_123",
-            username="user",
-            limit=2,
-            since=None,
-            dry_run=False,
-            known_ig_ids=known_ig_ids,
-            storage_dir=Path("/tmp"),
-            result=result,
-        )
+        await mock_backfill_service._backfill_feed(ctx, limit=2, since=None)
 
-        assert result.downloaded == 2
+        assert ctx.result.downloaded == 2
 
-    async def test_respects_since_filter(self, mock_backfill_service):
+    async def test_respects_since_filter(self, mock_backfill_service, make_ctx):
         """Stops at items older than since."""
-        result = BackfillResult()
-        known_ig_ids = set()
+        ctx = make_ctx()
 
         mock_backfill_service._fetch_media_page = AsyncMock(
             return_value={
@@ -384,25 +405,15 @@ class TestBackfillFeed:
         mock_backfill_service._download_and_index = AsyncMock()
 
         since = datetime(2025, 1, 1)
-        await mock_backfill_service._backfill_feed(
-            token="tok",
-            ig_account_id="ig_123",
-            username="user",
-            limit=None,
-            since=since,
-            dry_run=False,
-            known_ig_ids=known_ig_ids,
-            storage_dir=Path("/tmp"),
-            result=result,
-        )
+        await mock_backfill_service._backfill_feed(ctx, limit=None, since=since)
 
         # Should download the new one but stop at the old one
-        assert result.downloaded == 1
+        assert ctx.result.downloaded == 1
 
-    async def test_dry_run_no_download(self, mock_backfill_service):
+    async def test_dry_run_no_download(self, mock_backfill_service, make_ctx):
         """dry_run=True counts but doesn't download."""
-        result = BackfillResult(dry_run=True)
-        known_ig_ids = set()
+        ctx = make_ctx(dry_run=True)
+        ctx.result.dry_run = True
 
         mock_backfill_service._fetch_media_page = AsyncMock(
             return_value={
@@ -418,26 +429,15 @@ class TestBackfillFeed:
         )
         mock_backfill_service._download_and_index = AsyncMock()
 
-        await mock_backfill_service._backfill_feed(
-            token="tok",
-            ig_account_id="ig_123",
-            username="user",
-            limit=None,
-            since=None,
-            dry_run=True,
-            known_ig_ids=known_ig_ids,
-            storage_dir=Path("/tmp"),
-            result=result,
-        )
+        await mock_backfill_service._backfill_feed(ctx, limit=None, since=None)
 
-        assert result.downloaded == 1
-        assert "dry_1" in known_ig_ids
+        assert ctx.result.downloaded == 1
+        assert "dry_1" in ctx.known_ig_ids
         mock_backfill_service._download_and_index.assert_not_called()
 
-    async def test_handles_videos(self, mock_backfill_service):
+    async def test_handles_videos(self, mock_backfill_service, make_ctx):
         """VIDEO items are processed."""
-        result = BackfillResult()
-        known_ig_ids = set()
+        ctx = make_ctx()
 
         mock_backfill_service._fetch_media_page = AsyncMock(
             return_value={
@@ -453,42 +453,22 @@ class TestBackfillFeed:
         )
         mock_backfill_service._download_and_index = AsyncMock()
 
-        await mock_backfill_service._backfill_feed(
-            token="tok",
-            ig_account_id="ig_123",
-            username="user",
-            limit=None,
-            since=None,
-            dry_run=False,
-            known_ig_ids=known_ig_ids,
-            storage_dir=Path("/tmp"),
-            result=result,
-        )
+        await mock_backfill_service._backfill_feed(ctx, limit=None, since=None)
 
-        assert result.downloaded == 1
+        assert ctx.result.downloaded == 1
 
-    async def test_empty_response(self, mock_backfill_service):
+    async def test_empty_response(self, mock_backfill_service, make_ctx):
         """Empty data array produces no items."""
-        result = BackfillResult()
+        ctx = make_ctx()
 
         mock_backfill_service._fetch_media_page = AsyncMock(
             return_value={"data": [], "paging": {}}
         )
 
-        await mock_backfill_service._backfill_feed(
-            token="tok",
-            ig_account_id="ig_123",
-            username="user",
-            limit=None,
-            since=None,
-            dry_run=False,
-            known_ig_ids=set(),
-            storage_dir=Path("/tmp"),
-            result=result,
-        )
+        await mock_backfill_service._backfill_feed(ctx, limit=None, since=None)
 
-        assert result.total_api_items == 0
-        assert result.downloaded == 0
+        assert ctx.result.total_api_items == 0
+        assert ctx.result.downloaded == 0
 
 
 # ==================== Carousel Tests ====================
@@ -499,10 +479,9 @@ class TestBackfillFeed:
 class TestBackfillCarousel:
     """Tests for carousel album expansion."""
 
-    async def test_expands_children(self, mock_backfill_service):
+    async def test_expands_children(self, mock_backfill_service, make_ctx):
         """CAROUSEL_ALBUM fetches children and processes each."""
-        result = BackfillResult()
-        known_ig_ids = set()
+        ctx = make_ctx()
 
         carousel_item = {
             "id": "carousel_1",
@@ -530,23 +509,14 @@ class TestBackfillCarousel:
         )
         mock_backfill_service._download_and_index = AsyncMock()
 
-        await mock_backfill_service._process_carousel(
-            item=carousel_item,
-            token="tok",
-            username="testuser",
-            dry_run=False,
-            known_ig_ids=known_ig_ids,
-            storage_dir=Path("/tmp"),
-            result=result,
-        )
+        await mock_backfill_service._process_carousel(ctx, item=carousel_item)
 
-        assert result.downloaded == 2
-        assert result.total_api_items == 2
+        assert ctx.result.downloaded == 2
+        assert ctx.result.total_api_items == 2
 
-    async def test_inherits_caption(self, mock_backfill_service):
+    async def test_inherits_caption(self, mock_backfill_service, make_ctx):
         """Children inherit parent caption/permalink/username."""
-        result = BackfillResult()
-        known_ig_ids = set()
+        ctx = make_ctx()
 
         carousel_item = {
             "id": "carousel_2",
@@ -569,22 +539,13 @@ class TestBackfillCarousel:
         )
         mock_backfill_service._download_and_index = AsyncMock()
 
-        await mock_backfill_service._process_carousel(
-            item=carousel_item,
-            token="tok",
-            username="parent_user",
-            dry_run=False,
-            known_ig_ids=known_ig_ids,
-            storage_dir=Path("/tmp"),
-            result=result,
-        )
+        await mock_backfill_service._process_carousel(ctx, item=carousel_item)
 
-        assert result.downloaded == 1
+        assert ctx.result.downloaded == 1
 
-    async def test_child_failure_continues(self, mock_backfill_service):
+    async def test_child_failure_continues(self, mock_backfill_service, make_ctx):
         """One child fails, others still process."""
-        result = BackfillResult()
-        known_ig_ids = set()
+        ctx = make_ctx()
 
         carousel_item = {
             "id": "carousel_3",
@@ -611,39 +572,23 @@ class TestBackfillCarousel:
             side_effect=[None, Exception("Download error")]
         )
 
-        await mock_backfill_service._process_carousel(
-            item=carousel_item,
-            token="tok",
-            username="user",
-            dry_run=False,
-            known_ig_ids=known_ig_ids,
-            storage_dir=Path("/tmp"),
-            result=result,
-        )
+        await mock_backfill_service._process_carousel(ctx, item=carousel_item)
 
-        assert result.downloaded == 1
-        assert result.failed == 1
+        assert ctx.result.downloaded == 1
+        assert ctx.result.failed == 1
 
-    async def test_carousel_api_error(self, mock_backfill_service):
+    async def test_carousel_api_error(self, mock_backfill_service, make_ctx):
         """API error fetching children counts as failed."""
-        result = BackfillResult()
+        ctx = make_ctx()
 
         mock_backfill_service._fetch_carousel_children = AsyncMock(
             side_effect=InstagramAPIError("API error")
         )
 
-        await mock_backfill_service._process_carousel(
-            item={"id": "carousel_err"},
-            token="tok",
-            username="user",
-            dry_run=False,
-            known_ig_ids=set(),
-            storage_dir=Path("/tmp"),
-            result=result,
-        )
+        await mock_backfill_service._process_carousel(ctx, item={"id": "carousel_err"})
 
-        assert result.failed == 1
-        assert len(result.error_details) == 1
+        assert ctx.result.failed == 1
+        assert len(ctx.result.error_details) == 1
 
 
 # ==================== Stories Tests ====================
@@ -654,10 +599,9 @@ class TestBackfillCarousel:
 class TestBackfillStories:
     """Tests for stories backfill."""
 
-    async def test_fetches_live_stories(self, mock_backfill_service):
+    async def test_fetches_live_stories(self, mock_backfill_service, make_ctx):
         """Calls stories endpoint and processes items."""
-        result = BackfillResult()
-        known_ig_ids = set()
+        ctx = make_ctx()
 
         mock_backfill_service._fetch_stories = AsyncMock(
             return_value={
@@ -672,60 +616,33 @@ class TestBackfillStories:
         )
         mock_backfill_service._download_and_index = AsyncMock()
 
-        await mock_backfill_service._backfill_stories(
-            token="tok",
-            ig_account_id="ig_123",
-            username="user",
-            limit=None,
-            dry_run=False,
-            known_ig_ids=known_ig_ids,
-            storage_dir=Path("/tmp"),
-            result=result,
-        )
+        await mock_backfill_service._backfill_stories(ctx, limit=None)
 
-        assert result.downloaded == 1
-        assert result.total_api_items == 1
+        assert ctx.result.downloaded == 1
+        assert ctx.result.total_api_items == 1
 
-    async def test_empty_stories(self, mock_backfill_service):
+    async def test_empty_stories(self, mock_backfill_service, make_ctx):
         """No live stories returns gracefully."""
-        result = BackfillResult()
+        ctx = make_ctx()
 
         mock_backfill_service._fetch_stories = AsyncMock(return_value={"data": []})
 
-        await mock_backfill_service._backfill_stories(
-            token="tok",
-            ig_account_id="ig_123",
-            username="user",
-            limit=None,
-            dry_run=False,
-            known_ig_ids=set(),
-            storage_dir=Path("/tmp"),
-            result=result,
-        )
+        await mock_backfill_service._backfill_stories(ctx, limit=None)
 
-        assert result.total_api_items == 0
+        assert ctx.result.total_api_items == 0
 
-    async def test_api_error_handled(self, mock_backfill_service):
+    async def test_api_error_handled(self, mock_backfill_service, make_ctx):
         """API error caught and logged, no crash."""
-        result = BackfillResult()
+        ctx = make_ctx()
 
         mock_backfill_service._fetch_stories = AsyncMock(
             side_effect=InstagramAPIError("Stories not available")
         )
 
-        await mock_backfill_service._backfill_stories(
-            token="tok",
-            ig_account_id="ig_123",
-            username="user",
-            limit=None,
-            dry_run=False,
-            known_ig_ids=set(),
-            storage_dir=Path("/tmp"),
-            result=result,
-        )
+        await mock_backfill_service._backfill_stories(ctx, limit=None)
 
-        assert result.total_api_items == 0
-        assert result.failed == 0
+        assert ctx.result.total_api_items == 0
+        assert ctx.result.failed == 0
 
 
 # ==================== Download Tests ====================
@@ -853,19 +770,19 @@ class TestDownloadMedia:
 class TestDownloadAndIndex:
     """Tests for _download_and_index."""
 
-    async def test_creates_record(self, mock_backfill_service, tmp_path):
+    async def test_creates_record(self, mock_backfill_service, make_ctx, tmp_path):
         """media_repo.create() called with correct args."""
+        ctx = make_ctx(storage_dir=tmp_path)
         mock_backfill_service._download_media = AsyncMock(return_value=b"test_bytes")
         mock_media_item = MagicMock()
         mock_backfill_service.media_repo.create.return_value = mock_media_item
 
         await mock_backfill_service._download_and_index(
+            ctx,
             ig_media_id="ig_12345",
             media_url="https://example.com/photo.jpg",
             media_type="IMAGE",
             item={"timestamp": "2025-06-15T10:30:00+0000"},
-            username="testuser",
-            storage_dir=tmp_path,
             source_label="feed",
         )
 
@@ -880,18 +797,18 @@ class TestDownloadAndIndex:
         assert mock_media_item.instagram_media_id == "ig_12345"
         assert mock_media_item.backfilled_at is not None
 
-    async def test_filename_format(self, mock_backfill_service, tmp_path):
+    async def test_filename_format(self, mock_backfill_service, make_ctx, tmp_path):
         """Filename follows YYYYMMDD_HHMMSS_{id}.{ext} format."""
+        ctx = make_ctx(storage_dir=tmp_path)
         mock_backfill_service._download_media = AsyncMock(return_value=b"bytes")
         mock_backfill_service.media_repo.create.return_value = MagicMock()
 
         await mock_backfill_service._download_and_index(
+            ctx,
             ig_media_id="ig_99999",
             media_url="https://example.com/photo.jpg",
             media_type="IMAGE",
             item={"timestamp": "2025-03-15T14:30:45+0000"},
-            username="user",
-            storage_dir=tmp_path,
             source_label="feed",
         )
 
@@ -1002,46 +919,32 @@ class TestBackfillStatus:
 class TestProcessMediaItemErrors:
     """Tests for error handling in _process_media_item."""
 
-    async def test_unsupported_media_type(self, mock_backfill_service):
+    async def test_unsupported_media_type(self, mock_backfill_service, make_ctx):
         """Unsupported media types are counted."""
-        result = BackfillResult()
+        ctx = make_ctx()
         item = {"id": "unsup", "media_type": "UNKNOWN_TYPE"}
 
         await mock_backfill_service._process_media_item(
-            item=item,
-            token="tok",
-            username="user",
-            dry_run=False,
-            known_ig_ids=set(),
-            storage_dir=Path("/tmp"),
-            result=result,
-            source_label="feed",
+            ctx, item=item, source_label="feed"
         )
 
-        assert result.skipped_unsupported == 1
+        assert ctx.result.skipped_unsupported == 1
 
-    async def test_no_media_url(self, mock_backfill_service):
+    async def test_no_media_url(self, mock_backfill_service, make_ctx):
         """Items without media_url count as failed."""
-        result = BackfillResult()
+        ctx = make_ctx()
         item = {"id": "no_url", "media_type": "IMAGE"}
 
         await mock_backfill_service._process_media_item(
-            item=item,
-            token="tok",
-            username="user",
-            dry_run=False,
-            known_ig_ids=set(),
-            storage_dir=Path("/tmp"),
-            result=result,
-            source_label="feed",
+            ctx, item=item, source_label="feed"
         )
 
-        assert result.failed == 1
-        assert len(result.error_details) == 1
+        assert ctx.result.failed == 1
+        assert len(ctx.result.error_details) == 1
 
-    async def test_download_error_continues(self, mock_backfill_service):
+    async def test_download_error_continues(self, mock_backfill_service, make_ctx):
         """Download error for one item doesn't stop processing."""
-        result = BackfillResult()
+        ctx = make_ctx()
         mock_backfill_service._download_and_index = AsyncMock(
             side_effect=BackfillMediaExpiredError("Expired")
         )
@@ -1049,15 +952,8 @@ class TestProcessMediaItemErrors:
         item = {"id": "exp", "media_type": "IMAGE", "media_url": "https://a.com/x.jpg"}
 
         await mock_backfill_service._process_media_item(
-            item=item,
-            token="tok",
-            username="user",
-            dry_run=False,
-            known_ig_ids=set(),
-            storage_dir=Path("/tmp"),
-            result=result,
-            source_label="feed",
+            ctx, item=item, source_label="feed"
         )
 
-        assert result.failed == 1
-        assert result.downloaded == 0
+        assert ctx.result.failed == 1
+        assert ctx.result.downloaded == 0

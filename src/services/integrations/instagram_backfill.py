@@ -60,6 +60,24 @@ class BackfillResult:
         )
 
 
+@dataclass
+class BackfillContext:
+    """Shared state passed through the backfill call chain.
+
+    Bundles parameters that are constant for a single backfill() invocation
+    and shared across _backfill_feed, _process_media_item, _process_carousel,
+    and _download_and_index.
+    """
+
+    token: str
+    ig_account_id: str
+    username: Optional[str]
+    dry_run: bool
+    known_ig_ids: set
+    storage_dir: Path
+    result: BackfillResult
+
+
 class InstagramBackfillService(BaseService):
     """Pull existing media from Instagram back into the media library.
 
@@ -78,8 +96,7 @@ class InstagramBackfillService(BaseService):
     META_GRAPH_BASE = "https://graph.facebook.com/v18.0"
 
     MEDIA_FIELDS = (
-        "id,media_type,media_url,thumbnail_url,timestamp,"
-        "caption,permalink,username"
+        "id,media_type,media_url,thumbnail_url,timestamp,caption,permalink,username"
     )
 
     SUPPORTED_MEDIA_TYPES = {"IMAGE", "VIDEO"}
@@ -168,30 +185,22 @@ class InstagramBackfillService(BaseService):
             if not dry_run:
                 storage_dir.mkdir(parents=True, exist_ok=True)
 
+            ctx = BackfillContext(
+                token=token,
+                ig_account_id=ig_account_id,
+                username=username,
+                dry_run=dry_run,
+                known_ig_ids=known_ig_ids,
+                storage_dir=storage_dir,
+                result=result,
+            )
+
             if media_type in ("feed", "both"):
-                await self._backfill_feed(
-                    token=token,
-                    ig_account_id=ig_account_id,
-                    username=username,
-                    limit=limit,
-                    since=since,
-                    dry_run=dry_run,
-                    known_ig_ids=known_ig_ids,
-                    storage_dir=storage_dir,
-                    result=result,
-                )
+                await self._backfill_feed(ctx, limit=limit, since=since)
 
             if media_type in ("stories", "both"):
-                await self._backfill_stories(
-                    token=token,
-                    ig_account_id=ig_account_id,
-                    username=username,
-                    limit=limit if media_type == "stories" else None,
-                    dry_run=dry_run,
-                    known_ig_ids=known_ig_ids,
-                    storage_dir=storage_dir,
-                    result=result,
-                )
+                stories_limit = limit if media_type == "stories" else None
+                await self._backfill_stories(ctx, limit=stories_limit)
 
             logger.info(
                 f"[InstagramBackfillService] Backfill complete: "
@@ -243,8 +252,8 @@ class InstagramBackfillService(BaseService):
                 account.instagram_username,
             )
 
-        token, ig_id, username = (
-            self.instagram_service._get_active_account_credentials(telegram_chat_id)
+        token, ig_id, username = self.instagram_service._get_active_account_credentials(
+            telegram_chat_id
         )
 
         if not token:
@@ -263,15 +272,9 @@ class InstagramBackfillService(BaseService):
 
     async def _backfill_feed(
         self,
-        token: str,
-        ig_account_id: str,
-        username: Optional[str],
+        ctx: BackfillContext,
         limit: Optional[int],
         since: Optional[datetime],
-        dry_run: bool,
-        known_ig_ids: set,
-        storage_dir: Path,
-        result: BackfillResult,
     ) -> None:
         """Fetch and process feed media from Instagram API.
 
@@ -288,8 +291,8 @@ class InstagramBackfillService(BaseService):
                     break
 
             media_page = await self._fetch_media_page(
-                token=token,
-                ig_account_id=ig_account_id,
+                token=ctx.token,
+                ig_account_id=ctx.ig_account_id,
                 after_cursor=after_cursor,
                 page_size=page_size,
             )
@@ -298,7 +301,7 @@ class InstagramBackfillService(BaseService):
             if not items:
                 break
 
-            result.total_api_items += len(items)
+            ctx.result.total_api_items += len(items)
             logger.info(
                 f"[InstagramBackfillService] Feed page {page_num + 1}: "
                 f"{len(items)} items"
@@ -312,16 +315,7 @@ class InstagramBackfillService(BaseService):
                     )
                     return
 
-                await self._process_media_item(
-                    item=item,
-                    token=token,
-                    username=username,
-                    dry_run=dry_run,
-                    known_ig_ids=known_ig_ids,
-                    storage_dir=storage_dir,
-                    result=result,
-                    source_label="feed",
-                )
+                await self._process_media_item(ctx, item=item, source_label="feed")
 
                 if items_remaining is not None:
                     items_remaining -= 1
@@ -335,20 +329,14 @@ class InstagramBackfillService(BaseService):
 
     async def _backfill_stories(
         self,
-        token: str,
-        ig_account_id: str,
-        username: Optional[str],
+        ctx: BackfillContext,
         limit: Optional[int],
-        dry_run: bool,
-        known_ig_ids: set,
-        storage_dir: Path,
-        result: BackfillResult,
     ) -> None:
         """Fetch and process live stories (last 24 hours only)."""
         try:
             stories_data = await self._fetch_stories(
-                token=token,
-                ig_account_id=ig_account_id,
+                token=ctx.token,
+                ig_account_id=ctx.ig_account_id,
             )
         except InstagramAPIError as e:
             logger.warning(
@@ -365,63 +353,39 @@ class InstagramBackfillService(BaseService):
             )
             return
 
-        result.total_api_items += len(items)
-        logger.info(
-            f"[InstagramBackfillService] Found {len(items)} live stories"
-        )
+        ctx.result.total_api_items += len(items)
+        logger.info(f"[InstagramBackfillService] Found {len(items)} live stories")
 
         items_remaining = limit
         for item in items:
             if items_remaining is not None and items_remaining <= 0:
                 break
 
-            await self._process_media_item(
-                item=item,
-                token=token,
-                username=username,
-                dry_run=dry_run,
-                known_ig_ids=known_ig_ids,
-                storage_dir=storage_dir,
-                result=result,
-                source_label="story",
-            )
+            await self._process_media_item(ctx, item=item, source_label="story")
 
             if items_remaining is not None:
                 items_remaining -= 1
 
     async def _process_media_item(
         self,
+        ctx: BackfillContext,
         item: dict,
-        token: str,
-        username: Optional[str],
-        dry_run: bool,
-        known_ig_ids: set,
-        storage_dir: Path,
-        result: BackfillResult,
         source_label: str,
     ) -> None:
         """Process a single Instagram media item."""
         ig_media_id = item.get("id")
         media_type = item.get("media_type", "")
 
-        if ig_media_id in known_ig_ids:
-            result.skipped_duplicate += 1
+        if ig_media_id in ctx.known_ig_ids:
+            ctx.result.skipped_duplicate += 1
             return
 
         if media_type == self.CAROUSEL_TYPE:
-            await self._process_carousel(
-                item=item,
-                token=token,
-                username=username,
-                dry_run=dry_run,
-                known_ig_ids=known_ig_ids,
-                storage_dir=storage_dir,
-                result=result,
-            )
+            await self._process_carousel(ctx, item=item)
             return
 
         if media_type not in self.SUPPORTED_MEDIA_TYPES:
-            result.skipped_unsupported += 1
+            ctx.result.skipped_unsupported += 1
             return
 
         media_url = item.get("media_url")
@@ -429,15 +393,15 @@ class InstagramBackfillService(BaseService):
             media_url = item.get("thumbnail_url")
 
         if not media_url:
-            result.failed += 1
-            result.error_details.append(
+            ctx.result.failed += 1
+            ctx.result.error_details.append(
                 f"No media_url for {ig_media_id} ({media_type})"
             )
             return
 
-        if dry_run:
-            result.downloaded += 1
-            known_ig_ids.add(ig_media_id)
+        if ctx.dry_run:
+            ctx.result.downloaded += 1
+            ctx.known_ig_ids.add(ig_media_id)
             logger.info(
                 f"[InstagramBackfillService] [DRY RUN] Would download: "
                 f"{ig_media_id} ({media_type}, {source_label})"
@@ -446,77 +410,59 @@ class InstagramBackfillService(BaseService):
 
         try:
             await self._download_and_index(
+                ctx,
                 ig_media_id=ig_media_id,
                 media_url=media_url,
                 media_type=media_type,
                 item=item,
-                username=username,
-                storage_dir=storage_dir,
                 source_label=source_label,
             )
-            result.downloaded += 1
-            known_ig_ids.add(ig_media_id)
+            ctx.result.downloaded += 1
+            ctx.known_ig_ids.add(ig_media_id)
         except Exception as e:
-            result.failed += 1
+            ctx.result.failed += 1
             error_msg = f"Failed to download {ig_media_id}: {e}"
-            result.error_details.append(error_msg)
+            ctx.result.error_details.append(error_msg)
             logger.error(f"[InstagramBackfillService] {error_msg}")
 
     async def _process_carousel(
         self,
+        ctx: BackfillContext,
         item: dict,
-        token: str,
-        username: Optional[str],
-        dry_run: bool,
-        known_ig_ids: set,
-        storage_dir: Path,
-        result: BackfillResult,
     ) -> None:
         """Expand a carousel album and process each child media item."""
         carousel_id = item.get("id")
-        logger.info(
-            f"[InstagramBackfillService] Expanding carousel: {carousel_id}"
-        )
+        logger.info(f"[InstagramBackfillService] Expanding carousel: {carousel_id}")
 
         try:
             children_data = await self._fetch_carousel_children(
-                token=token,
+                token=ctx.token,
                 carousel_id=carousel_id,
             )
         except InstagramAPIError as e:
-            result.failed += 1
-            result.error_details.append(
+            ctx.result.failed += 1
+            ctx.result.error_details.append(
                 f"Failed to expand carousel {carousel_id}: {e}"
             )
             return
 
         children = children_data.get("data", [])
         for child in children:
-            result.total_api_items += 1
+            ctx.result.total_api_items += 1
 
             child.setdefault("caption", item.get("caption"))
             child.setdefault("permalink", item.get("permalink"))
             child.setdefault("username", item.get("username"))
 
-            await self._process_media_item(
-                item=child,
-                token=token,
-                username=username,
-                dry_run=dry_run,
-                known_ig_ids=known_ig_ids,
-                storage_dir=storage_dir,
-                result=result,
-                source_label="carousel",
-            )
+            await self._process_media_item(ctx, item=child, source_label="carousel")
 
     async def _download_and_index(
         self,
+        ctx: BackfillContext,
         ig_media_id: str,
         media_url: str,
         media_type: str,
         item: dict,
-        username: Optional[str],
-        storage_dir: Path,
         source_label: str,
     ) -> None:
         """Download media from Instagram and index in the database."""
@@ -533,7 +479,7 @@ class InstagramBackfillService(BaseService):
                 pass
 
         filename = f"{date_prefix}{ig_media_id}{extension}"
-        file_path = storage_dir / filename
+        file_path = ctx.storage_dir / filename
 
         file_path.write_bytes(file_bytes)
 
@@ -724,9 +670,7 @@ class InstagramBackfillService(BaseService):
             service_name="InstagramBackfillService", limit=5
         )
 
-        backfilled_count = len(
-            self.media_repo.get_backfilled_instagram_media_ids()
-        )
+        backfilled_count = len(self.media_repo.get_backfilled_instagram_media_ids())
 
         last_run = None
         if runs:
