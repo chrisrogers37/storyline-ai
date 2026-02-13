@@ -1,7 +1,9 @@
 # Phase 07: CLI Command Tests + Cleanup
 
-**Status:** 🔧 IN PROGRESS
+**Status:** ✅ COMPLETE
 **Started:** 2026-02-13
+**Completed:** 2026-02-13
+**PR:** #52
 **PR Title:** `test: add CLI command tests for backfill/sync/gdrive + minor cleanup`
 **Risk Level:** Low
 **Estimated Effort:** 2-3 hours
