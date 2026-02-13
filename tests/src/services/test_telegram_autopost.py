@@ -3,9 +3,13 @@
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
 from uuid import uuid4
+import threading
 
 from src.services.core.telegram_service import TelegramService
-from src.services.core.telegram_autopost import TelegramAutopostHandler
+from src.services.core.telegram_autopost import (
+    AutopostContext,
+    TelegramAutopostHandler,
+)
 
 
 @pytest.fixture
@@ -374,3 +378,412 @@ class TestAutopostOperationLock:
 
         # Clean up
         lock.release()
+
+
+# ==================== Extracted Helper Tests ====================
+
+
+@pytest.fixture
+def make_autopost_ctx():
+    """Factory fixture to create AutopostContext with sensible defaults."""
+
+    def _make(
+        queue_id=None,
+        queue_item=None,
+        media_item=None,
+        user=None,
+        query=None,
+        chat_id=-100123,
+        chat_settings=None,
+        cloud_service=None,
+        instagram_service=None,
+        cancel_flag=None,
+        cloud_url=None,
+        cloud_public_id=None,
+    ):
+        if queue_id is None:
+            queue_id = str(uuid4())
+        if queue_item is None:
+            queue_item = Mock(
+                media_item_id=uuid4(),
+                created_at="2026-01-01T00:00:00",
+                scheduled_for="2026-01-01T12:00:00",
+            )
+        if media_item is None:
+            media_item = Mock(
+                id=uuid4(),
+                file_path="/test/story.jpg",
+                file_name="story.jpg",
+                source_identifier="/test/story.jpg",
+                mime_type="image/jpeg",
+            )
+        if user is None:
+            user = Mock(
+                id=uuid4(),
+                telegram_username="tester",
+                telegram_first_name="Test",
+            )
+        if query is None:
+            query = AsyncMock()
+            query.message = Mock(chat_id=chat_id, message_id=1)
+        if chat_settings is None:
+            chat_settings = Mock(dry_run_mode=False)
+        if cloud_service is None:
+            cloud_service = Mock()
+        if instagram_service is None:
+            instagram_service = AsyncMock()
+
+        return AutopostContext(
+            queue_id=queue_id,
+            queue_item=queue_item,
+            media_item=media_item,
+            user=user,
+            query=query,
+            chat_id=chat_id,
+            chat_settings=chat_settings,
+            cloud_service=cloud_service,
+            instagram_service=instagram_service,
+            cancel_flag=cancel_flag,
+            cloud_url=cloud_url,
+            cloud_public_id=cloud_public_id,
+        )
+
+    return _make
+
+
+@pytest.mark.unit
+class TestAutopostContext:
+    """Tests for the AutopostContext dataclass."""
+
+    def test_creation(self):
+        """Test AutopostContext can be created with all fields."""
+        ctx = AutopostContext(
+            queue_id="q1",
+            queue_item=Mock(),
+            media_item=Mock(),
+            user=Mock(),
+            query=Mock(),
+            chat_id=-100,
+            chat_settings=Mock(),
+            cloud_service=Mock(),
+            instagram_service=Mock(),
+        )
+        assert ctx.queue_id == "q1"
+        assert ctx.chat_id == -100
+        assert ctx.cancel_flag is None
+        assert ctx.cloud_url is None
+        assert ctx.cloud_public_id is None
+
+    def test_mutable_fields(self):
+        """Test that cloud_url and cloud_public_id can be set after creation."""
+        ctx = AutopostContext(
+            queue_id="q1",
+            queue_item=Mock(),
+            media_item=Mock(),
+            user=Mock(),
+            query=Mock(),
+            chat_id=-100,
+            chat_settings=Mock(),
+            cloud_service=Mock(),
+            instagram_service=Mock(),
+        )
+        ctx.cloud_url = "https://example.com/img.jpg"
+        ctx.cloud_public_id = "stories/abc123"
+        assert ctx.cloud_url == "https://example.com/img.jpg"
+        assert ctx.cloud_public_id == "stories/abc123"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestGetAccountDisplay:
+    """Tests for _get_account_display helper."""
+
+    async def test_returns_username(self, mock_autopost_handler, make_autopost_ctx):
+        """Test successful account info lookup returns @username."""
+        handler = mock_autopost_handler
+        ctx = make_autopost_ctx(
+            instagram_service=AsyncMock(
+                get_account_info=AsyncMock(return_value={"username": "mybrand"})
+            )
+        )
+
+        result = await handler._get_account_display(ctx)
+        assert result == "@mybrand"
+
+    async def test_fallback_on_exception(
+        self, mock_autopost_handler, make_autopost_ctx
+    ):
+        """Test that exception returns 'Unknown account'."""
+        handler = mock_autopost_handler
+        ctx = make_autopost_ctx(
+            instagram_service=AsyncMock(
+                get_account_info=AsyncMock(side_effect=Exception("API error"))
+            )
+        )
+
+        result = await handler._get_account_display(ctx)
+        assert result == "Unknown account"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestUploadToCloudinary:
+    """Tests for _upload_to_cloudinary helper."""
+
+    async def test_success_sets_ctx_fields(
+        self, mock_autopost_handler, make_autopost_ctx
+    ):
+        """Test successful upload sets cloud_url and cloud_public_id on ctx."""
+        handler = mock_autopost_handler
+        mock_cloud = Mock()
+        mock_cloud.upload_media.return_value = {
+            "url": "https://res.cloudinary.com/test/img.jpg",
+            "public_id": "instagram_stories/abc",
+        }
+
+        ctx = make_autopost_ctx(cloud_service=mock_cloud)
+
+        mock_provider = Mock()
+        mock_provider.download_file.return_value = b"fake bytes"
+
+        with patch(
+            "src.services.media_sources.factory.MediaSourceFactory.get_provider_for_media_item",
+            return_value=mock_provider,
+        ):
+            result = await handler._upload_to_cloudinary(ctx)
+
+        assert result is True
+        assert ctx.cloud_url == "https://res.cloudinary.com/test/img.jpg"
+        assert ctx.cloud_public_id == "instagram_stories/abc"
+        handler.service.media_repo.update_cloud_info.assert_called_once()
+
+    async def test_cancelled_returns_false(
+        self, mock_autopost_handler, make_autopost_ctx
+    ):
+        """Test that a set cancel flag after upload returns False."""
+        handler = mock_autopost_handler
+        mock_cloud = Mock()
+        mock_cloud.upload_media.return_value = {
+            "url": "https://res.cloudinary.com/test/img.jpg",
+            "public_id": "instagram_stories/abc",
+        }
+
+        cancel_flag = threading.Event()
+        cancel_flag.set()  # Already cancelled
+
+        ctx = make_autopost_ctx(cloud_service=mock_cloud, cancel_flag=cancel_flag)
+
+        mock_provider = Mock()
+        mock_provider.download_file.return_value = b"fake bytes"
+
+        with patch(
+            "src.services.media_sources.factory.MediaSourceFactory.get_provider_for_media_item",
+            return_value=mock_provider,
+        ):
+            result = await handler._upload_to_cloudinary(ctx)
+
+        assert result is False
+        # Should show cancelled message
+        found_cancelled = False
+        for call in ctx.query.edit_message_caption.call_args_list:
+            if "cancelled" in str(call).lower():
+                found_cancelled = True
+                break
+        assert found_cancelled
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestHandleDryRun:
+    """Tests for _handle_dry_run helper."""
+
+    async def test_edits_message_with_dry_run_caption(
+        self, mock_autopost_handler, make_autopost_ctx
+    ):
+        """Test dry run edits message with DRY RUN caption."""
+        handler = mock_autopost_handler
+        handler.service._is_verbose = Mock(return_value=False)
+        handler.service._get_display_name = Mock(return_value="@tester")
+
+        ctx = make_autopost_ctx(
+            cloud_url="https://example.com/img.jpg",
+            cloud_public_id="stories/abc",
+            instagram_service=AsyncMock(
+                get_account_info=AsyncMock(return_value={"username": "testaccount"})
+            ),
+        )
+
+        await handler._handle_dry_run(ctx)
+
+        # Should edit message with dry run caption
+        ctx.query.edit_message_caption.assert_called_once()
+        call_kwargs = ctx.query.edit_message_caption.call_args.kwargs
+        assert "DRY RUN" in call_kwargs["caption"]
+        assert call_kwargs["reply_markup"] is not None
+
+    async def test_logs_dry_run_interaction(
+        self, mock_autopost_handler, make_autopost_ctx
+    ):
+        """Test dry run logs interaction with dry_run=True."""
+        handler = mock_autopost_handler
+        handler.service._is_verbose = Mock(return_value=False)
+        handler.service._get_display_name = Mock(return_value="@tester")
+
+        ctx = make_autopost_ctx(
+            cloud_url="https://example.com/img.jpg",
+            cloud_public_id="stories/abc",
+            instagram_service=AsyncMock(
+                get_account_info=AsyncMock(return_value={"username": "testaccount"})
+            ),
+        )
+
+        await handler._handle_dry_run(ctx)
+
+        handler.service.interaction_service.log_callback.assert_called_once()
+        log_ctx = handler.service.interaction_service.log_callback.call_args.kwargs[
+            "context"
+        ]
+        assert log_ctx["dry_run"] is True
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestExecuteInstagramPost:
+    """Tests for _execute_instagram_post helper."""
+
+    async def test_success_returns_story_id(
+        self, mock_autopost_handler, make_autopost_ctx
+    ):
+        """Test successful post returns story_id."""
+        handler = mock_autopost_handler
+        mock_cloud = Mock()
+        mock_cloud.get_story_optimized_url.return_value = (
+            "https://res.cloudinary.com/optimized.jpg"
+        )
+
+        mock_ig = AsyncMock()
+        mock_ig.post_story = AsyncMock(return_value={"story_id": "17890012345678"})
+
+        ctx = make_autopost_ctx(
+            cloud_service=mock_cloud,
+            instagram_service=mock_ig,
+            cloud_url="https://res.cloudinary.com/test/img.jpg",
+        )
+
+        result = await handler._execute_instagram_post(ctx)
+
+        assert result == "17890012345678"
+        mock_ig.post_story.assert_called_once()
+
+    async def test_cancelled_returns_none(
+        self, mock_autopost_handler, make_autopost_ctx
+    ):
+        """Test that a set cancel flag returns None without posting."""
+        handler = mock_autopost_handler
+        cancel_flag = threading.Event()
+        cancel_flag.set()
+
+        ctx = make_autopost_ctx(cancel_flag=cancel_flag)
+
+        result = await handler._execute_instagram_post(ctx)
+
+        assert result is None
+
+    async def test_video_uses_cloud_url_directly(
+        self, mock_autopost_handler, make_autopost_ctx
+    ):
+        """Test VIDEO media type uses cloud_url directly (no optimization)."""
+        handler = mock_autopost_handler
+        mock_cloud = Mock()
+        mock_ig = AsyncMock()
+        mock_ig.post_story = AsyncMock(return_value={"story_id": "vid123"})
+
+        video_media = Mock(
+            id=uuid4(),
+            file_path="/test/story.mp4",
+            file_name="story.mp4",
+            source_identifier="/test/story.mp4",
+            mime_type="video/mp4",
+        )
+
+        ctx = make_autopost_ctx(
+            media_item=video_media,
+            cloud_service=mock_cloud,
+            instagram_service=mock_ig,
+            cloud_url="https://res.cloudinary.com/test/video.mp4",
+        )
+
+        await handler._execute_instagram_post(ctx)
+
+        # Should NOT call get_story_optimized_url for video
+        mock_cloud.get_story_optimized_url.assert_not_called()
+        # Should post with original cloud_url
+        call_kwargs = mock_ig.post_story.call_args.kwargs
+        assert call_kwargs["media_url"] == "https://res.cloudinary.com/test/video.mp4"
+        assert call_kwargs["media_type"] == "VIDEO"
+
+
+@pytest.mark.unit
+class TestRecordSuccessfulPost:
+    """Tests for _record_successful_post helper."""
+
+    def test_calls_all_repo_operations(self, mock_autopost_handler, make_autopost_ctx):
+        """Test that all 5 repo operations are called."""
+        handler = mock_autopost_handler
+        ctx = make_autopost_ctx()
+
+        handler._record_successful_post(ctx, story_id="story_abc")
+
+        # 1. Create history
+        handler.service.history_repo.create.assert_called_once()
+        # 2. Increment times posted
+        handler.service.media_repo.increment_times_posted.assert_called_once_with(
+            str(ctx.queue_item.media_item_id)
+        )
+        # 3. Create lock
+        handler.service.lock_service.create_lock.assert_called_once_with(
+            str(ctx.queue_item.media_item_id)
+        )
+        # 4. Delete queue item
+        handler.service.queue_repo.delete.assert_called_once_with(ctx.queue_id)
+        # 5. Increment user posts
+        handler.service.user_repo.increment_posts.assert_called_once_with(
+            str(ctx.user.id)
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestHandleAutopostError:
+    """Tests for _handle_autopost_error helper."""
+
+    async def test_edits_message_with_error_caption(
+        self, mock_autopost_handler, make_autopost_ctx
+    ):
+        """Test error handler shows error message."""
+        handler = mock_autopost_handler
+        ctx = make_autopost_ctx()
+
+        await handler._handle_autopost_error(ctx, Exception("Connection timeout"))
+
+        ctx.query.edit_message_caption.assert_called_once()
+        call_kwargs = ctx.query.edit_message_caption.call_args.kwargs
+        assert "Auto Post Failed" in call_kwargs["caption"]
+        assert "Connection timeout" in call_kwargs["caption"]
+        assert call_kwargs["reply_markup"] is not None
+
+    async def test_logs_failure_interaction(
+        self, mock_autopost_handler, make_autopost_ctx
+    ):
+        """Test error handler logs interaction with success=False."""
+        handler = mock_autopost_handler
+        ctx = make_autopost_ctx()
+
+        await handler._handle_autopost_error(ctx, Exception("API error"))
+
+        handler.service.interaction_service.log_callback.assert_called_once()
+        log_ctx = handler.service.interaction_service.log_callback.call_args.kwargs[
+            "context"
+        ]
+        assert log_ctx["success"] is False
+        assert "API error" in log_ctx["error"]

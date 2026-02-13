@@ -54,6 +54,7 @@ class TelegramCommandHandlers:
     async def handle_status(self, update, context):
         """Handle /status command."""
         user = self.service._get_or_create_user(update.effective_user)
+        chat_id = update.effective_chat.id
 
         # Gather stats
         pending_count = self.service.queue_repo.count_pending()
@@ -61,76 +62,13 @@ class TelegramCommandHandlers:
         media_count = len(self.service.media_repo.get_all(is_active=True))
         locked_count = len(self.service.lock_repo.get_permanent_locks())
 
-        # Get next scheduled post
-        next_items = self.service.queue_repo.get_pending(limit=1)
-        if next_items:
-            next_time = next_items[0].scheduled_for
-            next_post_str = next_time.strftime("%H:%M UTC")
-        else:
-            next_post_str = "None scheduled"
+        next_post_str = self._get_next_post_display()
+        last_posted = self._get_last_posted_display(recent_posts)
 
-        # Last post time
-        if recent_posts:
-            time_diff = datetime.utcnow() - recent_posts[0].posted_at
-            hours = int(time_diff.total_seconds() / 3600)
-            last_posted = f"{hours}h ago" if hours > 0 else "< 1h ago"
-        else:
-            last_posted = "Never"
-
-        # Mode indicators
         dry_run_status = "🧪 ON" if settings.DRY_RUN_MODE else "🚀 OFF"
         pause_status = "⏸️ PAUSED" if self.service.is_paused else "▶️ Active"
-
-        # Instagram API status
-        if settings.ENABLE_INSTAGRAM_API:
-            from src.services.integrations.instagram_api import InstagramAPIService
-
-            with InstagramAPIService() as ig_service:
-                rate_remaining = ig_service.get_rate_limit_remaining()
-            ig_status = f"✅ Enabled ({rate_remaining}/{settings.INSTAGRAM_POSTS_PER_HOUR} remaining)"
-        else:
-            ig_status = "❌ Disabled"
-
-        # Media sync status
-        sync_status_line = ""
-        try:
-            from src.services.core.media_sync import MediaSyncService
-
-            sync_service = MediaSyncService()
-            last_sync = sync_service.get_last_sync_info()
-            chat_settings = self.service.settings_service.get_settings(
-                update.effective_chat.id
-            )
-
-            if not chat_settings.media_sync_enabled:
-                sync_status_line = "🔄 Media Sync: ❌ Disabled"
-            elif not last_sync:
-                sync_status_line = "🔄 Media Sync: ⏳ No syncs yet"
-            elif last_sync["success"]:
-                result = last_sync.get("result", {}) or {}
-                new_count = result.get("new", 0)
-                total = sum(
-                    result.get(k, 0)
-                    for k in [
-                        "new",
-                        "updated",
-                        "deactivated",
-                        "reactivated",
-                        "unchanged",
-                    ]
-                )
-                sync_status_line = (
-                    f"🔄 Media Sync: ✅ OK"
-                    f"\n   └─ Last: {last_sync['started_at'][:16]} "
-                    f"({total} items, {new_count} new)"
-                )
-            else:
-                sync_status_line = (
-                    f"🔄 Media Sync: ⚠️ Last sync failed"
-                    f"\n   └─ {last_sync.get('started_at', 'N/A')[:16]}"
-                )
-        except Exception:
-            sync_status_line = "🔄 Media Sync: ❓ Check failed"
+        ig_status = self._get_instagram_api_status()
+        sync_status_line = self._get_sync_status_line(chat_id)
 
         status_msg = (
             f"📊 *Storyline AI Status*\n\n"
@@ -154,7 +92,6 @@ class TelegramCommandHandlers:
 
         await update.message.reply_text(status_msg, parse_mode="Markdown")
 
-        # Log interaction
         self.service.interaction_service.log_command(
             user_id=str(user.id),
             command="/status",
@@ -163,9 +100,74 @@ class TelegramCommandHandlers:
                 "media_count": media_count,
                 "posts_24h": len(recent_posts),
             },
-            telegram_chat_id=update.effective_chat.id,
+            telegram_chat_id=chat_id,
             telegram_message_id=update.message.message_id,
         )
+
+    # ==================== Status Helpers ====================
+
+    def _get_next_post_display(self) -> str:
+        """Get formatted display for next scheduled post time."""
+        next_items = self.service.queue_repo.get_pending(limit=1)
+        if next_items:
+            return next_items[0].scheduled_for.strftime("%H:%M UTC")
+        return "None scheduled"
+
+    def _get_last_posted_display(self, recent_posts) -> str:
+        """Get formatted display for last post time."""
+        if recent_posts:
+            time_diff = datetime.utcnow() - recent_posts[0].posted_at
+            hours = int(time_diff.total_seconds() / 3600)
+            return f"{hours}h ago" if hours > 0 else "< 1h ago"
+        return "Never"
+
+    def _get_instagram_api_status(self) -> str:
+        """Get formatted Instagram API status string."""
+        if settings.ENABLE_INSTAGRAM_API:
+            from src.services.integrations.instagram_api import InstagramAPIService
+
+            with InstagramAPIService() as ig_service:
+                rate_remaining = ig_service.get_rate_limit_remaining()
+            return f"✅ Enabled ({rate_remaining}/{settings.INSTAGRAM_POSTS_PER_HOUR} remaining)"
+        return "❌ Disabled"
+
+    def _get_sync_status_line(self, chat_id) -> str:
+        """Get formatted media sync status (catches all exceptions internally)."""
+        try:
+            from src.services.core.media_sync import MediaSyncService
+
+            sync_service = MediaSyncService()
+            last_sync = sync_service.get_last_sync_info()
+            chat_settings = self.service.settings_service.get_settings(chat_id)
+
+            if not chat_settings.media_sync_enabled:
+                return "🔄 Media Sync: ❌ Disabled"
+            if not last_sync:
+                return "🔄 Media Sync: ⏳ No syncs yet"
+            if last_sync["success"]:
+                result = last_sync.get("result", {}) or {}
+                new_count = result.get("new", 0)
+                total = sum(
+                    result.get(k, 0)
+                    for k in [
+                        "new",
+                        "updated",
+                        "deactivated",
+                        "reactivated",
+                        "unchanged",
+                    ]
+                )
+                return (
+                    f"🔄 Media Sync: ✅ OK"
+                    f"\n   └─ Last: {last_sync['started_at'][:16]} "
+                    f"({total} items, {new_count} new)"
+                )
+            return (
+                f"🔄 Media Sync: ⚠️ Last sync failed"
+                f"\n   └─ {last_sync.get('started_at', 'N/A')[:16]}"
+            )
+        except Exception:
+            return "🔄 Media Sync: ❓ Check failed"
 
     async def handle_queue(self, update, context):
         """Handle /queue command - show upcoming scheduled posts."""
