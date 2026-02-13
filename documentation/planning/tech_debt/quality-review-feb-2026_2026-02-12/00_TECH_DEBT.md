@@ -68,7 +68,7 @@ Phase 07  (independent, naturally last)
 | 01 | Refactor Account Add State Machine | H1 | Medium | 2-3h | #46 |
 | 02 | BackfillContext Dataclass | H2 | Low | 1-2h | #47 |
 | 03 | Extract Long Method Sub-Methods | M1, M2 | Medium | 2-3h | #48 |
-| 04 | Extract Shared Telegram Utilities | M3 | Low | 1-2h | - |
+| 04 | Extract Shared Telegram Utilities | M3 | Low | 1-2h | #49 |
 | 05 | Convert Skipped CLI Tests | H4 | Low | 2-3h | - |
 | 06 | Model, Config, and Exception Tests | H3, M4 | Low | 3-4h | - |
 | 07 | CLI Command Tests + Cleanup | M5, L1-L3 | Low | 2-3h | - |

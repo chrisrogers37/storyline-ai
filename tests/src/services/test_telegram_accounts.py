@@ -677,12 +677,13 @@ class TestAddAccountFlow:
         self, mock_account_handlers
     ):
         """Deletes all tracked messages from the chat."""
+        from src.services.core.telegram_utils import cleanup_conversation_messages
+
         context = self._make_context()
         context.user_data["add_account_messages"] = [10, 20, 30]
 
-        await mock_account_handlers._cleanup_conversation_messages(
-            context, chat_id=-100123
-        )
+        messages = context.user_data["add_account_messages"]
+        await cleanup_conversation_messages(context.bot, -100123, messages)
 
         assert context.bot.delete_message.call_count == 3
         deleted_ids = [
@@ -695,11 +696,14 @@ class TestAddAccountFlow:
         self, mock_account_handlers
     ):
         """Skips the excluded message ID during cleanup."""
+        from src.services.core.telegram_utils import cleanup_conversation_messages
+
         context = self._make_context()
         context.user_data["add_account_messages"] = [10, 20, 30]
 
-        await mock_account_handlers._cleanup_conversation_messages(
-            context, chat_id=-100123, exclude_message_id=20
+        messages = context.user_data["add_account_messages"]
+        await cleanup_conversation_messages(
+            context.bot, -100123, messages, exclude_id=20
         )
 
         assert context.bot.delete_message.call_count == 2
@@ -711,10 +715,10 @@ class TestAddAccountFlow:
 
     # --- Keyboard builder ---
 
-    async def test_build_account_config_keyboard_with_accounts(
-        self, mock_account_handlers
-    ):
+    async def test_build_account_config_keyboard_with_accounts(self):
         """Keyboard includes account rows, add, remove, and back buttons."""
+        from src.services.core.telegram_utils import build_account_management_keyboard
+
         account_data = {
             "accounts": [
                 {"id": "acc1", "display_name": "Main", "username": "main_ig"},
@@ -723,9 +727,9 @@ class TestAddAccountFlow:
             "active_account_id": "acc1",
         }
 
-        markup = mock_account_handlers._build_account_config_keyboard(account_data)
+        keyboard = build_account_management_keyboard(account_data)
 
-        buttons = [btn for row in markup.inline_keyboard for btn in row]
+        buttons = [btn for row in keyboard for btn in row]
         button_texts = [b.text for b in buttons]
 
         # Active account has checkmark
@@ -737,15 +741,15 @@ class TestAddAccountFlow:
         assert any("Remove Account" in t for t in button_texts)
         assert any("Back to Settings" in t for t in button_texts)
 
-    async def test_build_account_config_keyboard_no_accounts(
-        self, mock_account_handlers
-    ):
+    async def test_build_account_config_keyboard_no_accounts(self):
         """Keyboard shows placeholder when no accounts exist."""
+        from src.services.core.telegram_utils import build_account_management_keyboard
+
         account_data = {"accounts": [], "active_account_id": None}
 
-        markup = mock_account_handlers._build_account_config_keyboard(account_data)
+        keyboard = build_account_management_keyboard(account_data)
 
-        buttons = [btn for row in markup.inline_keyboard for btn in row]
+        buttons = [btn for row in keyboard for btn in row]
         button_texts = [b.text for b in buttons]
 
         assert any("No accounts configured" in t for t in button_texts)

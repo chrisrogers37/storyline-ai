@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
+from src.utils.logger import logger
+
 if TYPE_CHECKING:
     from src.services.core.telegram_service import TelegramService
 
@@ -258,3 +260,112 @@ def clear_add_account_state(context) -> None:
     """
     for key in ADD_ACCOUNT_KEYS:
         context.user_data.pop(key, None)
+
+
+# =========================================================================
+# Pattern 5: Account Management Keyboard
+# =========================================================================
+
+
+def build_account_management_keyboard(
+    account_data: dict,
+) -> list[list[InlineKeyboardButton]]:
+    """Build the account list rows + management buttons for the accounts config menu.
+
+    Produces the keyboard rows used by both handle_account_selection_menu()
+    and the add-account success confirmation. The caller wraps the result
+    in InlineKeyboardMarkup.
+
+    Args:
+        account_data: Dict from ig_account_service.get_accounts_for_display(),
+                      must contain keys "accounts" (list of dicts with id,
+                      display_name, username) and "active_account_id" (str or None).
+
+    Returns:
+        List of keyboard rows (list of lists of InlineKeyboardButton).
+    """
+    keyboard: list[list[InlineKeyboardButton]] = []
+
+    if account_data["accounts"]:
+        for account in account_data["accounts"]:
+            is_active = account["id"] == account_data["active_account_id"]
+            label = f"{'✅ ' if is_active else '   '}{account['display_name']}"
+            if account["username"]:
+                label += f" (@{account['username']})"
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        label, callback_data=f"switch_account:{account['id']}"
+                    )
+                ]
+            )
+    else:
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    "No accounts configured", callback_data="accounts_config:noop"
+                )
+            ]
+        )
+
+    keyboard.append(
+        [InlineKeyboardButton("➕ Add Account", callback_data="accounts_config:add")]
+    )
+
+    if account_data["accounts"]:
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    "🗑️ Remove Account", callback_data="accounts_config:remove"
+                )
+            ]
+        )
+
+    keyboard.append(
+        [
+            InlineKeyboardButton(
+                "↩️ Back to Settings", callback_data="settings_accounts:back"
+            )
+        ]
+    )
+
+    return keyboard
+
+
+# =========================================================================
+# Pattern 6: Conversation Message Cleanup
+# =========================================================================
+
+
+async def cleanup_conversation_messages(
+    bot,
+    chat_id: int,
+    message_ids: list[int],
+    exclude_id: int | None = None,
+) -> int:
+    """Delete a list of tracked conversation messages (best-effort).
+
+    Iterates through message_ids and attempts to delete each one via the
+    Telegram Bot API. Failures are logged at DEBUG level and silently
+    ignored (the message may have been already deleted or be inaccessible).
+
+    Args:
+        bot: The telegram.Bot instance (context.bot).
+        chat_id: The Telegram chat ID to delete messages from.
+        message_ids: List of message IDs to delete.
+        exclude_id: Optional message ID to skip (e.g., a message that will
+                    be edited instead of deleted).
+
+    Returns:
+        The number of messages successfully deleted.
+    """
+    deleted = 0
+    for msg_id in message_ids:
+        if exclude_id is not None and msg_id == exclude_id:
+            continue
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=msg_id)
+            deleted += 1
+        except Exception as e:
+            logger.debug(f"Could not delete conversation message {msg_id}: {e}")
+    return deleted

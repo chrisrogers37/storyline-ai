@@ -8,7 +8,9 @@ import httpx
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from src.services.core.telegram_utils import (
+    build_account_management_keyboard,
     build_queue_action_keyboard,
+    cleanup_conversation_messages,
     clear_add_account_state,
     validate_queue_and_media,
     validate_queue_item,
@@ -40,13 +42,13 @@ class TelegramAccountHandlers:
         """Show Instagram account configuration menu."""
         chat_id = query.message.chat_id
         account_data = self.service.ig_account_service.get_accounts_for_display(chat_id)
-        reply_markup = self._build_account_config_keyboard(account_data)
+        keyboard = build_account_management_keyboard(account_data)
 
         await query.edit_message_text(
             "📸 *Choose Default Account*\n\n"
             "Select an account to set as default, or add/remove accounts.",
             parse_mode="Markdown",
-            reply_markup=reply_markup,
+            reply_markup=InlineKeyboardMarkup(keyboard),
         )
         await query.answer()
 
@@ -140,8 +142,12 @@ class TelegramAccountHandlers:
         """Cancel add account flow."""
         chat_id = query.message.chat_id
 
-        await self._cleanup_conversation_messages(
-            context, chat_id, exclude_message_id=query.message.message_id
+        messages_to_delete = context.user_data.get("add_account_messages", [])
+        await cleanup_conversation_messages(
+            context.bot,
+            chat_id,
+            messages_to_delete,
+            exclude_id=query.message.message_id,
         )
 
         clear_add_account_state(context)
@@ -237,7 +243,10 @@ class TelegramAccountHandlers:
                 except Exception:
                     pass
 
-            await self._cleanup_conversation_messages(context, chat_id)
+            messages_to_delete = context.user_data.get("add_account_messages", [])
+            await cleanup_conversation_messages(
+                context.bot, chat_id, messages_to_delete
+            )
             clear_add_account_state(context)
 
             # Log interaction
@@ -265,7 +274,7 @@ class TelegramAccountHandlers:
             account_data = self.service.ig_account_service.get_accounts_for_display(
                 chat_id
             )
-            reply_markup = self._build_account_config_keyboard(account_data)
+            keyboard = build_account_management_keyboard(account_data)
 
             if was_update:
                 action_msg = f"✅ *Updated token for @{account.instagram_username}*"
@@ -283,7 +292,7 @@ class TelegramAccountHandlers:
                     "Select an account to make it active, or add/remove accounts."
                 ),
                 parse_mode="Markdown",
-                reply_markup=reply_markup,
+                reply_markup=InlineKeyboardMarkup(keyboard),
             )
 
         except Exception as e:
@@ -294,87 +303,6 @@ class TelegramAccountHandlers:
     # =========================================================================
     # Shared helpers (private)
     # =========================================================================
-
-    async def _cleanup_conversation_messages(
-        self, context, chat_id: int, exclude_message_id: int | None = None
-    ) -> None:
-        """Delete tracked add-account conversation messages (best-effort).
-
-        Args:
-            context: Telegram CallbackContext with user_data containing message IDs.
-            chat_id: Telegram chat ID to delete messages from.
-            exclude_message_id: Optional message ID to skip (e.g., one being edited).
-        """
-        messages_to_delete = context.user_data.get("add_account_messages", [])
-        for msg_id in messages_to_delete:
-            if exclude_message_id is not None and msg_id == exclude_message_id:
-                continue
-            try:
-                await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
-            except Exception as e:
-                logger.debug(f"Could not delete conversation message {msg_id}: {e}")
-
-    def _build_account_config_keyboard(
-        self, account_data: dict
-    ) -> InlineKeyboardMarkup:
-        """Build the account list keyboard for the config menu.
-
-        Args:
-            account_data: Dict from ig_account_service.get_accounts_for_display().
-
-        Returns:
-            InlineKeyboardMarkup ready for use in Telegram messages.
-        """
-        keyboard = []
-
-        if account_data["accounts"]:
-            for account in account_data["accounts"]:
-                is_active = account["id"] == account_data["active_account_id"]
-                label = f"{'✅ ' if is_active else '   '}{account['display_name']}"
-                if account["username"]:
-                    label += f" (@{account['username']})"
-                keyboard.append(
-                    [
-                        InlineKeyboardButton(
-                            label, callback_data=f"switch_account:{account['id']}"
-                        )
-                    ]
-                )
-        else:
-            keyboard.append(
-                [
-                    InlineKeyboardButton(
-                        "No accounts configured", callback_data="accounts_config:noop"
-                    )
-                ]
-            )
-
-        keyboard.append(
-            [
-                InlineKeyboardButton(
-                    "➕ Add Account", callback_data="accounts_config:add"
-                )
-            ]
-        )
-
-        if account_data["accounts"]:
-            keyboard.append(
-                [
-                    InlineKeyboardButton(
-                        "🗑️ Remove Account", callback_data="accounts_config:remove"
-                    )
-                ]
-            )
-
-        keyboard.append(
-            [
-                InlineKeyboardButton(
-                    "↩️ Back to Settings", callback_data="settings_accounts:back"
-                )
-            ]
-        )
-
-        return InlineKeyboardMarkup(keyboard)
 
     async def _validate_instagram_credentials(
         self, data: dict, access_token: str, user, chat_id: int
@@ -443,7 +371,8 @@ class TelegramAccountHandlers:
             except Exception as delete_err:
                 logger.debug(f"Could not delete verifying message: {delete_err}")
 
-        await self._cleanup_conversation_messages(context, chat_id)
+        messages_to_delete = context.user_data.get("add_account_messages", [])
+        await cleanup_conversation_messages(context.bot, chat_id, messages_to_delete)
         clear_add_account_state(context)
 
         keyboard = [
