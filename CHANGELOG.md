@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Extract shared Telegram handler utilities** - Promoted 2 private methods to module-level utilities in `telegram_utils.py`
+  - `build_account_management_keyboard()` — pure function replacing duplicated keyboard building in account selection menu and add-account success path
+  - `cleanup_conversation_messages()` — async helper replacing 3 identical message-deletion loops (success, error, cancel paths)
+  - Deleted `_build_account_config_keyboard()` and `_cleanup_conversation_messages()` private methods from `TelegramAccountHandlers`
+  - 12 new utility tests, 4 existing tests updated
+
 - **Extract sub-methods from long handlers** - Decomposed `_do_autopost()` and `handle_status()` into focused helpers
   - `_do_autopost()` reduced from 353 to ~50 lines via `AutopostContext` dataclass + 7 extracted helpers (`_get_account_display`, `_upload_to_cloudinary`, `_handle_dry_run`, `_execute_instagram_post`, `_record_successful_post`, `_send_success_message`, `_handle_autopost_error`)
   - `handle_status()` reduced from 115 to ~50 lines via 4 extracted helpers (`_get_next_post_display`, `_get_last_posted_display`, `_get_instagram_api_status`, `_get_sync_status_line`)
