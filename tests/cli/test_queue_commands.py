@@ -1,148 +1,158 @@
 """Tests for queue CLI commands."""
 
 import pytest
+from unittest.mock import Mock, patch, AsyncMock
 from click.testing import CliRunner
-from datetime import datetime
 
 from cli.commands.queue import create_schedule, list_queue, process_queue
-from src.repositories.media_repository import MediaRepository
-from src.repositories.user_repository import UserRepository
-from src.repositories.queue_repository import QueueRepository
 
 
 @pytest.mark.unit
-class TestQueueCommands:
-    """Test suite for queue CLI commands."""
+class TestCreateScheduleCommand:
+    """Tests for the create-schedule CLI command."""
 
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_create_schedule_command(self, test_db):
-        """Test create-schedule CLI command."""
-        media_repo = MediaRepository(test_db)
-        user_repo = UserRepository(test_db)
-
-        # Create test data
-        media_repo.create(
-            file_path="/test/schedule_cmd.jpg",
-            file_name="schedule_cmd.jpg",
-            file_hash="schedule_cmd_hash",
-            file_size_bytes=100000,
-            mime_type="image/jpeg",
-        )
-
-        user_repo.create(telegram_user_id=2000001)
+    @patch("cli.commands.queue.SchedulerService")
+    def test_create_schedule_success(self, mock_service_class):
+        """Test create-schedule successfully creates a schedule."""
+        mock_service = mock_service_class.return_value
+        mock_service.create_schedule.return_value = {
+            "scheduled": 6,
+            "skipped": 0,
+            "total_slots": 6,
+            "category_breakdown": {"memes": 4, "merch": 2},
+        }
 
         runner = CliRunner()
-        result = runner.invoke(create_schedule, ["--days", "1", "--posts-per-day", "2"])
-
-        # Command should execute successfully
-        assert result.exit_code == 0
-        assert "schedule" in result.output.lower() or "queued" in result.output.lower()
-
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_create_schedule_no_media(self, test_db):
-        """Test create-schedule with no available media."""
-        runner = CliRunner()
-
         result = runner.invoke(create_schedule, ["--days", "1"])
 
-        # Should handle gracefully (may warn about no media)
-        # Exit code may be 0 or non-zero depending on implementation
-        assert "no media" in result.output.lower() or result.exit_code == 0
+        assert result.exit_code == 0
+        assert "Schedule created" in result.output
+        assert "Scheduled: 6" in result.output
+        mock_service.create_schedule.assert_called_once_with(days=1)
 
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_list_queue_command(self, test_db):
-        """Test list-queue CLI command."""
-        media_repo = MediaRepository(test_db)
-        user_repo = UserRepository(test_db)
-        queue_repo = QueueRepository(test_db)
-
-        # Create test queue item
-        media = media_repo.create(
-            file_path="/test/queue_list.jpg",
-            file_name="queue_list.jpg",
-            file_hash="queue_list_hash",
-            file_size_bytes=95000,
-            mime_type="image/jpeg",
+    @patch("cli.commands.queue.SchedulerService")
+    def test_create_schedule_no_media(self, mock_service_class):
+        """Test create-schedule when service raises exception due to no media."""
+        mock_service = mock_service_class.return_value
+        mock_service.create_schedule.side_effect = ValueError(
+            "No eligible media items available"
         )
 
-        user = user_repo.create(telegram_user_id=2000002)
+        runner = CliRunner()
+        result = runner.invoke(create_schedule, ["--days", "1"])
 
-        queue_repo.create(
-            media_id=media.id,
-            scheduled_user_id=user.id,
-            scheduled_time=datetime.utcnow(),
-        )
+        assert result.exit_code != 0
+        assert "No eligible media" in result.output or "Error" in result.output
+
+    @patch("cli.commands.queue.SchedulerService")
+    def test_create_schedule_default_days(self, mock_service_class):
+        """Test create-schedule uses default of 7 days."""
+        mock_service = mock_service_class.return_value
+        mock_service.create_schedule.return_value = {
+            "scheduled": 21,
+            "skipped": 0,
+            "total_slots": 21,
+        }
+
+        runner = CliRunner()
+        result = runner.invoke(create_schedule, [])
+
+        assert result.exit_code == 0
+        mock_service.create_schedule.assert_called_once_with(days=7)
+
+
+@pytest.mark.unit
+class TestListQueueCommand:
+    """Tests for the list-queue CLI command."""
+
+    @patch("src.repositories.media_repository.MediaRepository")
+    @patch("cli.commands.queue.QueueRepository")
+    def test_list_queue_shows_items(self, mock_queue_class, mock_media_class):
+        """Test list-queue displays pending items in a table."""
+        from datetime import datetime
+
+        mock_queue_repo = mock_queue_class.return_value
+        mock_media_repo = mock_media_class.return_value
+
+        mock_queue_item = Mock()
+        mock_queue_item.media_item_id = "media-uuid-1"
+        mock_queue_item.scheduled_for = datetime(2026, 2, 15, 10, 0)
+        mock_queue_item.status = "pending"
+
+        mock_queue_repo.get_all.return_value = [mock_queue_item]
+
+        mock_media = Mock()
+        mock_media.file_name = "queue_list.jpg"
+        mock_media.category = "memes"
+        mock_media_repo.get_by_id.return_value = mock_media
 
         runner = CliRunner()
         result = runner.invoke(list_queue, [])
 
-        # Command should execute successfully
         assert result.exit_code == 0
+        assert "queue_list.jpg" in result.output
+        assert "memes" in result.output
+        assert "pending" in result.output
+        mock_queue_repo.get_all.assert_called_once_with(status="pending")
 
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_list_queue_with_status_filter(self, test_db):
-        """Test list-queue with status filter."""
-        media_repo = MediaRepository(test_db)
-        user_repo = UserRepository(test_db)
-        queue_repo = QueueRepository(test_db)
-
-        media = media_repo.create(
-            file_path="/test/status_filter.jpg",
-            file_name="status_filter.jpg",
-            file_hash="status_filter_hash",
-            file_size_bytes=90000,
-            mime_type="image/jpeg",
-        )
-
-        user = user_repo.create(telegram_user_id=2000003)
-
-        queue_repo.create(
-            media_id=media.id,
-            scheduled_user_id=user.id,
-            scheduled_time=datetime.utcnow(),
-        )
+    @patch("src.repositories.media_repository.MediaRepository")
+    @patch("cli.commands.queue.QueueRepository")
+    def test_list_queue_empty(self, mock_queue_class, mock_media_class):
+        """Test list-queue shows message when queue is empty."""
+        mock_queue_repo = mock_queue_class.return_value
+        mock_queue_repo.get_all.return_value = []
 
         runner = CliRunner()
-        result = runner.invoke(list_queue, ["--status", "pending"])
+        result = runner.invoke(list_queue, [])
 
         assert result.exit_code == 0
+        assert "Queue is empty" in result.output
 
-    @pytest.mark.skip(
-        reason="TODO: Integration test - needs test_db, convert to unit test or move to integration/"
-    )
-    def test_process_queue_command(self, test_db):
-        """Test process-queue CLI command."""
-        media_repo = MediaRepository(test_db)
-        user_repo = UserRepository(test_db)
-        queue_repo = QueueRepository(test_db)
 
-        # Create pending queue item
-        media = media_repo.create(
-            file_path="/test/process.jpg",
-            file_name="process.jpg",
-            file_hash="process_hash",
-            file_size_bytes=85000,
-            mime_type="image/jpeg",
-        )
+@pytest.mark.unit
+class TestProcessQueueCommand:
+    """Tests for the process-queue CLI command."""
 
-        user = user_repo.create(telegram_user_id=2000004)
-
-        queue_repo.create(
-            media_id=media.id,
-            scheduled_user_id=user.id,
-            scheduled_time=datetime.utcnow(),
+    @patch("cli.commands.queue.PostingService")
+    def test_process_queue_success(self, mock_service_class):
+        """Test process-queue processes pending items."""
+        mock_service = mock_service_class.return_value
+        mock_service.process_pending_posts = AsyncMock(
+            return_value={
+                "processed": 3,
+                "telegram": 3,
+                "failed": 0,
+            }
         )
 
         runner = CliRunner()
         result = runner.invoke(process_queue, [])
 
-        # Command should execute successfully
         assert result.exit_code == 0
+        assert "Processing complete" in result.output
+        assert "Processed: 3" in result.output
+
+    @patch("cli.commands.queue.PostingService")
+    def test_process_queue_force(self, mock_service_class):
+        """Test process-queue --force posts next item immediately."""
+        mock_service = mock_service_class.return_value
+
+        mock_media = Mock()
+        mock_media.file_name = "force_post.jpg"
+
+        mock_service.force_post_next = AsyncMock(
+            return_value={
+                "success": True,
+                "media_item": mock_media,
+                "queue_item_id": "queue-uuid-1",
+                "shifted_count": 2,
+            }
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(process_queue, ["--force"])
+
+        assert result.exit_code == 0
+        assert "Force-posted successfully" in result.output
+        assert "force_post.jpg" in result.output
+        assert "Shifted 2 items forward" in result.output

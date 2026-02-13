@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **CLI unit tests for user, queue, and media commands** - Converted 17 skipped integration test placeholders to 24 working unit tests
+  - `test_user_commands.py`: 6 tests (list users, empty DB, no-username fallback, promote, nonexistent user, invalid role)
+  - `test_queue_commands.py`: 7 tests (create schedule, no media, default days, list queue, empty queue, process queue, force post)
+  - `test_media_commands.py`: 11 tests (index success/error/nonexistent, list items/empty/category/active-only, validate valid/warnings/errors/nonexistent)
+  - All tests use `@patch` + `CliRunner` pattern matching existing `test_instagram_commands.py`
+
 ### Changed
 
 - **Extract shared Telegram handler utilities** - Promoted 2 private methods to module-level utilities in `telegram_utils.py`
