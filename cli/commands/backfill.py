@@ -155,17 +155,14 @@ def backfill_status():
     overview_table = Table(title="Overview")
     overview_table.add_column("Metric", style="cyan")
     overview_table.add_column("Value")
-    overview_table.add_row(
-        "Total Backfilled Items", str(status["total_backfilled"])
-    )
+    overview_table.add_row("Total Backfilled Items", str(status["total_backfilled"]))
     console.print(overview_table)
 
     last_run = status.get("last_run")
     if not last_run:
         console.print("\n[yellow]No backfill runs recorded yet.[/yellow]")
         console.print(
-            "[dim]Run 'storyline-cli backfill-instagram --dry-run' "
-            "to preview.[/dim]"
+            "[dim]Run 'storyline-cli backfill-instagram --dry-run' to preview.[/dim]"
         )
         return
 
@@ -204,9 +201,7 @@ def backfill_status():
             "Failed",
             f"[red]{failed}[/red]" if failed > 0 else "0",
         )
-        detail_table.add_row(
-            "Total API Items", str(result.get("total_api_items", 0))
-        )
+        detail_table.add_row("Total API Items", str(result.get("total_api_items", 0)))
         detail_table.add_row(
             "Dry Run",
             "Yes" if result.get("dry_run") else "No",

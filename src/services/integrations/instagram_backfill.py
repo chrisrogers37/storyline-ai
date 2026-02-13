@@ -473,7 +473,11 @@ class InstagramBackfillService(BaseService):
         date_prefix = ""
         if timestamp:
             try:
-                dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                normalized = timestamp.replace("Z", "+00:00")
+                # Python 3.10 fromisoformat doesn't support +0000 (no colon)
+                if normalized.endswith("+0000"):
+                    normalized = normalized[:-5] + "+00:00"
+                dt = datetime.fromisoformat(normalized)
                 date_prefix = dt.strftime("%Y%m%d_%H%M%S_")
             except (ValueError, TypeError):
                 pass
@@ -657,9 +661,11 @@ class InstagramBackfillService(BaseService):
             return True
 
         try:
-            item_dt = datetime.fromisoformat(
-                timestamp_str.replace("Z", "+00:00")
-            ).replace(tzinfo=None)
+            normalized = timestamp_str.replace("Z", "+00:00")
+            # Python 3.10 fromisoformat doesn't support +0000 (no colon)
+            if normalized.endswith("+0000"):
+                normalized = normalized[:-5] + "+00:00"
+            item_dt = datetime.fromisoformat(normalized).replace(tzinfo=None)
             return item_dt >= since
         except (ValueError, TypeError):
             return True
