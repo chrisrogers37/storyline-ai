@@ -10,6 +10,8 @@ from src.repositories.service_run_repository import ServiceRunRepository
 from src.repositories.interaction_repository import InteractionRepository
 from src.repositories.category_mix_repository import CategoryMixRepository
 from src.repositories.token_repository import TokenRepository
+from src.repositories.chat_settings_repository import ChatSettingsRepository
+from src.repositories.instagram_account_repository import InstagramAccountRepository
 
 __all__ = [
     "BaseRepository",
@@ -22,4 +24,6 @@ __all__ = [
     "InteractionRepository",
     "CategoryMixRepository",
     "TokenRepository",
+    "ChatSettingsRepository",
+    "InstagramAccountRepository",
 ]

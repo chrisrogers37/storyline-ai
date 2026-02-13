@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **CLI command tests for backfill, Google Drive, and sync** - 27 new unit tests for 3 previously untested CLI modules
+  - `tests/cli/test_backfill_commands.py` - 10 tests covering `backfill-instagram` and `backfill-status` commands
+  - `tests/cli/test_google_drive_commands.py` - 8 tests covering `connect-google-drive`, `google-drive-status`, `disconnect-google-drive`
+  - `tests/cli/test_sync_commands.py` - 9 tests covering `sync-media` and `sync-status`
+
 - **Model, config, and exception unit tests** - 12 new test files covering previously untested areas
   - Exception tests: `test_base_exceptions.py` (5 tests), `test_google_drive_exceptions.py` (22 tests), `test_instagram_exceptions.py` (22 tests) — inheritance hierarchy, attribute storage, catchability
   - Model tests: `test_media_item.py` (16 tests), `test_posting_queue.py` (10 tests), `test_chat_settings.py` (14 tests), `test_instagram_account.py` (8 tests), `test_api_token.py` (14 tests) — column defaults, nullability, uniqueness, repr, computed properties
@@ -16,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - All tests are pure unit tests (no database required)
 
 ### Fixed
+
+- **Repository exports** - Added `ChatSettingsRepository` and `InstagramAccountRepository` to `src/repositories/__init__.py`
+- **Stale comment** - Updated `get_recent_runs()` comment in `service_run_repository.py` to reflect actual production usage
 
 - **Instagram backfill timestamp parsing on Python 3.10** - `+0000` timezone format isn't supported by `datetime.fromisoformat()` in Python 3.10, causing silent parse failures in `_is_after_date` and `_download_and_index`
 - **CI FutureWarning crash** - Filter `FutureWarning` from `google.api_core` in pytest config to prevent test collection errors on Python 3.10
