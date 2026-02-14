@@ -65,6 +65,14 @@ class PostingHistory(Base):
     error_message = Column(Text)
     retry_count = Column(Integer, default=0)  # How many times we retried
 
+    # Multi-tenant: which chat owns this history record (NULL = legacy single-tenant)
+    chat_settings_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("chat_settings.id"),
+        nullable=True,
+        index=True,
+    )
+
     # Metadata
     created_at = Column(DateTime, default=datetime.utcnow)
 

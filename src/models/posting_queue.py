@@ -55,6 +55,14 @@ class PostingQueue(Base):
     next_retry_at = Column(DateTime)
     last_error = Column(Text)
 
+    # Multi-tenant: which chat owns this queue item (NULL = legacy single-tenant)
+    chat_settings_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("chat_settings.id"),
+        nullable=True,
+        index=True,
+    )
+
     # Timestamps (preserved in history)
     created_at = Column(DateTime, default=datetime.utcnow)
 

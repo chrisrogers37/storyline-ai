@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Multi-tenant data model foundation** - Add nullable `chat_settings_id` FK to 5 core tables for multi-tenant support
+  - `media_items`, `posting_queue`, `posting_history`, `media_posting_locks`, `category_post_case_mix`
+  - All FKs nullable: `NULL` = legacy single-tenant data (full backward compatibility)
+  - `media_items.file_path` uniqueness moved from column-level to table-level `UniqueConstraint` per tenant
+  - `media_posting_locks` unique constraint updated to include tenant scope
+  - Partial unique index preserves legacy file_path uniqueness for NULL-tenant rows
+  - Migration: `014_multi_tenant_chat_settings_fk.sql`
+  - New model test suites: `test_posting_history.py`, `test_media_lock.py`, `test_category_mix.py`
+
 - **CLI command tests for backfill, Google Drive, and sync** - 27 new unit tests for 3 previously untested CLI modules
   - `tests/cli/test_backfill_commands.py` - 10 tests covering `backfill-instagram` and `backfill-status` commands
   - `tests/cli/test_google_drive_commands.py` - 8 tests covering `connect-google-drive`, `google-drive-status`, `disconnect-google-drive`

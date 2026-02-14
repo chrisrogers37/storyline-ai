@@ -39,11 +39,24 @@ class MediaPostingLock(Base):
     # Who created the lock
     created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
 
+    # Multi-tenant: which chat owns this lock (NULL = legacy single-tenant)
+    chat_settings_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("chat_settings.id"),
+        nullable=True,
+        index=True,
+    )
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
-        UniqueConstraint("media_item_id", "locked_until", name="unique_active_lock"),
+        UniqueConstraint(
+            "media_item_id",
+            "locked_until",
+            "chat_settings_id",
+            name="unique_active_lock_per_tenant",
+        ),
     )
 
     def __repr__(self):
