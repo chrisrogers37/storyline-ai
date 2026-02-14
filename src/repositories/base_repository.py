@@ -1,5 +1,7 @@
 """Base repository class with proper session management."""
 
+from typing import Optional
+
 from sqlalchemy.orm import Session
 
 from src.config.database import get_db
@@ -114,6 +116,12 @@ class BaseRepository:
         """Context manager exit - ensures session is closed."""
         self.close()
         return False  # Don't suppress exceptions
+
+    def _apply_tenant_filter(self, query, model_class, chat_settings_id: Optional[str] = None):
+        """Apply tenant filter if chat_settings_id is provided. No-op when None."""
+        if chat_settings_id:
+            query = query.filter(model_class.chat_settings_id == chat_settings_id)
+        return query
 
     @staticmethod
     def check_connection():

@@ -102,6 +102,26 @@ class TestBaseRepository:
         result = repo.__exit__(ValueError, ValueError("test"), None)
         assert result is False
 
+    def test_apply_tenant_filter_with_id(self, repo):
+        """Test _apply_tenant_filter adds filter when chat_settings_id provided."""
+        mock_query = MagicMock()
+        mock_model = MagicMock()
+
+        result = repo._apply_tenant_filter(mock_query, mock_model, "tenant-1")
+
+        mock_query.filter.assert_called_once()
+        assert result is mock_query.filter.return_value
+
+    def test_apply_tenant_filter_without_id(self, repo):
+        """Test _apply_tenant_filter is no-op when chat_settings_id is None."""
+        mock_query = MagicMock()
+        mock_model = MagicMock()
+
+        result = repo._apply_tenant_filter(mock_query, mock_model, None)
+
+        mock_query.filter.assert_not_called()
+        assert result is mock_query
+
     def test_check_connection_executes_query(self):
         """Test that check_connection() executes a SELECT 1 query."""
         mock_session = MagicMock()
