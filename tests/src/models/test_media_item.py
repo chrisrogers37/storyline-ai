@@ -20,8 +20,13 @@ class TestMediaItemModel:
     def test_file_path_not_nullable(self):
         assert MediaItem.file_path.nullable is False
 
-    def test_file_path_is_unique(self):
-        assert MediaItem.file_path.unique is True
+    def test_file_path_uniqueness_is_per_tenant(self):
+        """file_path is unique per tenant via table-level UniqueConstraint, not column-level."""
+        assert MediaItem.file_path.unique is not True
+        constraint_names = [
+            c.name for c in MediaItem.__table_args__ if hasattr(c, "name")
+        ]
+        assert "unique_file_path_per_tenant" in constraint_names
 
     def test_file_name_not_nullable(self):
         assert MediaItem.file_name.nullable is False
@@ -58,6 +63,9 @@ class TestMediaItemModel:
         result = repr(item)
         assert "test_image.jpg" in result
         assert "5x" in result
+
+    def test_chat_settings_id_nullable(self):
+        assert MediaItem.chat_settings_id.nullable is True
 
     def test_repr_zero_posts(self):
         item = MediaItem(file_name="new_image.png", times_posted=0)

@@ -44,6 +44,9 @@ class TestPostingQueueModel:
         ]
         assert "check_status" in constraint_names
 
+    def test_chat_settings_id_nullable(self):
+        assert PostingQueue.chat_settings_id.nullable is True
+
     def test_repr_format(self):
         item = PostingQueue(
             id=uuid.uuid4(),

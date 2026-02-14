@@ -46,6 +46,14 @@ class CategoryPostCaseMix(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
 
+    # Multi-tenant: which chat owns this ratio config (NULL = legacy single-tenant)
+    chat_settings_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("chat_settings.id"),
+        nullable=True,
+        index=True,
+    )
+
     # Constraints
     __table_args__ = (
         CheckConstraint("ratio >= 0 AND ratio <= 1", name="check_ratio_range"),

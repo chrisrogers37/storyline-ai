@@ -9,9 +9,10 @@ from sqlalchemy import (
     DateTime,
     Text,
     ARRAY,
+    ForeignKey,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
-from sqlalchemy import ForeignKey
 from datetime import datetime
 import uuid
 
@@ -30,7 +31,7 @@ class MediaItem(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
     # File information
-    file_path = Column(Text, nullable=False, unique=True, index=True)
+    file_path = Column(Text, nullable=False, index=True)
     file_name = Column(Text, nullable=False)
     file_size = Column(BigInteger, nullable=False)
     file_hash = Column(Text, nullable=False, index=True)  # SHA256 of content
@@ -80,6 +81,20 @@ class MediaItem(Base):
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Multi-tenant: which chat owns this media item (NULL = legacy single-tenant)
+    chat_settings_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("chat_settings.id"),
+        nullable=True,
+        index=True,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "file_path", "chat_settings_id", name="unique_file_path_per_tenant"
+        ),
+    )
 
     def __repr__(self):
         return f"<MediaItem {self.file_name} (posted {self.times_posted}x)>"
