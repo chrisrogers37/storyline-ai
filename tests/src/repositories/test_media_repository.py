@@ -1,7 +1,7 @@
 """Tests for MediaRepository."""
 
 import pytest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 from sqlalchemy.orm import Session
 
@@ -310,7 +310,9 @@ class TestMediaRepositoryTenantFiltering:
 
     def test_get_by_id_with_tenant(self, media_repo, mock_db):
         """get_by_id passes chat_settings_id through tenant filter."""
-        with patch.object(media_repo, "_apply_tenant_filter", wraps=media_repo._apply_tenant_filter) as mock_filter:
+        with patch.object(
+            media_repo, "_apply_tenant_filter", wraps=media_repo._apply_tenant_filter
+        ) as mock_filter:
             media_repo.get_by_id("some-id", chat_settings_id=self.TENANT_ID)
             mock_filter.assert_called_once_with(
                 mock_db.query.return_value.filter.return_value,
@@ -320,7 +322,9 @@ class TestMediaRepositoryTenantFiltering:
 
     def test_get_by_id_without_tenant(self, media_repo, mock_db):
         """get_by_id works without chat_settings_id (backward compat)."""
-        with patch.object(media_repo, "_apply_tenant_filter", wraps=media_repo._apply_tenant_filter) as mock_filter:
+        with patch.object(
+            media_repo, "_apply_tenant_filter", wraps=media_repo._apply_tenant_filter
+        ) as mock_filter:
             media_repo.get_by_id("some-id")
             mock_filter.assert_called_once_with(
                 mock_db.query.return_value.filter.return_value,
@@ -330,50 +334,72 @@ class TestMediaRepositoryTenantFiltering:
 
     def test_get_by_path_with_tenant(self, media_repo, mock_db):
         """get_by_path passes chat_settings_id through tenant filter."""
-        with patch.object(media_repo, "_apply_tenant_filter", wraps=media_repo._apply_tenant_filter) as mock_filter:
+        with patch.object(
+            media_repo, "_apply_tenant_filter", wraps=media_repo._apply_tenant_filter
+        ) as mock_filter:
             media_repo.get_by_path("/test/path.jpg", chat_settings_id=self.TENANT_ID)
             mock_filter.assert_called_once()
             assert mock_filter.call_args[0][2] == self.TENANT_ID
 
     def test_get_by_hash_with_tenant(self, media_repo, mock_db):
         """get_by_hash passes chat_settings_id through tenant filter."""
-        with patch.object(media_repo, "_apply_tenant_filter", wraps=media_repo._apply_tenant_filter) as mock_filter:
+        with patch.object(
+            media_repo, "_apply_tenant_filter", wraps=media_repo._apply_tenant_filter
+        ) as mock_filter:
             media_repo.get_by_hash("hash123", chat_settings_id=self.TENANT_ID)
             mock_filter.assert_called_once()
             assert mock_filter.call_args[0][2] == self.TENANT_ID
 
     def test_get_by_instagram_media_id_with_tenant(self, media_repo, mock_db):
         """get_by_instagram_media_id passes chat_settings_id through."""
-        with patch.object(media_repo, "_apply_tenant_filter", wraps=media_repo._apply_tenant_filter) as mock_filter:
-            media_repo.get_by_instagram_media_id("ig-123", chat_settings_id=self.TENANT_ID)
+        with patch.object(
+            media_repo, "_apply_tenant_filter", wraps=media_repo._apply_tenant_filter
+        ) as mock_filter:
+            media_repo.get_by_instagram_media_id(
+                "ig-123", chat_settings_id=self.TENANT_ID
+            )
             mock_filter.assert_called_once()
             assert mock_filter.call_args[0][2] == self.TENANT_ID
 
     def test_get_backfilled_instagram_media_ids_with_tenant(self, media_repo, mock_db):
         """get_backfilled_instagram_media_ids passes chat_settings_id through."""
         mock_db.query.return_value.filter.return_value.all.return_value = []
-        with patch.object(media_repo, "_apply_tenant_filter", wraps=media_repo._apply_tenant_filter) as mock_filter:
-            media_repo.get_backfilled_instagram_media_ids(chat_settings_id=self.TENANT_ID)
+        with patch.object(
+            media_repo, "_apply_tenant_filter", wraps=media_repo._apply_tenant_filter
+        ) as mock_filter:
+            media_repo.get_backfilled_instagram_media_ids(
+                chat_settings_id=self.TENANT_ID
+            )
             mock_filter.assert_called_once()
             assert mock_filter.call_args[0][2] == self.TENANT_ID
 
     def test_get_by_source_identifier_with_tenant(self, media_repo, mock_db):
         """get_by_source_identifier passes chat_settings_id through."""
-        with patch.object(media_repo, "_apply_tenant_filter", wraps=media_repo._apply_tenant_filter) as mock_filter:
-            media_repo.get_by_source_identifier("local", "/path", chat_settings_id=self.TENANT_ID)
+        with patch.object(
+            media_repo, "_apply_tenant_filter", wraps=media_repo._apply_tenant_filter
+        ) as mock_filter:
+            media_repo.get_by_source_identifier(
+                "local", "/path", chat_settings_id=self.TENANT_ID
+            )
             mock_filter.assert_called_once()
             assert mock_filter.call_args[0][2] == self.TENANT_ID
 
     def test_get_active_by_source_type_with_tenant(self, media_repo, mock_db):
         """get_active_by_source_type passes chat_settings_id through."""
-        with patch.object(media_repo, "_apply_tenant_filter", wraps=media_repo._apply_tenant_filter) as mock_filter:
-            media_repo.get_active_by_source_type("local", chat_settings_id=self.TENANT_ID)
+        with patch.object(
+            media_repo, "_apply_tenant_filter", wraps=media_repo._apply_tenant_filter
+        ) as mock_filter:
+            media_repo.get_active_by_source_type(
+                "local", chat_settings_id=self.TENANT_ID
+            )
             mock_filter.assert_called_once()
             assert mock_filter.call_args[0][2] == self.TENANT_ID
 
     def test_get_inactive_by_source_identifier_with_tenant(self, media_repo, mock_db):
         """get_inactive_by_source_identifier passes chat_settings_id through."""
-        with patch.object(media_repo, "_apply_tenant_filter", wraps=media_repo._apply_tenant_filter) as mock_filter:
+        with patch.object(
+            media_repo, "_apply_tenant_filter", wraps=media_repo._apply_tenant_filter
+        ) as mock_filter:
             media_repo.get_inactive_by_source_identifier(
                 "local", "/path", chat_settings_id=self.TENANT_ID
             )
@@ -383,7 +409,9 @@ class TestMediaRepositoryTenantFiltering:
     def test_get_all_with_tenant(self, media_repo, mock_db):
         """get_all passes chat_settings_id through tenant filter."""
         mock_db.query.return_value.all.return_value = []
-        with patch.object(media_repo, "_apply_tenant_filter", wraps=media_repo._apply_tenant_filter) as mock_filter:
+        with patch.object(
+            media_repo, "_apply_tenant_filter", wraps=media_repo._apply_tenant_filter
+        ) as mock_filter:
             media_repo.get_all(is_active=True, chat_settings_id=self.TENANT_ID)
             mock_filter.assert_called_once()
             assert mock_filter.call_args[0][2] == self.TENANT_ID
@@ -391,7 +419,9 @@ class TestMediaRepositoryTenantFiltering:
     def test_get_categories_with_tenant(self, media_repo, mock_db):
         """get_categories passes chat_settings_id through tenant filter."""
         mock_db.query.return_value.filter.return_value.distinct.return_value.all.return_value = []
-        with patch.object(media_repo, "_apply_tenant_filter", wraps=media_repo._apply_tenant_filter) as mock_filter:
+        with patch.object(
+            media_repo, "_apply_tenant_filter", wraps=media_repo._apply_tenant_filter
+        ) as mock_filter:
             media_repo.get_categories(chat_settings_id=self.TENANT_ID)
             mock_filter.assert_called_once()
             assert mock_filter.call_args[0][2] == self.TENANT_ID
@@ -399,7 +429,9 @@ class TestMediaRepositoryTenantFiltering:
     def test_get_duplicates_with_tenant(self, media_repo, mock_db):
         """get_duplicates passes chat_settings_id through tenant filter."""
         mock_db.query.return_value.having.return_value.all.return_value = []
-        with patch.object(media_repo, "_apply_tenant_filter", wraps=media_repo._apply_tenant_filter) as mock_filter:
+        with patch.object(
+            media_repo, "_apply_tenant_filter", wraps=media_repo._apply_tenant_filter
+        ) as mock_filter:
             media_repo.get_duplicates(chat_settings_id=self.TENANT_ID)
             mock_filter.assert_called_once()
             assert mock_filter.call_args[0][2] == self.TENANT_ID
@@ -431,7 +463,9 @@ class TestMediaRepositoryTenantFiltering:
 
     def test_get_next_eligible_with_tenant(self, media_repo, mock_db):
         """get_next_eligible_for_posting passes chat_settings_id to main query."""
-        with patch.object(media_repo, "_apply_tenant_filter", wraps=media_repo._apply_tenant_filter) as mock_filter:
+        with patch.object(
+            media_repo, "_apply_tenant_filter", wraps=media_repo._apply_tenant_filter
+        ) as mock_filter:
             media_repo.get_next_eligible_for_posting(chat_settings_id=self.TENANT_ID)
             mock_filter.assert_called_once()
             assert mock_filter.call_args[0][2] == self.TENANT_ID

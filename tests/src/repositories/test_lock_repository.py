@@ -135,14 +135,18 @@ class TestLockRepositoryTenantFiltering:
 
     def test_get_by_id_with_tenant(self, lock_repo, mock_db):
         """get_by_id passes chat_settings_id through tenant filter."""
-        with patch.object(lock_repo, "_apply_tenant_filter", wraps=lock_repo._apply_tenant_filter) as mock_filter:
+        with patch.object(
+            lock_repo, "_apply_tenant_filter", wraps=lock_repo._apply_tenant_filter
+        ) as mock_filter:
             lock_repo.get_by_id("lock-1", chat_settings_id=self.TENANT_ID)
             mock_filter.assert_called_once()
             assert mock_filter.call_args[0][2] == self.TENANT_ID
 
     def test_get_active_lock_with_tenant(self, lock_repo, mock_db):
         """get_active_lock passes chat_settings_id through tenant filter."""
-        with patch.object(lock_repo, "_apply_tenant_filter", wraps=lock_repo._apply_tenant_filter) as mock_filter:
+        with patch.object(
+            lock_repo, "_apply_tenant_filter", wraps=lock_repo._apply_tenant_filter
+        ) as mock_filter:
             lock_repo.get_active_lock("media-1", chat_settings_id=self.TENANT_ID)
             mock_filter.assert_called_once()
             assert mock_filter.call_args[0][2] == self.TENANT_ID
@@ -156,7 +160,9 @@ class TestLockRepositoryTenantFiltering:
     def test_get_all_active_with_tenant(self, lock_repo, mock_db):
         """get_all_active passes chat_settings_id through tenant filter."""
         mock_db.query.return_value.all.return_value = []
-        with patch.object(lock_repo, "_apply_tenant_filter", wraps=lock_repo._apply_tenant_filter) as mock_filter:
+        with patch.object(
+            lock_repo, "_apply_tenant_filter", wraps=lock_repo._apply_tenant_filter
+        ) as mock_filter:
             lock_repo.get_all_active(chat_settings_id=self.TENANT_ID)
             mock_filter.assert_called_once()
             assert mock_filter.call_args[0][2] == self.TENANT_ID
@@ -185,7 +191,9 @@ class TestLockRepositoryTenantFiltering:
     def test_get_permanent_locks_with_tenant(self, lock_repo, mock_db):
         """get_permanent_locks passes chat_settings_id through tenant filter."""
         mock_db.query.return_value.all.return_value = []
-        with patch.object(lock_repo, "_apply_tenant_filter", wraps=lock_repo._apply_tenant_filter) as mock_filter:
+        with patch.object(
+            lock_repo, "_apply_tenant_filter", wraps=lock_repo._apply_tenant_filter
+        ) as mock_filter:
             lock_repo.get_permanent_locks(chat_settings_id=self.TENANT_ID)
             mock_filter.assert_called_once()
             assert mock_filter.call_args[0][2] == self.TENANT_ID
@@ -193,7 +201,9 @@ class TestLockRepositoryTenantFiltering:
     def test_cleanup_expired_with_tenant(self, lock_repo, mock_db):
         """cleanup_expired passes chat_settings_id through tenant filter."""
         mock_db.query.return_value.filter.return_value.delete.return_value = 0
-        with patch.object(lock_repo, "_apply_tenant_filter", wraps=lock_repo._apply_tenant_filter) as mock_filter:
+        with patch.object(
+            lock_repo, "_apply_tenant_filter", wraps=lock_repo._apply_tenant_filter
+        ) as mock_filter:
             lock_repo.cleanup_expired(chat_settings_id=self.TENANT_ID)
             mock_filter.assert_called_once()
             assert mock_filter.call_args[0][2] == self.TENANT_ID

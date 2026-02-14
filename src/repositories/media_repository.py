@@ -225,9 +225,7 @@ class MediaRepository(BaseRepository):
 
     def get_categories(self, chat_settings_id: Optional[str] = None) -> List[str]:
         """Get all unique categories."""
-        query = self.db.query(MediaItem.category).filter(
-            MediaItem.category.isnot(None)
-        )
+        query = self.db.query(MediaItem.category).filter(MediaItem.category.isnot(None))
         query = self._apply_tenant_filter(query, MediaItem, chat_settings_id)
         result = query.distinct().all()
         return [r[0] for r in result]
@@ -430,12 +428,8 @@ class MediaRepository(BaseRepository):
             | (MediaPostingLock.locked_until > now),
         ]
         if chat_settings_id:
-            lock_where.append(
-                MediaPostingLock.chat_settings_id == chat_settings_id
-            )
-        locked_subquery = exists(
-            select(MediaPostingLock.id).where(and_(*lock_where))
-        )
+            lock_where.append(MediaPostingLock.chat_settings_id == chat_settings_id)
+        locked_subquery = exists(select(MediaPostingLock.id).where(and_(*lock_where)))
         query = query.filter(~locked_subquery)
 
         # Sort by priority:

@@ -17,9 +17,7 @@ class LockRepository(BaseRepository):
         self, lock_id: str, chat_settings_id: Optional[str] = None
     ) -> Optional[MediaPostingLock]:
         """Get lock by ID."""
-        query = self.db.query(MediaPostingLock).filter(
-            MediaPostingLock.id == lock_id
-        )
+        query = self.db.query(MediaPostingLock).filter(MediaPostingLock.id == lock_id)
         query = self._apply_tenant_filter(query, MediaPostingLock, chat_settings_id)
         return query.first()
 

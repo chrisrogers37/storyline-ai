@@ -117,7 +117,9 @@ class BaseRepository:
         self.close()
         return False  # Don't suppress exceptions
 
-    def _apply_tenant_filter(self, query, model_class, chat_settings_id: Optional[str] = None):
+    def _apply_tenant_filter(
+        self, query, model_class, chat_settings_id: Optional[str] = None
+    ):
         """Apply tenant filter if chat_settings_id is provided. No-op when None."""
         if chat_settings_id:
             query = query.filter(model_class.chat_settings_id == chat_settings_id)

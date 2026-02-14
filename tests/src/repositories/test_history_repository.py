@@ -159,7 +159,11 @@ class TestHistoryRepositoryTenantFiltering:
 
     def test_get_by_id_with_tenant(self, history_repo, mock_db):
         """get_by_id passes chat_settings_id through tenant filter."""
-        with patch.object(history_repo, "_apply_tenant_filter", wraps=history_repo._apply_tenant_filter) as mock_filter:
+        with patch.object(
+            history_repo,
+            "_apply_tenant_filter",
+            wraps=history_repo._apply_tenant_filter,
+        ) as mock_filter:
             history_repo.get_by_id("h-1", chat_settings_id=self.TENANT_ID)
             mock_filter.assert_called_once()
             assert mock_filter.call_args[0][2] == self.TENANT_ID
@@ -167,7 +171,11 @@ class TestHistoryRepositoryTenantFiltering:
     def test_get_all_with_tenant(self, history_repo, mock_db):
         """get_all passes chat_settings_id through tenant filter."""
         mock_db.query.return_value.all.return_value = []
-        with patch.object(history_repo, "_apply_tenant_filter", wraps=history_repo._apply_tenant_filter) as mock_filter:
+        with patch.object(
+            history_repo,
+            "_apply_tenant_filter",
+            wraps=history_repo._apply_tenant_filter,
+        ) as mock_filter:
             history_repo.get_all(chat_settings_id=self.TENANT_ID)
             mock_filter.assert_called_once()
             assert mock_filter.call_args[0][2] == self.TENANT_ID
@@ -175,7 +183,11 @@ class TestHistoryRepositoryTenantFiltering:
     def test_get_by_media_id_with_tenant(self, history_repo, mock_db):
         """get_by_media_id passes chat_settings_id through tenant filter."""
         mock_db.query.return_value.all.return_value = []
-        with patch.object(history_repo, "_apply_tenant_filter", wraps=history_repo._apply_tenant_filter) as mock_filter:
+        with patch.object(
+            history_repo,
+            "_apply_tenant_filter",
+            wraps=history_repo._apply_tenant_filter,
+        ) as mock_filter:
             history_repo.get_by_media_id("m-1", chat_settings_id=self.TENANT_ID)
             mock_filter.assert_called_once()
             assert mock_filter.call_args[0][2] == self.TENANT_ID
@@ -183,7 +195,11 @@ class TestHistoryRepositoryTenantFiltering:
     def test_get_recent_posts_with_tenant(self, history_repo, mock_db):
         """get_recent_posts passes chat_settings_id through tenant filter."""
         mock_db.query.return_value.all.return_value = []
-        with patch.object(history_repo, "_apply_tenant_filter", wraps=history_repo._apply_tenant_filter) as mock_filter:
+        with patch.object(
+            history_repo,
+            "_apply_tenant_filter",
+            wraps=history_repo._apply_tenant_filter,
+        ) as mock_filter:
             history_repo.get_recent_posts(hours=24, chat_settings_id=self.TENANT_ID)
             mock_filter.assert_called_once()
             assert mock_filter.call_args[0][2] == self.TENANT_ID
@@ -191,7 +207,13 @@ class TestHistoryRepositoryTenantFiltering:
     def test_count_by_method_with_tenant(self, history_repo, mock_db):
         """count_by_method passes chat_settings_id through tenant filter."""
         now = datetime.utcnow()
-        with patch.object(history_repo, "_apply_tenant_filter", wraps=history_repo._apply_tenant_filter) as mock_filter:
-            history_repo.count_by_method("instagram_api", now, chat_settings_id=self.TENANT_ID)
+        with patch.object(
+            history_repo,
+            "_apply_tenant_filter",
+            wraps=history_repo._apply_tenant_filter,
+        ) as mock_filter:
+            history_repo.count_by_method(
+                "instagram_api", now, chat_settings_id=self.TENANT_ID
+            )
             mock_filter.assert_called_once()
             assert mock_filter.call_args[0][2] == self.TENANT_ID

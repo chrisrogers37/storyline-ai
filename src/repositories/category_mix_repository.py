@@ -22,9 +22,7 @@ class CategoryMixRepository(BaseRepository):
         query = self.db.query(CategoryPostCaseMix).filter(
             CategoryPostCaseMix.is_current
         )
-        query = self._apply_tenant_filter(
-            query, CategoryPostCaseMix, chat_settings_id
-        )
+        query = self._apply_tenant_filter(query, CategoryPostCaseMix, chat_settings_id)
         return query.order_by(CategoryPostCaseMix.category).all()
 
     def get_current_mix_as_dict(
@@ -39,9 +37,7 @@ class CategoryMixRepository(BaseRepository):
     ) -> List[CategoryPostCaseMix]:
         """Get full history, optionally filtered by category."""
         query = self.db.query(CategoryPostCaseMix)
-        query = self._apply_tenant_filter(
-            query, CategoryPostCaseMix, chat_settings_id
-        )
+        query = self._apply_tenant_filter(query, CategoryPostCaseMix, chat_settings_id)
 
         if category:
             query = query.filter(CategoryPostCaseMix.category == category)
@@ -113,9 +109,7 @@ class CategoryMixRepository(BaseRepository):
         query = self.db.query(func.count(CategoryPostCaseMix.id)).filter(
             CategoryPostCaseMix.is_current
         )
-        query = self._apply_tenant_filter(
-            query, CategoryPostCaseMix, chat_settings_id
-        )
+        query = self._apply_tenant_filter(query, CategoryPostCaseMix, chat_settings_id)
         count = query.scalar()
         return count > 0
 

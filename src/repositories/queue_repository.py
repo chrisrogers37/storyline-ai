@@ -211,7 +211,9 @@ class QueueRepository(BaseRepository):
         from src.utils.logger import logger
 
         # Get all pending items in scheduled order
-        pending_items = self.get_all(status="pending", chat_settings_id=chat_settings_id)
+        pending_items = self.get_all(
+            status="pending", chat_settings_id=chat_settings_id
+        )
 
         if not pending_items:
             return 0
