@@ -209,3 +209,106 @@ class TestShiftSlotsForward:
     def test_shift_slots_forward_multiple_calls(self):
         """Integration test: multiple consecutive shifts."""
         pass
+
+
+@pytest.mark.unit
+class TestQueueRepositoryTenantFiltering:
+    """Tests for optional chat_settings_id tenant filtering on QueueRepository."""
+
+    TENANT_ID = "tenant-uuid-1"
+
+    def test_get_by_id_with_tenant(self, queue_repo, mock_db):
+        """get_by_id passes chat_settings_id through tenant filter."""
+        with patch.object(queue_repo, "_apply_tenant_filter", wraps=queue_repo._apply_tenant_filter) as mock_filter:
+            queue_repo.get_by_id("some-id", chat_settings_id=self.TENANT_ID)
+            mock_filter.assert_called_once()
+            assert mock_filter.call_args[0][2] == self.TENANT_ID
+
+    def test_get_by_id_without_tenant(self, queue_repo, mock_db):
+        """get_by_id works without chat_settings_id (backward compat)."""
+        with patch.object(queue_repo, "_apply_tenant_filter", wraps=queue_repo._apply_tenant_filter) as mock_filter:
+            queue_repo.get_by_id("some-id")
+            mock_filter.assert_called_once()
+            assert mock_filter.call_args[0][2] is None
+
+    def test_get_by_id_prefix_with_tenant(self, queue_repo, mock_db):
+        """get_by_id_prefix passes chat_settings_id through."""
+        with patch.object(queue_repo, "_apply_tenant_filter", wraps=queue_repo._apply_tenant_filter) as mock_filter:
+            queue_repo.get_by_id_prefix("abcd1234", chat_settings_id=self.TENANT_ID)
+            mock_filter.assert_called_once()
+            assert mock_filter.call_args[0][2] == self.TENANT_ID
+
+    def test_get_by_media_id_with_tenant(self, queue_repo, mock_db):
+        """get_by_media_id passes chat_settings_id through."""
+        with patch.object(queue_repo, "_apply_tenant_filter", wraps=queue_repo._apply_tenant_filter) as mock_filter:
+            queue_repo.get_by_media_id("media-123", chat_settings_id=self.TENANT_ID)
+            mock_filter.assert_called_once()
+            assert mock_filter.call_args[0][2] == self.TENANT_ID
+
+    def test_get_pending_with_tenant(self, queue_repo, mock_db):
+        """get_pending passes chat_settings_id through."""
+        mock_db.query.return_value.all.return_value = []
+        with patch.object(queue_repo, "_apply_tenant_filter", wraps=queue_repo._apply_tenant_filter) as mock_filter:
+            queue_repo.get_pending(chat_settings_id=self.TENANT_ID)
+            mock_filter.assert_called_once()
+            assert mock_filter.call_args[0][2] == self.TENANT_ID
+
+    def test_get_all_with_tenant(self, queue_repo, mock_db):
+        """get_all passes chat_settings_id through."""
+        mock_db.query.return_value.all.return_value = []
+        with patch.object(queue_repo, "_apply_tenant_filter", wraps=queue_repo._apply_tenant_filter) as mock_filter:
+            queue_repo.get_all(chat_settings_id=self.TENANT_ID)
+            mock_filter.assert_called_once()
+            assert mock_filter.call_args[0][2] == self.TENANT_ID
+
+    def test_count_pending_with_tenant(self, queue_repo, mock_db):
+        """count_pending passes chat_settings_id through."""
+        with patch.object(queue_repo, "_apply_tenant_filter", wraps=queue_repo._apply_tenant_filter) as mock_filter:
+            queue_repo.count_pending(chat_settings_id=self.TENANT_ID)
+            mock_filter.assert_called_once()
+            assert mock_filter.call_args[0][2] == self.TENANT_ID
+
+    def test_get_oldest_pending_with_tenant(self, queue_repo, mock_db):
+        """get_oldest_pending passes chat_settings_id through."""
+        with patch.object(queue_repo, "_apply_tenant_filter", wraps=queue_repo._apply_tenant_filter) as mock_filter:
+            queue_repo.get_oldest_pending(chat_settings_id=self.TENANT_ID)
+            mock_filter.assert_called_once()
+            assert mock_filter.call_args[0][2] == self.TENANT_ID
+
+    def test_create_with_tenant(self, queue_repo, mock_db):
+        """create sets chat_settings_id on the new PostingQueue item."""
+        scheduled_time = datetime.utcnow() + timedelta(hours=1)
+        queue_repo.create(
+            media_item_id="media-123",
+            scheduled_for=scheduled_time,
+            chat_settings_id=self.TENANT_ID,
+        )
+
+        added_item = mock_db.add.call_args[0][0]
+        assert added_item.chat_settings_id == self.TENANT_ID
+
+    def test_create_without_tenant(self, queue_repo, mock_db):
+        """create without chat_settings_id sets None (backward compat)."""
+        scheduled_time = datetime.utcnow() + timedelta(hours=1)
+        queue_repo.create(
+            media_item_id="media-123",
+            scheduled_for=scheduled_time,
+        )
+
+        added_item = mock_db.add.call_args[0][0]
+        assert added_item.chat_settings_id is None
+
+    def test_delete_all_pending_with_tenant(self, queue_repo, mock_db):
+        """delete_all_pending passes chat_settings_id through."""
+        with patch.object(queue_repo, "_apply_tenant_filter", wraps=queue_repo._apply_tenant_filter) as mock_filter:
+            queue_repo.delete_all_pending(chat_settings_id=self.TENANT_ID)
+            mock_filter.assert_called_once()
+            assert mock_filter.call_args[0][2] == self.TENANT_ID
+
+    def test_shift_slots_forward_passes_tenant_to_get_all(self, queue_repo, mock_db):
+        """shift_slots_forward passes chat_settings_id through to get_all."""
+        with patch.object(queue_repo, "get_all", return_value=[]) as mock_get_all:
+            queue_repo.shift_slots_forward("item-1", chat_settings_id=self.TENANT_ID)
+            mock_get_all.assert_called_once_with(
+                status="pending", chat_settings_id=self.TENANT_ID
+            )
