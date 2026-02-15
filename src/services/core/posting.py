@@ -49,9 +49,16 @@ class PostingService(BaseService):
             self._cloud_service = CloudStorageService()
         return self._cloud_service
 
-    def _get_chat_settings(self):
-        """Get settings for the admin chat (for checking dry_run, is_paused, etc.)."""
-        return self.settings_service.get_settings(settings.ADMIN_TELEGRAM_CHAT_ID)
+    def _get_chat_settings(self, telegram_chat_id: Optional[int] = None):
+        """Get settings for a chat (for checking dry_run, is_paused, etc.).
+
+        Args:
+            telegram_chat_id: Chat to get settings for.
+                Falls back to ADMIN_TELEGRAM_CHAT_ID if not specified.
+        """
+        if telegram_chat_id is None:
+            telegram_chat_id = settings.ADMIN_TELEGRAM_CHAT_ID
+        return self.settings_service.get_settings(telegram_chat_id)
 
     async def force_post_next(
         self,
@@ -221,9 +228,17 @@ class PostingService(BaseService):
                 "failed": 0 if result["error"] == "No pending items in queue" else 1,
             }
 
-    async def process_pending_posts(self, user_id: Optional[str] = None) -> dict:
+    async def process_pending_posts(
+        self, user_id: Optional[str] = None, telegram_chat_id: Optional[int] = None
+    ) -> dict:
         """
         Process all pending posts ready to be posted.
+
+        Args:
+            user_id: User who triggered processing (for observability)
+            telegram_chat_id: Chat to process posts for. When provided,
+                uses per-tenant pause state and tenant-scoped queue queries.
+                Falls back to global behavior when None.
 
         Returns:
             Dict with results: {processed: 5, telegram: 5, automated: 0, failed: 0, paused: bool}
@@ -233,8 +248,14 @@ class PostingService(BaseService):
             user_id=user_id,
             triggered_by="scheduler" if not user_id else "cli",
         ) as run_id:
-            # Check if posting is paused
-            if self.telegram_service.is_paused:
+            # Check if posting is paused for this chat
+            if telegram_chat_id:
+                chat_settings = self._get_chat_settings(telegram_chat_id)
+                is_paused = chat_settings.is_paused
+            else:
+                is_paused = self.telegram_service.is_paused
+
+            if is_paused:
                 logger.info("Posting is paused - skipping scheduled posts")
                 result = {
                     "processed": 0,
@@ -251,8 +272,18 @@ class PostingService(BaseService):
             automated_count = 0
             failed_count = 0
 
+            # Resolve chat_settings_id for tenant-scoped queue queries
+            # (chat_settings was already fetched in the pause check above)
+            chat_settings_id = None
+            if telegram_chat_id:
+                chat_settings_id = (
+                    str(chat_settings.id) if chat_settings else None
+                )
+
             # Get all pending posts ready to process
-            pending_items = self.queue_repo.get_pending(limit=100)
+            pending_items = self.queue_repo.get_pending(
+                limit=100, chat_settings_id=chat_settings_id
+            )
 
             logger.info(f"Processing {len(pending_items)} pending posts")
 
@@ -374,7 +405,8 @@ class PostingService(BaseService):
         queue_item_id = str(queue_item.id)
         media_item_id = str(media_item.id)
 
-        chat_settings = self._get_chat_settings()
+        # Use queue item's chat context if available, fall back to admin
+        chat_settings = self._get_chat_settings(queue_item.telegram_chat_id)
         if chat_settings.dry_run_mode:
             logger.info(
                 f"[DRY RUN] Would post {media_item.file_name} via Instagram API"
