@@ -1366,3 +1366,109 @@ class TestConnectCommand:
         call_kwargs = service.interaction_service.log_command.call_args[1]
         assert call_kwargs["command"] == "/connect"
         assert call_kwargs["telegram_chat_id"] == -100123
+
+
+# ==================== /connect_drive Tests ====================
+
+
+@pytest.mark.unit
+class TestConnectDriveCommand:
+    """Tests for the /connect_drive command handler."""
+
+    @pytest.mark.asyncio
+    async def test_connect_drive_sends_oauth_link(self, mock_command_handlers):
+        """Test /connect_drive sends Google Drive OAuth link as inline button."""
+        handlers = mock_command_handlers
+        service = handlers.service
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        service.user_repo.get_by_telegram_id.return_value = None
+        service.user_repo.create.return_value = mock_user
+
+        mock_update = AsyncMock()
+        mock_update.effective_user.id = 12345
+        mock_update.effective_user.first_name = "Test"
+        mock_update.effective_user.username = "testuser"
+        mock_update.effective_chat.id = -100123
+        mock_update.message.message_id = 42
+
+        with patch(
+            "src.services.integrations.google_drive_oauth.GoogleDriveOAuthService"
+        ) as MockGDrive:
+            mock_gdrive = MockGDrive.return_value
+            mock_gdrive.generate_authorization_url.return_value = (
+                "https://accounts.google.com/o/oauth2/v2/auth?state=test"
+            )
+            mock_gdrive.close = Mock()
+
+            await handlers.handle_connect_drive(mock_update, Mock())
+
+        mock_update.message.reply_text.assert_called_once()
+        call_args = mock_update.message.reply_text.call_args
+        assert "Google Drive" in call_args[0][0]
+        assert call_args[1]["reply_markup"] is not None
+
+    @pytest.mark.asyncio
+    async def test_connect_drive_handles_missing_config(self, mock_command_handlers):
+        """Test /connect_drive handles missing Google OAuth config."""
+        handlers = mock_command_handlers
+        service = handlers.service
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        service.user_repo.get_by_telegram_id.return_value = None
+        service.user_repo.create.return_value = mock_user
+
+        mock_update = AsyncMock()
+        mock_update.effective_user.id = 12345
+        mock_update.effective_user.first_name = "Test"
+        mock_update.effective_user.username = "testuser"
+        mock_update.effective_chat.id = -100123
+        mock_update.message.message_id = 42
+
+        with patch(
+            "src.services.integrations.google_drive_oauth.GoogleDriveOAuthService"
+        ) as MockGDrive:
+            mock_gdrive = MockGDrive.return_value
+            mock_gdrive.generate_authorization_url.side_effect = ValueError(
+                "GOOGLE_CLIENT_ID not configured"
+            )
+            mock_gdrive.close = Mock()
+
+            await handlers.handle_connect_drive(mock_update, Mock())
+
+        call_args = mock_update.message.reply_text.call_args[0][0]
+        assert "not configured" in call_args
+
+    @pytest.mark.asyncio
+    async def test_connect_drive_logs_interaction(self, mock_command_handlers):
+        """Test /connect_drive logs the command interaction."""
+        handlers = mock_command_handlers
+        service = handlers.service
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        service.user_repo.get_by_telegram_id.return_value = None
+        service.user_repo.create.return_value = mock_user
+
+        mock_update = AsyncMock()
+        mock_update.effective_user.id = 12345
+        mock_update.effective_user.first_name = "Test"
+        mock_update.effective_user.username = "testuser"
+        mock_update.effective_chat.id = -100123
+        mock_update.message.message_id = 42
+
+        with patch(
+            "src.services.integrations.google_drive_oauth.GoogleDriveOAuthService"
+        ) as MockGDrive:
+            mock_gdrive = MockGDrive.return_value
+            mock_gdrive.generate_authorization_url.return_value = "https://example.com"
+            mock_gdrive.close = Mock()
+
+            await handlers.handle_connect_drive(mock_update, Mock())
+
+        service.interaction_service.log_command.assert_called_once()
+        call_kwargs = service.interaction_service.log_command.call_args[1]
+        assert call_kwargs["command"] == "/connect_drive"
+        assert call_kwargs["telegram_chat_id"] == -100123
