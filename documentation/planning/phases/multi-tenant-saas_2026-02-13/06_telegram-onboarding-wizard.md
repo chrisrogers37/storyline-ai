@@ -1,11 +1,19 @@
 # Phase 06: Telegram Onboarding Mini App
 
-**Status:** 📋 PENDING
+**Status:** ✅ COMPLETE
+**Started:** 2026-02-15
+**Completed:** 2026-02-15
+**PR:** #58
 **Risk:** Medium
 **Effort:** 5-7 hours
 **PR Title:** `feat: Telegram Mini App onboarding wizard for self-service setup`
 
 ---
+
+### Challenge Round Decisions (2026-02-15)
+- **Chat ID**: Pass `chat_id` as URL parameter in Mini App URL (e.g., `/webapp/onboarding?chat_id=123`). The `/start` handler knows the chat from `update.effective_chat.id`. Works for both group chats (negative IDs) and DMs (user_id = chat_id). Backend validates initData user is authorized for the chat.
+- **HTTPS**: Use ngrok/tunnel for local development. Production HTTPS handled by cloud deployment (Phase 07). Don't over-engineer dev setup.
+- **Frontend structure**: 3 separate files (HTML, CSS, JS). Cleaner organization, easier to maintain.
 
 ## Overview
 
@@ -77,7 +85,9 @@ src/api/
 
 Validates `initData`, returns current setup state for this chat.
 
-**Request body**: `{ "init_data": "<telegram_init_data_string>" }`
+**Request body**: `{ "init_data": "<telegram_init_data_string>", "chat_id": -1001234567890 }`
+
+The `chat_id` comes from the Mini App URL parameter (set by `/start` handler). The `init_data` proves the user's identity via HMAC.
 
 **Response**:
 ```json
@@ -309,7 +319,8 @@ def validate_init_data(init_data: str) -> dict:
     return {
         "user_id": user_data.get("id"),
         "first_name": user_data.get("first_name"),
-        "chat_id": user_data.get("id"),  # In private chats, chat_id = user_id
+        # chat_id comes from URL parameter, not initData
+        # initData only proves user identity; chat_id is set by /start handler
     }
 ```
 
