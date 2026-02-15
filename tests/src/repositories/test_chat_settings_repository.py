@@ -124,3 +124,37 @@ class TestChatSettingsRepository:
         assert mock_settings.is_paused is False
         assert mock_settings.paused_by_user_id is None
         assert mock_settings.paused_at is None
+
+    def test_get_all_active_returns_unpaused_chats(self, settings_repo, mock_db):
+        """get_all_active returns only non-paused ChatSettings."""
+        mock_chat1 = Mock(spec=ChatSettings, is_paused=False)
+        mock_chat2 = Mock(spec=ChatSettings, is_paused=False)
+        mock_query = mock_db.query.return_value
+        mock_query.filter.return_value.order_by.return_value.all.return_value = [
+            mock_chat1,
+            mock_chat2,
+        ]
+
+        result = settings_repo.get_all_active()
+
+        assert len(result) == 2
+        mock_db.query.assert_called_with(ChatSettings)
+        mock_db.commit.assert_called_once()  # end_read_transaction
+
+    def test_get_all_active_returns_empty_when_all_paused(self, settings_repo, mock_db):
+        """get_all_active returns empty list when all chats are paused."""
+        mock_query = mock_db.query.return_value
+        mock_query.filter.return_value.order_by.return_value.all.return_value = []
+
+        result = settings_repo.get_all_active()
+
+        assert result == []
+
+    def test_get_all_active_returns_empty_when_no_records(self, settings_repo, mock_db):
+        """get_all_active returns empty list when no chat_settings exist."""
+        mock_query = mock_db.query.return_value
+        mock_query.filter.return_value.order_by.return_value.all.return_value = []
+
+        result = settings_repo.get_all_active()
+
+        assert result == []
