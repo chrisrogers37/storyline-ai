@@ -27,7 +27,12 @@ class SchedulerService(BaseService):
         self.category_mix_repo = CategoryMixRepository()
         self.settings_service = SettingsService()
 
-    def create_schedule(self, days: int = 7, user_id: Optional[str] = None) -> dict:
+    def create_schedule(
+        self,
+        days: int = 7,
+        user_id: Optional[str] = None,
+        telegram_chat_id: Optional[int] = None,
+    ) -> dict:
         """
         Generate posting schedule for the next N days.
 
@@ -56,7 +61,9 @@ class SchedulerService(BaseService):
 
             try:
                 # Generate time slots
-                time_slots = self._generate_time_slots(days)
+                time_slots = self._generate_time_slots(
+                    days, telegram_chat_id=telegram_chat_id
+                )
                 total_slots = len(time_slots)
 
                 logger.info(
@@ -93,7 +100,12 @@ class SchedulerService(BaseService):
 
             return result
 
-    def extend_schedule(self, days: int = 7, user_id: Optional[str] = None) -> dict:
+    def extend_schedule(
+        self,
+        days: int = 7,
+        user_id: Optional[str] = None,
+        telegram_chat_id: Optional[int] = None,
+    ) -> dict:
         """
         Extend existing schedule by adding more days.
 
@@ -135,7 +147,9 @@ class SchedulerService(BaseService):
                 logger.info(f"Extending schedule from {start_date} for {days} days")
 
                 # Generate time slots starting from start_date
-                time_slots = self._generate_time_slots_from_date(start_date, days)
+                time_slots = self._generate_time_slots_from_date(
+                    start_date, days, telegram_chat_id=telegram_chat_id
+                )
                 total_slots = len(time_slots)
 
                 logger.info(f"Generated {total_slots} new time slots")
@@ -216,21 +230,25 @@ class SchedulerService(BaseService):
 
         return scheduled_count, skipped_count, category_breakdown
 
-    def _generate_time_slots_from_date(self, start_date, days: int) -> list[datetime]:
+    def _generate_time_slots_from_date(
+        self, start_date, days: int, telegram_chat_id: Optional[int] = None
+    ) -> list[datetime]:
         """
         Generate time slots starting from a specific date.
 
         Args:
             start_date: Date to start generating slots from
             days: Number of days to generate
+            telegram_chat_id: Chat to get schedule settings for.
+                Falls back to ADMIN_TELEGRAM_CHAT_ID if not specified.
 
         Returns:
             List of datetime objects for posting
         """
         # Get schedule settings from database
-        chat_settings = self.settings_service.get_settings(
-            settings.ADMIN_TELEGRAM_CHAT_ID
-        )
+        if telegram_chat_id is None:
+            telegram_chat_id = settings.ADMIN_TELEGRAM_CHAT_ID
+        chat_settings = self.settings_service.get_settings(telegram_chat_id)
 
         time_slots = []
         posts_per_day = chat_settings.posts_per_day
@@ -318,17 +336,24 @@ class SchedulerService(BaseService):
             summary[cat] = summary.get(cat, 0) + 1
         return ", ".join(f"{cat}: {count}" for cat, count in sorted(summary.items()))
 
-    def _generate_time_slots(self, days: int) -> list[datetime]:
+    def _generate_time_slots(
+        self, days: int, telegram_chat_id: Optional[int] = None
+    ) -> list[datetime]:
         """
         Generate evenly distributed time slots within posting windows.
+
+        Args:
+            days: Number of days to generate slots for
+            telegram_chat_id: Chat to get schedule settings for.
+                Falls back to ADMIN_TELEGRAM_CHAT_ID if not specified.
 
         Returns:
             List of datetime objects for posting
         """
         # Get schedule settings from database (falls back to .env if not in DB)
-        chat_settings = self.settings_service.get_settings(
-            settings.ADMIN_TELEGRAM_CHAT_ID
-        )
+        if telegram_chat_id is None:
+            telegram_chat_id = settings.ADMIN_TELEGRAM_CHAT_ID
+        chat_settings = self.settings_service.get_settings(telegram_chat_id)
 
         time_slots = []
         posts_per_day = chat_settings.posts_per_day
