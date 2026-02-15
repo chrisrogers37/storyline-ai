@@ -276,9 +276,7 @@ class PostingService(BaseService):
             # (chat_settings was already fetched in the pause check above)
             chat_settings_id = None
             if telegram_chat_id:
-                chat_settings_id = (
-                    str(chat_settings.id) if chat_settings else None
-                )
+                chat_settings_id = str(chat_settings.id) if chat_settings else None
 
             # Get all pending posts ready to process
             pending_items = self.queue_repo.get_pending(

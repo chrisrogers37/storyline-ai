@@ -136,9 +136,7 @@ class TestPostingServiceTenantSupport:
         posting_service.settings_service.get_settings.return_value = mock_chat_settings
         posting_service.queue_repo.get_pending.return_value = []
 
-        result = await posting_service.process_pending_posts(
-            telegram_chat_id=-200456
-        )
+        result = await posting_service.process_pending_posts(telegram_chat_id=-200456)
 
         posting_service.settings_service.get_settings.assert_called_with(-200456)
         assert result["processed"] == 0
@@ -150,9 +148,7 @@ class TestPostingServiceTenantSupport:
         mock_chat_settings.is_paused = True
         posting_service.settings_service.get_settings.return_value = mock_chat_settings
 
-        result = await posting_service.process_pending_posts(
-            telegram_chat_id=-200456
-        )
+        result = await posting_service.process_pending_posts(telegram_chat_id=-200456)
 
         assert result["paused"] is True
         assert result["processed"] == 0

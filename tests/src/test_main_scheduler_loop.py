@@ -34,12 +34,8 @@ class TestSchedulerLoop:
 
         # Should have called process_pending_posts for each chat
         assert posting_service.process_pending_posts.call_count == 2
-        posting_service.process_pending_posts.assert_any_call(
-            telegram_chat_id=-100111
-        )
-        posting_service.process_pending_posts.assert_any_call(
-            telegram_chat_id=-100222
-        )
+        posting_service.process_pending_posts.assert_any_call(telegram_chat_id=-100111)
+        posting_service.process_pending_posts.assert_any_call(telegram_chat_id=-100222)
 
     @pytest.mark.asyncio
     async def test_scheduler_loop_falls_back_to_global_when_no_tenants(self):
