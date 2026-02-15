@@ -506,7 +506,10 @@ class TelegramCommandHandlers:
 
         with SchedulerService() as scheduler:
             try:
-                result = scheduler.create_schedule(days=days)
+                result = scheduler.create_schedule(
+                    days=days,
+                    telegram_chat_id=update.effective_chat.id,
+                )
                 await update.message.reply_text(
                     f"📅 *Schedule Created*\n\n"
                     f"✅ Scheduled: {result['scheduled']} posts\n"

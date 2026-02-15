@@ -250,6 +250,31 @@ class TestSettingsServiceUnit:
 
         assert display["media_sync_enabled"] is True
 
+    def test_get_all_active_chats_delegates_to_repository(self):
+        """get_all_active_chats delegates to settings_repo.get_all_active."""
+        service = SettingsService()
+        mock_repo = Mock()
+        mock_chat1 = Mock(spec=ChatSettings)
+        mock_chat2 = Mock(spec=ChatSettings)
+        mock_repo.get_all_active.return_value = [mock_chat1, mock_chat2]
+        service.settings_repo = mock_repo
+
+        result = service.get_all_active_chats()
+
+        assert len(result) == 2
+        mock_repo.get_all_active.assert_called_once()
+
+    def test_get_all_active_chats_returns_empty_list(self):
+        """get_all_active_chats returns empty list when no active chats."""
+        service = SettingsService()
+        mock_repo = Mock()
+        mock_repo.get_all_active.return_value = []
+        service.settings_repo = mock_repo
+
+        result = service.get_all_active_chats()
+
+        assert result == []
+
 
 # =============================================================================
 # ARCHITECTURE VALIDATION TESTS

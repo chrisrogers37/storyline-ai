@@ -1,6 +1,6 @@
 """Settings service - runtime configuration management."""
 
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, List
 
 from src.services.base_service import BaseService
 from src.repositories.chat_settings_repository import ChatSettingsRepository
@@ -197,3 +197,13 @@ class SettingsService(BaseService):
             "media_sync_enabled": settings.media_sync_enabled,
             "updated_at": settings.updated_at,
         }
+
+    def get_all_active_chats(self) -> List[ChatSettings]:
+        """Get all active (non-paused) chat settings.
+
+        Used by the scheduler loop to iterate over all tenants.
+
+        Returns:
+            List of ChatSettings records where is_paused=False
+        """
+        return self.settings_repo.get_all_active()

@@ -312,6 +312,126 @@ class TestSchedulerCategoryAllocation:
         scheduler_service._select_media_from_pool.assert_called_once_with(category=None)
         assert result is None
 
+
+@pytest.mark.unit
+class TestSchedulerTenantSupport:
+    """Tests for per-tenant scheduler parameter threading."""
+
+    @patch("src.services.core.scheduler.settings")
+    def test_create_schedule_passes_telegram_chat_id(
+        self, mock_settings, scheduler_service_mocked
+    ):
+        """create_schedule threads telegram_chat_id to _generate_time_slots."""
+        service = scheduler_service_mocked
+        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
+
+        mock_chat_settings = Mock()
+        mock_chat_settings.posts_per_day = 2
+        mock_chat_settings.posting_hours_start = 9
+        mock_chat_settings.posting_hours_end = 17
+        service.settings_service.get_settings.return_value = mock_chat_settings
+        service.category_mix_repo.get_current_mix_as_dict.return_value = {}
+
+        mock_media = Mock()
+        mock_media.id = uuid4()
+        mock_media.file_name = "test.jpg"
+        mock_media.category = None
+        service._select_media = Mock(return_value=mock_media)
+
+        service.create_schedule(days=2, telegram_chat_id=-200456)
+
+        # Should use the provided chat ID, not the admin default
+        service.settings_service.get_settings.assert_called_with(-200456)
+
+    @patch("src.services.core.scheduler.settings")
+    def test_create_schedule_falls_back_to_admin_when_no_chat_id(
+        self, mock_settings, scheduler_service_mocked
+    ):
+        """create_schedule without telegram_chat_id falls back to ADMIN_TELEGRAM_CHAT_ID."""
+        service = scheduler_service_mocked
+        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
+
+        mock_chat_settings = Mock()
+        mock_chat_settings.posts_per_day = 2
+        mock_chat_settings.posting_hours_start = 9
+        mock_chat_settings.posting_hours_end = 17
+        service.settings_service.get_settings.return_value = mock_chat_settings
+        service.category_mix_repo.get_current_mix_as_dict.return_value = {}
+
+        mock_media = Mock()
+        mock_media.id = uuid4()
+        mock_media.file_name = "test.jpg"
+        mock_media.category = None
+        service._select_media = Mock(return_value=mock_media)
+
+        service.create_schedule(days=2)
+
+        service.settings_service.get_settings.assert_called_with(-100123)
+
+    @patch("src.services.core.scheduler.settings")
+    def test_extend_schedule_passes_telegram_chat_id(
+        self, mock_settings, scheduler_service_mocked
+    ):
+        """extend_schedule threads telegram_chat_id to _generate_time_slots_from_date."""
+        service = scheduler_service_mocked
+        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
+
+        mock_chat_settings = Mock()
+        mock_chat_settings.posts_per_day = 2
+        mock_chat_settings.posting_hours_start = 9
+        mock_chat_settings.posting_hours_end = 17
+        service.settings_service.get_settings.return_value = mock_chat_settings
+        service.category_mix_repo.get_current_mix_as_dict.return_value = {}
+        service.queue_repo.get_all.return_value = []
+
+        mock_media = Mock()
+        mock_media.id = uuid4()
+        mock_media.file_name = "test.jpg"
+        mock_media.category = None
+        service._select_media = Mock(return_value=mock_media)
+
+        service.extend_schedule(days=2, telegram_chat_id=-200456)
+
+        service.settings_service.get_settings.assert_called_with(-200456)
+
+    @patch("src.services.core.scheduler.settings")
+    def test_generate_time_slots_uses_chat_specific_settings(
+        self, mock_settings, scheduler_service_mocked
+    ):
+        """_generate_time_slots uses the provided chat's schedule settings."""
+        service = scheduler_service_mocked
+        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
+
+        mock_chat_settings = Mock()
+        mock_chat_settings.posts_per_day = 5
+        mock_chat_settings.posting_hours_start = 10
+        mock_chat_settings.posting_hours_end = 20
+        service.settings_service.get_settings.return_value = mock_chat_settings
+
+        service._generate_time_slots(days=2, telegram_chat_id=-200456)
+
+        service.settings_service.get_settings.assert_called_with(-200456)
+
+
+@pytest.mark.unit
+class TestSchedulerMediaPool:
+    """Tests for _select_media_from_pool method."""
+
+    @pytest.fixture
+    def scheduler_service(self):
+        """Create SchedulerService with mocked dependencies."""
+        with patch.object(SchedulerService, "__init__", lambda self: None):
+            service = SchedulerService()
+            service.media_repo = Mock()
+            service.queue_repo = Mock()
+            service.lock_repo = Mock()
+            service.category_mix_repo = Mock()
+            service.settings_service = Mock()
+            service.service_run_repo = Mock()
+            service.service_name = "SchedulerService"
+            service.SCHEDULE_JITTER_MINUTES = 30
+            return service
+
     def test_select_media_from_pool_delegates_to_repository(self, scheduler_service):
         """Test that _select_media_from_pool delegates to media_repo."""
         mock_media = Mock(category="memes", file_name="test.jpg")

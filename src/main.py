@@ -19,29 +19,66 @@ session_posts_sent = 0
 shutdown_in_progress = False
 
 
-async def run_scheduler_loop(posting_service: PostingService):
-    """Run scheduler loop - check for pending posts every minute."""
+async def run_scheduler_loop(
+    posting_service: PostingService,
+    settings_service=None,
+):
+    """Run scheduler loop - check for pending posts every minute.
+
+    Iterates over all active (non-paused) tenants and processes each
+    tenant's pending posts independently.
+
+    Args:
+        posting_service: PostingService instance
+        settings_service: SettingsService instance for tenant discovery.
+            If None, falls back to global single-tenant behavior.
+    """
     global session_posts_sent
     logger.info("Starting scheduler loop...")
 
     while True:
         try:
-            # Process pending posts
-            result = await posting_service.process_pending_posts()
+            if settings_service:
+                active_chats = settings_service.get_all_active_chats()
+            else:
+                active_chats = []
 
-            if result["processed"] > 0:
-                # Only count successful Telegram posts (not failed ones)
-                session_posts_sent += result["telegram"]
-                logger.info(
-                    f"Processed {result['processed']} posts: "
-                    f"{result['telegram']} to Telegram, "
-                    f"{result['failed']} failed"
-                )
+            if active_chats:
+                # Multi-tenant mode: process each tenant's queue
+                for chat in active_chats:
+                    try:
+                        result = await posting_service.process_pending_posts(
+                            telegram_chat_id=chat.telegram_chat_id
+                        )
+
+                        if result["processed"] > 0:
+                            session_posts_sent += result["telegram"]
+                            logger.info(
+                                f"[chat={chat.telegram_chat_id}] "
+                                f"Processed {result['processed']} posts: "
+                                f"{result['telegram']} to Telegram, "
+                                f"{result['failed']} failed"
+                            )
+                    except Exception as e:
+                        logger.error(
+                            f"Error processing chat {chat.telegram_chat_id}: {e}",
+                            exc_info=True,
+                        )
+            else:
+                # Legacy single-tenant fallback
+                result = await posting_service.process_pending_posts()
+
+                if result["processed"] > 0:
+                    session_posts_sent += result["telegram"]
+                    logger.info(
+                        f"Processed {result['processed']} posts: "
+                        f"{result['telegram']} to Telegram, "
+                        f"{result['failed']} failed"
+                    )
 
         except Exception as e:
             logger.error(f"Error in scheduler loop: {e}", exc_info=True)
         finally:
-            # Clean up open transactions to prevent "idle in transaction"
             posting_service.cleanup_transactions()
 
         # Wait 1 minute before next check
@@ -176,7 +213,7 @@ async def _notify_sync_error(telegram_service, message: str):
             return
 
         await telegram_service.bot.send_message(
-            chat_id=settings.TELEGRAM_CHANNEL_ID,
+            chat_id=telegram_service.channel_id,
             text=message,
             parse_mode="Markdown",
         )
@@ -204,9 +241,12 @@ async def main_async():
     logger.info("✓ Configuration validated successfully")
 
     # Initialize services
+    from src.services.core.settings_service import SettingsService
+
     posting_service = PostingService()
     telegram_service = TelegramService()
     lock_service = MediaLockService()
+    settings_service = SettingsService()
 
     # Initialize media sync (if enabled)
     sync_service = None
@@ -223,7 +263,7 @@ async def main_async():
     # Create tasks
     all_services = [posting_service, telegram_service, lock_service]
     tasks = [
-        asyncio.create_task(run_scheduler_loop(posting_service)),
+        asyncio.create_task(run_scheduler_loop(posting_service, settings_service)),
         asyncio.create_task(cleanup_locks_loop(lock_service)),
         asyncio.create_task(telegram_service.start_polling()),
     ]

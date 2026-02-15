@@ -677,7 +677,10 @@ class TestScheduleCommand:
 
             await handlers.handle_schedule(mock_update, mock_context)
 
-            mock_scheduler.create_schedule.assert_called_once_with(days=7)
+            mock_scheduler.create_schedule.assert_called_once_with(
+                days=7,
+                telegram_chat_id=-100123,
+            )
 
             call_args = mock_update.message.reply_text.call_args
             message_text = call_args.args[0]

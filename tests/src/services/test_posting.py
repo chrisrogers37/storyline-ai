@@ -121,3 +121,83 @@ class TestPostingService:
 
         assert result["success"] is False
         assert result["error"] == "No pending items in queue"
+
+
+@pytest.mark.unit
+class TestPostingServiceTenantSupport:
+    """Tests for per-tenant posting behavior."""
+
+    @pytest.mark.asyncio
+    async def test_process_pending_posts_with_tenant_chat_id(self, posting_service):
+        """process_pending_posts with telegram_chat_id uses per-tenant pause state."""
+        mock_chat_settings = Mock()
+        mock_chat_settings.is_paused = False
+        mock_chat_settings.id = uuid4()
+        posting_service.settings_service.get_settings.return_value = mock_chat_settings
+        posting_service.queue_repo.get_pending.return_value = []
+
+        result = await posting_service.process_pending_posts(telegram_chat_id=-200456)
+
+        posting_service.settings_service.get_settings.assert_called_with(-200456)
+        assert result["processed"] == 0
+
+    @pytest.mark.asyncio
+    async def test_process_pending_posts_tenant_paused(self, posting_service):
+        """process_pending_posts returns paused result when tenant is paused."""
+        mock_chat_settings = Mock()
+        mock_chat_settings.is_paused = True
+        posting_service.settings_service.get_settings.return_value = mock_chat_settings
+
+        result = await posting_service.process_pending_posts(telegram_chat_id=-200456)
+
+        assert result["paused"] is True
+        assert result["processed"] == 0
+        posting_service.queue_repo.get_pending.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_process_pending_posts_falls_back_to_global(self, posting_service):
+        """process_pending_posts without telegram_chat_id uses global is_paused."""
+        posting_service.telegram_service.is_paused = False
+        posting_service.queue_repo.get_pending.return_value = []
+
+        result = await posting_service.process_pending_posts()
+
+        posting_service.settings_service.get_settings.assert_not_called()
+        assert result["processed"] == 0
+
+    @pytest.mark.asyncio
+    async def test_process_pending_posts_passes_chat_settings_id_to_queue(
+        self, posting_service
+    ):
+        """process_pending_posts threads chat_settings_id to queue_repo.get_pending."""
+        mock_chat_settings = Mock()
+        mock_chat_settings.is_paused = False
+        mock_chat_settings.id = uuid4()
+        posting_service.settings_service.get_settings.return_value = mock_chat_settings
+        posting_service.queue_repo.get_pending.return_value = []
+
+        await posting_service.process_pending_posts(telegram_chat_id=-200456)
+
+        posting_service.queue_repo.get_pending.assert_called_once_with(
+            limit=100, chat_settings_id=str(mock_chat_settings.id)
+        )
+
+    @patch("src.services.core.posting.settings")
+    def test_get_chat_settings_with_explicit_chat_id(
+        self, mock_settings, posting_service
+    ):
+        """_get_chat_settings with explicit chat_id uses that id."""
+        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
+        posting_service._get_chat_settings(-200456)
+
+        posting_service.settings_service.get_settings.assert_called_with(-200456)
+
+    @patch("src.services.core.posting.settings")
+    def test_get_chat_settings_falls_back_to_admin(
+        self, mock_settings, posting_service
+    ):
+        """_get_chat_settings without chat_id falls back to ADMIN_TELEGRAM_CHAT_ID."""
+        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
+        posting_service._get_chat_settings()
+
+        posting_service.settings_service.get_settings.assert_called_with(-100123)

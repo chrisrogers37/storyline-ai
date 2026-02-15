@@ -1,6 +1,6 @@
 """Chat settings repository - CRUD operations for runtime settings."""
 
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 from src.repositories.base_repository import BaseRepository
@@ -98,3 +98,21 @@ class ChatSettingsRepository(BaseRepository):
             "paused_by_user_id": user_id if is_paused else None,
         }
         return self.update(telegram_chat_id, **update_data)
+
+    def get_all_active(self) -> List[ChatSettings]:
+        """Get all non-paused chat settings records.
+
+        Used by the scheduler loop to iterate over all active tenants.
+        Returns only records where is_paused is False.
+
+        Returns:
+            List of active ChatSettings, ordered by created_at
+        """
+        result = (
+            self.db.query(ChatSettings)
+            .filter(ChatSettings.is_paused == False)  # noqa: E712
+            .order_by(ChatSettings.created_at.asc())
+            .all()
+        )
+        self.end_read_transaction()
+        return result
