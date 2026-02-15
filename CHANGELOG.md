@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Per-tenant scheduler and posting pipeline** - Thread `telegram_chat_id` through scheduler, posting, and main loop for multi-tenant operation
+  - `ChatSettingsRepository.get_all_active()` — discover all non-paused tenants
+  - `SettingsService.get_all_active_chats()` — service-layer tenant discovery
+  - `SchedulerService`: 4 methods accept `telegram_chat_id` (create_schedule, extend_schedule, both time-slot generators)
+  - `PostingService`: `process_pending_posts` and `_get_chat_settings` accept `telegram_chat_id`; `_post_via_instagram` reads chat context from queue item
+  - `main.py`: Scheduler loop iterates over all active tenants with per-tenant error isolation; legacy single-tenant fallback preserved
+  - `TelegramService`: `admin_chat_id` cached in constructor, lifecycle notifications use instance property
+  - `/schedule` command passes `update.effective_chat.id` to scheduler
+  - `_notify_sync_error` uses `telegram_service.channel_id` instead of hardcoded constant
+  - 20 new unit tests (scheduler loop, posting tenant, scheduler tenant, repository, service)
+
 - **Per-tenant repository query filtering** - Add optional `chat_settings_id` parameter to 42 repository methods across 5 repositories
   - `BaseRepository`: New `_apply_tenant_filter()` helper used by all tenant-scoped repositories
   - `MediaRepository`: 13 methods updated (including `get_next_eligible_for_posting` with tenant-scoped subqueries)

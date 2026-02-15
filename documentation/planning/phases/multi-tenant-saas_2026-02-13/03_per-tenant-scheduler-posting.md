@@ -1,6 +1,7 @@
 # Phase 03: Per-Tenant Scheduler & Posting
 
-**Status:** PENDING
+**Status:** 🔧 IN PROGRESS
+**Started:** 2026-02-15
 **Risk:** Medium
 **Effort:** 4-5 hours
 **PR Title:** `feat: per-tenant scheduler loops and posting pipeline`
@@ -277,6 +278,25 @@ After:
 
 Note: The `self.telegram_service.is_paused` property checks `self.channel_id` which is still the global admin channel. For the per-tenant path, we check `chat_settings.is_paused` directly. This preserves backward compatibility when called without `telegram_chat_id`.
 
+**Change 2b: Thread `chat_settings_id` to queue repo queries**
+
+Since Phase 02 added `chat_settings_id` params to all queue repo methods, we should use them. Resolve `chat_settings_id` from the chat settings record and pass it to `get_pending()`:
+
+```python
+            # Resolve chat_settings_id for tenant-scoped queue queries
+            chat_settings_id = None
+            if telegram_chat_id:
+                chat_settings = self._get_chat_settings(telegram_chat_id)
+                chat_settings_id = str(chat_settings.id) if chat_settings else None
+
+            # Get all pending posts ready to process (tenant-scoped if chat_settings_id provided)
+            pending_items = self.queue_repo.get_pending(
+                limit=100, chat_settings_id=chat_settings_id
+            )
+```
+
+This ensures the posting loop only processes queue items belonging to the current tenant.
+
 **Change 3: `_post_via_instagram()` (line 360-462) -- thread `telegram_chat_id`**
 
 The existing call at line 377 already uses `self._get_chat_settings()`. Since `_post_via_instagram` is called with both `queue_item` and `media_item`, and the queue item has `telegram_chat_id` on it (line 50 of posting_queue model), we can extract it:
@@ -289,8 +309,7 @@ Before (line 377):
 After:
 ```python
         # Use queue item's chat context if available, fall back to admin
-        item_chat_id = getattr(queue_item, 'telegram_chat_id', None)
-        chat_settings = self._get_chat_settings(item_chat_id)
+        chat_settings = self._get_chat_settings(queue_item.telegram_chat_id)
 ```
 
 ---
@@ -635,21 +654,21 @@ The existing test mocks for `mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123` wil
 
 ## 7. Verification Checklist
 
-- [ ] `get_all_active()` returns only non-paused chat settings
-- [ ] `SchedulerService.create_schedule(telegram_chat_id=X)` uses chat X's settings (posts_per_day, hours)
-- [ ] `SchedulerService.create_schedule()` (no arg) falls back to `ADMIN_TELEGRAM_CHAT_ID`
-- [ ] `PostingService.process_pending_posts(telegram_chat_id=X)` checks chat X's pause state
-- [ ] `PostingService.process_pending_posts()` (no arg) falls back to `self.telegram_service.is_paused`
-- [ ] Scheduler loop in main.py iterates over all active tenants
-- [ ] Scheduler loop gracefully handles empty tenant list (falls back to global)
-- [ ] Scheduler loop handles per-tenant errors without stopping other tenants
-- [ ] `/schedule 7` in Telegram passes `update.effective_chat.id` to `create_schedule`
-- [ ] Startup/shutdown notifications still go to admin chat
-- [ ] Sync error notifications use `telegram_service.channel_id` not `settings.TELEGRAM_CHANNEL_ID`
-- [ ] All existing tests pass without modification (backward compatibility)
-- [ ] `ruff check src/ tests/ cli/` passes
-- [ ] `ruff format --check src/ tests/ cli/` passes
-- [ ] `pytest` passes
+- [x] `get_all_active()` returns only non-paused chat settings
+- [x] `SchedulerService.create_schedule(telegram_chat_id=X)` uses chat X's settings (posts_per_day, hours)
+- [x] `SchedulerService.create_schedule()` (no arg) falls back to `ADMIN_TELEGRAM_CHAT_ID`
+- [x] `PostingService.process_pending_posts(telegram_chat_id=X)` checks chat X's pause state
+- [x] `PostingService.process_pending_posts()` (no arg) falls back to `self.telegram_service.is_paused`
+- [x] Scheduler loop in main.py iterates over all active tenants
+- [x] Scheduler loop gracefully handles empty tenant list (falls back to global)
+- [x] Scheduler loop handles per-tenant errors without stopping other tenants
+- [x] `/schedule 7` in Telegram passes `update.effective_chat.id` to `create_schedule`
+- [x] Startup/shutdown notifications still go to admin chat
+- [x] Sync error notifications use `telegram_service.channel_id` not `settings.TELEGRAM_CHANNEL_ID`
+- [x] All existing tests pass without modification (backward compatibility)
+- [x] `ruff check src/ tests/ cli/` passes
+- [x] `ruff format --check src/ tests/ cli/` passes
+- [x] `pytest` passes (1065 passed, 21 skipped)
 
 ## 8. What NOT To Do
 
