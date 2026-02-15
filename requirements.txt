@@ -30,6 +30,10 @@ google-api-python-client>=2.100.0
 google-auth>=2.23.0
 google-auth-oauthlib>=1.1.0
 
+# API Server (Phase 04 OAuth)
+fastapi>=0.109.0
+uvicorn>=0.27.0
+
 # Security (Phase 2)
 cryptography>=41.0.0
 

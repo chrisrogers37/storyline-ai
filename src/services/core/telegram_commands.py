@@ -955,3 +955,46 @@ class TelegramCommandHandlers:
             telegram_chat_id=chat_id,
             telegram_message_id=update.message.message_id,
         )
+
+    async def handle_connect(self, update, context):
+        """Handle /connect command - generate Instagram OAuth link.
+
+        Usage:
+            /connect - Get a link to connect an Instagram account via OAuth
+        """
+        user = self.service._get_or_create_user(update.effective_user)
+        chat_id = update.effective_chat.id
+
+        from src.services.core.oauth_service import OAuthService
+
+        oauth_service = OAuthService()
+        try:
+            auth_url = oauth_service.generate_authorization_url(chat_id)
+
+            keyboard = InlineKeyboardMarkup(
+                [[InlineKeyboardButton("Connect Instagram", url=auth_url)]]
+            )
+
+            await update.message.reply_text(
+                "\U0001f4f8 *Connect Instagram Account*\n\n"
+                "Click the button below to authorize Storyline AI "
+                "to post Stories on your behalf.\n\n"
+                "_This link expires in 10 minutes._",
+                parse_mode="Markdown",
+                reply_markup=keyboard,
+            )
+        except ValueError as e:
+            await update.message.reply_text(
+                f"\u26a0\ufe0f OAuth not configured: {e}\n\n"
+                "Contact your admin to set up FACEBOOK_APP_ID, "
+                "FACEBOOK_APP_SECRET, and OAUTH_REDIRECT_BASE_URL.",
+            )
+        finally:
+            oauth_service.close()
+
+        self.service.interaction_service.log_command(
+            user_id=str(user.id),
+            command="/connect",
+            telegram_chat_id=chat_id,
+            telegram_message_id=update.message.message_id,
+        )
