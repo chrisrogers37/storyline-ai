@@ -414,25 +414,25 @@ def test_apply_tenant_filter_without_id(self, base_repo):
 
 ## Verification Checklist
 
-- [ ] `_apply_tenant_filter` exists on `BaseRepository` and is used consistently
-- [ ] All 13 `MediaRepository` query/create methods updated
-- [ ] All 10 `QueueRepository` query/create methods updated
-- [ ] `HistoryCreateParams` dataclass has `chat_settings_id` field
-- [ ] All 5 `HistoryRepository` query methods updated
-- [ ] All 7 `LockRepository` query/create methods updated
-- [ ] All 6 `CategoryMixRepository` query/create methods updated
-- [ ] `QueueRepository.shift_slots_forward` passes `chat_settings_id` to `self.get_all`
-- [ ] `LockRepository.is_locked` passes `chat_settings_id` to `self.get_active_lock`
-- [ ] `CategoryMixRepository.get_current_mix_as_dict` passes `chat_settings_id` to `self.get_current_mix`
-- [ ] `CategoryMixRepository.get_categories_without_ratio` passes `chat_settings_id` through
-- [ ] `CategoryMixRepository.set_mix` passes `chat_settings_id` to both expire query and create
-- [ ] `MediaRepository.get_next_eligible_for_posting` applies tenant filter to main query AND subqueries
-- [ ] All existing tests still pass (backward compatibility -- `chat_settings_id=None` default)
-- [ ] New tests added for every modified method (both with and without tenant filter)
-- [ ] `ruff check src/ tests/` passes
-- [ ] `ruff format --check src/ tests/` passes
-- [ ] `pytest` passes
-- [ ] CHANGELOG.md updated
+- [x] `_apply_tenant_filter` exists on `BaseRepository` and is used consistently
+- [x] All 13 `MediaRepository` query/create methods updated
+- [x] All 10 `QueueRepository` query/create methods updated
+- [x] `HistoryCreateParams` dataclass has `chat_settings_id` field
+- [x] All 5 `HistoryRepository` query methods updated
+- [x] All 7 `LockRepository` query/create methods updated
+- [x] All 6 `CategoryMixRepository` query/create methods updated
+- [x] `QueueRepository.shift_slots_forward` passes `chat_settings_id` to `self.get_all`
+- [x] `LockRepository.is_locked` passes `chat_settings_id` to `self.get_active_lock`
+- [x] `CategoryMixRepository.get_current_mix_as_dict` passes `chat_settings_id` to `self.get_current_mix`
+- [x] `CategoryMixRepository.get_categories_without_ratio` passes `chat_settings_id` through
+- [x] `CategoryMixRepository.set_mix` passes `chat_settings_id` to both expire query and create
+- [x] `MediaRepository.get_next_eligible_for_posting` applies tenant filter to main query AND subqueries
+- [x] All existing tests still pass (backward compatibility -- `chat_settings_id=None` default)
+- [x] New tests added for every modified method (both with and without tenant filter)
+- [x] `ruff check src/ tests/` passes
+- [x] `ruff format --check src/ tests/` passes
+- [x] `pytest` passes (1046 passed, 21 skipped)
+- [x] CHANGELOG.md updated
 
 ---
 
