@@ -15,11 +15,15 @@ class Settings(BaseSettings):
     ENABLE_INSTAGRAM_API: bool = False
 
     # Database Configuration
+    DATABASE_URL: Optional[str] = None  # Full URL (overrides DB_* components if set)
     DB_HOST: str = "localhost"
     DB_PORT: int = 5432
     DB_NAME: str = "storyline_ai"
     DB_USER: str = "storyline_user"
     DB_PASSWORD: Optional[str] = ""
+    DB_SSLMODE: Optional[str] = None  # e.g., "require" for Neon
+    DB_POOL_SIZE: int = 10
+    DB_MAX_OVERFLOW: int = 20
     TEST_DB_NAME: str = "storyline_ai_test"
 
     # Telegram Configuration (REQUIRED)
@@ -81,19 +85,35 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
-        """Get database URL for SQLAlchemy."""
+        """Get database URL for SQLAlchemy.
+
+        If DATABASE_URL is set, use it directly (standard for PaaS platforms).
+        Otherwise, assemble from individual DB_* components.
+        Appends ?sslmode= if DB_SSLMODE is set (required for Neon).
+        """
+        if self.DATABASE_URL:
+            return self.DATABASE_URL
+
         if self.DB_PASSWORD:
-            return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
-        return (
-            f"postgresql://{self.DB_USER}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
-        )
+            url = f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        else:
+            url = f"postgresql://{self.DB_USER}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+
+        if self.DB_SSLMODE:
+            url += f"?sslmode={self.DB_SSLMODE}"
+        return url
 
     @property
     def test_database_url(self) -> str:
         """Get test database URL."""
         if self.DB_PASSWORD:
-            return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.TEST_DB_NAME}"
-        return f"postgresql://{self.DB_USER}@{self.DB_HOST}:{self.DB_PORT}/{self.TEST_DB_NAME}"
+            url = f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.TEST_DB_NAME}"
+        else:
+            url = f"postgresql://{self.DB_USER}@{self.DB_HOST}:{self.DB_PORT}/{self.TEST_DB_NAME}"
+
+        if self.DB_SSLMODE:
+            url += f"?sslmode={self.DB_SSLMODE}"
+        return url
 
 
 # Global settings instance

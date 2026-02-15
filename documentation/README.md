@@ -93,7 +93,7 @@ documentation/
 - Essential CLI and Telegram bot commands
 - Troubleshooting common issues
 
-### Deployment Guide
+### Deployment Guide (Raspberry Pi)
 **[deployment.md](guides/deployment.md)**
 - 12-section deployment checklist for production
 - Telegram bot setup (BotFather, channel, admin ID)
@@ -101,6 +101,15 @@ documentation/
 - Raspberry Pi systemd service setup
 - Media indexing and schedule creation
 - Team onboarding, backups, monitoring
+
+### Cloud Deployment Guide (Railway + Neon)
+**[cloud-deployment.md](guides/cloud-deployment.md)**
+- Railway two-process deployment (worker + web)
+- Neon PostgreSQL setup with SSL and pool sizing
+- Full environment variable reference
+- OAuth callback setup (Instagram + Google Drive)
+- Onboarding Mini App HTTPS configuration
+- Monitoring, costs, security checklist, troubleshooting
 
 ### Testing Guide
 **[testing-guide.md](guides/testing-guide.md)**
