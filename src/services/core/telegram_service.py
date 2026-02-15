@@ -56,6 +56,7 @@ class TelegramService(BaseService):
         super().__init__()
         self.bot_token = settings.TELEGRAM_BOT_TOKEN
         self.channel_id = settings.TELEGRAM_CHANNEL_ID
+        self.admin_chat_id = settings.ADMIN_TELEGRAM_CHAT_ID
         self.user_repo = UserRepository()
         self.queue_repo = QueueRepository()
         self.history_repo = HistoryRepository()
@@ -694,7 +695,7 @@ class TelegramService(BaseService):
 
             # Send to admin
             await self.bot.send_message(
-                chat_id=settings.ADMIN_TELEGRAM_CHAT_ID,
+                chat_id=self.admin_chat_id,
                 text=message,
                 parse_mode="Markdown",
             )
@@ -729,7 +730,7 @@ class TelegramService(BaseService):
 
             # Send to admin
             await self.bot.send_message(
-                chat_id=settings.ADMIN_TELEGRAM_CHAT_ID,
+                chat_id=self.admin_chat_id,
                 text=message,
                 parse_mode="Markdown",
             )
