@@ -339,9 +339,7 @@ class TestGDriveGetUserCredentials:
         self.service.token_repo.get_token_for_chat.side_effect = get_token_side_effect
         self.service._encryption.decrypt.side_effect = lambda v: f"decrypted_{v}"
 
-        with patch(
-            "google.oauth2.credentials.Credentials"
-        ) as MockCreds:
+        with patch("google.oauth2.credentials.Credentials") as MockCreds:
             MockCreds.return_value = Mock()
             result = self.service.get_user_credentials(-100123)
 

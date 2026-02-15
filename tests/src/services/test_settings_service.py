@@ -746,3 +746,58 @@ class TestDeploymentModel:
             if col.name == "telegram_chat_id":
                 assert col.unique, "telegram_chat_id should be unique"
                 break
+
+
+# =============================================================================
+# ONBOARDING METHODS TESTS
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestSettingsServiceOnboarding:
+    """Test onboarding convenience methods."""
+
+    @pytest.fixture
+    def settings_service(self):
+        """Create SettingsService with mocked repository."""
+        with patch.object(SettingsService, "__init__", lambda self: None):
+            service = SettingsService()
+            service.settings_repo = Mock()
+            return service
+
+    def test_set_onboarding_step(self, settings_service):
+        """set_onboarding_step updates the column via repo."""
+        settings_service.settings_repo.update.return_value = Mock(
+            onboarding_step="instagram"
+        )
+
+        result = settings_service.set_onboarding_step(123456, "instagram")
+
+        settings_service.settings_repo.update.assert_called_once_with(
+            123456, onboarding_step="instagram"
+        )
+        assert result.onboarding_step == "instagram"
+
+    def test_set_onboarding_step_none_clears(self, settings_service):
+        """set_onboarding_step(None) clears the step."""
+        settings_service.settings_repo.update.return_value = Mock(onboarding_step=None)
+
+        settings_service.set_onboarding_step(123456, None)
+
+        settings_service.settings_repo.update.assert_called_once_with(
+            123456, onboarding_step=None
+        )
+
+    def test_complete_onboarding(self, settings_service):
+        """complete_onboarding sets completed=True and clears step."""
+        settings_service.settings_repo.update.return_value = Mock(
+            onboarding_step=None, onboarding_completed=True
+        )
+
+        result = settings_service.complete_onboarding(123456)
+
+        settings_service.settings_repo.update.assert_called_once_with(
+            123456, onboarding_step=None, onboarding_completed=True
+        )
+        assert result.onboarding_completed is True
+        assert result.onboarding_step is None
