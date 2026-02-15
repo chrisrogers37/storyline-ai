@@ -144,3 +144,88 @@ class TestTokenRepository:
         result = token_repo.get_expiring_tokens(hours_until_expiry=168)
 
         assert len(result) == 1
+
+
+@pytest.mark.unit
+class TestTokenRepositoryTenantScoped:
+    """Tests for tenant-scoped (chat_settings_id) token methods."""
+
+    @pytest.fixture
+    def mock_db(self):
+        return MagicMock()
+
+    @pytest.fixture
+    def token_repo(self, mock_db):
+        with patch("src.repositories.base_repository.get_db") as mock_get_db:
+            mock_get_db.return_value = iter([mock_db])
+            repo = TokenRepository()
+            repo._db = mock_db
+            return repo
+
+    def test_get_token_for_chat_found(self, token_repo, mock_db):
+        """Get token scoped to a specific chat."""
+        mock_token = Mock(spec=ApiToken)
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_token
+
+        result = token_repo.get_token_for_chat(
+            "google_drive", "oauth_access", "chat-uuid-1"
+        )
+
+        assert result is mock_token
+
+    def test_get_token_for_chat_not_found(self, token_repo, mock_db):
+        """Returns None when no token exists for chat."""
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+
+        result = token_repo.get_token_for_chat(
+            "google_drive", "oauth_access", "chat-uuid-1"
+        )
+
+        assert result is None
+
+    def test_create_or_update_for_chat_creates_new(self, token_repo, mock_db):
+        """Creates a new token when none exists for this chat."""
+        # get_token_for_chat returns None
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+
+        token_repo.create_or_update_for_chat(
+            service_name="google_drive",
+            token_type="oauth_access",
+            token_value="encrypted_access",
+            chat_settings_id="chat-uuid-1",
+            expires_at=datetime.utcnow() + timedelta(hours=1),
+            scopes=["drive.readonly"],
+            metadata={"email": "user@gmail.com"},
+        )
+
+        mock_db.add.assert_called_once()
+        added = mock_db.add.call_args[0][0]
+        assert isinstance(added, ApiToken)
+        assert added.service_name == "google_drive"
+        assert added.chat_settings_id == "chat-uuid-1"
+
+    def test_create_or_update_for_chat_updates_existing(self, token_repo, mock_db):
+        """Updates existing token when one exists for this chat."""
+        existing = Mock(spec=ApiToken)
+        existing.token_value = "old_encrypted"
+        mock_db.query.return_value.filter.return_value.first.return_value = existing
+
+        token_repo.create_or_update_for_chat(
+            service_name="google_drive",
+            token_type="oauth_access",
+            token_value="new_encrypted",
+            chat_settings_id="chat-uuid-1",
+        )
+
+        mock_db.add.assert_not_called()
+        assert existing.token_value == "new_encrypted"
+        mock_db.commit.assert_called()
+
+    def test_delete_tokens_for_chat(self, token_repo, mock_db):
+        """Delete all tokens for a service scoped to a chat."""
+        mock_db.query.return_value.filter.return_value.delete.return_value = 2
+
+        count = token_repo.delete_tokens_for_chat("google_drive", "chat-uuid-1")
+
+        assert count == 2
+        mock_db.commit.assert_called()

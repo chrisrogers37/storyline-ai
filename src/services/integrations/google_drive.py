@@ -186,6 +186,44 @@ class GoogleDriveService(BaseService):
             service_account_info=creds_dict,
         )
 
+    def get_provider_for_chat(
+        self,
+        telegram_chat_id: int,
+        root_folder_id: Optional[str] = None,
+    ) -> GoogleDriveProvider:
+        """Create a GoogleDriveProvider using user OAuth credentials for a tenant.
+
+        Args:
+            telegram_chat_id: Telegram chat ID to look up OAuth tokens for.
+            root_folder_id: Google Drive folder ID to use as media root.
+
+        Raises:
+            GoogleDriveAuthError: If no user OAuth tokens found for this chat.
+        """
+        from src.services.integrations.google_drive_oauth import GoogleDriveOAuthService
+
+        oauth_service = GoogleDriveOAuthService()
+        try:
+            credentials = oauth_service.get_user_credentials(telegram_chat_id)
+        finally:
+            oauth_service.close()
+
+        if not credentials:
+            raise GoogleDriveAuthError(
+                "No Google Drive OAuth credentials found for this chat. "
+                "Use /connect_drive to connect your Google Drive."
+            )
+
+        if not root_folder_id:
+            raise GoogleDriveAuthError(
+                "No root_folder_id configured for Google Drive media source."
+            )
+
+        return GoogleDriveProvider(
+            root_folder_id=root_folder_id,
+            oauth_credentials=credentials,
+        )
+
     def disconnect(self) -> bool:
         """Remove stored Google Drive credentials."""
         with self.track_execution(method_name="disconnect") as run_id:

@@ -42,6 +42,14 @@ class ApiToken(Base):
         index=True,
     )
 
+    # Per-tenant scoping (used by Google Drive OAuth tokens)
+    chat_settings_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("chat_settings.id"),
+        nullable=True,
+        index=True,
+    )
+
     # Token data (encrypted at application level)
     token_value = Column(Text, nullable=False)
 

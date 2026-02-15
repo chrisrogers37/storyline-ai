@@ -247,3 +247,64 @@ class TestGoogleDriveServiceValidateAccess:
 
         assert result["valid"] is False
         assert "No credentials" in result["error"]
+
+
+# ==================== get_provider_for_chat Tests ====================
+
+
+@pytest.mark.unit
+class TestGoogleDriveServiceProviderForChat:
+    """Tests for get_provider_for_chat method."""
+
+    def test_get_provider_for_chat_success(self, gdrive_service):
+        """Creates provider from user OAuth credentials."""
+        mock_credentials = Mock()
+        mock_oauth_service = Mock()
+        mock_oauth_service.get_user_credentials.return_value = mock_credentials
+        mock_oauth_service.close = Mock()
+
+        with (
+            patch(
+                "src.services.integrations.google_drive_oauth.GoogleDriveOAuthService",
+                return_value=mock_oauth_service,
+            ),
+            patch(
+                "src.services.integrations.google_drive.GoogleDriveProvider"
+            ) as MockProvider,
+        ):
+            gdrive_service.get_provider_for_chat(-100123, "folder_abc")
+
+        MockProvider.assert_called_once_with(
+            root_folder_id="folder_abc",
+            oauth_credentials=mock_credentials,
+        )
+        mock_oauth_service.close.assert_called_once()
+
+    def test_get_provider_for_chat_no_credentials_raises(self, gdrive_service):
+        """Raises when no OAuth credentials for this chat."""
+        mock_oauth_service = Mock()
+        mock_oauth_service.get_user_credentials.return_value = None
+        mock_oauth_service.close = Mock()
+
+        with patch(
+            "src.services.integrations.google_drive_oauth.GoogleDriveOAuthService",
+            return_value=mock_oauth_service,
+        ):
+            with pytest.raises(GoogleDriveAuthError, match="No Google Drive OAuth"):
+                gdrive_service.get_provider_for_chat(-100123, "folder_abc")
+
+        mock_oauth_service.close.assert_called_once()
+
+    def test_get_provider_for_chat_no_folder_raises(self, gdrive_service):
+        """Raises when no root_folder_id provided."""
+        mock_credentials = Mock()
+        mock_oauth_service = Mock()
+        mock_oauth_service.get_user_credentials.return_value = mock_credentials
+        mock_oauth_service.close = Mock()
+
+        with patch(
+            "src.services.integrations.google_drive_oauth.GoogleDriveOAuthService",
+            return_value=mock_oauth_service,
+        ):
+            with pytest.raises(GoogleDriveAuthError, match="root_folder_id"):
+                gdrive_service.get_provider_for_chat(-100123)
