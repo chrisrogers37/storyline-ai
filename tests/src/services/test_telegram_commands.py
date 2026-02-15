@@ -1268,3 +1268,101 @@ class TestPauseIntegration:
 
             posting_service.telegram_service.is_paused = False
             assert posting_service.telegram_service.is_paused is False
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestConnectCommand:
+    """Tests for /connect command."""
+
+    async def test_connect_sends_oauth_link(self, mock_command_handlers):
+        """Test /connect sends inline button with OAuth URL."""
+        handlers = mock_command_handlers
+        service = handlers.service
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "testuser"
+        service.user_repo.get_by_telegram_id.return_value = None
+        service.user_repo.create.return_value = mock_user
+
+        mock_update = AsyncMock()
+        mock_update.effective_user.id = 12345
+        mock_update.effective_user.first_name = "Test"
+        mock_update.effective_user.username = "testuser"
+        mock_update.effective_chat.id = -100123
+        mock_update.message.message_id = 1
+
+        with patch("src.services.core.oauth_service.OAuthService") as MockOAuth:
+            mock_oauth = MockOAuth.return_value
+            mock_oauth.generate_authorization_url.return_value = (
+                "https://www.facebook.com/dialog/oauth?client_id=123&state=abc"
+            )
+            mock_oauth.close = Mock()
+
+            await handlers.handle_connect(mock_update, Mock())
+
+        mock_update.message.reply_text.assert_called_once()
+        call_kwargs = mock_update.message.reply_text.call_args[1]
+        assert call_kwargs["parse_mode"] == "Markdown"
+        assert call_kwargs["reply_markup"] is not None
+
+    async def test_connect_handles_missing_config(self, mock_command_handlers):
+        """Test /connect shows error when OAuth not configured."""
+        handlers = mock_command_handlers
+        service = handlers.service
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "testuser"
+        service.user_repo.get_by_telegram_id.return_value = None
+        service.user_repo.create.return_value = mock_user
+
+        mock_update = AsyncMock()
+        mock_update.effective_user.id = 12345
+        mock_update.effective_user.first_name = "Test"
+        mock_update.effective_user.username = "testuser"
+        mock_update.effective_chat.id = -100123
+        mock_update.message.message_id = 1
+
+        with patch("src.services.core.oauth_service.OAuthService") as MockOAuth:
+            mock_oauth = MockOAuth.return_value
+            mock_oauth.generate_authorization_url.side_effect = ValueError(
+                "FACEBOOK_APP_ID not configured"
+            )
+            mock_oauth.close = Mock()
+
+            await handlers.handle_connect(mock_update, Mock())
+
+        call_args = mock_update.message.reply_text.call_args[0][0]
+        assert "OAuth not configured" in call_args
+
+    async def test_connect_logs_interaction(self, mock_command_handlers):
+        """Test /connect logs the command interaction."""
+        handlers = mock_command_handlers
+        service = handlers.service
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "testuser"
+        service.user_repo.get_by_telegram_id.return_value = None
+        service.user_repo.create.return_value = mock_user
+
+        mock_update = AsyncMock()
+        mock_update.effective_user.id = 12345
+        mock_update.effective_user.first_name = "Test"
+        mock_update.effective_user.username = "testuser"
+        mock_update.effective_chat.id = -100123
+        mock_update.message.message_id = 42
+
+        with patch("src.services.core.oauth_service.OAuthService") as MockOAuth:
+            mock_oauth = MockOAuth.return_value
+            mock_oauth.generate_authorization_url.return_value = "https://example.com"
+            mock_oauth.close = Mock()
+
+            await handlers.handle_connect(mock_update, Mock())
+
+        service.interaction_service.log_command.assert_called_once()
+        call_kwargs = service.interaction_service.log_command.call_args[1]
+        assert call_kwargs["command"] == "/connect"
+        assert call_kwargs["telegram_chat_id"] == -100123
