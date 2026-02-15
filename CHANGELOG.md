@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Telegram Mini App onboarding wizard** - Self-service setup flow for new users via Telegram WebApp
+  - 6-step wizard: Welcome, Connect Instagram, Connect Google Drive, Media Folder, Schedule, Summary
+  - `validate_init_data()`: HMAC-SHA256 validation of Telegram `initData` for secure Mini App authentication
+  - 5 API endpoints under `/api/onboarding/`: init, oauth-url, media-folder, schedule, complete
+  - Static Mini App frontend (HTML/CSS/JS) served by FastAPI, Telegram theme-aware
+  - OAuth polling pattern: Mini App polls `/init` every 3s to detect when OAuth completes
+  - `/start` command updated: new users see "Open Setup Wizard" `WebAppInfo` button, returning users see dashboard
+  - Migration 016: `onboarding_step` + `onboarding_completed` columns on `chat_settings`
+  - `SettingsService`: `set_onboarding_step()` and `complete_onboarding()` methods
+  - 30 new tests (8 webapp auth, 16 API routes, 3 settings service, 3 /start command)
+
 - **Google Drive user OAuth flow** - Browser-based Google Drive connection for per-tenant media sourcing
   - `GoogleDriveOAuthService`: Fernet-encrypted state tokens, Google token exchange, per-tenant token storage
   - Google Drive OAuth routes: `/auth/google-drive/start` (redirect to Google consent) and `/auth/google-drive/callback` (exchange + store)

@@ -1472,3 +1472,101 @@ class TestConnectDriveCommand:
         call_kwargs = service.interaction_service.log_command.call_args[1]
         assert call_kwargs["command"] == "/connect_drive"
         assert call_kwargs["telegram_chat_id"] == -100123
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestStartCommand:
+    """Tests for the /start command with onboarding Mini App support."""
+
+    async def test_start_new_user_shows_webapp_button(self, mock_command_handlers):
+        """New user (onboarding not completed) sees the setup wizard button."""
+        handlers = mock_command_handlers
+        service = handlers.service
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        service.user_repo.get_by_telegram_id.return_value = None
+        service.user_repo.create.return_value = mock_user
+
+        mock_update = AsyncMock()
+        mock_update.effective_user.id = 12345
+        mock_update.effective_user.first_name = "Test"
+        mock_update.effective_user.username = "testuser"
+        mock_update.effective_chat.id = -100123
+        mock_update.message.message_id = 1
+
+        with patch(
+            "src.services.core.settings_service.SettingsService"
+        ) as MockSettings:
+            mock_chat_settings = Mock(onboarding_completed=False)
+            MockSettings.return_value.get_settings.return_value = mock_chat_settings
+            MockSettings.return_value.close = Mock()
+
+            with patch(
+                "src.services.core.telegram_commands.settings"
+            ) as mock_app_settings:
+                mock_app_settings.OAUTH_REDIRECT_BASE_URL = "https://example.com"
+
+                await handlers.handle_start(mock_update, Mock())
+
+        call_args = mock_update.message.reply_text.call_args
+        assert "Setup Wizard" in str(call_args)
+
+    async def test_start_returning_user_shows_dashboard(self, mock_command_handlers):
+        """Returning user (onboarding completed) sees the dashboard."""
+        handlers = mock_command_handlers
+        service = handlers.service
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        service.user_repo.get_by_telegram_id.return_value = mock_user
+
+        mock_update = AsyncMock()
+        mock_update.effective_user.id = 12345
+        mock_update.effective_user.first_name = "Test"
+        mock_update.effective_user.username = "testuser"
+        mock_update.effective_chat.id = -100123
+        mock_update.message.message_id = 1
+
+        with patch(
+            "src.services.core.settings_service.SettingsService"
+        ) as MockSettings:
+            mock_chat_settings = Mock(onboarding_completed=True)
+            MockSettings.return_value.get_settings.return_value = mock_chat_settings
+            MockSettings.return_value.close = Mock()
+
+            await handlers.handle_start(mock_update, Mock())
+
+        call_text = mock_update.message.reply_text.call_args[0][0]
+        assert "/queue" in call_text
+        assert "/status" in call_text
+
+    async def test_start_logs_interaction(self, mock_command_handlers):
+        """Start command logs the interaction."""
+        handlers = mock_command_handlers
+        service = handlers.service
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        service.user_repo.get_by_telegram_id.return_value = mock_user
+
+        mock_update = AsyncMock()
+        mock_update.effective_user.id = 12345
+        mock_update.effective_user.first_name = "Test"
+        mock_update.effective_user.username = "testuser"
+        mock_update.effective_chat.id = -100123
+        mock_update.message.message_id = 1
+
+        with patch(
+            "src.services.core.settings_service.SettingsService"
+        ) as MockSettings:
+            mock_chat_settings = Mock(onboarding_completed=True)
+            MockSettings.return_value.get_settings.return_value = mock_chat_settings
+            MockSettings.return_value.close = Mock()
+
+            await handlers.handle_start(mock_update, Mock())
+
+        service.interaction_service.log_command.assert_called_once()
+        call_kwargs = service.interaction_service.log_command.call_args[1]
+        assert call_kwargs["command"] == "/start"
