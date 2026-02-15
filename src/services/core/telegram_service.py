@@ -140,6 +140,7 @@ class TelegramService(BaseService):
             "sync": self.commands.handle_sync,
             "backfill": self.commands.handle_backfill,
             "connect": self.commands.handle_connect,
+            "connect_drive": self.commands.handle_connect_drive,
             "settings": self.settings_handler.handle_settings,
         }
         for cmd, handler in command_map.items():
@@ -174,6 +175,7 @@ class TelegramService(BaseService):
             BotCommand("sync", "Sync media from configured source"),
             BotCommand("backfill", "Backfill media from Instagram"),
             BotCommand("connect", "Connect an Instagram account via OAuth"),
+            BotCommand("connect_drive", "Connect your Google Drive for media"),
         ]
         await self.bot.set_my_commands(commands)
 

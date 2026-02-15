@@ -185,6 +185,114 @@ class TokenRepository(BaseRepository):
             return True
         return False
 
+    def get_token_for_chat(
+        self,
+        service_name: str,
+        token_type: str,
+        chat_settings_id: str,
+    ) -> Optional[ApiToken]:
+        """Get token scoped to a specific tenant (chat).
+
+        Args:
+            service_name: Service identifier (e.g., 'google_drive')
+            token_type: Token type (e.g., 'oauth_access', 'oauth_refresh')
+            chat_settings_id: UUID of the chat_settings record
+
+        Returns:
+            ApiToken or None if not found
+        """
+        result = (
+            self.db.query(ApiToken)
+            .filter(
+                ApiToken.service_name == service_name,
+                ApiToken.token_type == token_type,
+                ApiToken.chat_settings_id == chat_settings_id,
+            )
+            .first()
+        )
+        self.end_read_transaction()
+        return result
+
+    def create_or_update_for_chat(
+        self,
+        service_name: str,
+        token_type: str,
+        token_value: str,
+        chat_settings_id: str,
+        issued_at: Optional[datetime] = None,
+        expires_at: Optional[datetime] = None,
+        scopes: Optional[List[str]] = None,
+        metadata: Optional[dict] = None,
+    ) -> ApiToken:
+        """Create or update a token scoped to a specific tenant.
+
+        Args:
+            service_name: Service identifier
+            token_type: Token type
+            token_value: Encrypted token value
+            chat_settings_id: UUID of the chat_settings record
+            issued_at: When the token was issued (defaults to now)
+            expires_at: When the token expires (None = never)
+            scopes: OAuth scopes granted
+            metadata: Additional service-specific data
+
+        Returns:
+            Created or updated ApiToken
+        """
+        if issued_at is None:
+            issued_at = datetime.utcnow()
+
+        existing = self.get_token_for_chat(service_name, token_type, chat_settings_id)
+
+        if existing:
+            existing.token_value = token_value
+            existing.issued_at = issued_at
+            existing.expires_at = expires_at
+            existing.last_refreshed_at = datetime.utcnow()
+            if scopes is not None:
+                existing.scopes = scopes
+            if metadata is not None:
+                existing.token_metadata = metadata
+            self.db.commit()
+            self.db.refresh(existing)
+            return existing
+        else:
+            token = ApiToken(
+                service_name=service_name,
+                token_type=token_type,
+                token_value=token_value,
+                chat_settings_id=chat_settings_id,
+                issued_at=issued_at,
+                expires_at=expires_at,
+                scopes=scopes,
+                token_metadata=metadata,
+            )
+            self.db.add(token)
+            self.db.commit()
+            self.db.refresh(token)
+            return token
+
+    def delete_tokens_for_chat(
+        self,
+        service_name: str,
+        chat_settings_id: str,
+    ) -> int:
+        """Delete all tokens for a service scoped to a specific tenant.
+
+        Returns:
+            Number of tokens deleted
+        """
+        count = (
+            self.db.query(ApiToken)
+            .filter(
+                ApiToken.service_name == service_name,
+                ApiToken.chat_settings_id == chat_settings_id,
+            )
+            .delete()
+        )
+        self.db.commit()
+        return count
+
     def get_expiring_tokens(self, hours_until_expiry: int = 168) -> List[ApiToken]:
         """
         Get all tokens expiring within the specified hours.

@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     FACEBOOK_APP_SECRET: Optional[str] = None
     OAUTH_REDIRECT_BASE_URL: Optional[str] = None  # e.g., "https://api.storyline.ai"
 
+    # Google Drive OAuth (Phase 05 Multi-Tenant)
+    GOOGLE_CLIENT_ID: Optional[str] = None
+    GOOGLE_CLIENT_SECRET: Optional[str] = None
+
     # Cloudinary Configuration (Phase 2 Only)
     CLOUD_STORAGE_PROVIDER: str = "cloudinary"  # Currently only cloudinary supported
     CLOUDINARY_CLOUD_NAME: Optional[str] = None

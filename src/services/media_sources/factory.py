@@ -72,6 +72,7 @@ class MediaSourceFactory:
             root_folder_id = kwargs.get("root_folder_id")
             service_account_info = kwargs.get("service_account_info")
             oauth_credentials = kwargs.get("oauth_credentials")
+            telegram_chat_id = kwargs.get("telegram_chat_id")
 
             if not service_account_info and not oauth_credentials:
                 from src.services.integrations.google_drive import (
@@ -79,6 +80,19 @@ class MediaSourceFactory:
                 )
 
                 gdrive_service = GoogleDriveService()
+
+                # Try per-tenant user OAuth first, then service account fallback
+                if telegram_chat_id:
+                    try:
+                        return gdrive_service.get_provider_for_chat(
+                            telegram_chat_id, root_folder_id
+                        )
+                    except Exception:
+                        logger.debug(
+                            "No user OAuth for chat %s, falling back to service account",
+                            telegram_chat_id,
+                        )
+
                 return gdrive_service.get_provider(root_folder_id)
 
             return provider_class(

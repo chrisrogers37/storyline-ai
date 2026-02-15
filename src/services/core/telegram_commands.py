@@ -998,3 +998,46 @@ class TelegramCommandHandlers:
             telegram_chat_id=chat_id,
             telegram_message_id=update.message.message_id,
         )
+
+    async def handle_connect_drive(self, update, context):
+        """Handle /connect_drive command - generate Google Drive OAuth link.
+
+        Usage:
+            /connect_drive - Get a link to connect your Google Drive
+        """
+        user = self.service._get_or_create_user(update.effective_user)
+        chat_id = update.effective_chat.id
+
+        from src.services.integrations.google_drive_oauth import GoogleDriveOAuthService
+
+        gdrive_service = GoogleDriveOAuthService()
+        try:
+            auth_url = gdrive_service.generate_authorization_url(chat_id)
+
+            keyboard = InlineKeyboardMarkup(
+                [[InlineKeyboardButton("Connect Google Drive", url=auth_url)]]
+            )
+
+            await update.message.reply_text(
+                "\U0001f4c1 *Connect Google Drive*\n\n"
+                "Click the button below to authorize Storyline AI "
+                "to read media from your Google Drive.\n\n"
+                "_This link expires in 10 minutes._",
+                parse_mode="Markdown",
+                reply_markup=keyboard,
+            )
+        except ValueError as e:
+            await update.message.reply_text(
+                f"\u26a0\ufe0f Google Drive OAuth not configured: {e}\n\n"
+                "Contact your admin to set up GOOGLE_CLIENT_ID, "
+                "GOOGLE_CLIENT_SECRET, and OAUTH_REDIRECT_BASE_URL.",
+            )
+        finally:
+            gdrive_service.close()
+
+        self.service.interaction_service.log_command(
+            user_id=str(user.id),
+            command="/connect_drive",
+            telegram_chat_id=chat_id,
+            telegram_message_id=update.message.message_id,
+        )
