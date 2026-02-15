@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Google Drive user OAuth flow** - Browser-based Google Drive connection for per-tenant media sourcing
+  - `GoogleDriveOAuthService`: Fernet-encrypted state tokens, Google token exchange, per-tenant token storage
+  - Google Drive OAuth routes: `/auth/google-drive/start` (redirect to Google consent) and `/auth/google-drive/callback` (exchange + store)
+  - `/connect_drive` Telegram command: sends inline button with Google Drive OAuth link
+  - Per-tenant token storage via `api_tokens.chat_settings_id` FK (migration 015)
+  - `TokenRepository`: 3 new tenant-scoped methods (`get_token_for_chat`, `create_or_update_for_chat`, `delete_tokens_for_chat`)
+  - `GoogleDriveService.get_provider_for_chat()`: creates GoogleDriveProvider from user OAuth credentials
+  - `MediaSourceFactory`: accepts `telegram_chat_id` param, tries user OAuth before service account fallback
+  - New settings: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+  - 43 new tests (18 OAuth service, 13 routes, 6 token repo, 3 command, 3 provider)
+
 - **Instagram OAuth redirect flow** - Browser-based Instagram account connection replacing manual CLI token copy-paste
   - `OAuthService`: Fernet-encrypted state tokens (10min TTL, CSRF nonce), Meta token exchange (short→long-lived), account create/update
   - FastAPI app (`src/api/app.py`) with two OAuth endpoints: `/auth/instagram/start` (redirect to Meta) and `/auth/instagram/callback` (exchange + store)
