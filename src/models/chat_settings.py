@@ -58,6 +58,10 @@ class ChatSettings(Base):
         nullable=True,  # NULL = no account selected yet
     )
 
+    # Onboarding wizard state
+    onboarding_step = Column(String(50), nullable=True)  # NULL = not in onboarding
+    onboarding_completed = Column(Boolean, default=False)
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Storyline AI Setup</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="/static/onboarding/style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Step 1: Welcome -->
+        <div class="step" id="step-welcome">
+            <div class="progress-bar"><div class="progress-fill" style="width: 16%"></div></div>
+            <div class="step-content">
+                <h1>Welcome to Storyline AI</h1>
+                <p class="subtitle">Let's get your Instagram posting automated in a few quick steps.</p>
+                <div class="step-list">
+                    <div class="step-item"><span class="step-num">1</span> Connect Instagram</div>
+                    <div class="step-item"><span class="step-num">2</span> Connect Google Drive</div>
+                    <div class="step-item"><span class="step-num">3</span> Pick media folder</div>
+                    <div class="step-item"><span class="step-num">4</span> Set your schedule</div>
+                </div>
+                <button class="btn btn-primary" onclick="App.goToStep('instagram')">Get Started</button>
+            </div>
+        </div>
+
+        <!-- Step 2: Connect Instagram -->
+        <div class="step hidden" id="step-instagram">
+            <div class="progress-bar"><div class="progress-fill" style="width: 33%"></div></div>
+            <div class="step-content">
+                <h2>Connect Instagram</h2>
+                <p class="subtitle">Link your Instagram Business or Creator account.</p>
+                <div id="instagram-status" class="status-card">
+                    <div class="status-icon status-pending">&#9679;</div>
+                    <span>Not connected</span>
+                </div>
+                <button class="btn btn-primary" id="btn-connect-instagram" onclick="App.connectOAuth('instagram')">
+                    Connect Instagram
+                </button>
+                <div id="instagram-polling" class="polling-indicator hidden">
+                    <div class="spinner"></div>
+                    <span>Waiting for authorization...</span>
+                </div>
+                <div class="step-nav">
+                    <button class="btn btn-text" onclick="App.goToStep('gdrive')">Skip for now</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 3: Connect Google Drive -->
+        <div class="step hidden" id="step-gdrive">
+            <div class="progress-bar"><div class="progress-fill" style="width: 50%"></div></div>
+            <div class="step-content">
+                <h2>Connect Google Drive</h2>
+                <p class="subtitle">Access your media files stored in Google Drive.</p>
+                <div id="gdrive-status" class="status-card">
+                    <div class="status-icon status-pending">&#9679;</div>
+                    <span>Not connected</span>
+                </div>
+                <button class="btn btn-primary" id="btn-connect-gdrive" onclick="App.connectOAuth('google-drive')">
+                    Connect Google Drive
+                </button>
+                <div id="gdrive-polling" class="polling-indicator hidden">
+                    <div class="spinner"></div>
+                    <span>Waiting for authorization...</span>
+                </div>
+                <div class="step-nav">
+                    <button class="btn btn-text" onclick="App.goToStep('media-folder')">Skip for now</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 4: Media Folder -->
+        <div class="step hidden" id="step-media-folder">
+            <div class="progress-bar"><div class="progress-fill" style="width: 66%"></div></div>
+            <div class="step-content">
+                <h2>Media Folder</h2>
+                <p class="subtitle">Paste the URL of the Google Drive folder with your media files.</p>
+                <div class="input-group">
+                    <input type="url" id="folder-url" placeholder="https://drive.google.com/drive/folders/..." />
+                    <button class="btn btn-primary" onclick="App.validateFolder()">Validate</button>
+                </div>
+                <div id="folder-result" class="hidden">
+                    <div class="result-card">
+                        <div class="result-row"><strong>Files found:</strong> <span id="folder-file-count"></span></div>
+                        <div class="result-row"><strong>Categories:</strong> <span id="folder-categories"></span></div>
+                    </div>
+                </div>
+                <div id="folder-error" class="error-text hidden"></div>
+                <div class="step-nav">
+                    <button class="btn btn-text" onclick="App.goToStep('schedule')">Skip for now</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 5: Schedule -->
+        <div class="step hidden" id="step-schedule">
+            <div class="progress-bar"><div class="progress-fill" style="width: 83%"></div></div>
+            <div class="step-content">
+                <h2>Posting Schedule</h2>
+                <p class="subtitle">How often and when should Storyline post?</p>
+
+                <div class="form-group">
+                    <label>Posts per day</label>
+                    <div class="btn-group" id="posts-per-day-group">
+                        <button class="btn btn-option" data-value="1" onclick="App.selectOption('posts-per-day', 1)">1</button>
+                        <button class="btn btn-option active" data-value="3" onclick="App.selectOption('posts-per-day', 3)">3</button>
+                        <button class="btn btn-option" data-value="5" onclick="App.selectOption('posts-per-day', 5)">5</button>
+                        <button class="btn btn-option" data-value="7" onclick="App.selectOption('posts-per-day', 7)">7</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Posting window</label>
+                    <div class="btn-group" id="posting-window-group">
+                        <button class="btn btn-option" data-start="9" data-end="21" onclick="App.selectWindow(9, 21)">9am - 9pm</button>
+                        <button class="btn btn-option active" data-start="14" data-end="2" onclick="App.selectWindow(14, 2)">2pm - 2am</button>
+                        <button class="btn btn-option" data-start="12" data-end="0" onclick="App.selectWindow(12, 0)">12pm - 12am</button>
+                    </div>
+                    <p class="hint">All times in UTC</p>
+                </div>
+
+                <button class="btn btn-primary" onclick="App.saveSchedule()">Continue</button>
+            </div>
+        </div>
+
+        <!-- Step 6: Summary -->
+        <div class="step hidden" id="step-summary">
+            <div class="progress-bar"><div class="progress-fill" style="width: 100%"></div></div>
+            <div class="step-content">
+                <h2>All Set!</h2>
+                <p class="subtitle">Here's your configuration summary.</p>
+
+                <div class="summary-card">
+                    <div class="summary-row">
+                        <span class="summary-label">Instagram</span>
+                        <span class="summary-value" id="summary-instagram">Not connected</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-label">Google Drive</span>
+                        <span class="summary-value" id="summary-gdrive">Not connected</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-label">Schedule</span>
+                        <span class="summary-value" id="summary-schedule">3 posts/day</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-label">Posting window</span>
+                        <span class="summary-value" id="summary-window">2pm - 2am UTC</span>
+                    </div>
+                </div>
+
+                <div class="toggle-row">
+                    <label class="toggle">
+                        <input type="checkbox" id="create-schedule-toggle" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span>Create 7-day schedule now</span>
+                </div>
+
+                <button class="btn btn-primary" onclick="App.finishSetup()">Finish Setup</button>
+            </div>
+        </div>
+
+        <!-- Loading overlay -->
+        <div id="loading-overlay" class="hidden">
+            <div class="spinner large"></div>
+        </div>
+    </div>
+
+    <script src="/static/onboarding/app.js"></script>
+</body>
+</html>

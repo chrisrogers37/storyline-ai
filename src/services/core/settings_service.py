@@ -198,6 +198,18 @@ class SettingsService(BaseService):
             "updated_at": settings.updated_at,
         }
 
+    def set_onboarding_step(
+        self, telegram_chat_id: int, step: Optional[str]
+    ) -> ChatSettings:
+        """Update the onboarding wizard step for a chat."""
+        return self.settings_repo.update(telegram_chat_id, onboarding_step=step)
+
+    def complete_onboarding(self, telegram_chat_id: int) -> ChatSettings:
+        """Mark onboarding as completed for a chat."""
+        return self.settings_repo.update(
+            telegram_chat_id, onboarding_step=None, onboarding_completed=True
+        )
+
     def get_all_active_chats(self) -> List[ChatSettings]:
         """Get all active (non-paused) chat settings.
 

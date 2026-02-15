@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from src.config.settings import settings
 from src.services.core.telegram_service import _escape_markdown
@@ -30,24 +30,64 @@ class TelegramCommandHandlers:
         self.service = service
 
     async def handle_start(self, update, context):
-        """Handle /start command."""
-        user = self.service._get_or_create_user(update.effective_user)
+        """Handle /start command.
 
-        await update.message.reply_text(
-            "👋 *Storyline AI Bot*\n\n"
-            "Commands:\n"
-            "/queue - View upcoming posts\n"
-            "/next - Force send next post\n"
-            "/status - Check system status\n"
-            "/help - Show all commands",
-            parse_mode="Markdown",
-        )
+        New users: show onboarding Mini App button.
+        Returning users: show dashboard summary.
+        """
+        user = self.service._get_or_create_user(update.effective_user)
+        chat_id = update.effective_chat.id
+
+        # Check onboarding status
+        from src.services.core.settings_service import SettingsService
+
+        settings_service = SettingsService()
+        try:
+            chat_settings = settings_service.get_settings(chat_id)
+            onboarding_done = chat_settings.onboarding_completed
+        finally:
+            settings_service.close()
+
+        if not onboarding_done and settings.OAUTH_REDIRECT_BASE_URL:
+            # New user — show setup wizard button
+            webapp_url = (
+                f"{settings.OAUTH_REDIRECT_BASE_URL}/webapp/onboarding"
+                f"?chat_id={chat_id}"
+            )
+            keyboard = InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton(
+                            "Open Setup Wizard",
+                            web_app=WebAppInfo(url=webapp_url),
+                        )
+                    ]
+                ]
+            )
+            await update.message.reply_text(
+                "Welcome to *Storyline AI*\\!\n\n"
+                "Let's get you set up\\. Tap the button below to "
+                "connect your accounts and configure your posting schedule\\.",
+                parse_mode="MarkdownV2",
+                reply_markup=keyboard,
+            )
+        else:
+            # Returning user — show dashboard
+            await update.message.reply_text(
+                "👋 *Storyline AI Bot*\n\n"
+                "Commands:\n"
+                "/queue - View upcoming posts\n"
+                "/next - Force send next post\n"
+                "/status - Check system status\n"
+                "/help - Show all commands",
+                parse_mode="Markdown",
+            )
 
         # Log interaction
         self.service.interaction_service.log_command(
             user_id=str(user.id),
             command="/start",
-            telegram_chat_id=update.effective_chat.id,
+            telegram_chat_id=chat_id,
             telegram_message_id=update.message.message_id,
         )
 
