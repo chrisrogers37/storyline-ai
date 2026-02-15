@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Cloud deployment guide** - Comprehensive guide for deploying to Railway + Neon
+  - Two-process architecture (worker + web) with Procfile
+  - Neon PostgreSQL setup with SSL, pool sizing, and schema migration instructions
+  - Full environment variable reference (30+ vars)
+  - OAuth callback configuration for Instagram and Google Drive
+  - Security checklist, cost estimates, and troubleshooting guide
+
+- **Cloud-ready database configuration**
+  - `DATABASE_URL` env var support — full connection string overrides individual `DB_*` components
+  - `DB_SSLMODE` env var — appends `?sslmode=require` for Neon compatibility
+  - `DB_POOL_SIZE` and `DB_MAX_OVERFLOW` env vars — configurable connection pool (default: 10/20, Neon free tier: 3/2)
+
 - **Telegram Mini App onboarding wizard** - Self-service setup flow for new users via Telegram WebApp
   - 6-step wizard: Welcome, Connect Instagram, Connect Google Drive, Media Folder, Schedule, Summary
   - `validate_init_data()`: HMAC-SHA256 validation of Telegram `initData` for secure Mini App authentication

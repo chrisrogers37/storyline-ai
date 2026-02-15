@@ -11,8 +11,8 @@ from src.config.settings import settings
 engine = create_engine(
     settings.database_url,
     pool_pre_ping=True,  # Verify connections before using
-    pool_size=10,  # Increased from 5
-    max_overflow=20,  # Increased from 10
+    pool_size=settings.DB_POOL_SIZE,
+    max_overflow=settings.DB_MAX_OVERFLOW,
     pool_recycle=300,  # Recycle connections after 5 minutes
     pool_timeout=30,  # Wait up to 30 seconds for connection
     echo=False,  # Set to True for SQL debugging

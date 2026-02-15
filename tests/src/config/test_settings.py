@@ -112,3 +112,41 @@ class TestSettingsDatabaseUrl:
         url = s.database_url
         assert "myhost" in url
         assert "5433" in url
+
+    def test_database_url_full_url_overrides_components(self):
+        """DATABASE_URL takes precedence over DB_* components."""
+        s = self._make_settings(
+            DATABASE_URL="postgresql://neon:pass@ep-cool.neon.tech/mydb?sslmode=require",
+            DB_HOST="localhost",
+            DB_PASSWORD="localpass",
+        )
+        assert (
+            s.database_url
+            == "postgresql://neon:pass@ep-cool.neon.tech/mydb?sslmode=require"
+        )
+
+    def test_database_url_sslmode_appended(self):
+        """DB_SSLMODE appends ?sslmode= to assembled URL."""
+        s = self._make_settings(DB_PASSWORD="pw", DB_SSLMODE="require")
+        assert s.database_url.endswith("?sslmode=require")
+
+    def test_database_url_no_sslmode_by_default(self):
+        """No sslmode appended when DB_SSLMODE is not set."""
+        s = self._make_settings(DB_PASSWORD="pw")
+        assert "sslmode" not in s.database_url
+
+    def test_test_database_url_sslmode_appended(self):
+        """DB_SSLMODE also applies to test_database_url."""
+        s = self._make_settings(DB_PASSWORD="pw", DB_SSLMODE="require")
+        assert s.test_database_url.endswith("?sslmode=require")
+
+    def test_pool_size_defaults(self):
+        """Pool size and max overflow have sensible defaults."""
+        assert Settings.model_fields["DB_POOL_SIZE"].default == 10
+        assert Settings.model_fields["DB_MAX_OVERFLOW"].default == 20
+
+    def test_pool_size_configurable(self):
+        """Pool settings can be overridden (for Neon free tier)."""
+        s = self._make_settings(DB_POOL_SIZE=3, DB_MAX_OVERFLOW=2)
+        assert s.DB_POOL_SIZE == 3
+        assert s.DB_MAX_OVERFLOW == 2
