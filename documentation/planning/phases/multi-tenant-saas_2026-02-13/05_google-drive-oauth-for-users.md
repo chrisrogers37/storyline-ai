@@ -1,9 +1,17 @@
 # Phase 05: Google Drive OAuth for Users
 
-**Status:** 📋 PENDING
+**Status:** 🔧 IN PROGRESS
+**Started:** 2026-02-15
 **Risk:** Medium
 **Effort:** 4-5 hours
 **PR Title:** `feat: Google Drive user OAuth flow with folder selection via Telegram`
+
+### Challenge Round Decisions (2026-02-15)
+- **State tokens**: Reuse Fernet approach from Phase 04 (no oauth_states table/model/repo/migration)
+- **Scope trimmed**: OAuth core only. Folder selection UX, settings button, disconnect flow deferred to Phase 06
+- **Routes**: Add Google Drive routes to existing `src/api/routes/oauth.py`
+- **Migration numbering**: Use 015 (not 014, which is taken by Phase 01)
+- **Stale references**: src/api/ already exists from Phase 04, fastapi/uvicorn already installed, OAUTH_REDIRECT_BASE_URL already in settings
 
 ## 1. Summary
 
