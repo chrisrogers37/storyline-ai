@@ -1,6 +1,7 @@
 # Phase 02: Per-Tenant Repository Queries
 
-**Status:** 📋 PENDING
+**Status:** 🔧 IN PROGRESS
+**Started:** 2026-02-14
 **Risk:** Low
 **Effort:** 4-6 hours
 **PR Title:** `feat: add optional chat_settings_id tenant filtering to all repository methods`
@@ -9,9 +10,9 @@
 
 ## Context
 
-Phase 01 (Multi-Tenant Data Model) adds a nullable `chat_settings_id` UUID FK column to 6 tables: `media_items`, `posting_queue`, `posting_history`, `media_posting_locks`, `category_post_case_mix`, and `api_tokens`. Per Architecture Decision AD-2, all FK columns are nullable. `NULL` means legacy single-tenant behavior and existing queries return unchanged results.
+Phase 01 (Multi-Tenant Data Model) adds a nullable `chat_settings_id` UUID FK column to 5 tables: `media_items`, `posting_queue`, `posting_history`, `media_posting_locks`, and `category_post_case_mix`. Per Architecture Decision AD-2, all FK columns are nullable. `NULL` means legacy single-tenant behavior and existing queries return unchanged results. (`api_tokens` was intentionally excluded — tokens scope through `instagram_accounts`, not directly to tenant.)
 
-Phase 02 updates every public method in the 6 affected repositories to accept an optional `chat_settings_id` parameter. When provided, queries add a `WHERE chat_settings_id = :id` filter. When `None` (the default), behavior is identical to today. No service code changes occur in this phase.
+Phase 02 updates every public method in the 5 affected repositories to accept an optional `chat_settings_id` parameter. When provided, queries add a `WHERE chat_settings_id = :id` filter. When `None` (the default), behavior is identical to today. No service code changes occur in this phase.
 
 ## Dependencies
 
@@ -275,33 +276,9 @@ def set_mix(self, ratios, user_id=None, chat_settings_id: Optional[str] = None):
 
 ---
 
-### 7. `src/repositories/token_repository.py` -- TokenRepository
+### ~~7. `src/repositories/token_repository.py` -- TokenRepository~~
 
-**File location:** `/Users/chris/Projects/storyline-ai/src/repositories/token_repository.py`
-
-The `api_tokens` table already has an `instagram_account_id` FK. In multi-tenant mode, the new `chat_settings_id` column adds an additional scoping dimension. However, tokens are inherently scoped by `instagram_account_id` and `service_name`, and the `instagram_accounts` table itself will get the `chat_settings_id` FK in Phase 01. So the question is whether to add direct `chat_settings_id` filtering on `api_tokens` or rely on the join through `instagram_accounts`.
-
-Per the overview, `api_tokens` is one of the 6 tables getting the FK. So we add direct filtering:
-
-| # | Method | Current Signature | New Signature | Notes |
-|---|--------|-------------------|---------------|-------|
-| 1 | `get_token` | `get_token(self, service_name, token_type="access_token", instagram_account_id=None)` | `get_token(self, service_name, token_type="access_token", instagram_account_id=None, chat_settings_id: Optional[str] = None)` | Filter by tenant |
-| 2 | `get_token_for_account` | `get_token_for_account(self, instagram_account_id, token_type="access_token")` | `get_token_for_account(self, instagram_account_id, token_type="access_token", chat_settings_id: Optional[str] = None)` | Filter by tenant |
-| 3 | `get_all_instagram_tokens` | `get_all_instagram_tokens(self, token_type="access_token")` | `get_all_instagram_tokens(self, token_type="access_token", chat_settings_id: Optional[str] = None)` | Filter refresh iteration |
-| 4 | `create_or_update` | `create_or_update(self, service_name, token_type, token_value, ...)` | `create_or_update(self, service_name, token_type, token_value, ..., chat_settings_id: Optional[str] = None)` | Set FK on create |
-| 5 | `delete_token` | `delete_token(self, service_name, token_type)` | `delete_token(self, service_name, token_type, chat_settings_id: Optional[str] = None)` | Scope delete |
-| 6 | `update_last_refreshed` | `update_last_refreshed(self, service_name, token_type)` | `update_last_refreshed(self, service_name, token_type, chat_settings_id: Optional[str] = None)` | Scope update |
-| 7 | `get_expiring_tokens` | `get_expiring_tokens(self, hours_until_expiry=168)` | `get_expiring_tokens(self, hours_until_expiry=168, chat_settings_id: Optional[str] = None)` | Filter expiring per-tenant |
-
-**Note:** `delete_token` and `update_last_refreshed` both call `self.get_token()` internally. The `chat_settings_id` parameter must be passed through:
-
-```python
-def delete_token(self, service_name, token_type, chat_settings_id=None):
-    token = self.get_token(service_name, token_type, chat_settings_id=chat_settings_id)
-    ...
-```
-
-**Total methods affected in TokenRepository: 7 modified, 0 unchanged**
+**REMOVED (Challenge Round):** `api_tokens` does not have a `chat_settings_id` column. Phase 01 intentionally excluded `api_tokens` — tokens scope through `instagram_accounts` (their service account), not directly to tenant. No TokenRepository changes needed in Phase 02.
 
 ---
 
@@ -309,7 +286,7 @@ def delete_token(self, service_name, token_type, chat_settings_id=None):
 
 These model changes are Phase 01's responsibility, but this plan documents the expected column names that Phase 02 repository code will reference:
 
-Each of the 6 models gets:
+Each of the 5 models gets:
 
 ```python
 # In each model file
@@ -321,7 +298,7 @@ chat_settings_id = Column(
 )
 ```
 
-The column name `chat_settings_id` is consistent across all 6 models. Phase 02 code references `ModelClass.chat_settings_id` in all filter expressions.
+The column name `chat_settings_id` is consistent across all 5 models. Phase 02 code references `ModelClass.chat_settings_id` in all filter expressions.
 
 ---
 
@@ -346,10 +323,9 @@ Each repository test file needs new test cases covering the tenant filtering beh
 | `tests/src/repositories/test_history_repository.py` | ~7 (5 methods + dataclass field + create pass-through) |
 | `tests/src/repositories/test_lock_repository.py` | ~9 (7 methods, plus `is_locked` pass-through) |
 | `tests/src/repositories/test_category_mix_repository.py` | ~8 (6 methods, plus `set_mix` expire scope + create scope) |
-| `tests/src/repositories/test_token_repository.py` | ~9 (7 methods, plus `delete_token` and `update_last_refreshed` pass-through) |
 | `tests/src/repositories/test_base_repository.py` | ~2 (new `_apply_tenant_filter` helper) |
 
-**Total estimated new tests: ~62**
+**Total estimated new tests: ~53**
 
 ### Example Test Pattern (for `MediaRepository.get_all`)
 
@@ -433,34 +409,30 @@ def test_apply_tenant_filter_without_id(self, base_repo):
 4. **HistoryRepository** -- Includes `HistoryCreateParams` dataclass change
 5. **LockRepository** -- Straightforward application of pattern
 6. **CategoryMixRepository** -- `set_mix` needs careful tenant scoping on both expire and create
-7. **TokenRepository** -- Has existing `instagram_account_id` pattern that parallels `chat_settings_id`
 
 ---
 
 ## Verification Checklist
 
-- [ ] `_apply_tenant_filter` exists on `BaseRepository` and is used consistently
-- [ ] All 13 `MediaRepository` query/create methods updated
-- [ ] All 10 `QueueRepository` query/create methods updated
-- [ ] `HistoryCreateParams` dataclass has `chat_settings_id` field
-- [ ] All 5 `HistoryRepository` query methods updated
-- [ ] All 7 `LockRepository` query/create methods updated
-- [ ] All 6 `CategoryMixRepository` query/create methods updated
-- [ ] All 7 `TokenRepository` query/create methods updated
-- [ ] `QueueRepository.shift_slots_forward` passes `chat_settings_id` to `self.get_all`
-- [ ] `LockRepository.is_locked` passes `chat_settings_id` to `self.get_active_lock`
-- [ ] `CategoryMixRepository.get_current_mix_as_dict` passes `chat_settings_id` to `self.get_current_mix`
-- [ ] `CategoryMixRepository.get_categories_without_ratio` passes `chat_settings_id` through
-- [ ] `CategoryMixRepository.set_mix` passes `chat_settings_id` to both expire query and create
-- [ ] `TokenRepository.delete_token` passes `chat_settings_id` to `self.get_token`
-- [ ] `TokenRepository.update_last_refreshed` passes `chat_settings_id` to `self.get_token`
-- [ ] `MediaRepository.get_next_eligible_for_posting` applies tenant filter to main query AND subqueries
-- [ ] All existing tests still pass (backward compatibility -- `chat_settings_id=None` default)
-- [ ] New tests added for every modified method (both with and without tenant filter)
-- [ ] `ruff check src/ tests/` passes
-- [ ] `ruff format --check src/ tests/` passes
-- [ ] `pytest` passes
-- [ ] CHANGELOG.md updated
+- [x] `_apply_tenant_filter` exists on `BaseRepository` and is used consistently
+- [x] All 13 `MediaRepository` query/create methods updated
+- [x] All 10 `QueueRepository` query/create methods updated
+- [x] `HistoryCreateParams` dataclass has `chat_settings_id` field
+- [x] All 5 `HistoryRepository` query methods updated
+- [x] All 7 `LockRepository` query/create methods updated
+- [x] All 6 `CategoryMixRepository` query/create methods updated
+- [x] `QueueRepository.shift_slots_forward` passes `chat_settings_id` to `self.get_all`
+- [x] `LockRepository.is_locked` passes `chat_settings_id` to `self.get_active_lock`
+- [x] `CategoryMixRepository.get_current_mix_as_dict` passes `chat_settings_id` to `self.get_current_mix`
+- [x] `CategoryMixRepository.get_categories_without_ratio` passes `chat_settings_id` through
+- [x] `CategoryMixRepository.set_mix` passes `chat_settings_id` to both expire query and create
+- [x] `MediaRepository.get_next_eligible_for_posting` applies tenant filter to main query AND subqueries
+- [x] All existing tests still pass (backward compatibility -- `chat_settings_id=None` default)
+- [x] New tests added for every modified method (both with and without tenant filter)
+- [x] `ruff check src/ tests/` passes
+- [x] `ruff format --check src/ tests/` passes
+- [x] `pytest` passes (1046 passed, 21 skipped)
+- [x] CHANGELOG.md updated
 
 ---
 
@@ -472,15 +444,17 @@ def test_apply_tenant_filter_without_id(self, base_repo):
 4. **Do NOT add `chat_settings_id` to methods that operate on primary key IDs.** Methods like `update_status(queue_id, status)`, `reactivate(media_id)`, `increment_times_posted(media_id)` etc. already have a unique row identified by PK. Adding tenant filtering would be redundant and could mask bugs (if the PK exists but belongs to a different tenant, that is a logic error that should be caught upstream in the service layer, not silently ignored by the repository).
 5. **Do NOT make `chat_settings_id` required anywhere.** All parameters are `Optional[str] = None` for backward compatibility.
 6. **Do NOT add migration files.** Phase 01 handles the migration. Phase 02 only touches Python code.
-7. **Do NOT change the `ChatSettingsRepository` or `InstagramAccountRepository`.** These are not tenant-scoped tables; `chat_settings` IS the tenant table, and `instagram_accounts` is linked through it.
+7. **Do NOT change the `ChatSettingsRepository`, `InstagramAccountRepository`, or `TokenRepository`.** `chat_settings` IS the tenant table, `instagram_accounts` is linked through it, and `api_tokens` was excluded from tenant FK (tokens scope through `instagram_accounts`).
 8. **Do NOT change the `BaseRepository.check_connection()` method.** It is a static health check, not tenant-scoped.
 9. **Do NOT use the helper method for `get_next_eligible_for_posting` subqueries.** The subqueries use `exists(select(...).where(...))` syntax which does not use `self.db.query()`. The tenant filter must be applied directly in the `where` clause of each subquery.
 
 ---
 
 ## Critical Files for Implementation
-- `/Users/chris/Projects/storyline-ai/src/repositories/base_repository.py` - Add `_apply_tenant_filter` helper method used by all 6 repositories
+- `/Users/chris/Projects/storyline-ai/src/repositories/base_repository.py` - Add `_apply_tenant_filter` helper method used by all 5 repositories
 - `/Users/chris/Projects/storyline-ai/src/repositories/media_repository.py` - Largest repository (13 methods to update), includes complex `get_next_eligible_for_posting` with subqueries
 - `/Users/chris/Projects/storyline-ai/src/repositories/queue_repository.py` - 10 methods to update, `shift_slots_forward` has internal delegation that must pass tenant ID through
+- `/Users/chris/Projects/storyline-ai/src/repositories/history_repository.py` - 5 methods + `HistoryCreateParams` dataclass update
+- `/Users/chris/Projects/storyline-ai/src/repositories/lock_repository.py` - 7 methods to update, `is_locked` pass-through
 - `/Users/chris/Projects/storyline-ai/src/repositories/category_mix_repository.py` - `set_mix` requires tenant scoping on both SCD expire and create operations
 - `/Users/chris/Projects/storyline-ai/src/repositories/history_repository.py` - Requires `HistoryCreateParams` dataclass update in addition to method signatures

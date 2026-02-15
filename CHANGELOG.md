@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Per-tenant repository query filtering** - Add optional `chat_settings_id` parameter to 42 repository methods across 5 repositories
+  - `BaseRepository`: New `_apply_tenant_filter()` helper used by all tenant-scoped repositories
+  - `MediaRepository`: 13 methods updated (including `get_next_eligible_for_posting` with tenant-scoped subqueries)
+  - `QueueRepository`: 10 methods updated (`shift_slots_forward` passes tenant through to `get_all`)
+  - `HistoryRepository`: 5 methods + `HistoryCreateParams` dataclass updated
+  - `LockRepository`: 7 methods updated (`is_locked` passes tenant through to `get_active_lock`)
+  - `CategoryMixRepository`: 6 methods updated (`set_mix` scopes both SCD expire and create operations)
+  - All parameters are `Optional[str] = None` — backward compatible, no service code changes
+  - ~53 new unit tests for tenant filtering behavior
+
 - **Multi-tenant data model foundation** - Add nullable `chat_settings_id` FK to 5 core tables for multi-tenant support
   - `media_items`, `posting_queue`, `posting_history`, `media_posting_locks`, `category_post_case_mix`
   - All FKs nullable: `NULL` = legacy single-tenant data (full backward compatibility)

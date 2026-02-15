@@ -16,66 +16,86 @@ class MediaRepository(BaseRepository):
     def __init__(self):
         super().__init__()
 
-    def get_by_id(self, media_id: str) -> Optional[MediaItem]:
+    def get_by_id(
+        self, media_id: str, chat_settings_id: Optional[str] = None
+    ) -> Optional[MediaItem]:
         """Get media item by ID."""
-        return self.db.query(MediaItem).filter(MediaItem.id == media_id).first()
+        query = self.db.query(MediaItem).filter(MediaItem.id == media_id)
+        query = self._apply_tenant_filter(query, MediaItem, chat_settings_id)
+        return query.first()
 
-    def get_by_path(self, file_path: str) -> Optional[MediaItem]:
+    def get_by_path(
+        self, file_path: str, chat_settings_id: Optional[str] = None
+    ) -> Optional[MediaItem]:
         """Get media item by file path."""
-        return self.db.query(MediaItem).filter(MediaItem.file_path == file_path).first()
+        query = self.db.query(MediaItem).filter(MediaItem.file_path == file_path)
+        query = self._apply_tenant_filter(query, MediaItem, chat_settings_id)
+        return query.first()
 
-    def get_by_hash(self, file_hash: str) -> List[MediaItem]:
+    def get_by_hash(
+        self, file_hash: str, chat_settings_id: Optional[str] = None
+    ) -> List[MediaItem]:
         """Get all media items with the same hash (duplicate content)."""
-        return self.db.query(MediaItem).filter(MediaItem.file_hash == file_hash).all()
+        query = self.db.query(MediaItem).filter(MediaItem.file_hash == file_hash)
+        query = self._apply_tenant_filter(query, MediaItem, chat_settings_id)
+        return query.all()
 
-    def get_by_instagram_media_id(self, instagram_media_id: str) -> Optional[MediaItem]:
+    def get_by_instagram_media_id(
+        self, instagram_media_id: str, chat_settings_id: Optional[str] = None
+    ) -> Optional[MediaItem]:
         """Get media item by Instagram Graph API media ID.
 
         Used by InstagramBackfillService to check if an Instagram media item
         has already been backfilled into the system.
         """
-        return (
-            self.db.query(MediaItem)
-            .filter(MediaItem.instagram_media_id == instagram_media_id)
-            .first()
+        query = self.db.query(MediaItem).filter(
+            MediaItem.instagram_media_id == instagram_media_id
         )
+        query = self._apply_tenant_filter(query, MediaItem, chat_settings_id)
+        return query.first()
 
-    def get_backfilled_instagram_media_ids(self) -> set:
+    def get_backfilled_instagram_media_ids(
+        self, chat_settings_id: Optional[str] = None
+    ) -> set:
         """Get all Instagram media IDs that have been backfilled.
 
         Returns a set for O(1) lookup during backfill operations.
         This avoids N+1 queries when checking each item during batch backfill.
         """
-        results = (
-            self.db.query(MediaItem.instagram_media_id)
-            .filter(MediaItem.instagram_media_id.isnot(None))
-            .all()
+        query = self.db.query(MediaItem.instagram_media_id).filter(
+            MediaItem.instagram_media_id.isnot(None)
         )
+        query = self._apply_tenant_filter(query, MediaItem, chat_settings_id)
+        results = query.all()
         self.end_read_transaction()
         return {r[0] for r in results}
 
     def get_by_source_identifier(
-        self, source_type: str, source_identifier: str
+        self,
+        source_type: str,
+        source_identifier: str,
+        chat_settings_id: Optional[str] = None,
     ) -> Optional[MediaItem]:
         """Get media item by provider-specific source identifier.
 
         Args:
             source_type: Provider type (e.g., 'local', 'google_drive')
             source_identifier: Provider-specific unique ID
+            chat_settings_id: Optional tenant filter
 
         Returns:
             MediaItem if found, None otherwise
         """
-        return (
-            self.db.query(MediaItem)
-            .filter(
-                MediaItem.source_type == source_type,
-                MediaItem.source_identifier == source_identifier,
-            )
-            .first()
+        query = self.db.query(MediaItem).filter(
+            MediaItem.source_type == source_type,
+            MediaItem.source_identifier == source_identifier,
         )
+        query = self._apply_tenant_filter(query, MediaItem, chat_settings_id)
+        return query.first()
 
-    def get_active_by_source_type(self, source_type: str) -> List[MediaItem]:
+    def get_active_by_source_type(
+        self, source_type: str, chat_settings_id: Optional[str] = None
+    ) -> List[MediaItem]:
         """Get all active media items for a given source type.
 
         Used by MediaSyncService to build a lookup dict of known items
@@ -83,21 +103,23 @@ class MediaRepository(BaseRepository):
 
         Args:
             source_type: Provider type string (e.g., 'local', 'google_drive')
+            chat_settings_id: Optional tenant filter
 
         Returns:
             List of active MediaItem instances for the given source type
         """
-        return (
-            self.db.query(MediaItem)
-            .filter(
-                MediaItem.source_type == source_type,
-                MediaItem.is_active == True,  # noqa: E712
-            )
-            .all()
+        query = self.db.query(MediaItem).filter(
+            MediaItem.source_type == source_type,
+            MediaItem.is_active == True,  # noqa: E712
         )
+        query = self._apply_tenant_filter(query, MediaItem, chat_settings_id)
+        return query.all()
 
     def get_inactive_by_source_identifier(
-        self, source_type: str, source_identifier: str
+        self,
+        source_type: str,
+        source_identifier: str,
+        chat_settings_id: Optional[str] = None,
     ) -> Optional[MediaItem]:
         """Get an inactive media item by source identifier.
 
@@ -107,19 +129,18 @@ class MediaRepository(BaseRepository):
         Args:
             source_type: Provider type string
             source_identifier: Provider-specific unique ID
+            chat_settings_id: Optional tenant filter
 
         Returns:
             Inactive MediaItem if found, None otherwise
         """
-        return (
-            self.db.query(MediaItem)
-            .filter(
-                MediaItem.source_type == source_type,
-                MediaItem.source_identifier == source_identifier,
-                MediaItem.is_active == False,  # noqa: E712
-            )
-            .first()
+        query = self.db.query(MediaItem).filter(
+            MediaItem.source_type == source_type,
+            MediaItem.source_identifier == source_identifier,
+            MediaItem.is_active == False,  # noqa: E712
         )
+        query = self._apply_tenant_filter(query, MediaItem, chat_settings_id)
+        return query.first()
 
     def reactivate(self, media_id: str) -> MediaItem:
         """Reactivate a previously deactivated media item.
@@ -180,9 +201,11 @@ class MediaRepository(BaseRepository):
         requires_interaction: Optional[bool] = None,
         category: Optional[str] = None,
         limit: Optional[int] = None,
+        chat_settings_id: Optional[str] = None,
     ) -> List[MediaItem]:
         """Get all media items with optional filters."""
         query = self.db.query(MediaItem)
+        query = self._apply_tenant_filter(query, MediaItem, chat_settings_id)
 
         if is_active is not None:
             query = query.filter(MediaItem.is_active == is_active)
@@ -200,14 +223,11 @@ class MediaRepository(BaseRepository):
 
         return query.all()
 
-    def get_categories(self) -> List[str]:
+    def get_categories(self, chat_settings_id: Optional[str] = None) -> List[str]:
         """Get all unique categories."""
-        result = (
-            self.db.query(MediaItem.category)
-            .filter(MediaItem.category.isnot(None))
-            .distinct()
-            .all()
-        )
+        query = self.db.query(MediaItem.category).filter(MediaItem.category.isnot(None))
+        query = self._apply_tenant_filter(query, MediaItem, chat_settings_id)
+        result = query.distinct().all()
         return [r[0] for r in result]
 
     def create(
@@ -227,6 +247,7 @@ class MediaRepository(BaseRepository):
         indexed_by_user_id: Optional[str] = None,
         source_type: str = "local",
         source_identifier: Optional[str] = None,
+        chat_settings_id: Optional[str] = None,
     ) -> MediaItem:
         """Create a new media item."""
         media_item = MediaItem(
@@ -245,6 +266,7 @@ class MediaRepository(BaseRepository):
             indexed_by_user_id=indexed_by_user_id,
             source_type=source_type,
             source_identifier=source_identifier or file_path,
+            chat_settings_id=chat_settings_id,
         )
         self.db.add(media_item)
         self.db.commit()
@@ -345,20 +367,21 @@ class MediaRepository(BaseRepository):
             return True
         return False
 
-    def get_duplicates(self) -> List[tuple]:
+    def get_duplicates(self, chat_settings_id: Optional[str] = None) -> List[tuple]:
         """
         Get all duplicate media items (same hash, different paths).
 
         Returns:
             List of tuples (file_hash, count, paths)
         """
+        query = self.db.query(
+            MediaItem.file_hash,
+            func.count(MediaItem.id).label("count"),
+            func.array_agg(MediaItem.file_path).label("paths"),
+        )
+        query = self._apply_tenant_filter(query, MediaItem, chat_settings_id)
         duplicates = (
-            self.db.query(
-                MediaItem.file_hash,
-                func.count(MediaItem.id).label("count"),
-                func.array_agg(MediaItem.file_path).label("paths"),
-            )
-            .group_by(MediaItem.file_hash)
+            query.group_by(MediaItem.file_hash)
             .having(func.count(MediaItem.id) > 1)
             .all()
         )
@@ -366,7 +389,9 @@ class MediaRepository(BaseRepository):
         return [(d.file_hash, d.count, d.paths) for d in duplicates]
 
     def get_next_eligible_for_posting(
-        self, category: Optional[str] = None
+        self,
+        category: Optional[str] = None,
+        chat_settings_id: Optional[str] = None,
     ) -> Optional[MediaItem]:
         """
         Get the next eligible media item for posting.
@@ -376,35 +401,35 @@ class MediaRepository(BaseRepository):
 
         Args:
             category: Filter by category, or None for all categories
+            chat_settings_id: Optional tenant filter (applied to main query and subqueries)
 
         Returns:
             The highest-priority eligible MediaItem, or None if no eligible media exists
         """
         query = self.db.query(MediaItem).filter(MediaItem.is_active)
+        query = self._apply_tenant_filter(query, MediaItem, chat_settings_id)
 
         # Filter by category if specified
         if category:
             query = query.filter(MediaItem.category == category)
 
-        # Exclude already queued items
-        queued_subquery = exists(
-            select(PostingQueue.id).where(PostingQueue.media_item_id == MediaItem.id)
-        )
+        # Exclude already queued items (tenant-scoped subquery)
+        queued_where = [PostingQueue.media_item_id == MediaItem.id]
+        if chat_settings_id:
+            queued_where.append(PostingQueue.chat_settings_id == chat_settings_id)
+        queued_subquery = exists(select(PostingQueue.id).where(and_(*queued_where)))
         query = query.filter(~queued_subquery)
 
-        # Exclude locked items (both permanent and TTL locks)
+        # Exclude locked items (both permanent and TTL locks, tenant-scoped subquery)
         now = datetime.utcnow()
-        locked_subquery = exists(
-            select(MediaPostingLock.id).where(
-                and_(
-                    MediaPostingLock.media_item_id == MediaItem.id,
-                    # Lock is active if: locked_until is NULL (permanent)
-                    # OR locked_until > now (TTL not expired)
-                    (MediaPostingLock.locked_until.is_(None))
-                    | (MediaPostingLock.locked_until > now),
-                )
-            )
-        )
+        lock_where = [
+            MediaPostingLock.media_item_id == MediaItem.id,
+            (MediaPostingLock.locked_until.is_(None))
+            | (MediaPostingLock.locked_until > now),
+        ]
+        if chat_settings_id:
+            lock_where.append(MediaPostingLock.chat_settings_id == chat_settings_id)
+        locked_subquery = exists(select(MediaPostingLock.id).where(and_(*lock_where)))
         query = query.filter(~locked_subquery)
 
         # Sort by priority:

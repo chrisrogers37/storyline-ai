@@ -36,6 +36,7 @@ class HistoryCreateParams:
     posted_by_telegram_username: Optional[str] = None
     error_message: Optional[str] = None
     retry_count: int = 0
+    chat_settings_id: Optional[str] = None
 
 
 class HistoryRepository(BaseRepository):
@@ -44,22 +45,24 @@ class HistoryRepository(BaseRepository):
     def __init__(self):
         super().__init__()
 
-    def get_by_id(self, history_id: str) -> Optional[PostingHistory]:
+    def get_by_id(
+        self, history_id: str, chat_settings_id: Optional[str] = None
+    ) -> Optional[PostingHistory]:
         """Get history record by ID."""
-        return (
-            self.db.query(PostingHistory)
-            .filter(PostingHistory.id == history_id)
-            .first()
-        )
+        query = self.db.query(PostingHistory).filter(PostingHistory.id == history_id)
+        query = self._apply_tenant_filter(query, PostingHistory, chat_settings_id)
+        return query.first()
 
     def get_all(
         self,
         status: Optional[str] = None,
         days: Optional[int] = None,
         limit: Optional[int] = None,
+        chat_settings_id: Optional[str] = None,
     ) -> List[PostingHistory]:
         """Get all history records with optional filters."""
         query = self.db.query(PostingHistory)
+        query = self._apply_tenant_filter(query, PostingHistory, chat_settings_id)
 
         if status:
             query = query.filter(PostingHistory.status == status)
@@ -76,14 +79,17 @@ class HistoryRepository(BaseRepository):
         return query.all()
 
     def get_by_media_id(
-        self, media_id: str, limit: Optional[int] = None
+        self,
+        media_id: str,
+        limit: Optional[int] = None,
+        chat_settings_id: Optional[str] = None,
     ) -> List[PostingHistory]:
         """Get all history records for a specific media item."""
-        query = (
-            self.db.query(PostingHistory)
-            .filter(PostingHistory.media_item_id == media_id)
-            .order_by(PostingHistory.posted_at.desc())
+        query = self.db.query(PostingHistory).filter(
+            PostingHistory.media_item_id == media_id
         )
+        query = self._apply_tenant_filter(query, PostingHistory, chat_settings_id)
+        query = query.order_by(PostingHistory.posted_at.desc())
 
         if limit:
             query = query.limit(limit)
@@ -100,17 +106,18 @@ class HistoryRepository(BaseRepository):
         self.db.refresh(history)
         return history
 
-    def get_recent_posts(self, hours: int = 24) -> List[PostingHistory]:
+    def get_recent_posts(
+        self, hours: int = 24, chat_settings_id: Optional[str] = None
+    ) -> List[PostingHistory]:
         """Get posts from the last N hours."""
         since = datetime.utcnow() - timedelta(hours=hours)
-        return (
-            self.db.query(PostingHistory)
-            .filter(PostingHistory.posted_at >= since)
-            .order_by(PostingHistory.posted_at.desc())
-            .all()
-        )
+        query = self.db.query(PostingHistory).filter(PostingHistory.posted_at >= since)
+        query = self._apply_tenant_filter(query, PostingHistory, chat_settings_id)
+        return query.order_by(PostingHistory.posted_at.desc()).all()
 
-    def count_by_method(self, method: str, since: datetime) -> int:
+    def count_by_method(
+        self, method: str, since: datetime, chat_settings_id: Optional[str] = None
+    ) -> int:
         """
         Count posts by posting method since a given time.
 
@@ -119,18 +126,17 @@ class HistoryRepository(BaseRepository):
         Args:
             method: Posting method ('instagram_api' or 'telegram_manual')
             since: Start of time window
+            chat_settings_id: Optional tenant filter
 
         Returns:
             Count of posts matching criteria
         """
-        return (
-            self.db.query(func.count(PostingHistory.id))
-            .filter(
-                and_(
-                    PostingHistory.posting_method == method,
-                    PostingHistory.posted_at >= since,
-                    PostingHistory.success,
-                )
+        query = self.db.query(func.count(PostingHistory.id)).filter(
+            and_(
+                PostingHistory.posting_method == method,
+                PostingHistory.posted_at >= since,
+                PostingHistory.success,
             )
-            .scalar()
-        ) or 0
+        )
+        query = self._apply_tenant_filter(query, PostingHistory, chat_settings_id)
+        return query.scalar() or 0

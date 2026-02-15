@@ -125,3 +125,85 @@ class TestLockRepository:
 
         assert result is False
         mock_db.delete.assert_not_called()
+
+
+@pytest.mark.unit
+class TestLockRepositoryTenantFiltering:
+    """Tests for optional chat_settings_id tenant filtering on LockRepository."""
+
+    TENANT_ID = "tenant-uuid-1"
+
+    def test_get_by_id_with_tenant(self, lock_repo, mock_db):
+        """get_by_id passes chat_settings_id through tenant filter."""
+        with patch.object(
+            lock_repo, "_apply_tenant_filter", wraps=lock_repo._apply_tenant_filter
+        ) as mock_filter:
+            lock_repo.get_by_id("lock-1", chat_settings_id=self.TENANT_ID)
+            mock_filter.assert_called_once()
+            assert mock_filter.call_args[0][2] == self.TENANT_ID
+
+    def test_get_active_lock_with_tenant(self, lock_repo, mock_db):
+        """get_active_lock passes chat_settings_id through tenant filter."""
+        with patch.object(
+            lock_repo, "_apply_tenant_filter", wraps=lock_repo._apply_tenant_filter
+        ) as mock_filter:
+            lock_repo.get_active_lock("media-1", chat_settings_id=self.TENANT_ID)
+            mock_filter.assert_called_once()
+            assert mock_filter.call_args[0][2] == self.TENANT_ID
+
+    def test_is_locked_passes_tenant_to_get_active_lock(self, lock_repo, mock_db):
+        """is_locked passes chat_settings_id through to get_active_lock."""
+        with patch.object(lock_repo, "get_active_lock", return_value=None) as mock_get:
+            lock_repo.is_locked("media-1", chat_settings_id=self.TENANT_ID)
+            mock_get.assert_called_once_with("media-1", self.TENANT_ID)
+
+    def test_get_all_active_with_tenant(self, lock_repo, mock_db):
+        """get_all_active passes chat_settings_id through tenant filter."""
+        mock_db.query.return_value.all.return_value = []
+        with patch.object(
+            lock_repo, "_apply_tenant_filter", wraps=lock_repo._apply_tenant_filter
+        ) as mock_filter:
+            lock_repo.get_all_active(chat_settings_id=self.TENANT_ID)
+            mock_filter.assert_called_once()
+            assert mock_filter.call_args[0][2] == self.TENANT_ID
+
+    def test_create_with_tenant(self, lock_repo, mock_db):
+        """create sets chat_settings_id on the new lock."""
+        lock_repo.create(
+            media_item_id="media-1",
+            ttl_days=30,
+            chat_settings_id=self.TENANT_ID,
+        )
+
+        added_lock = mock_db.add.call_args[0][0]
+        assert added_lock.chat_settings_id == self.TENANT_ID
+
+    def test_create_without_tenant(self, lock_repo, mock_db):
+        """create without chat_settings_id sets None (backward compat)."""
+        lock_repo.create(
+            media_item_id="media-1",
+            ttl_days=30,
+        )
+
+        added_lock = mock_db.add.call_args[0][0]
+        assert added_lock.chat_settings_id is None
+
+    def test_get_permanent_locks_with_tenant(self, lock_repo, mock_db):
+        """get_permanent_locks passes chat_settings_id through tenant filter."""
+        mock_db.query.return_value.all.return_value = []
+        with patch.object(
+            lock_repo, "_apply_tenant_filter", wraps=lock_repo._apply_tenant_filter
+        ) as mock_filter:
+            lock_repo.get_permanent_locks(chat_settings_id=self.TENANT_ID)
+            mock_filter.assert_called_once()
+            assert mock_filter.call_args[0][2] == self.TENANT_ID
+
+    def test_cleanup_expired_with_tenant(self, lock_repo, mock_db):
+        """cleanup_expired passes chat_settings_id through tenant filter."""
+        mock_db.query.return_value.filter.return_value.delete.return_value = 0
+        with patch.object(
+            lock_repo, "_apply_tenant_filter", wraps=lock_repo._apply_tenant_filter
+        ) as mock_filter:
+            lock_repo.cleanup_expired(chat_settings_id=self.TENANT_ID)
+            mock_filter.assert_called_once()
+            assert mock_filter.call_args[0][2] == self.TENANT_ID

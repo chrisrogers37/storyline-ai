@@ -166,6 +166,96 @@ class TestCategoryMixRepository:
 
 
 @pytest.mark.unit
+class TestCategoryMixRepositoryTenantFiltering:
+    """Tests for optional chat_settings_id tenant filtering on CategoryMixRepository."""
+
+    TENANT_ID = "tenant-uuid-1"
+
+    @pytest.fixture
+    def mock_db(self):
+        """Create a mock database session."""
+        return MagicMock()
+
+    @pytest.fixture
+    def mix_repo(self, mock_db):
+        """Create CategoryMixRepository with mocked database."""
+        with patch("src.repositories.base_repository.get_db") as mock_get_db:
+            mock_get_db.return_value = iter([mock_db])
+            repo = CategoryMixRepository()
+            repo._db = mock_db
+            return repo
+
+    def test_get_current_mix_with_tenant(self, mix_repo, mock_db):
+        """get_current_mix passes chat_settings_id through tenant filter."""
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = []
+        with patch.object(
+            mix_repo, "_apply_tenant_filter", wraps=mix_repo._apply_tenant_filter
+        ) as mock_filter:
+            mix_repo.get_current_mix(chat_settings_id=self.TENANT_ID)
+            mock_filter.assert_called_once()
+            assert mock_filter.call_args[0][2] == self.TENANT_ID
+
+    def test_get_current_mix_as_dict_passes_tenant(self, mix_repo, mock_db):
+        """get_current_mix_as_dict passes chat_settings_id to get_current_mix."""
+        with patch.object(mix_repo, "get_current_mix", return_value=[]) as mock_get:
+            mix_repo.get_current_mix_as_dict(chat_settings_id=self.TENANT_ID)
+            mock_get.assert_called_once_with(chat_settings_id=self.TENANT_ID)
+
+    def test_get_history_with_tenant(self, mix_repo, mock_db):
+        """get_history passes chat_settings_id through tenant filter."""
+        mock_db.query.return_value.order_by.return_value.all.return_value = []
+        with patch.object(
+            mix_repo, "_apply_tenant_filter", wraps=mix_repo._apply_tenant_filter
+        ) as mock_filter:
+            mix_repo.get_history(chat_settings_id=self.TENANT_ID)
+            mock_filter.assert_called_once()
+            assert mock_filter.call_args[0][2] == self.TENANT_ID
+
+    def test_set_mix_passes_tenant_to_expire_query(self, mix_repo, mock_db):
+        """set_mix passes chat_settings_id when expiring old records."""
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = []
+        with patch.object(mix_repo, "get_current_mix", return_value=[]) as mock_get:
+            mix_repo.set_mix({"memes": Decimal("1.0")}, chat_settings_id=self.TENANT_ID)
+            mock_get.assert_called_once_with(chat_settings_id=self.TENANT_ID)
+
+    def test_set_mix_passes_tenant_to_new_records(self, mix_repo, mock_db):
+        """set_mix sets chat_settings_id on newly created records."""
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = []
+        mix_repo.set_mix(
+            {"memes": Decimal("0.7"), "merch": Decimal("0.3")},
+            chat_settings_id=self.TENANT_ID,
+        )
+
+        # Both added records should have the tenant ID
+        for call in mock_db.add.call_args_list:
+            added = call[0][0]
+            assert added.chat_settings_id == self.TENANT_ID
+
+    def test_has_current_mix_with_tenant(self, mix_repo, mock_db):
+        """has_current_mix passes chat_settings_id through tenant filter."""
+        # Set up chain so scalar() returns an int after tenant filter
+        mock_query = mock_db.query.return_value.filter.return_value
+        mock_query.filter.return_value.scalar.return_value = 0
+        mock_query.scalar.return_value = 0
+        with patch.object(
+            mix_repo, "_apply_tenant_filter", wraps=mix_repo._apply_tenant_filter
+        ) as mock_filter:
+            mix_repo.has_current_mix(chat_settings_id=self.TENANT_ID)
+            mock_filter.assert_called_once()
+            assert mock_filter.call_args[0][2] == self.TENANT_ID
+
+    def test_get_categories_without_ratio_passes_tenant(self, mix_repo, mock_db):
+        """get_categories_without_ratio passes chat_settings_id to get_current_mix_as_dict."""
+        with patch.object(
+            mix_repo, "get_current_mix_as_dict", return_value={}
+        ) as mock_get:
+            mix_repo.get_categories_without_ratio(
+                ["memes"], chat_settings_id=self.TENANT_ID
+            )
+            mock_get.assert_called_once_with(chat_settings_id=self.TENANT_ID)
+
+
+@pytest.mark.unit
 class TestCategoryPostCaseMixModel:
     """Test suite for CategoryPostCaseMix model."""
 
