@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     INSTAGRAM_ACCESS_TOKEN: Optional[str] = None
     FACEBOOK_APP_ID: Optional[str] = None
     FACEBOOK_APP_SECRET: Optional[str] = None
+    OAUTH_REDIRECT_BASE_URL: Optional[str] = None  # e.g., "https://api.storyline.ai"
 
     # Cloudinary Configuration (Phase 2 Only)
     CLOUD_STORAGE_PROVIDER: str = "cloudinary"  # Currently only cloudinary supported

@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Instagram OAuth redirect flow** - Browser-based Instagram account connection replacing manual CLI token copy-paste
+  - `OAuthService`: Fernet-encrypted state tokens (10min TTL, CSRF nonce), Meta token exchange (short→long-lived), account create/update
+  - FastAPI app (`src/api/app.py`) with two OAuth endpoints: `/auth/instagram/start` (redirect to Meta) and `/auth/instagram/callback` (exchange + store)
+  - `/connect` Telegram command: sends inline button with OAuth link, 10-minute expiry notice
+  - HTML success/error pages for browser feedback after OAuth callback
+  - Telegram notification on success ("Instagram connected! Account: @username") and failure
+  - New dependencies: `fastapi>=0.109.0`, `uvicorn>=0.27.0`
+  - New setting: `OAUTH_REDIRECT_BASE_URL`
+  - 32 new tests (17 OAuthService, 12 route, 3 /connect command)
+
 - **Per-tenant scheduler and posting pipeline** - Thread `telegram_chat_id` through scheduler, posting, and main loop for multi-tenant operation
   - `ChatSettingsRepository.get_all_active()` — discover all non-paused tenants
   - `SettingsService.get_all_active_chats()` — service-layer tenant discovery

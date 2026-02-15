@@ -139,6 +139,7 @@ class TelegramService(BaseService):
             "dryrun": self.commands.handle_dryrun,
             "sync": self.commands.handle_sync,
             "backfill": self.commands.handle_backfill,
+            "connect": self.commands.handle_connect,
             "settings": self.settings_handler.handle_settings,
         }
         for cmd, handler in command_map.items():
@@ -172,6 +173,7 @@ class TelegramService(BaseService):
             BotCommand("dryrun", "Toggle dry-run mode"),
             BotCommand("sync", "Sync media from configured source"),
             BotCommand("backfill", "Backfill media from Instagram"),
+            BotCommand("connect", "Connect an Instagram account via OAuth"),
         ]
         await self.bot.set_my_commands(commands)
 

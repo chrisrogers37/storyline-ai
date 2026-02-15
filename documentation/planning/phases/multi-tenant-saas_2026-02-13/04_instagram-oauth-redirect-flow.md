@@ -1,6 +1,7 @@
 # Phase 04: Instagram OAuth Redirect Flow
 
-**Status:** 📋 PENDING
+**Status:** 🔧 IN PROGRESS
+**Started:** 2026-02-15
 **Risk:** Medium
 **Effort:** 4-5 hours
 **PR Title:** `feat: Instagram OAuth redirect flow for self-service account connection`
@@ -367,9 +368,9 @@ class OAuthService(BaseService):
             "state": state_token,
         }
 
-        # Build URL with query parameters
-        query_string = "&".join(f"{k}={v}" for k, v in params.items())
-        return f"{self.META_OAUTH_DIALOG}?{query_string}"
+        # Build URL with query parameters (urlencode handles redirect_uri safely)
+        from urllib.parse import urlencode
+        return f"{self.META_OAUTH_DIALOG}?{urlencode(params)}"
 
     def _create_state_token(self, telegram_chat_id: int) -> str:
         """
@@ -1267,25 +1268,25 @@ In the Meta Developer Console:
 
 ## 10. Verification Checklist
 
-- [ ] `OAUTH_REDIRECT_BASE_URL` setting added to `Settings` class
-- [ ] `fastapi` and `uvicorn` added to `requirements.txt`
-- [ ] `src/api/app.py` creates FastAPI app with OAuth router
-- [ ] `GET /auth/instagram/start?chat_id=X` generates state, redirects to Meta
-- [ ] `GET /auth/instagram/callback?code=X&state=Y` exchanges code, stores token, notifies Telegram
-- [ ] State token expires after 10 minutes (Fernet TTL)
-- [ ] State token includes CSRF nonce
-- [ ] User denial at Meta is handled gracefully (error page + Telegram notification)
-- [ ] Expired/invalid state shows user-friendly error page
-- [ ] New account: `InstagramAccountService.add_account()` called, set as active
-- [ ] Existing account: `InstagramAccountService.update_account_token()` called, set as active
-- [ ] Telegram `/connect` command sends InlineKeyboardButton with OAuth link
-- [ ] `/connect` registered in TelegramService.initialize() command map
-- [ ] Success page shown in browser after callback
-- [ ] Telegram bot notifies chat: "Instagram connected! Account: @username"
-- [ ] All unit tests pass for OAuthService (state validation, token exchange, store logic)
-- [ ] All route tests pass for `/auth/instagram/start` and `/auth/instagram/callback`
-- [ ] `ruff check` and `ruff format` pass on all new/modified files
-- [ ] CHANGELOG.md updated
+- [x] `OAUTH_REDIRECT_BASE_URL` setting added to `Settings` class
+- [x] `fastapi` and `uvicorn` added to `requirements.txt`
+- [x] `src/api/app.py` creates FastAPI app with OAuth router
+- [x] `GET /auth/instagram/start?chat_id=X` generates state, redirects to Meta
+- [x] `GET /auth/instagram/callback?code=X&state=Y` exchanges code, stores token, notifies Telegram
+- [x] State token expires after 10 minutes (Fernet TTL)
+- [x] State token includes CSRF nonce
+- [x] User denial at Meta is handled gracefully (error page + Telegram notification)
+- [x] Expired/invalid state shows user-friendly error page
+- [x] New account: `InstagramAccountService.add_account()` called, set as active
+- [x] Existing account: `InstagramAccountService.update_account_token()` called, set as active
+- [x] Telegram `/connect` command sends InlineKeyboardButton with OAuth link
+- [x] `/connect` registered in TelegramService.initialize() command map
+- [x] Success page shown in browser after callback
+- [x] Telegram bot notifies chat: "Instagram connected! Account: @username"
+- [x] All unit tests pass for OAuthService (state validation, token exchange, store logic)
+- [x] All route tests pass for `/auth/instagram/start` and `/auth/instagram/callback`
+- [x] `ruff check` and `ruff format` pass on all new/modified files
+- [x] CHANGELOG.md updated
 
 ## 11. What NOT To Do
 
