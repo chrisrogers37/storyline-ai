@@ -141,3 +141,24 @@ class TestValidateInitData:
         result = validate_init_data(init_data)
 
         assert result["user_id"] == 12345
+
+    @patch("src.utils.webapp_auth.settings")
+    def test_chat_id_extracted_when_present(self, mock_settings):
+        """When initData contains a chat object, chat_id is extracted."""
+        mock_settings.TELEGRAM_BOT_TOKEN = "test-bot-token"
+
+        chat_data = json.dumps({"id": -1001234567890, "type": "supergroup"})
+        init_data = _build_init_data(extra_params={"chat": chat_data})
+        result = validate_init_data(init_data)
+
+        assert result["chat_id"] == -1001234567890
+
+    @patch("src.utils.webapp_auth.settings")
+    def test_no_chat_id_when_absent(self, mock_settings):
+        """When initData has no chat object, chat_id is not in result."""
+        mock_settings.TELEGRAM_BOT_TOKEN = "test-bot-token"
+
+        init_data = _build_init_data()
+        result = validate_init_data(init_data)
+
+        assert "chat_id" not in result

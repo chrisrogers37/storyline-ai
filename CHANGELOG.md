@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **XSS prevention in OAuth HTML pages** - All user-supplied values (`username`, `email`, `title`, `message`) now escaped with `html.escape()` before interpolation into HTML responses (`src/api/routes/oauth.py`)
+- **Onboarding chat_id verification** - `_validate_request()` now verifies the `chat_id` from the signed `initData` matches the request's `chat_id`, preventing cross-tenant manipulation; returns 403 on mismatch
+- **CORS origin restriction** - Replaced `allow_origins=["*"]` with `OAUTH_REDIRECT_BASE_URL` (or `localhost` in development), and restricted `allow_headers` to `Content-Type`
+- **Google Drive API query injection fix** - Escaped single quotes and backslashes in `folder_name` before interpolating into Google Drive API query strings (`google_drive_provider.py`)
+- **Schedule input validation** - Added Pydantic `Field` validators: `posts_per_day` (1-50), `posting_hours_start/end` (0-23), `schedule_days` (1-30)
+- **Instagram API exception data sanitization** - Removed `response` dict from `InstagramAPIError` to prevent full API response leakage through error tracking/logging
+- **initData chat extraction** - `validate_init_data()` now extracts `chat_id` from Telegram's `chat` object when present in signed data (group chats)
+
 ### Added
 
 - **Cloud deployment guide** - Comprehensive guide for deploying to Railway + Neon

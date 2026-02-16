@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from src.api.routes.oauth import router as oauth_router
 from src.api.routes.onboarding import router as onboarding_router
+from src.config.settings import settings
 
 app = FastAPI(
     title="Storyline AI API",
@@ -16,12 +17,17 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# CORS middleware (needed for browser redirects and Mini App API calls)
+# CORS middleware — restrict to our own domain in production
+_cors_origins = (
+    [settings.OAUTH_REDIRECT_BASE_URL]
+    if settings.OAUTH_REDIRECT_BASE_URL
+    else ["http://localhost:8000"]
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Tighten in production
+    allow_origins=_cors_origins,
     allow_methods=["GET", "POST"],
-    allow_headers=["*"],
+    allow_headers=["Content-Type"],
 )
 
 # Static files for Mini App

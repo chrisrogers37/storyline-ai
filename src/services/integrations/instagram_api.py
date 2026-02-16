@@ -260,7 +260,6 @@ class InstagramAPIService(BaseService):
             if not container_id:
                 raise InstagramAPIError(
                     "No container ID in response",
-                    response=data,
                 )
 
             return container_id
@@ -294,7 +293,6 @@ class InstagramAPIService(BaseService):
                     raise InstagramAPIError(
                         f"Media container failed: {error_msg}",
                         error_code=status_code,
-                        response=data,
                     )
 
                 if status_code == "EXPIRED":
@@ -337,7 +335,6 @@ class InstagramAPIService(BaseService):
             if not story_id:
                 raise InstagramAPIError(
                     "No story ID in publish response",
-                    response=data,
                 )
 
             return story_id
@@ -387,7 +384,6 @@ class InstagramAPIService(BaseService):
             error_message,
             error_code=str(error_code) if error_code else None,
             error_subcode=error_subcode,
-            response=data,
         )
 
     def get_rate_limit_remaining(self) -> int:

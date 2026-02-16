@@ -3,7 +3,7 @@
 import re
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.repositories.chat_settings_repository import ChatSettingsRepository
 from src.repositories.token_repository import TokenRepository
@@ -37,27 +37,41 @@ class MediaFolderRequest(BaseModel):
 class ScheduleRequest(BaseModel):
     init_data: str
     chat_id: int
-    posts_per_day: int
-    posting_hours_start: int
-    posting_hours_end: int
+    posts_per_day: int = Field(ge=1, le=50)
+    posting_hours_start: int = Field(ge=0, le=23)
+    posting_hours_end: int = Field(ge=0, le=23)
 
 
 class CompleteRequest(BaseModel):
     init_data: str
     chat_id: int
     create_schedule: bool = False
-    schedule_days: int = 7
+    schedule_days: int = Field(default=7, ge=1, le=30)
 
 
 # --- Helpers ---
 
 
-def _validate_request(init_data: str) -> dict:
-    """Validate initData and return user info. Raises HTTPException on failure."""
+def _validate_request(init_data: str, chat_id: int) -> dict:
+    """Validate initData and verify chat_id matches.
+
+    Raises HTTPException on auth failure or chat_id mismatch.
+    """
     try:
-        return validate_init_data(init_data)
+        user_info = validate_init_data(init_data)
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e))
+
+    # If initData contains a chat_id (group chats), verify it matches the request
+    signed_chat_id = user_info.get("chat_id")
+    if signed_chat_id is not None and signed_chat_id != chat_id:
+        logger.warning(
+            f"Chat ID mismatch: initData has {signed_chat_id}, "
+            f"request has {chat_id} (user_id={user_info.get('user_id')})"
+        )
+        raise HTTPException(status_code=403, detail="Chat ID mismatch")
+
+    return user_info
 
 
 def _get_setup_state(telegram_chat_id: int) -> dict:
@@ -114,7 +128,7 @@ def _get_setup_state(telegram_chat_id: int) -> dict:
 @router.post("/init")
 async def onboarding_init(request: InitRequest):
     """Validate initData and return current setup state for this chat."""
-    user_info = _validate_request(request.init_data)
+    user_info = _validate_request(request.init_data, request.chat_id)
 
     setup_state = _get_setup_state(request.chat_id)
 
@@ -132,7 +146,7 @@ async def onboarding_oauth_url(
     chat_id: int,
 ):
     """Return OAuth authorization URL for a provider."""
-    _validate_request(init_data)
+    _validate_request(init_data, chat_id)
 
     if provider == "instagram":
         from src.services.core.oauth_service import OAuthService
@@ -167,7 +181,7 @@ async def onboarding_oauth_url(
 @router.post("/media-folder")
 async def onboarding_media_folder(request: MediaFolderRequest):
     """Set the Google Drive media folder for this chat."""
-    _validate_request(request.init_data)
+    _validate_request(request.init_data, request.chat_id)
 
     # Extract folder ID from URL
     match = GDRIVE_FOLDER_RE.search(request.folder_url)
@@ -216,7 +230,7 @@ async def onboarding_media_folder(request: MediaFolderRequest):
 @router.post("/schedule")
 async def onboarding_schedule(request: ScheduleRequest):
     """Save posting schedule configuration."""
-    _validate_request(request.init_data)
+    _validate_request(request.init_data, request.chat_id)
 
     settings_service = SettingsService()
     try:
@@ -244,7 +258,7 @@ async def onboarding_schedule(request: ScheduleRequest):
 @router.post("/complete")
 async def onboarding_complete(request: CompleteRequest):
     """Mark onboarding as finished, optionally create initial schedule."""
-    _validate_request(request.init_data)
+    _validate_request(request.init_data, request.chat_id)
 
     settings_service = SettingsService()
     try:

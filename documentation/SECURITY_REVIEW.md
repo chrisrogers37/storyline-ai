@@ -1,8 +1,8 @@
 # Security Review - Storyline AI
 
-**Date**: 2026-01-11 (Updated 2026-02-10)
+**Date**: 2026-01-11 (Updated 2026-02-15)
 **Reviewer**: AI Security Audit
-**Status**: ✅ Generally Secure with Recommendations
+**Status**: ✅ Secure — Post-SaaS hardening complete
 
 ---
 
@@ -333,6 +333,40 @@ async def handle_pause(self, update, context):
 
 ---
 
-**Review Complete** ✅
+## 10. Multi-Tenant SaaS Security Hardening (2026-02-15)
 
-Your repository is secure from credential leakage. The collaborative bot design is intentional and appropriate for team workflows.
+Post multi-tenant transition (Phases 01-07) security review. All findings fixed.
+
+### Fixed Issues
+
+| Severity | Issue | Fix | File |
+|----------|-------|-----|------|
+| Critical | XSS in OAuth HTML pages — `username`, `email` interpolated without escaping | `html.escape()` on all interpolated values | `src/api/routes/oauth.py` |
+| Critical | Onboarding endpoints didn't verify chat_id against initData | `_validate_request()` now verifies signed chat_id matches request; 403 on mismatch | `src/api/routes/onboarding.py` |
+| High | CORS `allow_origins=["*"]` | Restricted to `OAUTH_REDIRECT_BASE_URL` or localhost | `src/api/app.py` |
+| High | Google Drive API query injection via folder_name | Escape `'` and `\` before interpolating | `src/services/media_sources/google_drive_provider.py` |
+| Medium | No input bounds on schedule fields | Pydantic `Field(ge=, le=)` validators | `src/api/routes/onboarding.py` |
+| Medium | Full API response stored in `InstagramAPIError.response` | Removed `response` parameter entirely | `src/exceptions/instagram.py` |
+
+### Verified Secure (no issues found)
+
+| Area | Assessment |
+|------|-----------|
+| Token encryption (Fernet AES+HMAC) | Excellent — singleton cipher, key validation on init |
+| HMAC initData validation | Excellent — `hmac.compare_digest()` timing-safe comparison |
+| OAuth CSRF (state tokens) | Strong — Fernet encrypted, 10-min TTL, nonce |
+| SQL injection | Safe — all SQLAlchemy ORM, no raw SQL |
+| Command injection | Safe — no subprocess/os.system calls |
+| Hardcoded credentials | None — all via `.env`, properly gitignored |
+| Instagram rate limiting | Correct — pre-request database-tracked check |
+| Database SSL | Supported — `DB_SSLMODE=require` for cloud PaaS |
+
+### Remaining Recommendations (pre-SaaS launch)
+
+- [ ] Add role-based access control on Telegram commands for multi-tenant
+- [ ] Add API rate limiting (e.g., `slowapi`) on `/api/onboarding/*` endpoints
+- [ ] Add `pip-audit` to CI for automated dependency vulnerability scanning
+
+---
+
+**Review Complete** ✅
