@@ -15,7 +15,6 @@ class InstagramAPIError(StorylineError):
         message: Human-readable error description
         error_code: Instagram/Meta error code (e.g., 'OAuthException')
         error_subcode: More specific error subcode from Meta
-        response: Full response dict from the API (for debugging)
     """
 
     def __init__(
@@ -23,12 +22,10 @@ class InstagramAPIError(StorylineError):
         message: str,
         error_code: Optional[str] = None,
         error_subcode: Optional[int] = None,
-        response: Optional[dict] = None,
     ):
         super().__init__(message)
         self.error_code = error_code
         self.error_subcode = error_subcode
-        self.response = response
 
     def __str__(self) -> str:
         base = super().__str__()

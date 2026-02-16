@@ -60,7 +60,15 @@ def validate_init_data(init_data: str) -> dict:
     user_json = parsed.get("user", ["{}"])[0]
     user_data = json.loads(user_json)
 
-    return {
+    result = {
         "user_id": user_data.get("id"),
         "first_name": user_data.get("first_name"),
     }
+
+    # Extract chat_id if present (available when opened from a group chat)
+    chat_json = parsed.get("chat", [None])[0]
+    if chat_json:
+        chat_data = json.loads(chat_json)
+        result["chat_id"] = chat_data.get("id")
+
+    return result

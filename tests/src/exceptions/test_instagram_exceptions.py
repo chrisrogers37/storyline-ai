@@ -38,9 +38,10 @@ class TestInstagramAPIError:
         err = InstagramAPIError("msg", error_subcode=463)
         assert err.error_subcode == 463
 
-    def test_response_attribute(self):
-        err = InstagramAPIError("msg", response={"error": "bad"})
-        assert err.response == {"error": "bad"}
+    def test_no_response_attribute(self):
+        """Response dict removed to prevent sensitive API data leakage."""
+        err = InstagramAPIError("msg")
+        assert not hasattr(err, "response")
 
     def test_str_includes_error_code(self):
         err = InstagramAPIError("msg", error_code="OAuthException")

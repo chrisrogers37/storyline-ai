@@ -406,3 +406,60 @@ class TestGDriveOAuthCallbackEndpoint:
             client.get("/auth/google-drive/callback?code=CODE&state=STATE")
 
         mock_svc.close.assert_called_once()
+
+
+# =============================================================================
+# Security: XSS prevention in HTML pages
+# =============================================================================
+
+
+class TestOAuthHtmlEscaping:
+    """Verify user-supplied values are HTML-escaped in success/error pages."""
+
+    def test_instagram_username_is_escaped(self, client):
+        """Username with HTML/JS is escaped in success page."""
+        xss_username = '"><script>alert(1)</script>'
+
+        with patch("src.api.routes.oauth.OAuthService") as MockService:
+            mock_svc = MockService.return_value
+            mock_svc.validate_state_token.return_value = -100123
+            mock_svc.exchange_and_store = AsyncMock(
+                return_value={
+                    "username": xss_username,
+                    "expires_in_days": 60,
+                }
+            )
+            mock_svc.notify_telegram = AsyncMock()
+            mock_svc.close = Mock()
+
+            response = client.get(
+                "/auth/instagram/callback?code=AUTH_CODE&state=VALID_STATE"
+            )
+
+        assert response.status_code == 200
+        assert "<script>" not in response.text
+        assert "&lt;script&gt;" in response.text
+
+    def test_gdrive_email_is_escaped(self, client):
+        """Email with HTML is escaped in Google Drive success page."""
+        xss_email = "<img src=x onerror=alert(1)>"
+
+        with patch("src.api.routes.oauth.GoogleDriveOAuthService") as MockService:
+            mock_svc = MockService.return_value
+            mock_svc.validate_state_token.return_value = -100123
+            mock_svc.exchange_and_store = AsyncMock(
+                return_value={
+                    "email": xss_email,
+                    "expires_in_hours": 1,
+                }
+            )
+            mock_svc.notify_telegram = AsyncMock()
+            mock_svc.close = Mock()
+
+            response = client.get(
+                "/auth/google-drive/callback?code=AUTH_CODE&state=VALID_STATE"
+            )
+
+        assert response.status_code == 200
+        assert "<img src=" not in response.text
+        assert "&lt;img" in response.text

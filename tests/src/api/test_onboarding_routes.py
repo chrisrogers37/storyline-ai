@@ -19,7 +19,11 @@ CHAT_ID = -1001234567890
 
 
 def _mock_validate(return_value=None):
-    """Patch validate_init_data to skip HMAC validation in tests."""
+    """Patch validate_init_data to skip HMAC validation in tests.
+
+    The default return has no chat_id, simulating DM-opened Mini Apps.
+    Pass chat_id in return_value to test group-chat initData.
+    """
     return patch(
         "src.api.routes.onboarding.validate_init_data",
         return_value=return_value or VALID_USER,
@@ -352,14 +356,14 @@ class TestOnboardingSchedule:
         mock_svc = MockSettings.return_value
         assert mock_svc.update_setting.call_count == 3
 
-    def test_schedule_invalid_value_returns_400(self, client):
-        """Out-of-range value returns 400."""
+    def test_schedule_service_validation_error_returns_400(self, client):
+        """Service-level validation error returns 400."""
         with (
             _mock_validate(),
             patch("src.api.routes.onboarding.SettingsService") as MockSettings,
         ):
             MockSettings.return_value.update_setting.side_effect = ValueError(
-                "posts_per_day must be between 1 and 10"
+                "Invalid setting value"
             )
             MockSettings.return_value.close = Mock()
 
@@ -368,7 +372,7 @@ class TestOnboardingSchedule:
                 json={
                     "init_data": "test",
                     "chat_id": CHAT_ID,
-                    "posts_per_day": 99,
+                    "posts_per_day": 5,
                     "posting_hours_start": 9,
                     "posting_hours_end": 21,
                 },
@@ -471,3 +475,172 @@ class TestOnboardingComplete:
         assert data["onboarding_completed"] is True
         assert data["schedule_created"] is False
         assert "schedule_error" in data
+
+
+# =============================================================================
+# Security: Chat ID verification
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestOnboardingChatIdVerification:
+    """Test that chat_id from initData is verified against request chat_id."""
+
+    def test_mismatched_chat_id_returns_403(self, client):
+        """If initData has a different chat_id than the request, return 403."""
+        # initData says chat_id=999, but request says CHAT_ID
+        user_with_chat = {
+            "user_id": 12345,
+            "first_name": "Chris",
+            "chat_id": 999,
+        }
+        with _mock_validate(return_value=user_with_chat):
+            response = client.post(
+                "/api/onboarding/init",
+                json={"init_data": "test", "chat_id": CHAT_ID},
+            )
+
+        assert response.status_code == 403
+        assert "mismatch" in response.json()["detail"].lower()
+
+    def test_matching_chat_id_succeeds(self, client):
+        """If initData chat_id matches request chat_id, proceed normally."""
+        user_with_chat = {
+            "user_id": 12345,
+            "first_name": "Chris",
+            "chat_id": CHAT_ID,
+        }
+        mock_settings = Mock(
+            id=uuid4(),
+            posts_per_day=3,
+            posting_hours_start=14,
+            posting_hours_end=2,
+            onboarding_completed=False,
+        )
+
+        with (
+            _mock_validate(return_value=user_with_chat),
+            patch(
+                "src.api.routes.onboarding.ChatSettingsRepository"
+            ) as MockSettingsRepo,
+            patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
+            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
+        ):
+            MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
+            MockSettingsRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.get_token_for_chat.return_value = None
+            MockTokenRepo.return_value.close = Mock()
+            MockIGService.return_value.get_active_account.return_value = None
+            MockIGService.return_value.close = Mock()
+
+            response = client.post(
+                "/api/onboarding/init",
+                json={"init_data": "test", "chat_id": CHAT_ID},
+            )
+
+        assert response.status_code == 200
+
+    def test_no_chat_id_in_initdata_allows_any(self, client):
+        """If initData has no chat_id (DM context), request proceeds."""
+        mock_settings = Mock(
+            id=uuid4(),
+            posts_per_day=3,
+            posting_hours_start=14,
+            posting_hours_end=2,
+            onboarding_completed=False,
+        )
+
+        with (
+            _mock_validate(),  # default: no chat_id in return
+            patch(
+                "src.api.routes.onboarding.ChatSettingsRepository"
+            ) as MockSettingsRepo,
+            patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
+            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
+        ):
+            MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
+            MockSettingsRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.get_token_for_chat.return_value = None
+            MockTokenRepo.return_value.close = Mock()
+            MockIGService.return_value.get_active_account.return_value = None
+            MockIGService.return_value.close = Mock()
+
+            response = client.post(
+                "/api/onboarding/init",
+                json={"init_data": "test", "chat_id": CHAT_ID},
+            )
+
+        assert response.status_code == 200
+
+
+# =============================================================================
+# Security: Input validation on schedule fields
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestOnboardingInputValidation:
+    """Test Pydantic field validators reject out-of-range values."""
+
+    def test_posts_per_day_zero_rejected(self, client):
+        """posts_per_day=0 is rejected by Pydantic validation."""
+        with _mock_validate():
+            response = client.post(
+                "/api/onboarding/schedule",
+                json={
+                    "init_data": "test",
+                    "chat_id": CHAT_ID,
+                    "posts_per_day": 0,
+                    "posting_hours_start": 9,
+                    "posting_hours_end": 21,
+                },
+            )
+
+        assert response.status_code == 422
+
+    def test_posts_per_day_negative_rejected(self, client):
+        """Negative posts_per_day is rejected."""
+        with _mock_validate():
+            response = client.post(
+                "/api/onboarding/schedule",
+                json={
+                    "init_data": "test",
+                    "chat_id": CHAT_ID,
+                    "posts_per_day": -1,
+                    "posting_hours_start": 9,
+                    "posting_hours_end": 21,
+                },
+            )
+
+        assert response.status_code == 422
+
+    def test_posting_hours_out_of_range_rejected(self, client):
+        """posting_hours_start=25 is rejected."""
+        with _mock_validate():
+            response = client.post(
+                "/api/onboarding/schedule",
+                json={
+                    "init_data": "test",
+                    "chat_id": CHAT_ID,
+                    "posts_per_day": 3,
+                    "posting_hours_start": 25,
+                    "posting_hours_end": 21,
+                },
+            )
+
+        assert response.status_code == 422
+
+    def test_schedule_days_over_max_rejected(self, client):
+        """schedule_days=100 is rejected on complete endpoint."""
+        with _mock_validate():
+            response = client.post(
+                "/api/onboarding/complete",
+                json={
+                    "init_data": "test",
+                    "chat_id": CHAT_ID,
+                    "create_schedule": True,
+                    "schedule_days": 100,
+                },
+            )
+
+        assert response.status_code == 422

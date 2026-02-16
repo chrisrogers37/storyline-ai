@@ -294,9 +294,10 @@ class GoogleDriveProvider(MediaSourceProvider):
             if fname == folder_name:
                 return fid
 
+        safe_name = folder_name.replace("\\", "\\\\").replace("'", "\\'")
         query = (
             f"'{self.root_folder_id}' in parents "
-            f"and name='{folder_name}' "
+            f"and name='{safe_name}' "
             f"and mimeType='application/vnd.google-apps.folder' "
             f"and trashed=false"
         )

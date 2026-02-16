@@ -1,5 +1,7 @@
 """OAuth redirect flow endpoints for Instagram and Google Drive."""
 
+import html
+
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 
@@ -205,6 +207,7 @@ async def google_drive_oauth_callback(
 
 def _gdrive_success_html_page(email: str) -> HTMLResponse:
     """Return a simple HTML success page for Google Drive."""
+    safe_email = html.escape(email)
     return HTMLResponse(
         content=f"""
         <!DOCTYPE html>
@@ -222,7 +225,7 @@ def _gdrive_success_html_page(email: str) -> HTMLResponse:
         <body>
         <div class="card">
             <h1>Google Drive Connected!</h1>
-            <p>Your Google Drive (<strong>{email}</strong>) has been
+            <p>Your Google Drive (<strong>{safe_email}</strong>) has been
             connected to Storyline AI.</p>
             <p>You can close this window and return to Telegram.</p>
         </div>
@@ -234,6 +237,7 @@ def _gdrive_success_html_page(email: str) -> HTMLResponse:
 
 def _success_html_page(username: str) -> HTMLResponse:
     """Return a simple HTML success page."""
+    safe_username = html.escape(username)
     return HTMLResponse(
         content=f"""
         <!DOCTYPE html>
@@ -251,7 +255,7 @@ def _success_html_page(username: str) -> HTMLResponse:
         <body>
         <div class="card">
             <h1>Connected!</h1>
-            <p>Instagram account <strong>@{username}</strong> has been
+            <p>Instagram account <strong>@{safe_username}</strong> has been
             connected to Storyline AI.</p>
             <p>You can close this window and return to Telegram.</p>
         </div>
@@ -263,11 +267,13 @@ def _success_html_page(username: str) -> HTMLResponse:
 
 def _error_html_page(title: str, message: str) -> HTMLResponse:
     """Return a simple HTML error page."""
+    safe_title = html.escape(title)
+    safe_message = html.escape(message)
     return HTMLResponse(
         content=f"""
         <!DOCTYPE html>
         <html>
-        <head><title>Storyline AI - {title}</title>
+        <head><title>Storyline AI - {safe_title}</title>
         <style>
             body {{ font-family: -apple-system, sans-serif; text-align: center;
                    padding: 60px 20px; background: #f5f5f5; }}
@@ -279,8 +285,8 @@ def _error_html_page(title: str, message: str) -> HTMLResponse:
         </style></head>
         <body>
         <div class="card">
-            <h1>{title}</h1>
-            <p>{message}</p>
+            <h1>{safe_title}</h1>
+            <p>{safe_message}</p>
         </div>
         </body></html>
         """,
