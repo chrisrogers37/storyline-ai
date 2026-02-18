@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Google Drive media sync auth** - Media sync now passes tenant chat ID when creating Google Drive provider, enabling per-tenant OAuth credential lookup instead of falling back to non-existent service account
+
 ### Changed
 
 - **ConfigValidator cloud deployment support** - Relaxed startup validation for cloud environments

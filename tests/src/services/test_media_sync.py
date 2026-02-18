@@ -506,13 +506,19 @@ class TestMediaSyncServiceProviderCreation:
 
         mock_factory.create.assert_called_once_with("local", base_path="/media/stories")
 
+    @patch("src.services.core.media_sync.settings")
     @patch("src.services.core.media_sync.MediaSourceFactory")
-    def test_create_provider_google_drive(self, mock_factory, sync_service):
-        """Google Drive provider passes root_folder_id."""
+    def test_create_provider_google_drive(
+        self, mock_factory, mock_settings, sync_service
+    ):
+        """Google Drive provider passes root_folder_id and telegram_chat_id."""
+        mock_settings.TELEGRAM_CHANNEL_ID = -100123456789
         sync_service._create_provider("google_drive", "folder_xyz")
 
         mock_factory.create.assert_called_once_with(
-            "google_drive", root_folder_id="folder_xyz"
+            "google_drive",
+            root_folder_id="folder_xyz",
+            telegram_chat_id=-100123456789,
         )
 
     @patch("src.services.core.media_sync.settings")
@@ -633,6 +639,7 @@ class TestMediaSyncServiceSettingsResolution:
         mock_settings.MEDIA_SOURCE_TYPE = "local"
         mock_settings.MEDIA_SOURCE_ROOT = "folder_id"
         mock_settings.MEDIA_DIR = "/media"
+        mock_settings.TELEGRAM_CHANNEL_ID = -100123456789
 
         mock_provider = Mock()
         mock_factory.create.return_value = mock_provider
@@ -643,7 +650,9 @@ class TestMediaSyncServiceSettingsResolution:
         sync_service.sync(source_type="google_drive")
 
         mock_factory.create.assert_called_once_with(
-            "google_drive", root_folder_id="folder_id"
+            "google_drive",
+            root_folder_id="folder_id",
+            telegram_chat_id=-100123456789,
         )
 
     @patch("src.services.core.media_sync.settings")

@@ -291,7 +291,11 @@ class MediaSyncService(BaseService):
         if source_type == "local":
             return MediaSourceFactory.create(source_type, base_path=source_root)
         elif source_type == "google_drive":
-            return MediaSourceFactory.create(source_type, root_folder_id=source_root)
+            return MediaSourceFactory.create(
+                source_type,
+                root_folder_id=source_root,
+                telegram_chat_id=settings.TELEGRAM_CHANNEL_ID,
+            )
         else:
             return MediaSourceFactory.create(source_type)
 
