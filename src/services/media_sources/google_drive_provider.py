@@ -183,7 +183,8 @@ class GoogleDriveProvider(MediaSourceProvider):
                 fileId=self.root_folder_id, fields="id, name"
             ).execute()
             return True
-        except Exception:
+        except Exception as e:
+            logger.error(f"Google Drive is_configured check failed: {e}")
             return False
 
     def calculate_file_hash(self, file_identifier: str) -> str:
