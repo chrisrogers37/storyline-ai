@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **ConfigValidator cloud deployment support** - Relaxed startup validation for cloud environments
+  - `MEDIA_DIR` is now auto-created if it doesn't exist (needed for Railway's `/tmp/media`)
+  - Removed `INSTAGRAM_ACCESS_TOKEN` and `INSTAGRAM_ACCOUNT_ID` env var requirements — tokens are managed via OAuth and stored in the database in multi-tenant mode
+  - Cloudinary config check retained when `ENABLE_INSTAGRAM_API=true`
+
+- **`.env.example` cloud variables** - Added cloud deployment configuration reference
+  - `DATABASE_URL` full connection string option for PaaS platforms
+  - `DB_SSLMODE`, `DB_POOL_SIZE`, `DB_MAX_OVERFLOW` for Neon tuning
+  - `OAUTH_REDIRECT_BASE_URL` for Railway HTTPS domain
+  - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` for Google Drive OAuth
+  - `MEDIA_SOURCE_TYPE`, `MEDIA_SOURCE_ROOT`, `MEDIA_SYNC_ENABLED` for cloud media
+
 ### Security
 
 - **XSS prevention in OAuth HTML pages** - All user-supplied values (`username`, `email`, `title`, `message`) now escaped with `html.escape()` before interpolation into HTML responses (`src/api/routes/oauth.py`)

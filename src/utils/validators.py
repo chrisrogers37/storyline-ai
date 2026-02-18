@@ -46,16 +46,6 @@ class ConfigValidator:
 
         # Validate Instagram config (if API enabled)
         if settings.ENABLE_INSTAGRAM_API:
-            if not settings.INSTAGRAM_ACCOUNT_ID:
-                errors.append(
-                    "INSTAGRAM_ACCOUNT_ID required when ENABLE_INSTAGRAM_API=true"
-                )
-
-            if not settings.INSTAGRAM_ACCESS_TOKEN:
-                errors.append(
-                    "INSTAGRAM_ACCESS_TOKEN required when ENABLE_INSTAGRAM_API=true"
-                )
-
             if not settings.CLOUDINARY_CLOUD_NAME:
                 errors.append(
                     "Cloudinary config required when ENABLE_INSTAGRAM_API=true"
@@ -65,10 +55,16 @@ class ConfigValidator:
         if not settings.DB_NAME:
             errors.append("DB_NAME is required")
 
-        # Validate paths
+        # Validate paths — auto-create MEDIA_DIR for cloud deployments
         media_dir = Path(settings.MEDIA_DIR)
         if not media_dir.exists():
-            errors.append(f"MEDIA_DIR does not exist: {settings.MEDIA_DIR}")
+            try:
+                media_dir.mkdir(parents=True, exist_ok=True)
+            except OSError as e:
+                errors.append(
+                    f"MEDIA_DIR does not exist and could not be created: "
+                    f"{settings.MEDIA_DIR} ({e})"
+                )
 
         is_valid = len(errors) == 0
         return is_valid, errors
