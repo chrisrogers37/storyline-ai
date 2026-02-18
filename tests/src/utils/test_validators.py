@@ -232,8 +232,10 @@ class TestConfigValidator:
 
     @patch("src.utils.validators.settings")
     @patch("src.utils.validators.Path")
-    def test_validate_all_media_dir_not_exists(self, mock_path, mock_settings):
-        """Test validation fails when media dir doesn't exist."""
+    def test_validate_all_media_dir_not_exists_and_cannot_create(
+        self, mock_path, mock_settings
+    ):
+        """Test validation fails when media dir doesn't exist and can't be created."""
         mock_settings.POSTS_PER_DAY = 3
         mock_settings.POSTING_HOURS_START = 14
         mock_settings.POSTING_HOURS_END = 2
@@ -246,7 +248,8 @@ class TestConfigValidator:
         mock_settings.MEDIA_DIR = "/nonexistent/path"
 
         mock_path_instance = MagicMock()
-        mock_path_instance.exists.return_value = False  # Doesn't exist
+        mock_path_instance.exists.return_value = False
+        mock_path_instance.mkdir.side_effect = OSError("Permission denied")
         mock_path.return_value = mock_path_instance
 
         is_valid, errors = ConfigValidator.validate_all()
@@ -256,8 +259,36 @@ class TestConfigValidator:
 
     @patch("src.utils.validators.settings")
     @patch("src.utils.validators.Path")
-    def test_validate_all_instagram_api_missing_config(self, mock_path, mock_settings):
-        """Test validation fails when Instagram API enabled but config missing."""
+    def test_validate_all_media_dir_auto_created(self, mock_path, mock_settings):
+        """Test validation passes when media dir can be auto-created."""
+        mock_settings.POSTS_PER_DAY = 3
+        mock_settings.POSTING_HOURS_START = 14
+        mock_settings.POSTING_HOURS_END = 2
+        mock_settings.REPOST_TTL_DAYS = 30
+        mock_settings.TELEGRAM_BOT_TOKEN = "123456:ABC"
+        mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
+        mock_settings.ADMIN_TELEGRAM_CHAT_ID = 123456789
+        mock_settings.ENABLE_INSTAGRAM_API = False
+        mock_settings.DB_NAME = "storyline_ai"
+        mock_settings.MEDIA_DIR = "/tmp/media"
+
+        mock_path_instance = MagicMock()
+        mock_path_instance.exists.return_value = False
+        mock_path_instance.mkdir.return_value = None  # mkdir succeeds
+        mock_path.return_value = mock_path_instance
+
+        is_valid, errors = ConfigValidator.validate_all()
+
+        assert is_valid is True
+        assert len(errors) == 0
+        mock_path_instance.mkdir.assert_called_once_with(parents=True, exist_ok=True)
+
+    @patch("src.utils.validators.settings")
+    @patch("src.utils.validators.Path")
+    def test_validate_all_instagram_api_missing_cloudinary(
+        self, mock_path, mock_settings
+    ):
+        """Test validation fails when Instagram API enabled but Cloudinary missing."""
         mock_settings.POSTS_PER_DAY = 3
         mock_settings.POSTING_HOURS_START = 14
         mock_settings.POSTING_HOURS_END = 2
@@ -266,8 +297,6 @@ class TestConfigValidator:
         mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
         mock_settings.ADMIN_TELEGRAM_CHAT_ID = 123456789
         mock_settings.ENABLE_INSTAGRAM_API = True  # Enabled
-        mock_settings.INSTAGRAM_ACCOUNT_ID = ""  # Missing
-        mock_settings.INSTAGRAM_ACCESS_TOKEN = ""  # Missing
         mock_settings.CLOUDINARY_CLOUD_NAME = ""  # Missing
         mock_settings.DB_NAME = "storyline_ai"
         mock_settings.MEDIA_DIR = "/media/stories"
@@ -279,8 +308,6 @@ class TestConfigValidator:
         is_valid, errors = ConfigValidator.validate_all()
 
         assert is_valid is False
-        assert any("INSTAGRAM_ACCOUNT_ID" in error for error in errors)
-        assert any("INSTAGRAM_ACCESS_TOKEN" in error for error in errors)
         assert any("Cloudinary" in error for error in errors)
 
     @patch("src.utils.validators.settings")
