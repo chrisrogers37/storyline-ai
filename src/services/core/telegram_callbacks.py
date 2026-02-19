@@ -443,7 +443,10 @@ class TelegramCallbackHandlers:
         )
 
     async def handle_reset_callback(self, action: str, user, query):
-        """Handle reset queue callback buttons (confirm/cancel)."""
+        """Handle reset queue callback buttons (confirm/cancel).
+
+        Legacy: kept for backward compat with old /reset confirmation messages.
+        """
         if action == "confirm":
             # Reset queue - clear all pending posts
             all_pending = self.service.queue_repo.get_all(status="pending")
