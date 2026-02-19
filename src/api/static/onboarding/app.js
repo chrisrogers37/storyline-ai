@@ -1,7 +1,8 @@
 /**
  * Storyline AI Onboarding Mini App
  *
- * Telegram WebApp SDK integration for guided setup wizard.
+ * Telegram WebApp SDK integration for guided setup wizard
+ * and returning-user home screen dashboard.
  * No framework — vanilla JS with simple state management.
  */
 
@@ -13,6 +14,12 @@ const App = {
     pollInterval: null,
     pollTimeout: null,
     _currentStep: 'welcome',
+
+    // Mode: 'wizard' (onboarding) or 'home' (returning user dashboard)
+    mode: 'wizard',
+
+    // When true, wizard steps show "Save & Return" instead of "Next"/"Skip"
+    editingFrom: false,
 
     // Track which steps were completed vs skipped
     skippedSteps: new Set(),
@@ -106,6 +113,14 @@ const App = {
         if (stepName === 'summary') {
             this._populateSummary();
         }
+
+        // If going to home, populate dashboard cards
+        if (stepName === 'home') {
+            this._populateHome();
+        }
+
+        // Toggle wizard step navigation based on editing mode
+        this._updateStepNavVisibility(stepName);
 
         // If going to indexing, update the preview from folder validation
         if (stepName === 'indexing' && this.folderValidation) {
@@ -312,6 +327,185 @@ const App = {
         }
     },
 
+    // ==================== Home Screen Methods ====================
+
+    /**
+     * Populate the home screen dashboard cards from setupState.
+     */
+    _populateHome() {
+        const s = this.setupState || {};
+
+        // Instagram card
+        if (s.instagram_connected) {
+            this._setHomeBadge('instagram', 'connected', 'Connected');
+            this._setHomeDetail('instagram',
+                '@' + this._escapeHtml(s.instagram_username || 'unknown'));
+        } else {
+            this._setHomeBadge('instagram', 'warning', 'Not connected');
+            this._setHomeDetail('instagram', 'Tap Edit to connect your account');
+        }
+
+        // Google Drive card
+        if (s.gdrive_connected) {
+            this._setHomeBadge('gdrive', 'connected', 'Connected');
+            this._setHomeDetail('gdrive', this._escapeHtml(s.gdrive_email || 'Connected'));
+        } else {
+            this._setHomeBadge('gdrive', 'warning', 'Not connected');
+            this._setHomeDetail('gdrive', 'Tap Edit to connect Google Drive');
+        }
+
+        // Schedule card
+        const postsPerDay = s.posts_per_day || 3;
+        const start = s.posting_hours_start != null ? s.posting_hours_start : 14;
+        const end = s.posting_hours_end != null ? s.posting_hours_end : 2;
+
+        if (s.is_paused) {
+            this._setHomeBadge('schedule', 'error', 'Paused');
+        } else {
+            this._setHomeBadge('schedule', 'connected', 'Active');
+        }
+        this._setHomeDetail('schedule',
+            postsPerDay + ' posts/day, ' +
+            this._formatHour(start) + ' - ' + this._formatHour(end) + ' UTC' +
+            (s.dry_run_mode ? '<br><span class="home-card-tag">Dry run ON</span>' : ''));
+
+        // Queue status card
+        const queueCount = s.queue_count || 0;
+        if (queueCount > 0) {
+            this._setHomeBadge('queue', 'connected', queueCount + ' pending');
+        } else {
+            this._setHomeBadge('queue', 'neutral', 'Empty');
+        }
+
+        let queueDetail = queueCount + ' posts in queue';
+        if (s.last_post_at) {
+            const lastDate = new Date(s.last_post_at);
+            const now = new Date();
+            const hoursAgo = Math.floor((now - lastDate) / (1000 * 60 * 60));
+            if (hoursAgo < 1) {
+                queueDetail += ' \u00B7 Last post: < 1h ago';
+            } else if (hoursAgo < 24) {
+                queueDetail += ' \u00B7 Last post: ' + hoursAgo + 'h ago';
+            } else {
+                const daysAgo = Math.floor(hoursAgo / 24);
+                queueDetail += ' \u00B7 Last post: ' + daysAgo + 'd ago';
+            }
+        } else {
+            queueDetail += ' \u00B7 No posts yet';
+        }
+        this._setHomeDetail('queue', queueDetail);
+    },
+
+    _setHomeBadge(section, type, text) {
+        const el = document.getElementById('home-badge-' + section);
+        if (el) {
+            el.textContent = text;
+            el.className = 'home-card-badge badge-' + type;
+        }
+    },
+
+    _setHomeDetail(section, html) {
+        const el = document.getElementById('home-detail-' + section);
+        if (el) {
+            el.innerHTML = html;
+        }
+    },
+
+    /**
+     * Enter edit mode for a section — jumps to the wizard step
+     * with "Save & Return" shown instead of "Next"/"Skip".
+     */
+    editSection(section) {
+        this.editingFrom = true;
+        this.mode = 'wizard';
+        this.goToStep(section);
+    },
+
+    /**
+     * Return from edit mode to the home screen.
+     * Re-fetches state to get latest data, then shows home.
+     */
+    async returnToHome() {
+        this.editingFrom = false;
+        this.mode = 'home';
+
+        try {
+            const response = await this._api('/api/onboarding/init', {
+                init_data: this.initData,
+                chat_id: this.chatId,
+            });
+            this.setupState = response.setup_state;
+        } catch (err) {
+            // Non-critical: show home with stale data
+        }
+
+        this.goToStep('home');
+    },
+
+    /**
+     * Save schedule settings then return to home (edit mode).
+     */
+    async saveScheduleAndReturn() {
+        this._showLoading(true);
+        try {
+            await this._api('/api/onboarding/schedule', {
+                init_data: this.initData,
+                chat_id: this.chatId,
+                posts_per_day: this.schedule.postsPerDay,
+                posting_hours_start: this.schedule.postingHoursStart,
+                posting_hours_end: this.schedule.postingHoursEnd,
+            });
+            await this.returnToHome();
+        } catch (err) {
+            this._showError('Failed to save schedule. Please try again.');
+        } finally {
+            this._showLoading(false);
+        }
+    },
+
+    /**
+     * "Run Full Setup Again" — reset to wizard mode from step 1.
+     */
+    runFullSetup() {
+        this.editingFrom = false;
+        this.mode = 'wizard';
+        this.goToStep('welcome');
+    },
+
+    /**
+     * Show or hide "Save & Return" vs normal navigation
+     * based on whether we are editing from home.
+     */
+    _updateStepNavVisibility(stepName) {
+        const editableSteps = ['instagram', 'gdrive', 'media-folder', 'schedule'];
+
+        editableSteps.forEach(step => {
+            const returnNav = document.getElementById('return-nav-' + step);
+            if (returnNav) {
+                returnNav.classList.toggle('hidden', !this.editingFrom);
+            }
+        });
+
+        // For steps with regular nav, hide it when editing
+        if (this.editingFrom) {
+            document.querySelectorAll('.step-nav').forEach(el => {
+                el.classList.add('hidden');
+            });
+        } else {
+            document.querySelectorAll('.step-nav').forEach(el => {
+                el.classList.remove('hidden');
+            });
+        }
+
+        // Toggle schedule buttons
+        const scheduleNext = document.getElementById('btn-schedule-next');
+        const scheduleReturn = document.getElementById('btn-schedule-return');
+        if (scheduleNext && scheduleReturn) {
+            scheduleNext.classList.toggle('hidden', this.editingFrom);
+            scheduleReturn.classList.toggle('hidden', !this.editingFrom);
+        }
+    },
+
     // --- Private methods ---
 
     /**
@@ -319,14 +513,20 @@ const App = {
      */
     _resumeFromState() {
         if (!this.setupState) {
+            this.mode = 'wizard';
             this.goToStep('welcome');
             return;
         }
 
         if (this.setupState.onboarding_completed) {
-            this.goToStep('summary');
+            // Returning user — show home screen dashboard
+            this.mode = 'home';
+            this.goToStep('home');
             return;
         }
+
+        // Onboarding in progress — show wizard
+        this.mode = 'wizard';
 
         // Update schedule defaults from saved state
         this.schedule.postsPerDay = this.setupState.posts_per_day || 3;
@@ -352,7 +552,7 @@ const App = {
 
         // Instagram
         const igStatus = document.getElementById('instagram-status');
-        if (s.instagram_connected) {
+        if (igStatus && s.instagram_connected) {
             igStatus.innerHTML =
                 '<div class="status-icon status-connected">&#9679;</div>' +
                 '<span>Connected: @' + this._escapeHtml(s.instagram_username || '') + '</span>';
@@ -427,8 +627,10 @@ const App = {
                     this._stopPolling();
                     this._updateStatusIndicators();
 
-                    // Auto-advance to next step
-                    if (provider === 'instagram') {
+                    // Auto-advance depends on mode
+                    if (this.editingFrom) {
+                        setTimeout(() => this.returnToHome(), 800);
+                    } else if (provider === 'instagram') {
                         setTimeout(() => this.goToStep('gdrive'), 800);
                     } else {
                         setTimeout(() => this.goToStep('media-folder'), 800);

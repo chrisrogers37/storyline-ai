@@ -1,5 +1,10 @@
 # Phase 03: Mini App Home Screen for Returning Users
 
+**Status:** ✅ COMPLETE
+**Started:** 2026-02-19
+**Completed:** 2026-02-19
+**PR:** #64
+
 **PR Title:** `feat: Mini App home screen for returning users with edit-and-return flow`
 
 **Risk Level:** Low
@@ -7,6 +12,13 @@
 **Estimated Effort:** Medium (2-3 days)
 
 **Branch Name:** `feat/onboarding-phase-03-home-screen`
+
+### Challenge Round Corrections (2026-02-19)
+- `_get_setup_state` before-code is stale (missing Phase 02 fields). Actual function at lines 82-152. Will add new fields to actual current return dict.
+- TestStartCommand class doesn't exist — tests will be *created*, not replaced.
+- Plan's full app.js replacement drops Phase 02 functionality (startIndexing, folderValidation, skippedSteps, onboarding_step resume). Will edit incrementally instead of wholesale replacement.
+- `_resumeFromState` must preserve Phase 02's onboarding_step resume logic.
+- `validateFolder()` edit-from-home flow: will still show indexing option rather than auto-returning.
 
 ## Files Summary
 

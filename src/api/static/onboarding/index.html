@@ -9,6 +9,65 @@
 </head>
 <body>
     <div id="app">
+        <!-- Home Screen (returning users) -->
+        <div class="step hidden" id="step-home">
+            <div class="step-content">
+                <h1>Storyline AI</h1>
+                <p class="subtitle">Your posting dashboard</p>
+
+                <div class="home-card" id="home-card-instagram">
+                    <div class="home-card-header">
+                        <div class="home-card-title">
+                            <span class="home-card-icon">&#x1F4F8;</span>
+                            <span>Instagram</span>
+                        </div>
+                        <span class="home-card-badge" id="home-badge-instagram"></span>
+                    </div>
+                    <div class="home-card-detail" id="home-detail-instagram"></div>
+                    <button class="btn btn-card-edit" onclick="App.editSection('instagram')">Edit</button>
+                </div>
+
+                <div class="home-card" id="home-card-gdrive">
+                    <div class="home-card-header">
+                        <div class="home-card-title">
+                            <span class="home-card-icon">&#x1F4C1;</span>
+                            <span>Google Drive</span>
+                        </div>
+                        <span class="home-card-badge" id="home-badge-gdrive"></span>
+                    </div>
+                    <div class="home-card-detail" id="home-detail-gdrive"></div>
+                    <button class="btn btn-card-edit" onclick="App.editSection('gdrive')">Edit</button>
+                </div>
+
+                <div class="home-card" id="home-card-schedule">
+                    <div class="home-card-header">
+                        <div class="home-card-title">
+                            <span class="home-card-icon">&#x1F4C5;</span>
+                            <span>Schedule</span>
+                        </div>
+                        <span class="home-card-badge" id="home-badge-schedule"></span>
+                    </div>
+                    <div class="home-card-detail" id="home-detail-schedule"></div>
+                    <button class="btn btn-card-edit" onclick="App.editSection('schedule')">Edit</button>
+                </div>
+
+                <div class="home-card" id="home-card-queue">
+                    <div class="home-card-header">
+                        <div class="home-card-title">
+                            <span class="home-card-icon">&#x1F4CA;</span>
+                            <span>Queue Status</span>
+                        </div>
+                        <span class="home-card-badge" id="home-badge-queue"></span>
+                    </div>
+                    <div class="home-card-detail" id="home-detail-queue"></div>
+                </div>
+
+                <div class="home-divider"></div>
+
+                <button class="btn btn-secondary" onclick="App.runFullSetup()">Run Full Setup Again</button>
+            </div>
+        </div>
+
         <!-- Step 1: Welcome -->
         <div class="step" id="step-welcome">
             <div class="progress-bar"><div class="progress-fill" style="width: 14%"></div></div>
@@ -46,6 +105,9 @@
                 <div class="step-nav">
                     <button class="btn btn-text" onclick="App.goToStep('gdrive')">Skip for now</button>
                 </div>
+                <div class="step-nav-return hidden" id="return-nav-instagram">
+                    <button class="btn btn-primary" onclick="App.returnToHome()">Save &amp; Return</button>
+                </div>
             </div>
         </div>
 
@@ -68,6 +130,9 @@
                 </div>
                 <div class="step-nav">
                     <button class="btn btn-text" onclick="App.goToStep('media-folder')">Skip for now</button>
+                </div>
+                <div class="step-nav-return hidden" id="return-nav-gdrive">
+                    <button class="btn btn-primary" onclick="App.returnToHome()">Save &amp; Return</button>
                 </div>
             </div>
         </div>
@@ -92,6 +157,9 @@
                 <div id="folder-error" class="error-text hidden"></div>
                 <div class="step-nav">
                     <button class="btn btn-text" onclick="App.goToStep('schedule')">Skip for now</button>
+                </div>
+                <div class="step-nav-return hidden" id="return-nav-media-folder">
+                    <button class="btn btn-primary" onclick="App.returnToHome()">Save &amp; Return</button>
                 </div>
             </div>
         </div>
@@ -162,7 +230,8 @@
                     <p class="hint">All times in UTC</p>
                 </div>
 
-                <button class="btn btn-primary" onclick="App.saveSchedule()">Continue</button>
+                <button class="btn btn-primary" id="btn-schedule-next" onclick="App.saveSchedule()">Continue</button>
+                <button class="btn btn-primary hidden" id="btn-schedule-return" onclick="App.saveScheduleAndReturn()">Save &amp; Return</button>
                 <div class="step-nav">
                     <button class="btn btn-text" onclick="App.goToStep('summary')">Skip for now</button>
                 </div>
