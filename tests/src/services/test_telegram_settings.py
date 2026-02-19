@@ -80,6 +80,8 @@ class TestBuildSettingsKeyboard:
             "posting_hours_end": 21,
             "show_verbose_notifications": True,
             "media_sync_enabled": False,
+            "media_source_type": None,
+            "media_source_root": None,
         }
         mock_settings_handlers.service.ig_account_service.get_accounts_for_display.return_value = {
             "active_account_id": "some-id",
@@ -104,6 +106,8 @@ class TestBuildSettingsKeyboard:
             "posting_hours_end": 21,
             "show_verbose_notifications": False,
             "media_sync_enabled": False,
+            "media_source_type": None,
+            "media_source_root": None,
         }
         mock_settings_handlers.service.ig_account_service.get_accounts_for_display.return_value = {
             "active_account_id": None,
@@ -129,6 +133,8 @@ class TestBuildSettingsKeyboard:
             "posting_hours_end": 21,
             "show_verbose_notifications": True,
             "media_sync_enabled": False,
+            "media_source_type": None,
+            "media_source_root": None,
         }
         mock_settings_handlers.service.ig_account_service.get_accounts_for_display.return_value = {
             "active_account_id": None,
@@ -153,6 +159,8 @@ class TestBuildSettingsKeyboard:
             "posting_hours_end": 21,
             "show_verbose_notifications": True,
             "media_sync_enabled": False,
+            "media_source_type": None,
+            "media_source_root": None,
         }
         mock_settings_handlers.service.ig_account_service.get_accounts_for_display.return_value = {
             "active_account_id": None,
@@ -179,6 +187,8 @@ class TestBuildSettingsKeyboard:
             "posting_hours_end": 21,
             "show_verbose_notifications": True,
             "media_sync_enabled": False,
+            "media_source_type": None,
+            "media_source_root": None,
         }
         mock_settings_handlers.service.ig_account_service.get_accounts_for_display.return_value = {
             "active_account_id": None,
@@ -210,6 +220,8 @@ class TestSettingsCommand:
             "posting_hours_end": 21,
             "show_verbose_notifications": True,
             "media_sync_enabled": False,
+            "media_source_type": None,
+            "media_source_root": None,
         }
         mock_settings_handlers.service.ig_account_service.get_accounts_for_display.return_value = {
             "active_account_id": None,
@@ -255,6 +267,8 @@ class TestSettingsCommand:
             "posting_hours_end": 21,
             "show_verbose_notifications": True,
             "media_sync_enabled": False,
+            "media_source_type": None,
+            "media_source_root": None,
         }
         mock_settings_handlers.service.ig_account_service.get_accounts_for_display.return_value = {
             "active_account_id": None,
@@ -297,6 +311,8 @@ class TestMediaSyncToggleButton:
             "posting_hours_end": 21,
             "show_verbose_notifications": True,
             "media_sync_enabled": True,
+            "media_source_type": None,
+            "media_source_root": None,
         }
         mock_settings_handlers.service.ig_account_service.get_accounts_for_display.return_value = {
             "active_account_id": None,
@@ -322,6 +338,8 @@ class TestMediaSyncToggleButton:
             "posting_hours_end": 21,
             "show_verbose_notifications": True,
             "media_sync_enabled": False,
+            "media_source_type": None,
+            "media_source_root": None,
         }
         mock_settings_handlers.service.ig_account_service.get_accounts_for_display.return_value = {
             "active_account_id": None,

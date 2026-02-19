@@ -17,6 +17,7 @@ from src.services.core.settings_service import (
     SettingsService,
     TOGGLEABLE_SETTINGS,
     NUMERIC_SETTINGS,
+    TEXT_SETTINGS,
 )
 from src.repositories.chat_settings_repository import ChatSettingsRepository
 from src.models.chat_settings import ChatSettings
@@ -197,6 +198,8 @@ class TestSettingsServiceUnit:
         mock_settings.posting_hours_end = 2
         mock_settings.show_verbose_notifications = True
         mock_settings.media_sync_enabled = False
+        mock_settings.media_source_type = None
+        mock_settings.media_source_root = None
         mock_settings.updated_at = datetime.utcnow()
 
         mock_repo = Mock()
@@ -216,6 +219,8 @@ class TestSettingsServiceUnit:
             "posting_hours_end",
             "show_verbose_notifications",
             "media_sync_enabled",
+            "media_source_type",
+            "media_source_root",
             "updated_at",
         ]
         for key in expected_keys:
@@ -240,6 +245,8 @@ class TestSettingsServiceUnit:
         mock_settings.posting_hours_end = 2
         mock_settings.show_verbose_notifications = True
         mock_settings.media_sync_enabled = True
+        mock_settings.media_source_type = None
+        mock_settings.media_source_root = None
         mock_settings.updated_at = datetime.utcnow()
 
         mock_repo = Mock()
@@ -801,3 +808,168 @@ class TestSettingsServiceOnboarding:
         )
         assert result.onboarding_completed is True
         assert result.onboarding_step is None
+
+
+# =============================================================================
+# MEDIA SOURCE CONFIGURATION TESTS
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestSettingsServiceMediaSource:
+    """Tests for per-chat media source configuration."""
+
+    @pytest.fixture
+    def settings_service(self):
+        """Create SettingsService with mocked repository."""
+        with patch.object(SettingsService, "__init__", lambda self: None):
+            service = SettingsService()
+            service.settings_repo = Mock()
+            return service
+
+    def test_text_settings_defined(self):
+        """TEXT_SETTINGS contains media source settings."""
+        assert "media_source_type" in TEXT_SETTINGS
+        assert "media_source_root" in TEXT_SETTINGS
+
+    def test_update_media_source_type_valid(self):
+        """Can update media_source_type to a valid value."""
+        service = SettingsService()
+        mock_settings = Mock(spec=ChatSettings)
+        mock_settings.media_source_type = None
+        mock_repo = Mock()
+        mock_repo.get_or_create.return_value = mock_settings
+        mock_repo.update.return_value = mock_settings
+        service.settings_repo = mock_repo
+        service.service_run_repo = Mock()
+        service.service_run_repo.create_run.return_value = str(uuid4())
+
+        service.update_setting(-100, "media_source_type", "google_drive")
+
+        mock_repo.update.assert_called_once()
+        call_kwargs = mock_repo.update.call_args[1]
+        assert call_kwargs["media_source_type"] == "google_drive"
+
+    def test_update_media_source_type_invalid_raises(self):
+        """Invalid media_source_type value raises ValueError."""
+        service = SettingsService()
+        mock_settings = Mock(spec=ChatSettings)
+        mock_settings.media_source_type = None
+        mock_repo = Mock()
+        mock_repo.get_or_create.return_value = mock_settings
+        service.settings_repo = mock_repo
+        service.service_run_repo = Mock()
+        service.service_run_repo.create_run.return_value = str(uuid4())
+
+        with pytest.raises(ValueError, match="media_source_type must be"):
+            service.update_setting(-100, "media_source_type", "dropbox")
+
+    def test_update_media_source_type_none_allowed(self):
+        """Setting media_source_type to None is valid (clears override)."""
+        service = SettingsService()
+        mock_settings = Mock(spec=ChatSettings)
+        mock_settings.media_source_type = "google_drive"
+        mock_repo = Mock()
+        mock_repo.get_or_create.return_value = mock_settings
+        mock_repo.update.return_value = mock_settings
+        service.settings_repo = mock_repo
+        service.service_run_repo = Mock()
+        service.service_run_repo.create_run.return_value = str(uuid4())
+
+        service.update_setting(-100, "media_source_type", None)
+
+        mock_repo.update.assert_called_once()
+
+    def test_update_media_source_root_no_validation(self):
+        """media_source_root accepts any string (folder IDs and paths are free-form)."""
+        service = SettingsService()
+        mock_settings = Mock(spec=ChatSettings)
+        mock_settings.media_source_root = None
+        mock_repo = Mock()
+        mock_repo.get_or_create.return_value = mock_settings
+        mock_repo.update.return_value = mock_settings
+        service.settings_repo = mock_repo
+        service.service_run_repo = Mock()
+        service.service_run_repo.create_run.return_value = str(uuid4())
+
+        service.update_setting(-100, "media_source_root", "1C9jxiJCU8Sf4Q7M")
+
+        mock_repo.update.assert_called_once()
+        call_kwargs = mock_repo.update.call_args[1]
+        assert call_kwargs["media_source_root"] == "1C9jxiJCU8Sf4Q7M"
+
+    @patch("src.config.settings.settings")
+    def test_get_media_source_config_uses_per_chat_values(
+        self, mock_env, settings_service
+    ):
+        """Per-chat values take priority over env vars."""
+        mock_env.MEDIA_SOURCE_TYPE = "local"
+        mock_env.MEDIA_SOURCE_ROOT = "/default/path"
+
+        mock_settings = Mock(spec=ChatSettings)
+        mock_settings.media_source_type = "google_drive"
+        mock_settings.media_source_root = "folder_abc"
+        settings_service.settings_repo.get_or_create.return_value = mock_settings
+
+        source_type, source_root = settings_service.get_media_source_config(-100)
+
+        assert source_type == "google_drive"
+        assert source_root == "folder_abc"
+
+    @patch("src.config.settings.settings")
+    def test_get_media_source_config_falls_back_to_env(
+        self, mock_env, settings_service
+    ):
+        """NULL per-chat values fall back to env vars."""
+        mock_env.MEDIA_SOURCE_TYPE = "local"
+        mock_env.MEDIA_SOURCE_ROOT = "/env/path"
+
+        mock_settings = Mock(spec=ChatSettings)
+        mock_settings.media_source_type = None
+        mock_settings.media_source_root = None
+        settings_service.settings_repo.get_or_create.return_value = mock_settings
+
+        source_type, source_root = settings_service.get_media_source_config(-100)
+
+        assert source_type == "local"
+        assert source_root == "/env/path"
+
+    @patch("src.config.settings.settings")
+    def test_get_media_source_config_partial_override(self, mock_env, settings_service):
+        """One per-chat value set, the other NULL -- mixed resolution."""
+        mock_env.MEDIA_SOURCE_TYPE = "local"
+        mock_env.MEDIA_SOURCE_ROOT = "/default"
+
+        mock_settings = Mock(spec=ChatSettings)
+        mock_settings.media_source_type = "google_drive"
+        mock_settings.media_source_root = None
+        settings_service.settings_repo.get_or_create.return_value = mock_settings
+
+        source_type, source_root = settings_service.get_media_source_config(-100)
+
+        assert source_type == "google_drive"
+        assert source_root == "/default"
+
+    def test_get_settings_display_includes_media_source_fields(self, settings_service):
+        """get_settings_display includes media_source_type and media_source_root."""
+        mock_settings = Mock(spec=ChatSettings)
+        mock_settings.dry_run_mode = False
+        mock_settings.enable_instagram_api = False
+        mock_settings.is_paused = False
+        mock_settings.paused_at = None
+        mock_settings.paused_by_user_id = None
+        mock_settings.posts_per_day = 3
+        mock_settings.posting_hours_start = 14
+        mock_settings.posting_hours_end = 2
+        mock_settings.show_verbose_notifications = True
+        mock_settings.media_sync_enabled = False
+        mock_settings.media_source_type = "google_drive"
+        mock_settings.media_source_root = "folder_123"
+        mock_settings.updated_at = datetime.utcnow()
+
+        settings_service.settings_repo.get_or_create.return_value = mock_settings
+
+        display = settings_service.get_settings_display(-100)
+
+        assert display["media_source_type"] == "google_drive"
+        assert display["media_source_root"] == "folder_123"

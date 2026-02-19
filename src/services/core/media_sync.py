@@ -83,6 +83,7 @@ class MediaSyncService(BaseService):
         source_type: Optional[str] = None,
         source_root: Optional[str] = None,
         triggered_by: str = "system",
+        telegram_chat_id: Optional[int] = None,
     ) -> SyncResult:
         """Run a full media sync against the configured provider.
 
@@ -90,6 +91,7 @@ class MediaSyncService(BaseService):
             source_type: Override settings.MEDIA_SOURCE_TYPE
             source_root: Override settings.MEDIA_SOURCE_ROOT
             triggered_by: Who triggered ('system', 'cli', 'scheduler')
+            telegram_chat_id: If provided, look up per-chat media source config
 
         Returns:
             SyncResult with counts for each action taken
@@ -97,6 +99,18 @@ class MediaSyncService(BaseService):
         Raises:
             ValueError: If provider is not configured or source_type is invalid
         """
+        # Resolution order: explicit params > per-chat DB config > global env vars
+        if not source_type and not source_root and telegram_chat_id:
+            from src.services.core.settings_service import SettingsService
+
+            settings_service = SettingsService()
+            try:
+                source_type, source_root = settings_service.get_media_source_config(
+                    telegram_chat_id
+                )
+            finally:
+                settings_service.close()
+
         resolved_source_type = source_type or settings.MEDIA_SOURCE_TYPE
         resolved_source_root = source_root or settings.MEDIA_SOURCE_ROOT
 
@@ -115,7 +129,9 @@ class MediaSyncService(BaseService):
             result = SyncResult()
 
             # Create provider
-            provider = self._create_provider(resolved_source_type, resolved_source_root)
+            provider = self._create_provider(
+                resolved_source_type, resolved_source_root, telegram_chat_id
+            )
 
             if not provider.is_configured():
                 raise ValueError(
@@ -286,15 +302,18 @@ class MediaSyncService(BaseService):
             + (f" [{file_info.folder}]" if file_info.folder else "")
         )
 
-    def _create_provider(self, source_type: str, source_root: str):
+    def _create_provider(
+        self, source_type: str, source_root: str, telegram_chat_id: Optional[int] = None
+    ):
         """Create a MediaSourceProvider based on source type and root."""
         if source_type == "local":
             return MediaSourceFactory.create(source_type, base_path=source_root)
         elif source_type == "google_drive":
+            chat_id = telegram_chat_id or settings.TELEGRAM_CHANNEL_ID
             return MediaSourceFactory.create(
                 source_type,
                 root_folder_id=source_root,
-                telegram_chat_id=settings.TELEGRAM_CHANNEL_ID,
+                telegram_chat_id=chat_id,
             )
         else:
             return MediaSourceFactory.create(source_type)

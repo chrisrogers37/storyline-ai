@@ -24,6 +24,7 @@ TOGGLEABLE_SETTINGS = {
     "media_sync_enabled",
 }
 NUMERIC_SETTINGS = {"posts_per_day", "posting_hours_start", "posting_hours_end"}
+TEXT_SETTINGS = {"media_source_type", "media_source_root"}
 
 
 class SettingsService(BaseService):
@@ -129,7 +130,7 @@ class SettingsService(BaseService):
         Raises:
             ValueError: If setting_name not valid or value out of range
         """
-        if setting_name not in TOGGLEABLE_SETTINGS | NUMERIC_SETTINGS:
+        if setting_name not in TOGGLEABLE_SETTINGS | NUMERIC_SETTINGS | TEXT_SETTINGS:
             raise ValueError(f"Unknown setting: {setting_name}")
 
         with self.track_execution(
@@ -153,6 +154,11 @@ class SettingsService(BaseService):
                 if not MIN_POSTING_HOUR <= value <= MAX_POSTING_HOUR:
                     raise ValueError(
                         f"Hour must be between {MIN_POSTING_HOUR} and {MAX_POSTING_HOUR}"
+                    )
+            elif setting_name == "media_source_type":
+                if value is not None and value not in ("local", "google_drive"):
+                    raise ValueError(
+                        "media_source_type must be 'local', 'google_drive', or None"
                     )
 
             updated = self.settings_repo.update(
@@ -195,8 +201,34 @@ class SettingsService(BaseService):
             "posting_hours_end": settings.posting_hours_end,
             "show_verbose_notifications": settings.show_verbose_notifications,
             "media_sync_enabled": settings.media_sync_enabled,
+            "media_source_type": settings.media_source_type,
+            "media_source_root": settings.media_source_root,
             "updated_at": settings.updated_at,
         }
+
+    def get_media_source_config(
+        self, telegram_chat_id: int
+    ) -> tuple[Optional[str], Optional[str]]:
+        """Get resolved media source configuration for a chat.
+
+        Resolution order:
+        1. Per-chat value from chat_settings (if not NULL)
+        2. Global env var fallback
+
+        Args:
+            telegram_chat_id: Telegram chat/channel ID
+
+        Returns:
+            Tuple of (source_type, source_root)
+        """
+        from src.config.settings import settings as env_settings
+
+        chat_settings = self.get_settings(telegram_chat_id)
+
+        source_type = chat_settings.media_source_type or env_settings.MEDIA_SOURCE_TYPE
+        source_root = chat_settings.media_source_root or env_settings.MEDIA_SOURCE_ROOT
+
+        return source_type, source_root
 
     def set_onboarding_step(
         self, telegram_chat_id: int, step: Optional[str]
