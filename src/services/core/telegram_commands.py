@@ -124,8 +124,11 @@ class TelegramCommandHandlers:
         ig_status = self._get_instagram_api_status()
         sync_status_line = self._get_sync_status_line(chat_id)
 
+        setup_section = self._get_setup_status(chat_id)
+
         status_msg = (
             f"📊 *Storyline AI Status*\n\n"
+            f"{setup_section}\n\n"
             f"*System:*\n"
             f"🤖 Bot: Online\n"
             f"⏯️ Posting: {pause_status}\n"
@@ -222,6 +225,126 @@ class TelegramCommandHandlers:
             )
         except Exception:
             return "🔄 Media Sync: ❓ Check failed"
+
+    # ==================== Setup Status Helpers ====================
+
+    def _get_setup_status(self, chat_id: int) -> str:
+        """Build setup completion section for /status output.
+
+        Each _check_* method returns (display_line, is_configured).
+        Check failures count as "missing" to nudge users toward /start.
+        """
+        lines = ["*Setup Status:*"]
+        checks = [
+            self._check_instagram_setup(chat_id),
+            self._check_gdrive_setup(chat_id),
+            self._check_media_setup(chat_id),
+            self._check_schedule_setup(chat_id),
+            self._check_delivery_setup(chat_id),
+        ]
+
+        missing = 0
+        for line_text, is_configured in checks:
+            lines.append(line_text)
+            if not is_configured:
+                missing += 1
+
+        if missing > 0:
+            lines.append("\n_Use /start to configure missing items._")
+
+        return "\n".join(lines)
+
+    def _check_instagram_setup(self, chat_id: int) -> tuple[str, bool]:
+        """Check Instagram account connection for setup status."""
+        try:
+            active_account = self.service.ig_account_service.get_active_account(chat_id)
+            if active_account and active_account.instagram_username:
+                return (
+                    f"├── 📸 Instagram: ✅ Connected (@{active_account.instagram_username})",
+                    True,
+                )
+            elif active_account:
+                return (
+                    f"├── 📸 Instagram: ✅ Connected ({active_account.display_name})",
+                    True,
+                )
+            return ("├── 📸 Instagram: ⚠️ Not connected", False)
+        except Exception:
+            return ("├── 📸 Instagram: ❓ Check failed", False)
+
+    def _check_gdrive_setup(self, chat_id: int) -> tuple[str, bool]:
+        """Check Google Drive OAuth connection for setup status."""
+        try:
+            from src.repositories.token_repository import TokenRepository
+
+            chat_settings = self.service.settings_service.get_settings(chat_id)
+            if not chat_settings:
+                return ("├── 📁 Google Drive: ⚠️ Not connected", False)
+
+            token_repo = TokenRepository()
+            try:
+                gdrive_token = token_repo.get_token_for_chat(
+                    "google_drive", "oauth_access", str(chat_settings.id)
+                )
+                if gdrive_token:
+                    email = None
+                    if gdrive_token.token_metadata:
+                        email = gdrive_token.token_metadata.get("email")
+                    if email:
+                        return (
+                            f"├── 📁 Google Drive: ✅ Connected ({email})",
+                            True,
+                        )
+                    return ("├── 📁 Google Drive: ✅ Connected", True)
+                return ("├── 📁 Google Drive: ⚠️ Not connected", False)
+            finally:
+                token_repo.close()
+        except Exception:
+            return ("├── 📁 Google Drive: ❓ Check failed", False)
+
+    def _check_media_setup(self, chat_id: int) -> tuple[str, bool]:
+        """Check media folder configuration and library size."""
+        try:
+            media_count = len(self.service.media_repo.get_all(is_active=True))
+            if media_count > 0:
+                return (f"├── 📂 Media Library: ✅ {media_count} files", True)
+
+            # No media indexed — check if source is configured (per-chat)
+            chat_settings = self.service.settings_service.get_settings(chat_id)
+            if chat_settings and chat_settings.media_source_root:
+                return (
+                    "├── 📂 Media Library: ⚠️ Configured (0 files — run /sync)",
+                    False,
+                )
+            return ("├── 📂 Media Library: ⚠️ Not configured", False)
+        except Exception:
+            return ("├── 📂 Media Library: ❓ Check failed", False)
+
+    def _check_schedule_setup(self, chat_id: int) -> tuple[str, bool]:
+        """Check schedule configuration for setup status."""
+        try:
+            chat_settings = self.service.settings_service.get_settings(chat_id)
+            ppd = chat_settings.posts_per_day
+            start = chat_settings.posting_hours_start
+            end = chat_settings.posting_hours_end
+            return (
+                f"├── 📅 Schedule: ✅ {ppd}/day, {start:02d}:00-{end:02d}:00 UTC",
+                True,
+            )
+        except Exception:
+            return ("├── 📅 Schedule: ❓ Check failed", False)
+
+    def _check_delivery_setup(self, chat_id: int) -> tuple[str, bool]:
+        """Check delivery mode (dry run / paused) for setup status."""
+        try:
+            chat_settings = self.service.settings_service.get_settings(chat_id)
+            if chat_settings.is_paused:
+                return ("└── 📦 Delivery: ⏸️ PAUSED", True)
+            if chat_settings.dry_run_mode:
+                return ("└── 📦 Delivery: 🧪 Dry Run (not posting)", True)
+            return ("└── 📦 Delivery: ✅ Live", True)
+        except Exception:
+            return ("└── 📦 Delivery: ❓ Check failed", False)
 
     async def handle_queue(self, update, context):
         """Handle /queue command - show upcoming scheduled posts."""
@@ -1050,49 +1173,6 @@ class TelegramCommandHandlers:
         self.service.interaction_service.log_command(
             user_id=str(user.id),
             command="/connect",
-            telegram_chat_id=chat_id,
-            telegram_message_id=update.message.message_id,
-        )
-
-    async def handle_connect_drive(self, update, context):
-        """Handle /connect_drive command - generate Google Drive OAuth link.
-
-        Usage:
-            /connect_drive - Get a link to connect your Google Drive
-        """
-        user = self.service._get_or_create_user(update.effective_user)
-        chat_id = update.effective_chat.id
-
-        from src.services.integrations.google_drive_oauth import GoogleDriveOAuthService
-
-        gdrive_service = GoogleDriveOAuthService()
-        try:
-            auth_url = gdrive_service.generate_authorization_url(chat_id)
-
-            keyboard = InlineKeyboardMarkup(
-                [[InlineKeyboardButton("Connect Google Drive", url=auth_url)]]
-            )
-
-            await update.message.reply_text(
-                "\U0001f4c1 *Connect Google Drive*\n\n"
-                "Click the button below to authorize Storyline AI "
-                "to read media from your Google Drive.\n\n"
-                "_This link expires in 10 minutes._",
-                parse_mode="Markdown",
-                reply_markup=keyboard,
-            )
-        except ValueError as e:
-            await update.message.reply_text(
-                f"\u26a0\ufe0f Google Drive OAuth not configured: {e}\n\n"
-                "Contact your admin to set up GOOGLE_CLIENT_ID, "
-                "GOOGLE_CLIENT_SECRET, and OAUTH_REDIRECT_BASE_URL.",
-            )
-        finally:
-            gdrive_service.close()
-
-        self.service.interaction_service.log_command(
-            user_id=str(user.id),
-            command="/connect_drive",
             telegram_chat_id=chat_id,
             telegram_message_id=update.message.message_id,
         )

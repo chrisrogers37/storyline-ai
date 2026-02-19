@@ -1,5 +1,9 @@
 # Phase 05: `/status` Setup Completion Reporting + `/connect_drive` Cleanup
 
+**Status**: ✅ COMPLETE
+**Started**: 2026-02-19
+**Completed**: 2026-02-19
+
 ## Header
 
 | Field | Value |
@@ -60,7 +64,7 @@ The underlying OAuth routes (`/auth/google-drive/start`, `/auth/google-drive/cal
 | Phase 02 | Completed onboarding wizard | Required -- The `/start` command already routes to it. `/connect_drive` removal makes sense only after the wizard handles Drive connections. |
 | Phase 03 | Mini App home screen | Required -- After removing `/connect_drive`, the home screen is the only place to trigger Google Drive OAuth. |
 
-**Fallback strategy if Phase 01 is not yet merged**: The `media_source_root` column does not yet exist on `chat_settings` (confirmed by grepping the model -- only `onboarding_step` and `onboarding_completed` were added in migration 016). If Phase 01 is not yet merged when this code is implemented, the media folder check should look at the global `settings.MEDIA_SOURCE_ROOT` env var instead. Once Phase 01 lands, a follow-up PR should switch to per-chat `chat_settings.media_source_root`. The implementation plan below includes both the fallback approach and the preferred per-chat approach, clearly labeled.
+**Phase 01 is merged**: The `media_source_root` column exists on `chat_settings`. The media folder check uses per-chat `chat_settings.media_source_root` directly — no global env fallback needed.
 
 ---
 
@@ -78,47 +82,31 @@ The underlying OAuth routes (`/auth/google-drive/start`, `/auth/google-drive/cal
 def _get_setup_status(self, chat_id: int) -> str:
     """Build setup completion section for /status output.
 
-    Checks:
-    1. Instagram account connected (active account linked to chat)
-    2. Google Drive connected (oauth_access token exists for chat)
-    3. Media folder configured (media_source_root set or media indexed)
-    4. Schedule configured (posts_per_day, posting window)
-    5. Delivery mode (dry run vs live, paused state)
-
-    Returns:
-        Formatted multi-line string for embedding in /status message.
+    Each _check_* method returns (display_line, is_configured).
+    Check failures count as "missing" to nudge users toward /start.
     """
     lines = ["*Setup Status:*"]
+    checks = [
+        self._check_instagram_setup(chat_id),
+        self._check_gdrive_setup(chat_id),
+        self._check_media_setup(chat_id),
+        self._check_schedule_setup(chat_id),
+        self._check_delivery_setup(chat_id),
+    ]
 
-    # 1. Instagram connection
-    ig_line = self._check_instagram_setup(chat_id)
-    lines.append(ig_line)
+    missing = 0
+    for line_text, is_configured in checks:
+        lines.append(line_text)
+        if not is_configured:
+            missing += 1
 
-    # 2. Google Drive connection
-    gdrive_line = self._check_gdrive_setup(chat_id)
-    lines.append(gdrive_line)
-
-    # 3. Media folder / library
-    media_line = self._check_media_setup(chat_id)
-    lines.append(media_line)
-
-    # 4. Schedule
-    schedule_line = self._check_schedule_setup(chat_id)
-    lines.append(schedule_line)
-
-    # 5. Delivery mode
-    delivery_line = self._check_delivery_setup(chat_id)
-    lines.append(delivery_line)
-
-    # Check if anything is missing
-    missing_count = sum(1 for line in lines[1:] if "Not" in line or "OFF" in line)
-    if missing_count > 0:
+    if missing > 0:
         lines.append(f"\n_Use /start to configure missing items._")
 
     return "\n".join(lines)
 ```
 
-**Key design decision**: Break the checks into individual private methods for testability. Each method returns a single formatted line.
+**Key design decision**: Break the checks into individual private methods for testability. Each method returns `tuple[str, bool]` — the display line and whether the check passed. Check failures (DB errors) count as "missing" to nudge users toward `/start`.
 
 ### Step 2: Add Individual Setup Check Methods
 
@@ -127,28 +115,33 @@ def _get_setup_status(self, chat_id: int) -> str:
 **Location**: Immediately after `_get_setup_status`.
 
 ```python
-def _check_instagram_setup(self, chat_id: int) -> str:
+def _check_instagram_setup(self, chat_id: int) -> tuple[str, bool]:
     """Check Instagram account connection for setup status."""
     try:
         active_account = self.service.ig_account_service.get_active_account(chat_id)
         if active_account and active_account.instagram_username:
-            return f"├── 📸 Instagram: ✅ Connected (@{active_account.instagram_username})"
+            return (f"├── 📸 Instagram: ✅ Connected (@{active_account.instagram_username})", True)
         elif active_account:
-            return f"├── 📸 Instagram: ✅ Connected ({active_account.display_name})"
-        return "├── 📸 Instagram: ⚠️ Not connected"
+            return (f"├── 📸 Instagram: ✅ Connected ({active_account.display_name})", True)
+        return ("├── 📸 Instagram: ⚠️ Not connected", False)
     except Exception:
-        return "├── 📸 Instagram: ❓ Check failed"
+        return ("├── 📸 Instagram: ❓ Check failed", False)
 
-def _check_gdrive_setup(self, chat_id: int) -> str:
-    """Check Google Drive OAuth connection for setup status."""
+def _check_gdrive_setup(self, chat_id: int) -> tuple[str, bool]:
+    """Check Google Drive OAuth connection for setup status.
+
+    Reuses settings_service for chat_settings lookup; only creates
+    TokenRepository for token check.
+    """
     try:
         from src.repositories.token_repository import TokenRepository
-        from src.repositories.chat_settings_repository import ChatSettingsRepository
 
-        settings_repo = ChatSettingsRepository()
+        chat_settings = self.service.settings_service.get_settings(chat_id)
+        if not chat_settings:
+            return ("├── 📁 Google Drive: ⚠️ Not connected", False)
+
         token_repo = TokenRepository()
         try:
-            chat_settings = settings_repo.get_or_create(chat_id)
             gdrive_token = token_repo.get_token_for_chat(
                 "google_drive", "oauth_access", str(chat_settings.id)
             )
@@ -157,58 +150,59 @@ def _check_gdrive_setup(self, chat_id: int) -> str:
                 if gdrive_token.token_metadata:
                     email = gdrive_token.token_metadata.get("email")
                 if email:
-                    return f"├── 📁 Google Drive: ✅ Connected ({email})"
-                return "├── 📁 Google Drive: ✅ Connected"
-            return "├── 📁 Google Drive: ⚠️ Not connected"
+                    return (f"├── 📁 Google Drive: ✅ Connected ({email})", True)
+                return ("├── 📁 Google Drive: ✅ Connected", True)
+            return ("├── 📁 Google Drive: ⚠️ Not connected", False)
         finally:
-            settings_repo.close()
             token_repo.close()
     except Exception:
-        return "├── 📁 Google Drive: ❓ Check failed"
+        return ("├── 📁 Google Drive: ❓ Check failed", False)
 
-def _check_media_setup(self, chat_id: int) -> str:
-    """Check media folder configuration and library size for setup status."""
+def _check_media_setup(self, chat_id: int) -> tuple[str, bool]:
+    """Check media folder configuration and library size for setup status.
+
+    Uses per-chat chat_settings.media_source_root (Phase 01 merged).
+    """
     try:
         media_count = len(self.service.media_repo.get_all(is_active=True))
         if media_count > 0:
-            return f"├── 📂 Media Library: ✅ {media_count} files"
+            return (f"├── 📂 Media Library: ✅ {media_count} files", True)
 
-        # No media indexed -- check if source is configured
-        # Fallback: check global env (Phase 01 will add per-chat column)
-        from src.config.settings import settings as app_settings
-        if app_settings.MEDIA_SOURCE_ROOT:
-            return "├── 📂 Media Library: ⚠️ Configured (0 files — run /sync)"
-        return "├── 📂 Media Library: ⚠️ Not configured"
+        # No media indexed -- check if source is configured (per-chat)
+        chat_settings = self.service.settings_service.get_settings(chat_id)
+        if chat_settings and chat_settings.media_source_root:
+            return ("├── 📂 Media Library: ⚠️ Configured (0 files — run /sync)", False)
+        return ("├── 📂 Media Library: ⚠️ Not configured", False)
     except Exception:
-        return "├── 📂 Media Library: ❓ Check failed"
+        return ("├── 📂 Media Library: ❓ Check failed", False)
 
-def _check_schedule_setup(self, chat_id: int) -> str:
+def _check_schedule_setup(self, chat_id: int) -> tuple[str, bool]:
     """Check schedule configuration for setup status."""
     try:
         chat_settings = self.service.settings_service.get_settings(chat_id)
         ppd = chat_settings.posts_per_day
         start = chat_settings.posting_hours_start
         end = chat_settings.posting_hours_end
-        return f"├── 📅 Schedule: ✅ {ppd}/day, {start:02d}:00-{end:02d}:00 UTC"
+        return (f"├── 📅 Schedule: ✅ {ppd}/day, {start:02d}:00-{end:02d}:00 UTC", True)
     except Exception:
-        return "├── 📅 Schedule: ❓ Check failed"
+        return ("├── 📅 Schedule: ❓ Check failed", False)
 
-def _check_delivery_setup(self, chat_id: int) -> str:
+def _check_delivery_setup(self, chat_id: int) -> tuple[str, bool]:
     """Check delivery mode (dry run / paused) for setup status."""
     try:
         chat_settings = self.service.settings_service.get_settings(chat_id)
         if chat_settings.is_paused:
-            return "└── 📦 Delivery: ⏸️ PAUSED"
+            return ("└── 📦 Delivery: ⏸️ PAUSED", True)
         if chat_settings.dry_run_mode:
-            return "└── 📦 Delivery: 🧪 Dry Run (not posting)"
-        return "└── 📦 Delivery: ✅ Live"
+            return ("└── 📦 Delivery: 🧪 Dry Run (not posting)", True)
+        return ("└── 📦 Delivery: ✅ Live", True)
     except Exception:
-        return "└── 📦 Delivery: ❓ Check failed"
+        return ("└── 📦 Delivery: ❓ Check failed", False)
 ```
 
 **Why this structure**: Each check is isolated, catches its own exceptions, and returns a formatted string. This means one failing check does not crash the entire `/status` command. The pattern mirrors how `_get_sync_status_line` (lines 174-210) wraps everything in a `try/except` that returns a safe fallback string.
 
-**Important**: The `_check_gdrive_setup` method creates its own `ChatSettingsRepository` and `TokenRepository` instances because the parent `TelegramService` does not hold references to these repos. This follows the same pattern used in `_get_setup_state()` in the onboarding routes (lines 79-80 of `src/api/routes/onboarding.py`). The `try/finally` with `.close()` ensures connections are cleaned up.
+**Important**: The `_check_gdrive_setup` method reuses `self.service.settings_service.get_settings(chat_id)` for the chat_settings lookup (avoiding a second repo instantiation). It only creates a `TokenRepository` for the token check, with `try/finally` + `.close()` to ensure cleanup.
 
 ### Step 3: Modify `handle_status` to Include Setup Section
 
@@ -343,17 +337,19 @@ class TestSetupStatus:
             mock_account
         )
 
-        result = handlers._check_instagram_setup(-100123)
-        assert "Connected" in result
-        assert "@testshop" in result
+        line, ok = handlers._check_instagram_setup(-100123)
+        assert "Connected" in line
+        assert "@testshop" in line
+        assert ok is True
 
     def test_instagram_not_connected(self, mock_command_handlers):
         """Test Instagram shows not connected when no active account."""
         handlers = mock_command_handlers
         handlers.service.ig_account_service.get_active_account.return_value = None
 
-        result = handlers._check_instagram_setup(-100123)
-        assert "Not connected" in result
+        line, ok = handlers._check_instagram_setup(-100123)
+        assert "Not connected" in line
+        assert ok is False
 
     def test_instagram_check_failure(self, mock_command_handlers):
         """Test Instagram check handles exceptions gracefully."""
@@ -362,39 +358,43 @@ class TestSetupStatus:
             Exception("DB error")
         )
 
-        result = handlers._check_instagram_setup(-100123)
-        assert "Check failed" in result
+        line, ok = handlers._check_instagram_setup(-100123)
+        assert "Check failed" in line
+        assert ok is False
 
     def test_media_library_with_files(self, mock_command_handlers):
         """Test media library shows file count when media is indexed."""
         handlers = mock_command_handlers
         handlers.service.media_repo.get_all.return_value = [Mock()] * 847
 
-        result = handlers._check_media_setup(-100123)
-        assert "847 files" in result
+        line, ok = handlers._check_media_setup(-100123)
+        assert "847 files" in line
+        assert ok is True
 
     def test_media_library_no_files_source_configured(self, mock_command_handlers):
         """Test media library when source configured but no files synced."""
         handlers = mock_command_handlers
         handlers.service.media_repo.get_all.return_value = []
+        handlers.service.settings_service.get_settings.return_value = Mock(
+            media_source_root="some_folder_id"
+        )
 
-        with patch("src.services.core.telegram_commands.settings") as mock_settings:
-            mock_settings.MEDIA_SOURCE_ROOT = "some_folder_id"
-            result = handlers._check_media_setup(-100123)
-
-        assert "Configured" in result
-        assert "0 files" in result
+        line, ok = handlers._check_media_setup(-100123)
+        assert "Configured" in line
+        assert "0 files" in line
+        assert ok is False
 
     def test_media_library_not_configured(self, mock_command_handlers):
         """Test media library when nothing is configured."""
         handlers = mock_command_handlers
         handlers.service.media_repo.get_all.return_value = []
+        handlers.service.settings_service.get_settings.return_value = Mock(
+            media_source_root=None
+        )
 
-        with patch("src.services.core.telegram_commands.settings") as mock_settings:
-            mock_settings.MEDIA_SOURCE_ROOT = ""
-            result = handlers._check_media_setup(-100123)
-
-        assert "Not configured" in result
+        line, ok = handlers._check_media_setup(-100123)
+        assert "Not configured" in line
+        assert ok is False
 
     def test_schedule_configured(self, mock_command_handlers):
         """Test schedule shows configuration."""
@@ -404,9 +404,10 @@ class TestSetupStatus:
         )
         handlers.service.settings_service.get_settings.return_value = mock_settings
 
-        result = handlers._check_schedule_setup(-100123)
-        assert "3/day" in result
-        assert "14:00-02:00 UTC" in result
+        line, ok = handlers._check_schedule_setup(-100123)
+        assert "3/day" in line
+        assert "14:00-02:00 UTC" in line
+        assert ok is True
 
     def test_delivery_live(self, mock_command_handlers):
         """Test delivery shows live when not paused and not dry run."""
@@ -414,8 +415,9 @@ class TestSetupStatus:
         mock_settings = Mock(is_paused=False, dry_run_mode=False)
         handlers.service.settings_service.get_settings.return_value = mock_settings
 
-        result = handlers._check_delivery_setup(-100123)
-        assert "Live" in result
+        line, ok = handlers._check_delivery_setup(-100123)
+        assert "Live" in line
+        assert ok is True
 
     def test_delivery_dry_run(self, mock_command_handlers):
         """Test delivery shows dry run when enabled."""
@@ -423,8 +425,9 @@ class TestSetupStatus:
         mock_settings = Mock(is_paused=False, dry_run_mode=True)
         handlers.service.settings_service.get_settings.return_value = mock_settings
 
-        result = handlers._check_delivery_setup(-100123)
-        assert "Dry Run" in result
+        line, ok = handlers._check_delivery_setup(-100123)
+        assert "Dry Run" in line
+        assert ok is True
 
     def test_delivery_paused(self, mock_command_handlers):
         """Test delivery shows paused state."""
@@ -432,8 +435,9 @@ class TestSetupStatus:
         mock_settings = Mock(is_paused=True, dry_run_mode=False)
         handlers.service.settings_service.get_settings.return_value = mock_settings
 
-        result = handlers._check_delivery_setup(-100123)
-        assert "PAUSED" in result
+        line, ok = handlers._check_delivery_setup(-100123)
+        assert "PAUSED" in line
+        assert ok is True
 
 
 @pytest.mark.unit
@@ -449,24 +453,19 @@ class TestSetupStatusGoogleDrive:
 
         mock_settings_obj = Mock()
         mock_settings_obj.id = "fake-uuid"
+        handlers.service.settings_service.get_settings.return_value = mock_settings_obj
 
-        with (
-            patch(
-                "src.repositories.chat_settings_repository.ChatSettingsRepository"
-            ) as MockSettingsRepo,
-            patch(
-                "src.repositories.token_repository.TokenRepository"
-            ) as MockTokenRepo,
-        ):
-            MockSettingsRepo.return_value.get_or_create.return_value = mock_settings_obj
-            MockSettingsRepo.return_value.close = Mock()
+        with patch(
+            "src.services.core.telegram_commands.TokenRepository"
+        ) as MockTokenRepo:
             MockTokenRepo.return_value.get_token_for_chat.return_value = mock_token
             MockTokenRepo.return_value.close = Mock()
 
-            result = handlers._check_gdrive_setup(-100123)
+            line, ok = handlers._check_gdrive_setup(-100123)
 
-        assert "Connected" in result
-        assert "user@gmail.com" in result
+        assert "Connected" in line
+        assert "user@gmail.com" in line
+        assert ok is True
 
     def test_gdrive_not_connected(self, mock_command_handlers):
         """Test Google Drive shows not connected when no token."""
@@ -474,23 +473,18 @@ class TestSetupStatusGoogleDrive:
 
         mock_settings_obj = Mock()
         mock_settings_obj.id = "fake-uuid"
+        handlers.service.settings_service.get_settings.return_value = mock_settings_obj
 
-        with (
-            patch(
-                "src.repositories.chat_settings_repository.ChatSettingsRepository"
-            ) as MockSettingsRepo,
-            patch(
-                "src.repositories.token_repository.TokenRepository"
-            ) as MockTokenRepo,
-        ):
-            MockSettingsRepo.return_value.get_or_create.return_value = mock_settings_obj
-            MockSettingsRepo.return_value.close = Mock()
+        with patch(
+            "src.services.core.telegram_commands.TokenRepository"
+        ) as MockTokenRepo:
             MockTokenRepo.return_value.get_token_for_chat.return_value = None
             MockTokenRepo.return_value.close = Mock()
 
-            result = handlers._check_gdrive_setup(-100123)
+            line, ok = handlers._check_gdrive_setup(-100123)
 
-        assert "Not connected" in result
+        assert "Not connected" in line
+        assert ok is False
 
 
 @pytest.mark.unit
@@ -526,6 +520,19 @@ class TestStatusIncludesSetup:
 
         mock_context = Mock()
 
+        # Mock settings_service for setup checks (schedule, delivery, media, gdrive)
+        mock_chat_settings = Mock(
+            id="fake-uuid",
+            posts_per_day=3,
+            posting_hours_start=14,
+            posting_hours_end=2,
+            is_paused=False,
+            dry_run_mode=False,
+            media_sync_enabled=False,
+            media_source_root=None,
+        )
+        service.settings_service.get_settings.return_value = mock_chat_settings
+
         with (
             patch("src.services.core.telegram_commands.settings") as mock_settings,
             patch(
@@ -533,32 +540,14 @@ class TestStatusIncludesSetup:
                 side_effect=Exception("not configured"),
             ),
             patch(
-                "src.repositories.chat_settings_repository.ChatSettingsRepository"
-            ) as MockSettingsRepo,
-            patch(
-                "src.repositories.token_repository.TokenRepository"
+                "src.services.core.telegram_commands.TokenRepository"
             ) as MockTokenRepo,
         ):
             mock_settings.DRY_RUN_MODE = False
             mock_settings.ENABLE_INSTAGRAM_API = False
-            mock_settings.MEDIA_SOURCE_ROOT = ""
 
-            mock_settings_obj = Mock()
-            mock_settings_obj.id = "fake-uuid"
-            MockSettingsRepo.return_value.get_or_create.return_value = mock_settings_obj
-            MockSettingsRepo.return_value.close = Mock()
             MockTokenRepo.return_value.get_token_for_chat.return_value = None
             MockTokenRepo.return_value.close = Mock()
-
-            # Mock the settings_service for schedule/delivery checks
-            service.settings_service.get_settings.return_value = Mock(
-                posts_per_day=3,
-                posting_hours_start=14,
-                posting_hours_end=2,
-                is_paused=False,
-                dry_run_mode=False,
-                media_sync_enabled=False,
-            )
 
             await handlers.handle_status(mock_update, mock_context)
 
@@ -698,73 +687,12 @@ Telegram will not autocomplete it (removed from BotCommand list). If the user ty
 
 ## Missing Count Detection Logic
 
-The hint line logic uses string matching to count how many items are "missing":
+Each `_check_*` method returns `tuple[str, bool]` — the display line and whether the check passed. The parent `_get_setup_status` counts `False` values to decide whether to show the hint line.
 
-```python
-missing_count = sum(1 for line in lines[1:] if "Not" in line or "OFF" in line)
-```
-
-This is intentionally simple. The check looks for:
-- `"Not connected"` -- Instagram or Google Drive not set up
-- `"Not configured"` -- Media folder not set up
-- These do NOT flag "Dry Run" or "PAUSED" as missing, because those are valid states
-
-If `missing_count > 0`, the hint is appended. This could be made more robust with an explicit counter instead of string matching, which I recommend:
-
-```python
-# Alternative: explicit tracking
-missing = 0
-ig_line, ig_ok = self._check_instagram_setup(chat_id)
-if not ig_ok:
-    missing += 1
-```
-
-But the string matching approach is simpler and sufficient for v1. The individual `_check_*` methods use distinctive emoji and wording, so false positives are unlikely.
-
-**Recommendation**: Use explicit boolean tracking. Have each `_check_*` method return a tuple of `(str, bool)` where the bool indicates whether the check passed. This is cleaner. The implementation above uses string matching for simplicity, but the test plan validates both approaches.
-
-Actually, for maximum clarity and safety, let me revise the approach. Each check method should return `(line_text: str, is_configured: bool)`:
-
-```python
-def _check_instagram_setup(self, chat_id: int) -> tuple[str, bool]:
-    """Returns (display_line, is_configured)."""
-    try:
-        active_account = self.service.ig_account_service.get_active_account(chat_id)
-        if active_account and active_account.instagram_username:
-            return (f"├── 📸 Instagram: ✅ Connected (@{active_account.instagram_username})", True)
-        elif active_account:
-            return (f"├── 📸 Instagram: ✅ Connected ({active_account.display_name})", True)
-        return ("├── 📸 Instagram: ⚠️ Not connected", False)
-    except Exception:
-        return ("├── 📸 Instagram: ❓ Check failed", False)
-```
-
-And the parent method:
-
-```python
-def _get_setup_status(self, chat_id: int) -> str:
-    lines = ["*Setup Status:*"]
-    checks = [
-        self._check_instagram_setup(chat_id),
-        self._check_gdrive_setup(chat_id),
-        self._check_media_setup(chat_id),
-        self._check_schedule_setup(chat_id),
-        self._check_delivery_setup(chat_id),
-    ]
-
-    missing = 0
-    for line_text, is_configured in checks:
-        lines.append(line_text)
-        if not is_configured:
-            missing += 1
-
-    if missing > 0:
-        lines.append(f"\n_Use /start to configure missing items._")
-
-    return "\n".join(lines)
-```
-
-**Python 3.10 compatibility note**: Use `tuple` lowercase or `from __future__ import annotations` (already imported at line 3 of the file) for `tuple[str, bool]` return type hints.
+**Design decisions (agreed in challenge round):**
+- Check failures (DB errors returning "Check failed") count as "missing" → `False`
+- "Dry Run" and "PAUSED" are valid delivery states → `True`
+- Python 3.10 compatibility: use `from __future__ import annotations` (already present in file) for `tuple[str, bool]` type hints
 
 ---
 
@@ -808,11 +736,11 @@ Before merging:
 
 6. **Do NOT add `HealthCheckService` as a dependency** for setup checks. The `HealthCheckService` checks operational health (database connectivity, sync freshness, token validity). Setup status is different -- it checks whether things are **configured**, not whether they are currently healthy. These are separate concerns.
 
-7. **Do NOT import `settings` (the global Pydantic settings)** at module level in the check methods if you are only using it inside a method body. The file already imports `from src.config.settings import settings` at line 9, so you can use it directly. But be aware that in tests, this `settings` object needs to be patched at `src.services.core.telegram_commands.settings`.
+7. **Do NOT use global `settings.MEDIA_SOURCE_ROOT`** for the media check. Phase 01 is merged — use per-chat `chat_settings.media_source_root` via `settings_service.get_settings(chat_id)`.
 
 8. **Do NOT change the existing `handle_status` signature or return value**. The change is purely additive -- one new line in the message template.
 
-9. **Do NOT add `media_source_root` or `media_source_type` columns to `chat_settings` in this phase**. That is Phase 01's job. This phase uses the global `settings.MEDIA_SOURCE_ROOT` as a fallback.
+9. **Do NOT create a separate `ChatSettingsRepository` in `_check_gdrive_setup`**. Reuse `self.service.settings_service.get_settings(chat_id)` for chat_settings — only create `TokenRepository` for the token lookup.
 
 ---
 
