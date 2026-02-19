@@ -637,138 +637,6 @@ class TestResumeCommand:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-class TestScheduleCommand:
-    """Tests for /schedule command."""
-
-    async def test_schedule_creates_schedule(self, mock_command_handlers):
-        """Test /schedule creates a posting schedule."""
-        handlers = mock_command_handlers
-        service = handlers.service
-
-        mock_user = Mock()
-        mock_user.id = uuid4()
-        service.user_repo.get_by_telegram_id.return_value = None
-        service.user_repo.create.return_value = mock_user
-
-        mock_update = Mock()
-        mock_update.effective_user = Mock(
-            id=123, username="test", first_name="Test", last_name=None
-        )
-        mock_update.effective_chat = Mock(id=-100123)
-        mock_update.message = AsyncMock()
-        mock_update.message.message_id = 1
-
-        mock_context = Mock()
-        mock_context.args = ["7"]
-
-        # Create a mock SchedulerService that supports context manager protocol
-        mock_scheduler = Mock()
-        mock_scheduler.create_schedule.return_value = {
-            "scheduled": 21,
-            "skipped": 5,
-            "total_slots": 21,
-        }
-        mock_scheduler.__enter__ = Mock(return_value=mock_scheduler)
-        mock_scheduler.__exit__ = Mock(return_value=False)
-
-        # Patch SchedulerService class
-        with patch("src.services.core.scheduler.SchedulerService") as MockScheduler:
-            MockScheduler.return_value = mock_scheduler
-
-            await handlers.handle_schedule(mock_update, mock_context)
-
-            mock_scheduler.create_schedule.assert_called_once_with(
-                days=7,
-                telegram_chat_id=-100123,
-            )
-
-            call_args = mock_update.message.reply_text.call_args
-            message_text = call_args.args[0]
-            assert "Schedule Created" in message_text
-            assert "21" in message_text
-
-    async def test_schedule_invalid_days(self, mock_command_handlers):
-        """Test /schedule handles invalid days argument."""
-        handlers = mock_command_handlers
-        service = handlers.service
-
-        mock_user = Mock()
-        mock_user.id = uuid4()
-        service.user_repo.get_by_telegram_id.return_value = None
-        service.user_repo.create.return_value = mock_user
-
-        mock_update = Mock()
-        mock_update.effective_user = Mock(
-            id=123, username="test", first_name="Test", last_name=None
-        )
-        mock_update.effective_chat = Mock(id=-100123)
-        mock_update.message = AsyncMock()
-        mock_update.message.message_id = 1
-
-        mock_context = Mock()
-        mock_context.args = ["abc"]
-
-        await handlers.handle_schedule(mock_update, mock_context)
-
-        call_args = mock_update.message.reply_text.call_args
-        message_text = call_args.args[0]
-        assert "Usage:" in message_text
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-class TestStatsCommand:
-    """Tests for /stats command."""
-
-    async def test_stats_shows_media_statistics(self, mock_command_handlers):
-        """Test /stats shows media library statistics."""
-        handlers = mock_command_handlers
-        service = handlers.service
-
-        mock_user = Mock()
-        mock_user.id = uuid4()
-        service.user_repo.get_by_telegram_id.return_value = None
-        service.user_repo.create.return_value = mock_user
-
-        # Create mock media items
-        media1 = Mock()
-        media1.id = uuid4()
-        media1.times_posted = 0
-
-        media2 = Mock()
-        media2.id = uuid4()
-        media2.times_posted = 1
-
-        media3 = Mock()
-        media3.id = uuid4()
-        media3.times_posted = 3
-
-        service.media_repo.get_all.return_value = [media1, media2, media3]
-        service.lock_repo.get_permanent_locks.return_value = [Mock()]
-        service.lock_repo.is_locked.return_value = False
-        service.queue_repo.count_pending.return_value = 5
-
-        mock_update = Mock()
-        mock_update.effective_user = Mock(
-            id=123, username="test", first_name="Test", last_name=None
-        )
-        mock_update.effective_chat = Mock(id=-100123)
-        mock_update.message = AsyncMock()
-        mock_update.message.message_id = 1
-
-        mock_context = Mock()
-
-        await handlers.handle_stats(mock_update, mock_context)
-
-        call_args = mock_update.message.reply_text.call_args
-        message_text = call_args.args[0]
-        assert "Media Library Stats" in message_text
-        assert "Total active: 3" in message_text
-        assert "Never posted: 1" in message_text
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
 class TestHistoryCommand:
     """Tests for /history command."""
 
@@ -845,148 +713,6 @@ class TestHistoryCommand:
         call_args = mock_update.message.reply_text.call_args
         message_text = call_args.args[0]
         assert "No Recent History" in message_text
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-class TestLocksCommand:
-    """Tests for /locks command."""
-
-    async def test_locks_shows_permanent_locks(self, mock_command_handlers):
-        """Test /locks shows permanently locked items."""
-        handlers = mock_command_handlers
-        service = handlers.service
-
-        mock_user = Mock()
-        mock_user.id = uuid4()
-        service.user_repo.get_by_telegram_id.return_value = None
-        service.user_repo.create.return_value = mock_user
-
-        # Create mock locks
-        lock1 = Mock()
-        lock1.media_item_id = uuid4()
-
-        lock2 = Mock()
-        lock2.media_item_id = uuid4()
-
-        service.lock_repo.get_permanent_locks.return_value = [
-            lock1,
-            lock2,
-        ]
-
-        mock_media = Mock()
-        mock_media.file_name = "locked_image.jpg"
-        service.media_repo.get_by_id.return_value = mock_media
-
-        mock_update = Mock()
-        mock_update.effective_user = Mock(
-            id=123, username="test", first_name="Test", last_name=None
-        )
-        mock_update.effective_chat = Mock(id=-100123)
-        mock_update.message = AsyncMock()
-        mock_update.message.message_id = 1
-
-        mock_context = Mock()
-
-        await handlers.handle_locks(mock_update, mock_context)
-
-        call_args = mock_update.message.reply_text.call_args
-        message_text = call_args.args[0]
-        assert "Permanently Locked" in message_text
-        assert "(2)" in message_text
-        assert "locked_image.jpg" in message_text
-
-    async def test_locks_empty(self, mock_command_handlers):
-        """Test /locks shows no locks message."""
-        handlers = mock_command_handlers
-        service = handlers.service
-
-        mock_user = Mock()
-        mock_user.id = uuid4()
-        service.user_repo.get_by_telegram_id.return_value = None
-        service.user_repo.create.return_value = mock_user
-
-        service.lock_repo.get_permanent_locks.return_value = []
-
-        mock_update = Mock()
-        mock_update.effective_user = Mock(
-            id=123, username="test", first_name="Test", last_name=None
-        )
-        mock_update.effective_chat = Mock(id=-100123)
-        mock_update.message = AsyncMock()
-        mock_update.message.message_id = 1
-
-        mock_context = Mock()
-
-        await handlers.handle_locks(mock_update, mock_context)
-
-        call_args = mock_update.message.reply_text.call_args
-        message_text = call_args.args[0]
-        assert "No Permanent Locks" in message_text
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-class TestResetCommand:
-    """Tests for /reset command (formerly /clear)."""
-
-    async def test_reset_shows_confirmation(self, mock_command_handlers):
-        """Test /reset shows confirmation dialog."""
-        handlers = mock_command_handlers
-        service = handlers.service
-
-        mock_user = Mock()
-        mock_user.id = uuid4()
-        service.user_repo.get_by_telegram_id.return_value = None
-        service.user_repo.create.return_value = mock_user
-
-        service.queue_repo.count_pending.return_value = 15
-
-        mock_update = Mock()
-        mock_update.effective_user = Mock(
-            id=123, username="test", first_name="Test", last_name=None
-        )
-        mock_update.effective_chat = Mock(id=-100123)
-        mock_update.message = AsyncMock()
-        mock_update.message.message_id = 1
-
-        mock_context = Mock()
-
-        await handlers.handle_reset(mock_update, mock_context)
-
-        call_args = mock_update.message.reply_text.call_args
-        message_text = call_args.args[0]
-        assert "Clear Queue?" in message_text
-        assert "15 pending posts" in message_text
-        assert call_args.kwargs.get("reply_markup") is not None
-
-    async def test_reset_empty_queue(self, mock_command_handlers):
-        """Test /reset shows already empty message."""
-        handlers = mock_command_handlers
-        service = handlers.service
-
-        mock_user = Mock()
-        mock_user.id = uuid4()
-        service.user_repo.get_by_telegram_id.return_value = None
-        service.user_repo.create.return_value = mock_user
-
-        service.queue_repo.count_pending.return_value = 0
-
-        mock_update = Mock()
-        mock_update.effective_user = Mock(
-            id=123, username="test", first_name="Test", last_name=None
-        )
-        mock_update.effective_chat = Mock(id=-100123)
-        mock_update.message = AsyncMock()
-        mock_update.message.message_id = 1
-
-        mock_context = Mock()
-
-        await handlers.handle_reset(mock_update, mock_context)
-
-        call_args = mock_update.message.reply_text.call_args
-        message_text = call_args.args[0]
-        assert "Queue Already Empty" in message_text
 
 
 # ==================== Status Helper Tests ====================
@@ -1213,7 +939,11 @@ class TestStatusCommand:
         service.queue_repo.count_pending.return_value = 5
         service.queue_repo.get_pending.return_value = []
         service.history_repo.get_recent_posts.return_value = []
-        service.media_repo.get_all.return_value = [Mock(), Mock(), Mock()]
+        service.media_repo.get_all.return_value = [
+            Mock(times_posted=0),
+            Mock(times_posted=1),
+            Mock(times_posted=2),
+        ]
         service.lock_repo.get_permanent_locks.return_value = [Mock()]
 
         mock_update = Mock()
@@ -1257,7 +987,7 @@ class TestStatusCommand:
 
         assert "Storyline AI Status" in message_text
         assert "Queue: 5 pending" in message_text
-        assert "Library: 3 active" in message_text
+        assert "Total: 3 active" in message_text
         assert "Locked: 1" in message_text
         assert "None scheduled" in message_text
 
@@ -1522,6 +1252,106 @@ class TestStatusIncludesSetup:
 
 
 @pytest.mark.unit
+@pytest.mark.asyncio
+class TestStatusLibraryBreakdown:
+    """Tests for /status library breakdown (merged from /stats)."""
+
+    async def test_status_includes_library_breakdown(self, mock_command_handlers):
+        """Test /status includes never-posted, posted-once, and posted-2+ counts."""
+        handlers = mock_command_handlers
+        service = handlers.service
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        service.user_repo.get_by_telegram_id.return_value = None
+        service.user_repo.create.return_value = mock_user
+
+        # Create media items with varying times_posted
+        media_never = Mock(times_posted=0)
+        media_once = Mock(times_posted=1)
+        media_multi = Mock(times_posted=3)
+        service.media_repo.get_all.return_value = [media_never, media_once, media_multi]
+        service.queue_repo.count_pending.return_value = 0
+        service.queue_repo.get_pending.return_value = []
+        service.history_repo.get_recent_posts.return_value = []
+        service.lock_repo.get_permanent_locks.return_value = []
+
+        mock_update = Mock()
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
+        mock_update.effective_chat = Mock(id=-100123)
+        mock_update.message = AsyncMock()
+        mock_update.message.message_id = 1
+
+        with (
+            patch("src.services.core.telegram_commands.settings") as mock_settings,
+            patch(
+                "src.services.core.media_sync.MediaSyncService",
+                side_effect=Exception("n/a"),
+            ),
+            patch("src.repositories.token_repository.TokenRepository") as MockTokenRepo,
+        ):
+            mock_settings.DRY_RUN_MODE = False
+            mock_settings.ENABLE_INSTAGRAM_API = False
+            MockTokenRepo.return_value.get_token_for_chat.return_value = None
+            MockTokenRepo.return_value.close = Mock()
+
+            await handlers.handle_status(mock_update, Mock())
+
+        msg = mock_update.message.reply_text.call_args.args[0]
+        assert "Never posted: 1" in msg
+        assert "Posted once: 1" in msg
+        assert "Posted 2+: 1" in msg
+        assert "Total: 3" in msg
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestRemovedCommandRedirects:
+    """Tests for removed command deprecation messages."""
+
+    @pytest.mark.parametrize(
+        "command,expected_text",
+        [
+            ("/schedule", "/settings"),
+            ("/stats", "/status"),
+            ("/locks", "/status"),
+            ("/reset", "/settings"),
+            ("/dryrun", "/settings"),
+            ("/backfill", "CLI"),
+            ("/connect", "/start"),
+        ],
+    )
+    async def test_removed_command_shows_redirect(
+        self, mock_command_handlers, command, expected_text
+    ):
+        """Removed commands show a helpful redirect message."""
+        handlers = mock_command_handlers
+        service = handlers.service
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        service.user_repo.get_by_telegram_id.return_value = None
+        service.user_repo.create.return_value = mock_user
+
+        mock_update = Mock()
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
+        mock_update.effective_chat = Mock(id=-100123)
+        mock_update.message = AsyncMock()
+        mock_update.message.message_id = 1
+        mock_update.message.text = command
+
+        await handlers.handle_removed_command(mock_update, Mock())
+
+        call_text = mock_update.message.reply_text.call_args.args[0]
+        assert "retired" in call_text
+        assert expected_text in call_text
+
+
+@pytest.mark.unit
 class TestPauseIntegration:
     """Tests for pause integration with PostingService."""
 
@@ -1539,104 +1369,6 @@ class TestPauseIntegration:
 
             posting_service.telegram_service.is_paused = False
             assert posting_service.telegram_service.is_paused is False
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-class TestConnectCommand:
-    """Tests for /connect command."""
-
-    async def test_connect_sends_oauth_link(self, mock_command_handlers):
-        """Test /connect sends inline button with OAuth URL."""
-        handlers = mock_command_handlers
-        service = handlers.service
-
-        mock_user = Mock()
-        mock_user.id = uuid4()
-        mock_user.telegram_username = "testuser"
-        service.user_repo.get_by_telegram_id.return_value = None
-        service.user_repo.create.return_value = mock_user
-
-        mock_update = AsyncMock()
-        mock_update.effective_user.id = 12345
-        mock_update.effective_user.first_name = "Test"
-        mock_update.effective_user.username = "testuser"
-        mock_update.effective_chat.id = -100123
-        mock_update.message.message_id = 1
-
-        with patch("src.services.core.oauth_service.OAuthService") as MockOAuth:
-            mock_oauth = MockOAuth.return_value
-            mock_oauth.generate_authorization_url.return_value = (
-                "https://www.facebook.com/dialog/oauth?client_id=123&state=abc"
-            )
-            mock_oauth.close = Mock()
-
-            await handlers.handle_connect(mock_update, Mock())
-
-        mock_update.message.reply_text.assert_called_once()
-        call_kwargs = mock_update.message.reply_text.call_args[1]
-        assert call_kwargs["parse_mode"] == "Markdown"
-        assert call_kwargs["reply_markup"] is not None
-
-    async def test_connect_handles_missing_config(self, mock_command_handlers):
-        """Test /connect shows error when OAuth not configured."""
-        handlers = mock_command_handlers
-        service = handlers.service
-
-        mock_user = Mock()
-        mock_user.id = uuid4()
-        mock_user.telegram_username = "testuser"
-        service.user_repo.get_by_telegram_id.return_value = None
-        service.user_repo.create.return_value = mock_user
-
-        mock_update = AsyncMock()
-        mock_update.effective_user.id = 12345
-        mock_update.effective_user.first_name = "Test"
-        mock_update.effective_user.username = "testuser"
-        mock_update.effective_chat.id = -100123
-        mock_update.message.message_id = 1
-
-        with patch("src.services.core.oauth_service.OAuthService") as MockOAuth:
-            mock_oauth = MockOAuth.return_value
-            mock_oauth.generate_authorization_url.side_effect = ValueError(
-                "FACEBOOK_APP_ID not configured"
-            )
-            mock_oauth.close = Mock()
-
-            await handlers.handle_connect(mock_update, Mock())
-
-        call_args = mock_update.message.reply_text.call_args[0][0]
-        assert "OAuth not configured" in call_args
-
-    async def test_connect_logs_interaction(self, mock_command_handlers):
-        """Test /connect logs the command interaction."""
-        handlers = mock_command_handlers
-        service = handlers.service
-
-        mock_user = Mock()
-        mock_user.id = uuid4()
-        mock_user.telegram_username = "testuser"
-        service.user_repo.get_by_telegram_id.return_value = None
-        service.user_repo.create.return_value = mock_user
-
-        mock_update = AsyncMock()
-        mock_update.effective_user.id = 12345
-        mock_update.effective_user.first_name = "Test"
-        mock_update.effective_user.username = "testuser"
-        mock_update.effective_chat.id = -100123
-        mock_update.message.message_id = 42
-
-        with patch("src.services.core.oauth_service.OAuthService") as MockOAuth:
-            mock_oauth = MockOAuth.return_value
-            mock_oauth.generate_authorization_url.return_value = "https://example.com"
-            mock_oauth.close = Mock()
-
-            await handlers.handle_connect(mock_update, Mock())
-
-        service.interaction_service.log_command.assert_called_once()
-        call_kwargs = service.interaction_service.log_command.call_args[1]
-        assert call_kwargs["command"] == "/connect"
-        assert call_kwargs["telegram_chat_id"] == -100123
 
 
 # ==================== /connect_drive Removal Tests ====================

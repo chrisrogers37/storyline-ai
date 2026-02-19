@@ -123,25 +123,27 @@ class TelegramService(BaseService):
 
         # Register command handlers
         command_map = {
+            # Active commands
             "start": self.commands.handle_start,
             "status": self.commands.handle_status,
             "queue": self.commands.handle_queue,
             "next": self.commands.handle_next,
             "pause": self.commands.handle_pause,
             "resume": self.commands.handle_resume,
-            "schedule": self.commands.handle_schedule,
-            "stats": self.commands.handle_stats,
             "history": self.commands.handle_history,
-            "locks": self.commands.handle_locks,
-            "reset": self.commands.handle_reset,
             "cleanup": self.commands.handle_cleanup,
             "help": self.commands.handle_help,
-            "dryrun": self.commands.handle_dryrun,
             "sync": self.commands.handle_sync,
-            "backfill": self.commands.handle_backfill,
-            "connect": self.commands.handle_connect,
             "settings": self.settings_handler.handle_settings,
             "setup": self.settings_handler.handle_settings,
+            # Retired commands (show helpful redirect)
+            "schedule": self.commands.handle_removed_command,
+            "stats": self.commands.handle_removed_command,
+            "locks": self.commands.handle_removed_command,
+            "reset": self.commands.handle_removed_command,
+            "dryrun": self.commands.handle_removed_command,
+            "backfill": self.commands.handle_removed_command,
+            "connect": self.commands.handle_removed_command,
         }
         for cmd, handler in command_map.items():
             self.application.add_handler(CommandHandler(cmd, handler))
@@ -157,25 +159,17 @@ class TelegramService(BaseService):
 
         # Register commands with Telegram for autocomplete menu
         commands = [
-            BotCommand("start", "Initialize bot and show welcome"),
-            BotCommand("status", "Show system health and queue status"),
-            BotCommand("help", "Show all available commands"),
-            BotCommand("queue", "View pending scheduled posts"),
-            BotCommand("next", "Force-send next scheduled post"),
-            BotCommand("pause", "Pause automatic posting"),
-            BotCommand("resume", "Resume posting"),
-            BotCommand("schedule", "Create N days of posting schedule"),
-            BotCommand("stats", "Show media library statistics"),
-            BotCommand("history", "Show recent post history"),
-            BotCommand("locks", "View permanently rejected items"),
-            BotCommand("reset", "Reset posting queue to empty"),
+            BotCommand("start", "Open Storyline (setup & config)"),
+            BotCommand("status", "System health & media overview"),
+            BotCommand("setup", "Quick settings & toggles"),
+            BotCommand("queue", "View upcoming posts"),
+            BotCommand("next", "Send next post now"),
+            BotCommand("pause", "Pause delivery"),
+            BotCommand("resume", "Resume delivery"),
+            BotCommand("history", "Recent post history"),
+            BotCommand("sync", "Sync media from Drive"),
             BotCommand("cleanup", "Delete recent bot messages"),
-            BotCommand("setup", "Quick settings + open full setup wizard"),
-            BotCommand("settings", "Alias for /setup"),
-            BotCommand("dryrun", "Toggle dry-run mode"),
-            BotCommand("sync", "Sync media from configured source"),
-            BotCommand("backfill", "Backfill media from Instagram"),
-            BotCommand("connect", "Connect an Instagram account via OAuth"),
+            BotCommand("help", "Show available commands"),
         ]
         await self.bot.set_my_commands(commands)
 

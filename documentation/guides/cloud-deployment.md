@@ -217,23 +217,17 @@ If not using `DATABASE_URL`, set individual components:
 3. `/setcommands` to register commands:
 
 ```
-start - Initialize bot and setup wizard
-status - System health and queue status
-help - Show available commands
+start - Open Storyline (setup & config)
+status - System health & media overview
+setup - Quick settings & toggles
 queue - View upcoming posts
-next - Force send next post
-pause - Pause automatic posting
-resume - Resume posting
-schedule - Create posting schedule
-stats - Media library statistics
+next - Send next post now
+pause - Pause delivery
+resume - Resume delivery
 history - Recent post history
-locks - View permanently rejected items
-reset - Reset posting queue
+sync - Sync media from Drive
 cleanup - Delete recent bot messages
-settings - Configure bot settings
-dryrun - Toggle dry-run mode
-sync - Trigger manual media sync
-connect - Connect Instagram account
+help - Show available commands
 ```
 
 4. Add the bot as admin to your Telegram channel/group

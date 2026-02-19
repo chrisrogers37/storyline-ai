@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Telegram command cleanup** - Consolidated bot commands from 18 to 11 for a cleaner daily experience
+  - **Kept:** `/start`, `/status`, `/help`, `/queue`, `/next`, `/pause`, `/resume`, `/history`, `/cleanup`, `/settings` (alias: `/setup`), `/sync`
+  - **Removed:** `/schedule`, `/stats`, `/locks`, `/reset`, `/dryrun`, `/backfill`, `/connect`
+  - Removed commands show a helpful redirect message (e.g., "Use /settings to toggle dry-run mode")
+  - `/stats` media breakdown (never-posted, posted-once, posted-2+) merged into `/status` output
+  - Schedule management remains available via `/settings` panel (Regenerate / +7 Days buttons)
+  - OAuth connections remain available via `/start` setup wizard
+  - `/backfill` remains available via CLI (`storyline-cli backfill-instagram`)
 - **`/status` enhanced with setup completion reporting** - Now shows setup status at the top: Instagram connection, Google Drive connection, media library, schedule config, and delivery mode. Users with missing configuration see a hint to run `/start`.
 - **`/settings` renamed to `/setup`** - Primary command is now `/setup` with `/settings` kept as an alias. Bot command list updated: `/setup` = "Quick settings + open full setup wizard", `/settings` = "Alias for /setup". Header changed from "Bot Settings" to "Quick Setup".
 - **Delivery language replaces pause/resume language** - All user-facing text reframed around "Delivery ON/OFF" instead of "Paused/Active/Running". Affects `/pause`, `/resume`, `/status`, `/help`, `/settings` toggle, and resume callback messages.
@@ -17,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - **`/connect_drive` command removed** - Google Drive connection is now handled exclusively through the onboarding Mini App wizard (accessible via `/start`). The underlying OAuth routes remain unchanged.
+- **7 Telegram commands retired** - `/schedule`, `/stats`, `/locks`, `/reset`, `/dryrun`, `/backfill`, `/connect` removed from bot menu. All still respond with a redirect message pointing to the appropriate replacement (`/settings`, `/status`, `/start`, or CLI).
 
 ### Added
 
