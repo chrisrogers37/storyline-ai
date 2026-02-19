@@ -715,8 +715,6 @@ class TestHistoryCommand:
         assert "No Recent History" in message_text
 
 
-
-
 # ==================== Status Helper Tests ====================
 
 
@@ -1292,9 +1290,7 @@ class TestStatusLibraryBreakdown:
                 "src.services.core.media_sync.MediaSyncService",
                 side_effect=Exception("n/a"),
             ),
-            patch(
-                "src.repositories.token_repository.TokenRepository"
-            ) as MockTokenRepo,
+            patch("src.repositories.token_repository.TokenRepository") as MockTokenRepo,
         ):
             mock_settings.DRY_RUN_MODE = False
             mock_settings.ENABLE_INSTAGRAM_API = False

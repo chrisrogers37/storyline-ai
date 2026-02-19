@@ -1,5 +1,7 @@
 # Phase 06: Command Audit, Cleanup & Consolidation
 
+**Status:** 🔧 IN PROGRESS
+**Started:** 2026-02-19
 **PR Title:** `refactor: audit and consolidate Telegram bot commands into minimal daily-use set`
 **Risk Level:** Medium (removing user-facing functionality)
 **Estimated Effort:** Medium (4-6 hours)
@@ -46,7 +48,7 @@ None. (Handler methods are removed from existing files, not deleted as whole fil
 
 ### Why This Phase Exists
 
-After Phases 01-05 of the onboarding plan, the bot has accumulated a large command set -- 19 slash commands registered in the Telegram autocomplete menu (see `/Users/chris/Projects/storyline-ai/src/services/core/telegram_service.py` lines 159-179). Many of these commands predate the Mini App (Phase 03) and the `/settings` / `/setup` in-channel settings panel (Phase 04). Their functionality is now duplicated or accessible through better UIs.
+After Phases 01-05 of the onboarding plan, the bot has accumulated a large command set -- 18 slash commands registered in the command_map, 19 in the Telegram autocomplete menu (see `/Users/chris/Projects/storyline-ai/src/services/core/telegram_service.py` lines 125-178). Many of these commands predate the Mini App (Phase 03) and the `/settings` / `/setup` in-channel settings panel (Phase 04). Their functionality is now duplicated or accessible through better UIs. Note: `/connect_drive` was already removed in Phase 05.
 
 The user explicitly stated a preference for keeping "some quick handy slash commands" -- the kind you can fire off in chat for an instant result. This phase trims the command set down to a focused, daily-use core.
 
@@ -78,31 +80,32 @@ This is the core deliverable. **Before implementing, present this table to the u
 | # | Command | Current Handler | Current Purpose | Disposition | Reasoning |
 |---|---------|----------------|-----------------|-------------|-----------|
 | 1 | `/start` | `telegram_commands.py:handle_start` (line 32) | Opens Mini App for new users; shows dashboard summary for returning users | **KEEP** | Essential entry point. Every Telegram bot needs `/start`. |
-| 2 | `/status` | `telegram_commands.py:handle_status` (line 94) | Shows system health, queue count, media count, lock count, IG API status, sync status | **KEEP + ENHANCE** | Quick health check. Merge `/stats` media library data into this output. |
-| 3 | `/help` | `telegram_commands.py:handle_help` (line 321) | Lists all available commands | **KEEP** | Standard bot convention. Update to show only the kept commands. |
-| 4 | `/queue` | `telegram_commands.py:handle_queue` (line 212) | View pending scheduled posts (up to 10) | **KEEP** | Daily-use command. Shows what is coming up. Quick, useful, fits in chat. |
-| 5 | `/next` | `telegram_commands.py:handle_next` (line 260) | Force-send next scheduled post immediately | **KEEP** | Power-user shortcut. Very handy for immediate posting. |
-| 6 | `/pause` | `telegram_commands.py:handle_pause` (line 435) | Pause automatic posting | **KEEP** | Quick toggle. Also available in `/settings`, but slash command is faster when you need to stop posting urgently. |
-| 7 | `/resume` | `telegram_commands.py:handle_resume` (line 465) | Resume automatic posting (with overdue detection) | **KEEP** | Companion to `/pause`. The overdue-post detection with inline buttons (reschedule/clear/force) is genuinely useful and cannot be replicated in `/settings`. |
-| 8 | `/schedule N` | `telegram_commands.py:handle_schedule` (line 526) | Create N days of posting schedule | **REMOVE** | Redundant with `/settings` panel which has "Regenerate" and "+7 Days" buttons (see `telegram_settings.py` lines 102-108). Schedule creation is a setup action, not a daily action. |
-| 9 | `/stats` | `telegram_commands.py:handle_stats` (line 577) | Media library statistics (total, never-posted, posted-once, posted-multiple, locks, queue) | **REMOVE (merge into /status)** | Overlaps heavily with `/status`. The unique data (never-posted, posted-once, posted-2+) can be added to `/status` under a "Library" section. |
-| 10 | `/history N` | `telegram_commands.py:handle_history` (line 620) | Show recent post history | **REMOVE** | Low daily-use value. Better suited for Mini App dashboard or API. |
-| 11 | `/locks` | `telegram_commands.py:handle_locks` (line 669) | View permanently rejected items | **REMOVE** | Very niche. Lock count is already shown in `/status`. Full lock list belongs in Mini App or admin dashboard. |
-| 12 | `/reset` | `telegram_commands.py:handle_reset` (line 701) | Clear posting queue (with confirmation dialog) | **REMOVE** | Dangerous action. Already available in `/settings` as "Regenerate" (which clears + rebuilds). Removing as a casual slash command reduces accidental queue clears. |
-| 13 | `/cleanup` | `telegram_commands.py:handle_cleanup` (line 739) | Delete recent bot messages from channel | **KEEP** | Unique utility with no equivalent in `/settings` or Mini App. Channel hygiene is a daily concern. |
+| 2 | `/status` | `telegram_commands.py:handle_status` (line 108) | Shows system health, queue count, media count, lock count, IG API status, sync status, setup completion | **KEEP + ENHANCE** | Quick health check. Merge `/stats` media library data into this output. |
+| 3 | `/help` | `telegram_commands.py:handle_help` (line 458) | Lists all available commands | **KEEP** | Standard bot convention. Update to show only the kept commands. |
+| 4 | `/queue` | `telegram_commands.py:handle_queue` (line 349) | View pending scheduled posts (up to 10) | **KEEP** | Daily-use command. Shows what is coming up. Quick, useful, fits in chat. |
+| 5 | `/next` | `telegram_commands.py:handle_next` (line 397) | Force-send next scheduled post immediately | **KEEP** | Power-user shortcut. Very handy for immediate posting. |
+| 6 | `/pause` | `telegram_commands.py:handle_pause` (line 572) | Pause automatic posting | **KEEP** | Quick toggle. Also available in `/settings`, but slash command is faster when you need to stop posting urgently. |
+| 7 | `/resume` | `telegram_commands.py:handle_resume` (line 603) | Resume automatic posting (with overdue detection) | **KEEP** | Companion to `/pause`. The overdue-post detection with inline buttons (reschedule/clear/force) is genuinely useful and cannot be replicated in `/settings`. |
+| 8 | `/schedule N` | `telegram_commands.py:handle_schedule` (line 664) | Create N days of posting schedule | **REMOVE** | Redundant with `/settings` panel which has "Regenerate" and "+7 Days" buttons (see `telegram_settings.py` lines 102-108). Schedule creation is a setup action, not a daily action. |
+| 9 | `/stats` | `telegram_commands.py:handle_stats` (line 715) | Media library statistics (total, never-posted, posted-once, posted-multiple, locks, queue) | **REMOVE (merge into /status)** | Overlaps heavily with `/status`. The unique data (never-posted, posted-once, posted-2+) can be added to `/status` under a "Library" section. |
+| 10 | `/history N` | `telegram_commands.py:handle_history` (line 758) | Show recent post history | **KEEP** | Quick in-chat view of recent posts has value for daily monitoring. |
+| 11 | `/locks` | `telegram_commands.py:handle_locks` (line 807) | View permanently rejected items | **REMOVE** | Very niche. Lock count is already shown in `/status`. Full lock list belongs in Mini App or admin dashboard. |
+| 12 | `/reset` | `telegram_commands.py:handle_reset` (line 839) | Clear posting queue (with confirmation dialog) | **REMOVE** | Dangerous action. Already available in `/settings` as "Regenerate" (which clears + rebuilds). Removing as a casual slash command reduces accidental queue clears. |
+| 13 | `/cleanup` | `telegram_commands.py:handle_cleanup` (line 877) | Delete recent bot messages from channel | **KEEP** | Unique utility with no equivalent in `/settings` or Mini App. Channel hygiene is a daily concern. |
 | 14 | `/settings` | `telegram_settings.py:handle_settings` (line 114) | Show settings panel with toggle buttons | **KEEP (as alias for /setup)** | After Phase 04, `/settings` and `/setup` should point to the same handler. Keep both registered so users can use either name. |
-| 15 | `/dryrun` | `telegram_commands.py:handle_dryrun` (line 363) | Toggle or check dry-run mode | **REMOVE** | Fully redundant with `/settings` toggle (see `telegram_settings.py` line 51: dry_run_mode toggle button). |
-| 16 | `/sync` | `telegram_commands.py:handle_sync` (line 809) | Trigger manual media sync | **KEEP** | Handy shortcut. Shows live progress with message editing. Cannot be replicated in `/settings` because it requires async progress reporting. |
-| 17 | `/backfill` | `telegram_commands.py:handle_backfill` (line 912) | Backfill media from Instagram | **REMOVE** | One-time migration utility. Should remain available via CLI (`storyline-cli backfill-instagram`) but not clutter the bot command menu. |
-| 18 | `/connect` | `telegram_commands.py:handle_connect` (line 999) | Generate Instagram OAuth link | **REMOVE** | Handled by Mini App onboarding wizard (Phase 03/05). OAuth connection should go through the wizard, not a standalone command. |
-| 19 | `/connect_drive` | `telegram_commands.py:handle_connect_drive` (line 1042) | Generate Google Drive OAuth link | **REMOVE** | Same reasoning as `/connect`. Mini App handles this. |
+| 15 | `/dryrun` | `telegram_commands.py:handle_dryrun` (line 500) | Toggle or check dry-run mode | **REMOVE** | Fully redundant with `/settings` toggle (see `telegram_settings.py` line 51: dry_run_mode toggle button). |
+| 16 | `/sync` | `telegram_commands.py:handle_sync` (line 947) | Trigger manual media sync | **KEEP** | Handy shortcut. Shows live progress with message editing. Cannot be replicated in `/settings` because it requires async progress reporting. |
+| 17 | `/backfill` | `telegram_commands.py:handle_backfill` (line 1050) | Backfill media from Instagram | **REMOVE** | One-time migration utility. Should remain available via CLI (`storyline-cli backfill-instagram`) but not clutter the bot command menu. |
+| 18 | `/connect` | `telegram_commands.py:handle_connect` (line 1137) | Generate Instagram OAuth link | **REMOVE** | Handled by Mini App onboarding wizard (Phase 03/05). OAuth connection should go through the wizard, not a standalone command. |
+| ~~19~~ | ~~`/connect_drive`~~ | ~~removed in Phase 05~~ | ~~Generate Google Drive OAuth link~~ | **ALREADY REMOVED** | Removed in Phase 05 (PR #66). |
 
 ### Summary
 
 | Disposition | Count | Commands |
 |-------------|-------|----------|
-| **KEEP** | 10 | `/start`, `/status`, `/help`, `/queue`, `/next`, `/pause`, `/resume`, `/cleanup`, `/settings`, `/sync` |
-| **REMOVE** | 9 | `/schedule`, `/stats`, `/history`, `/locks`, `/reset`, `/dryrun`, `/backfill`, `/connect`, `/connect_drive` |
+| **KEEP** | 11 | `/start`, `/status`, `/help`, `/queue`, `/next`, `/pause`, `/resume`, `/history`, `/cleanup`, `/settings`, `/sync` |
+| **REMOVE** | 7 | `/schedule`, `/stats`, `/locks`, `/reset`, `/dryrun`, `/backfill`, `/connect` |
+| **ALREADY REMOVED** | 1 | `/connect_drive` (Phase 05) |
 
 ---
 
@@ -158,16 +161,16 @@ This replaces the single `f"📁 Library: {media_count} active\n"` line currentl
 
 **File:** `/Users/chris/Projects/storyline-ai/src/services/core/telegram_commands.py`
 
-Delete the following methods entirely:
-- `handle_schedule` (lines 526-575) -- schedule creation is in `/settings` panel
-- `handle_stats` (lines 577-618) -- merged into `/status`
-- `handle_history` (lines 620-667) -- moved to Mini App / API
-- `handle_locks` (lines 669-698) -- moved to Mini App / API
-- `handle_reset` (lines 701-737) -- available in `/settings` as "Regenerate"
-- `handle_dryrun` (lines 363-433) -- available in `/settings` toggle
-- `handle_backfill` (lines 912-997) -- CLI-only utility
-- `handle_connect` (lines 999-1040) -- Mini App handles OAuth
-- `handle_connect_drive` (lines 1042-1083) -- Mini App handles OAuth
+Delete the following methods entirely (7 methods):
+- `handle_dryrun` (lines 500-570) -- available in `/settings` toggle
+- `handle_schedule` (lines 664-713) -- schedule creation is in `/settings` panel
+- `handle_stats` (lines 715-756) -- merged into `/status`
+- `handle_locks` (lines 807-837) -- moved to Mini App / API
+- `handle_reset` (lines 839-875) -- available in `/settings` as "Regenerate"
+- `handle_backfill` (lines 1050-1135) -- CLI-only utility
+- `handle_connect` (lines 1137-1178) -- Mini App handles OAuth
+
+Note: `handle_connect_drive` was already removed in Phase 05, and `handle_history` is **kept** per user decision.
 
 Also remove the `MAX_LOCKS_DISPLAY = 10` class constant (line 27) since it was only used by `handle_locks`.
 
@@ -183,13 +186,11 @@ async def handle_removed_command(self, update, context):
     redirects = {
         "/schedule": "Use /settings to manage your posting schedule (Regenerate / +7 Days).",
         "/stats": "Media stats are now included in /status.",
-        "/history": "Post history is available in the Storyline dashboard.",
         "/locks": "Lock count is shown in /status. Full list in the dashboard.",
         "/reset": "Use /settings → Regenerate to rebuild your queue.",
         "/dryrun": "Use /settings to toggle dry-run mode.",
         "/backfill": "Use the CLI: storyline-cli backfill-instagram",
         "/connect": "Use /start to open the setup wizard and connect Instagram.",
-        "/connect_drive": "Use /start to open the setup wizard and connect Google Drive.",
     }
 
     message = redirects.get(command, "This command has been removed.")
@@ -218,6 +219,7 @@ command_map = {
     "next": self.commands.handle_next,
     "pause": self.commands.handle_pause,
     "resume": self.commands.handle_resume,
+    "history": self.commands.handle_history,
     "cleanup": self.commands.handle_cleanup,
     "help": self.commands.handle_help,
     "sync": self.commands.handle_sync,
@@ -226,13 +228,11 @@ command_map = {
     # Retired commands (show helpful redirect)
     "schedule": self.commands.handle_removed_command,
     "stats": self.commands.handle_removed_command,
-    "history": self.commands.handle_removed_command,
     "locks": self.commands.handle_removed_command,
     "reset": self.commands.handle_removed_command,
     "dryrun": self.commands.handle_removed_command,
     "backfill": self.commands.handle_removed_command,
     "connect": self.commands.handle_removed_command,
-    "connect_drive": self.commands.handle_removed_command,
 }
 ```
 
@@ -243,7 +243,7 @@ Key points:
 
 #### 5b. Update `BotCommand` list (lines 159-179)
 
-Replace the current 19-item BotCommand list with only the 10 kept commands:
+Replace the current BotCommand list with only the 11 kept commands:
 
 ```python
 commands = [
@@ -254,6 +254,7 @@ commands = [
     BotCommand("next", "Send next post now"),
     BotCommand("pause", "Pause delivery"),
     BotCommand("resume", "Resume delivery"),
+    BotCommand("history", "Recent post history"),
     BotCommand("sync", "Sync media from Drive"),
     BotCommand("cleanup", "Delete recent bot messages"),
     BotCommand("help", "Show available commands"),
@@ -280,7 +281,8 @@ help_text = (
     "*Daily Commands:*\n"
     "/queue - View upcoming posts\n"
     "/next - Send next post now\n"
-    "/status - System health & overview\n\n"
+    "/status - System health & overview\n"
+    "/history - Recent post history\n\n"
     "*Control Commands:*\n"
     "/pause - Pause delivery\n"
     "/resume - Resume delivery\n"
@@ -343,16 +345,14 @@ No other callback handlers are affected by command removals. All callback patter
 
 **File:** `/Users/chris/Projects/storyline-ai/tests/src/services/test_telegram_commands.py`
 
-Remove these entire test classes:
-- `TestScheduleCommand` (lines 638-716) -- `/schedule` removed
-- `TestStatsCommand` (lines 718-767) -- `/stats` removed
-- `TestHistoryCommand` (lines 770-847) -- `/history` removed
-- `TestLocksCommand` (lines 850-925) -- `/locks` removed
-- `TestResetCommand` (lines 928-989) -- `/reset` removed
-- `TestConnectCommand` (lines 1273-1368) -- `/connect` removed
-- `TestConnectDriveCommand` (lines 1374-1474) -- `/connect_drive` removed
+Remove these entire test classes (5 classes):
+- `TestScheduleCommand` (lines 640-716) -- `/schedule` removed
+- `TestStatsCommand` (lines 720-767) -- `/stats` removed
+- `TestLocksCommand` (lines 852-925) -- `/locks` removed
+- `TestResetCommand` (lines 930-989) -- `/reset` removed
+- `TestConnectCommand` (lines 1546-1640) -- `/connect` removed
 
-These test classes at lines 718-989 total roughly 270 lines. The connect tests at lines 1273-1474 total roughly 200 lines. Total lines removed from this file: approximately 470 lines.
+Note: `TestHistoryCommand` is **kept** (lines 772-847) per user decision. `TestConnectDriveRemoved` (lines 1646-1652) is also kept as a regression guard (Phase 05). Total lines removed: approximately 330 lines.
 
 ### Tests to Update
 
@@ -416,13 +416,11 @@ class TestRemovedCommandRedirects:
     @pytest.mark.parametrize("command,expected_text", [
         ("/schedule", "/settings"),
         ("/stats", "/status"),
-        ("/history", "dashboard"),
         ("/locks", "/status"),
         ("/reset", "/settings"),
         ("/dryrun", "/settings"),
         ("/backfill", "CLI"),
         ("/connect", "/start"),
-        ("/connect_drive", "/start"),
     ])
     async def test_removed_command_shows_redirect(
         self, mock_command_handlers, command, expected_text
@@ -473,9 +471,9 @@ Add under `## [Unreleased]`:
 ```markdown
 ### Changed
 
-- **Telegram command cleanup** - Consolidated bot commands from 19 to 10 for a cleaner daily experience
-  - **Kept:** `/start`, `/status`, `/help`, `/queue`, `/next`, `/pause`, `/resume`, `/cleanup`, `/settings` (alias: `/setup`), `/sync`
-  - **Removed:** `/schedule`, `/stats`, `/history`, `/locks`, `/reset`, `/dryrun`, `/backfill`, `/connect`, `/connect_drive`
+- **Telegram command cleanup** - Consolidated bot commands from 18 to 11 for a cleaner daily experience
+  - **Kept:** `/start`, `/status`, `/help`, `/queue`, `/next`, `/pause`, `/resume`, `/history`, `/cleanup`, `/settings` (alias: `/setup`), `/sync`
+  - **Removed:** `/schedule`, `/stats`, `/locks`, `/reset`, `/dryrun`, `/backfill`, `/connect`
   - Removed commands show a helpful redirect message (e.g., "Use /settings to toggle dry-run mode")
   - `/stats` media breakdown (never-posted, posted-once, posted-2+) merged into `/status` output
   - Schedule management remains available via `/settings` panel (Regenerate / +7 Days buttons)
@@ -498,13 +496,14 @@ Replace the current command table with:
 | `/next` | Force-send next scheduled post | `telegram_commands.py` |
 | `/pause` | Pause automatic posting | `telegram_commands.py` |
 | `/resume` | Resume posting | `telegram_commands.py` |
+| `/history N` | Recent post history | `telegram_commands.py` |
 | `/cleanup` | Delete recent bot messages | `telegram_commands.py` |
 | `/settings` | Configure bot settings (alias: `/setup`) | `telegram_settings.py` |
 | `/sync` | Trigger manual media sync | `telegram_commands.py` |
 
 Add a note below the table:
 
-> **Retired commands:** `/schedule`, `/stats`, `/history`, `/locks`, `/reset`, `/dryrun`, `/backfill`, `/connect`, `/connect_drive` still respond with a helpful redirect message but are not listed in the bot menu. Their functionality is available through `/settings`, `/status`, `/start` (setup wizard), or the CLI.
+> **Retired commands:** `/schedule`, `/stats`, `/locks`, `/reset`, `/dryrun`, `/backfill`, `/connect` still respond with a helpful redirect message but are not listed in the bot menu. Their functionality is available through `/settings`, `/status`, `/start` (setup wizard), or the CLI.
 
 **Section: Telegram Callback Actions**
 
@@ -551,11 +550,12 @@ After implementation, manually verify each of these:
 ### Kept Commands (must work)
 - [ ] `/start` -- New user sees Mini App button; returning user sees dashboard
 - [ ] `/status` -- Shows all sections including new "Library" breakdown (never-posted, posted-once, posted-2+ counts)
-- [ ] `/help` -- Shows only the 10 kept commands
+- [ ] `/help` -- Shows only the 11 kept commands
 - [ ] `/queue` -- Shows upcoming posts (up to 10)
 - [ ] `/next` -- Force-sends next post
 - [ ] `/pause` -- Pauses posting; shows "already paused" if re-run
 - [ ] `/resume` -- Resumes posting; shows overdue options if applicable
+- [ ] `/history` -- Shows recent posts
 - [ ] `/cleanup` -- Deletes recent bot messages; self-deletes confirmation
 - [ ] `/settings` -- Shows settings panel with toggle buttons
 - [ ] `/setup` -- Same as `/settings` (alias)
@@ -564,17 +564,15 @@ After implementation, manually verify each of these:
 ### Removed Commands (must show redirect)
 - [ ] `/schedule 7` -- Shows redirect to `/settings`
 - [ ] `/stats` -- Shows redirect to `/status`
-- [ ] `/history 5` -- Shows redirect to dashboard
 - [ ] `/locks` -- Shows redirect to `/status`
 - [ ] `/reset` -- Shows redirect to `/settings`
 - [ ] `/dryrun` -- Shows redirect to `/settings`
 - [ ] `/dryrun on` -- Shows redirect to `/settings` (not crash on args)
 - [ ] `/backfill` -- Shows redirect to CLI
 - [ ] `/connect` -- Shows redirect to `/start`
-- [ ] `/connect_drive` -- Shows redirect to `/start`
 
 ### Bot Menu
-- [ ] Telegram autocomplete shows exactly 10 commands (start, status, setup, queue, next, pause, resume, sync, cleanup, help)
+- [ ] Telegram autocomplete shows exactly 11 commands (start, status, setup, queue, next, pause, resume, history, sync, cleanup, help)
 - [ ] No removed commands appear in autocomplete
 
 ### Callback Buttons (must still work)
@@ -632,8 +630,8 @@ The constant at line 27 of `telegram_commands.py` is only used by `handle_locks`
 ---
 
 ### Critical Files for Implementation
-- `/Users/chris/Projects/storyline-ai/src/services/core/telegram_commands.py` - Core file: remove 9 handler methods, add `handle_removed_command`, merge stats into status, update help text
+- `/Users/chris/Projects/storyline-ai/src/services/core/telegram_commands.py` - Core file: remove 7 handler methods, add `handle_removed_command`, merge stats into status, update help text
 - `/Users/chris/Projects/storyline-ai/src/services/core/telegram_service.py` - Update command_map registrations and BotCommand autocomplete list
-- `/Users/chris/Projects/storyline-ai/tests/src/services/test_telegram_commands.py` - Remove ~470 lines of tests for removed commands, add tests for merged status and deprecation redirects
+- `/Users/chris/Projects/storyline-ai/tests/src/services/test_telegram_commands.py` - Remove ~330 lines of tests for removed commands, add tests for merged status and deprecation redirects
 - `/Users/chris/Projects/storyline-ai/CLAUDE.md` - Update the Telegram Bot Commands Reference table (the large table listing all commands)
 - `/Users/chris/Projects/storyline-ai/src/services/core/telegram_callbacks.py` - Mark `handle_reset_callback` as legacy (keep for backward compat)
