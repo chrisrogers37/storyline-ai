@@ -30,6 +30,43 @@ def _mock_validate(return_value=None):
     )
 
 
+def _mock_settings_obj(**overrides):
+    """Create a mock ChatSettings object with sensible defaults."""
+    defaults = dict(
+        id=uuid4(),
+        posts_per_day=3,
+        posting_hours_start=14,
+        posting_hours_end=2,
+        onboarding_completed=False,
+        onboarding_step=None,
+        media_source_root=None,
+        media_source_type=None,
+    )
+    defaults.update(overrides)
+    return Mock(**defaults)
+
+
+def _mock_init_repos(mock_settings=None, instagram_account=None, gdrive_token=None):
+    """Return context managers for the three repos used by _get_setup_state + init."""
+    if mock_settings is None:
+        mock_settings = _mock_settings_obj()
+
+    settings_repo = patch("src.api.routes.onboarding.ChatSettingsRepository")
+    token_repo = patch("src.api.routes.onboarding.TokenRepository")
+    ig_service = patch("src.api.routes.onboarding.InstagramAccountService")
+    settings_service = patch("src.api.routes.onboarding.SettingsService")
+
+    return (
+        settings_repo,
+        token_repo,
+        ig_service,
+        settings_service,
+        mock_settings,
+        instagram_account,
+        gdrive_token,
+    )
+
+
 # =============================================================================
 # POST /api/onboarding/init
 # =============================================================================
@@ -41,13 +78,7 @@ class TestOnboardingInit:
 
     def test_init_returns_setup_state(self, client):
         """Valid initData returns chat_id, user, and setup_state."""
-        mock_settings = Mock(
-            id=uuid4(),
-            posts_per_day=3,
-            posting_hours_start=14,
-            posting_hours_end=2,
-            onboarding_completed=False,
-        )
+        mock_settings = _mock_settings_obj()
 
         with (
             _mock_validate(),
@@ -56,6 +87,7 @@ class TestOnboardingInit:
             ) as MockSettingsRepo,
             patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
             patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
+            patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
             MockSettingsRepo.return_value.close = Mock()
@@ -63,6 +95,7 @@ class TestOnboardingInit:
             MockTokenRepo.return_value.close = Mock()
             MockIGService.return_value.get_active_account.return_value = None
             MockIGService.return_value.close = Mock()
+            MockSettingsService.return_value.close = Mock()
 
             response = client.post(
                 "/api/onboarding/init",
@@ -79,13 +112,7 @@ class TestOnboardingInit:
 
     def test_init_shows_connected_instagram(self, client):
         """When Instagram is connected, setup_state reflects it."""
-        mock_settings = Mock(
-            id=uuid4(),
-            posts_per_day=3,
-            posting_hours_start=14,
-            posting_hours_end=2,
-            onboarding_completed=False,
-        )
+        mock_settings = _mock_settings_obj()
         mock_account = Mock(instagram_username="storyline_ai")
 
         with (
@@ -95,6 +122,7 @@ class TestOnboardingInit:
             ) as MockSettingsRepo,
             patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
             patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
+            patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
             MockSettingsRepo.return_value.close = Mock()
@@ -102,6 +130,7 @@ class TestOnboardingInit:
             MockTokenRepo.return_value.close = Mock()
             MockIGService.return_value.get_active_account.return_value = mock_account
             MockIGService.return_value.close = Mock()
+            MockSettingsService.return_value.close = Mock()
 
             response = client.post(
                 "/api/onboarding/init",
@@ -114,13 +143,7 @@ class TestOnboardingInit:
 
     def test_init_shows_connected_gdrive(self, client):
         """When Google Drive is connected, setup_state reflects it."""
-        mock_settings = Mock(
-            id=uuid4(),
-            posts_per_day=3,
-            posting_hours_start=14,
-            posting_hours_end=2,
-            onboarding_completed=False,
-        )
+        mock_settings = _mock_settings_obj()
         mock_token = Mock(token_metadata={"email": "user@gmail.com"})
 
         with (
@@ -130,6 +153,7 @@ class TestOnboardingInit:
             ) as MockSettingsRepo,
             patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
             patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
+            patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
             MockSettingsRepo.return_value.close = Mock()
@@ -137,6 +161,7 @@ class TestOnboardingInit:
             MockTokenRepo.return_value.close = Mock()
             MockIGService.return_value.get_active_account.return_value = None
             MockIGService.return_value.close = Mock()
+            MockSettingsService.return_value.close = Mock()
 
             response = client.post(
                 "/api/onboarding/init",
@@ -160,6 +185,85 @@ class TestOnboardingInit:
 
         assert response.status_code == 401
         assert "Invalid" in response.json()["detail"]
+
+    def test_init_includes_media_folder_fields(self, client):
+        """Init response contains media_folder_configured, media_indexed, media_count."""
+        mock_settings = _mock_settings_obj(
+            media_source_root="abc123",
+            media_source_type="google_drive",
+            onboarding_step="media_folder",
+        )
+
+        with (
+            _mock_validate(),
+            patch(
+                "src.api.routes.onboarding.ChatSettingsRepository"
+            ) as MockSettingsRepo,
+            patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
+            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
+            patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
+            patch("src.repositories.media_repository.MediaRepository") as MockMediaRepo,
+        ):
+            MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
+            MockSettingsRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.get_token_for_chat.return_value = None
+            MockTokenRepo.return_value.close = Mock()
+            MockIGService.return_value.get_active_account.return_value = None
+            MockIGService.return_value.close = Mock()
+            MockSettingsService.return_value.close = Mock()
+            MockMediaRepo.return_value.get_active_by_source_type.return_value = [
+                Mock(),
+                Mock(),
+                Mock(),
+            ]
+            MockMediaRepo.return_value.close = Mock()
+
+            response = client.post(
+                "/api/onboarding/init",
+                json={"init_data": "test", "chat_id": CHAT_ID},
+            )
+
+        data = response.json()
+        assert data["setup_state"]["media_folder_configured"] is True
+        assert data["setup_state"]["media_folder_id"] == "abc123"
+        assert data["setup_state"]["media_indexed"] is True
+        assert data["setup_state"]["media_count"] == 3
+        assert data["setup_state"]["onboarding_step"] == "media_folder"
+
+    def test_init_sets_welcome_step_on_first_access(self, client):
+        """Init sets onboarding_step='welcome' when not yet started."""
+        mock_settings = _mock_settings_obj(
+            onboarding_completed=False, onboarding_step=None
+        )
+
+        with (
+            _mock_validate(),
+            patch(
+                "src.api.routes.onboarding.ChatSettingsRepository"
+            ) as MockSettingsRepo,
+            patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
+            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
+            patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
+        ):
+            MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
+            MockSettingsRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.get_token_for_chat.return_value = None
+            MockTokenRepo.return_value.close = Mock()
+            MockIGService.return_value.get_active_account.return_value = None
+            MockIGService.return_value.close = Mock()
+            MockSettingsService.return_value.close = Mock()
+
+            response = client.post(
+                "/api/onboarding/init",
+                json={"init_data": "test", "chat_id": CHAT_ID},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["setup_state"]["onboarding_step"] == "welcome"
+        MockSettingsService.return_value.set_onboarding_step.assert_called_once_with(
+            CHAT_ID, "welcome"
+        )
 
 
 # =============================================================================
@@ -276,6 +380,7 @@ class TestOnboardingMediaFolder:
         data = response.json()
         assert data["folder_id"] == "abc123"
         assert data["file_count"] == 3
+        assert data["saved"] is True
         assert "memes" in data["categories"]
         assert "merch" in data["categories"]
         # Verify folder config was saved to per-chat settings
@@ -284,6 +389,12 @@ class TestOnboardingMediaFolder:
         )
         MockSettings.return_value.update_setting.assert_any_call(
             CHAT_ID, "media_source_root", "abc123"
+        )
+        MockSettings.return_value.update_setting.assert_any_call(
+            CHAT_ID, "media_sync_enabled", True
+        )
+        MockSettings.return_value.set_onboarding_step.assert_called_once_with(
+            CHAT_ID, "media_folder"
         )
 
     def test_invalid_folder_url_returns_400(self, client):
@@ -328,6 +439,138 @@ class TestOnboardingMediaFolder:
 
 
 # =============================================================================
+# POST /api/onboarding/start-indexing
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestOnboardingStartIndexing:
+    """Test POST /api/onboarding/start-indexing."""
+
+    def test_indexing_runs_sync(self, client):
+        """Start indexing triggers MediaSyncService.sync() with chat config."""
+        mock_settings = _mock_settings_obj(
+            media_source_type="google_drive",
+            media_source_root="abc123",
+        )
+        mock_sync_result = Mock(
+            new=42,
+            updated=0,
+            unchanged=0,
+            deactivated=0,
+            errors=0,
+            total_processed=42,
+        )
+
+        with (
+            _mock_validate(),
+            patch(
+                "src.api.routes.onboarding.ChatSettingsRepository"
+            ) as MockSettingsRepo,
+            patch("src.services.core.media_sync.MediaSyncService") as MockSync,
+            patch("src.api.routes.onboarding.SettingsService") as MockStepService,
+        ):
+            MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
+            MockSettingsRepo.return_value.close = Mock()
+            MockSync.return_value.sync.return_value = mock_sync_result
+            MockSync.return_value.close = Mock()
+            MockStepService.return_value.close = Mock()
+
+            response = client.post(
+                "/api/onboarding/start-indexing",
+                json={"init_data": "test", "chat_id": CHAT_ID},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["indexed"] is True
+        assert data["new"] == 42
+        assert data["total_processed"] == 42
+        MockStepService.return_value.set_onboarding_step.assert_called_once_with(
+            CHAT_ID, "indexing"
+        )
+
+    def test_indexing_without_folder_returns_400(self, client):
+        """Start indexing without a configured folder returns 400."""
+        mock_settings = _mock_settings_obj(
+            media_source_type="local",
+            media_source_root=None,
+        )
+
+        with (
+            _mock_validate(),
+            patch(
+                "src.api.routes.onboarding.ChatSettingsRepository"
+            ) as MockSettingsRepo,
+        ):
+            MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
+            MockSettingsRepo.return_value.close = Mock()
+
+            response = client.post(
+                "/api/onboarding/start-indexing",
+                json={"init_data": "test", "chat_id": CHAT_ID},
+            )
+
+        assert response.status_code == 400
+        assert "No media folder" in response.json()["detail"]
+
+    def test_indexing_sync_error_returns_500(self, client):
+        """MediaSyncService failure returns 500 with user-friendly message."""
+        mock_settings = _mock_settings_obj(
+            media_source_type="google_drive",
+            media_source_root="abc123",
+        )
+
+        with (
+            _mock_validate(),
+            patch(
+                "src.api.routes.onboarding.ChatSettingsRepository"
+            ) as MockSettingsRepo,
+            patch("src.services.core.media_sync.MediaSyncService") as MockSync,
+        ):
+            MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
+            MockSettingsRepo.return_value.close = Mock()
+            MockSync.return_value.sync.side_effect = Exception("Connection timeout")
+            MockSync.return_value.close = Mock()
+
+            response = client.post(
+                "/api/onboarding/start-indexing",
+                json={"init_data": "test", "chat_id": CHAT_ID},
+            )
+
+        assert response.status_code == 500
+        assert "failed" in response.json()["detail"].lower()
+
+    def test_indexing_value_error_returns_400(self, client):
+        """MediaSyncService ValueError (e.g., unconfigured provider) returns 400."""
+        mock_settings = _mock_settings_obj(
+            media_source_type="google_drive",
+            media_source_root="abc123",
+        )
+
+        with (
+            _mock_validate(),
+            patch(
+                "src.api.routes.onboarding.ChatSettingsRepository"
+            ) as MockSettingsRepo,
+            patch("src.services.core.media_sync.MediaSyncService") as MockSync,
+        ):
+            MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
+            MockSettingsRepo.return_value.close = Mock()
+            MockSync.return_value.sync.side_effect = ValueError(
+                "Provider not configured"
+            )
+            MockSync.return_value.close = Mock()
+
+            response = client.post(
+                "/api/onboarding/start-indexing",
+                json={"init_data": "test", "chat_id": CHAT_ID},
+            )
+
+        assert response.status_code == 400
+
+
+# =============================================================================
 # POST /api/onboarding/schedule
 # =============================================================================
 
@@ -361,9 +604,10 @@ class TestOnboardingSchedule:
         assert data["posting_hours_start"] == 9
         assert data["posting_hours_end"] == 21
 
-        # Verify service was called 3 times (one per setting)
+        # Verify service was called 3 times for settings + 1 for step tracking
         mock_svc = MockSettings.return_value
         assert mock_svc.update_setting.call_count == 3
+        mock_svc.set_onboarding_step.assert_called_once_with(CHAT_ID, "schedule")
 
     def test_schedule_service_validation_error_returns_400(self, client):
         """Service-level validation error returns 400."""
@@ -401,11 +645,24 @@ class TestOnboardingComplete:
 
     def test_complete_marks_onboarding_done(self, client):
         """Complete endpoint marks onboarding as finished."""
+        mock_settings = _mock_settings_obj()
+
         with (
             _mock_validate(),
-            patch("src.api.routes.onboarding.SettingsService") as MockSettings,
+            patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
+            patch(
+                "src.api.routes.onboarding.ChatSettingsRepository"
+            ) as MockSettingsRepo,
+            patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
+            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
         ):
-            MockSettings.return_value.close = Mock()
+            MockSettingsService.return_value.close = Mock()
+            MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
+            MockSettingsRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.get_token_for_chat.return_value = None
+            MockTokenRepo.return_value.close = Mock()
+            MockIGService.return_value.get_active_account.return_value = None
+            MockIGService.return_value.close = Mock()
 
             response = client.post(
                 "/api/onboarding/complete",
@@ -421,16 +678,31 @@ class TestOnboardingComplete:
         assert data["onboarding_completed"] is True
         assert data["schedule_created"] is False
 
-        MockSettings.return_value.complete_onboarding.assert_called_once_with(CHAT_ID)
+        MockSettingsService.return_value.complete_onboarding.assert_called_once_with(
+            CHAT_ID
+        )
 
     def test_complete_creates_schedule(self, client):
         """Complete with create_schedule=true calls SchedulerService."""
+        mock_settings = _mock_settings_obj()
+
         with (
             _mock_validate(),
-            patch("src.api.routes.onboarding.SettingsService") as MockSettings,
+            patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
+            patch(
+                "src.api.routes.onboarding.ChatSettingsRepository"
+            ) as MockSettingsRepo,
+            patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
+            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
             patch("src.services.core.scheduler.SchedulerService") as MockScheduler,
         ):
-            MockSettings.return_value.close = Mock()
+            MockSettingsService.return_value.close = Mock()
+            MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
+            MockSettingsRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.get_token_for_chat.return_value = None
+            MockTokenRepo.return_value.close = Mock()
+            MockIGService.return_value.get_active_account.return_value = None
+            MockIGService.return_value.close = Mock()
             MockScheduler.return_value.create_schedule.return_value = {
                 "scheduled": 21,
                 "total_slots": 21,
@@ -459,12 +731,25 @@ class TestOnboardingComplete:
 
     def test_complete_handles_schedule_error(self, client):
         """Schedule creation error doesn't fail the whole request."""
+        mock_settings = _mock_settings_obj()
+
         with (
             _mock_validate(),
-            patch("src.api.routes.onboarding.SettingsService") as MockSettings,
+            patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
+            patch(
+                "src.api.routes.onboarding.ChatSettingsRepository"
+            ) as MockSettingsRepo,
+            patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
+            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
             patch("src.services.core.scheduler.SchedulerService") as MockScheduler,
         ):
-            MockSettings.return_value.close = Mock()
+            MockSettingsService.return_value.close = Mock()
+            MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
+            MockSettingsRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.get_token_for_chat.return_value = None
+            MockTokenRepo.return_value.close = Mock()
+            MockIGService.return_value.get_active_account.return_value = None
+            MockIGService.return_value.close = Mock()
             MockScheduler.return_value.create_schedule.side_effect = Exception(
                 "No media items"
             )
@@ -484,6 +769,82 @@ class TestOnboardingComplete:
         assert data["onboarding_completed"] is True
         assert data["schedule_created"] is False
         assert "schedule_error" in data
+
+    def test_complete_enables_instagram_when_connected(self, client):
+        """When Instagram is connected, complete enables enable_instagram_api."""
+        mock_settings = _mock_settings_obj()
+        mock_account = Mock(instagram_username="test_ig")
+
+        with (
+            _mock_validate(),
+            patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
+            patch(
+                "src.api.routes.onboarding.ChatSettingsRepository"
+            ) as MockSettingsRepo,
+            patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
+            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
+        ):
+            MockSettingsService.return_value.close = Mock()
+            MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
+            MockSettingsRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.get_token_for_chat.return_value = None
+            MockTokenRepo.return_value.close = Mock()
+            MockIGService.return_value.get_active_account.return_value = mock_account
+            MockIGService.return_value.close = Mock()
+
+            response = client.post(
+                "/api/onboarding/complete",
+                json={
+                    "init_data": "test",
+                    "chat_id": CHAT_ID,
+                    "create_schedule": False,
+                },
+            )
+
+        assert response.status_code == 200
+
+        calls = MockSettingsService.return_value.update_setting.call_args_list
+        setting_updates = {c.args[1]: c.args[2] for c in calls}
+        assert setting_updates.get("enable_instagram_api") is True
+
+    def test_complete_does_not_disable_dry_run(self, client):
+        """Complete NEVER changes dry_run_mode."""
+        mock_settings = _mock_settings_obj(media_source_root="abc123")
+
+        with (
+            _mock_validate(),
+            patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
+            patch(
+                "src.api.routes.onboarding.ChatSettingsRepository"
+            ) as MockSettingsRepo,
+            patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
+            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
+            patch("src.repositories.media_repository.MediaRepository") as MockMediaRepo,
+        ):
+            MockSettingsService.return_value.close = Mock()
+            MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
+            MockSettingsRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.get_token_for_chat.return_value = None
+            MockTokenRepo.return_value.close = Mock()
+            MockIGService.return_value.get_active_account.return_value = Mock(
+                instagram_username="test"
+            )
+            MockIGService.return_value.close = Mock()
+            MockMediaRepo.return_value.get_active_by_source_type.return_value = [Mock()]
+            MockMediaRepo.return_value.close = Mock()
+
+            client.post(
+                "/api/onboarding/complete",
+                json={
+                    "init_data": "test",
+                    "chat_id": CHAT_ID,
+                    "create_schedule": False,
+                },
+            )
+
+        calls = MockSettingsService.return_value.update_setting.call_args_list
+        setting_names = [c.args[1] for c in calls]
+        assert "dry_run_mode" not in setting_names
 
 
 # =============================================================================
@@ -519,13 +880,7 @@ class TestOnboardingChatIdVerification:
             "first_name": "Chris",
             "chat_id": CHAT_ID,
         }
-        mock_settings = Mock(
-            id=uuid4(),
-            posts_per_day=3,
-            posting_hours_start=14,
-            posting_hours_end=2,
-            onboarding_completed=False,
-        )
+        mock_settings = _mock_settings_obj()
 
         with (
             _mock_validate(return_value=user_with_chat),
@@ -534,6 +889,7 @@ class TestOnboardingChatIdVerification:
             ) as MockSettingsRepo,
             patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
             patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
+            patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
             MockSettingsRepo.return_value.close = Mock()
@@ -541,6 +897,7 @@ class TestOnboardingChatIdVerification:
             MockTokenRepo.return_value.close = Mock()
             MockIGService.return_value.get_active_account.return_value = None
             MockIGService.return_value.close = Mock()
+            MockSettingsService.return_value.close = Mock()
 
             response = client.post(
                 "/api/onboarding/init",
@@ -551,13 +908,7 @@ class TestOnboardingChatIdVerification:
 
     def test_no_chat_id_in_initdata_allows_any(self, client):
         """If initData has no chat_id (DM context), request proceeds."""
-        mock_settings = Mock(
-            id=uuid4(),
-            posts_per_day=3,
-            posting_hours_start=14,
-            posting_hours_end=2,
-            onboarding_completed=False,
-        )
+        mock_settings = _mock_settings_obj()
 
         with (
             _mock_validate(),  # default: no chat_id in return
@@ -566,6 +917,7 @@ class TestOnboardingChatIdVerification:
             ) as MockSettingsRepo,
             patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
             patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
+            patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
             MockSettingsRepo.return_value.close = Mock()
@@ -573,6 +925,7 @@ class TestOnboardingChatIdVerification:
             MockTokenRepo.return_value.close = Mock()
             MockIGService.return_value.get_active_account.return_value = None
             MockIGService.return_value.close = Mock()
+            MockSettingsService.return_value.close = Mock()
 
             response = client.post(
                 "/api/onboarding/init",

@@ -12,6 +12,11 @@ const App = {
     setupState: null,
     pollInterval: null,
     pollTimeout: null,
+    _currentStep: 'welcome',
+
+    // Track which steps were completed vs skipped
+    skippedSteps: new Set(),
+    folderValidation: null,
 
     // Schedule config (defaults)
     schedule: {
@@ -70,6 +75,19 @@ const App = {
      * Navigate to a step.
      */
     goToStep(stepName) {
+        const stepOrder = ['welcome', 'instagram', 'gdrive', 'media-folder', 'indexing', 'schedule', 'summary'];
+        const currentIdx = stepOrder.indexOf(this._currentStep);
+        const targetIdx = stepOrder.indexOf(stepName);
+
+        // If jumping forward past intermediate steps, mark them as skipped
+        if (targetIdx > currentIdx + 1) {
+            for (let i = currentIdx + 1; i < targetIdx; i++) {
+                this.skippedSteps.add(stepOrder[i]);
+            }
+        }
+
+        this._currentStep = stepName;
+
         // Hide all steps
         document.querySelectorAll('.step').forEach(s => s.classList.add('hidden'));
 
@@ -87,6 +105,18 @@ const App = {
         // If going to summary, populate it
         if (stepName === 'summary') {
             this._populateSummary();
+        }
+
+        // If going to indexing, update the preview from folder validation
+        if (stepName === 'indexing' && this.folderValidation) {
+            document.getElementById('indexing-file-count').textContent =
+                this.folderValidation.file_count;
+            document.getElementById('indexing-categories').textContent =
+                this.folderValidation.categories.length > 0
+                    ? this.folderValidation.categories.join(', ')
+                    : 'None';
+            document.getElementById('btn-start-indexing').textContent =
+                'Index ' + this.folderValidation.file_count + ' Files Now';
         }
 
         // Stop any active polling when navigating away
@@ -141,19 +171,73 @@ const App = {
                 folder_url: url,
             });
 
+            this.folderValidation = response;
+
             document.getElementById('folder-file-count').textContent = response.file_count;
             document.getElementById('folder-categories').textContent =
                 response.categories.length > 0 ? response.categories.join(', ') : 'None';
             document.getElementById('folder-result').classList.remove('hidden');
 
-            // Auto-advance after short delay
-            setTimeout(() => this.goToStep('schedule'), 1500);
+            // Also pre-populate the indexing step preview
+            document.getElementById('indexing-file-count').textContent = response.file_count;
+            document.getElementById('indexing-categories').textContent =
+                response.categories.length > 0 ? response.categories.join(', ') : 'None';
+
+            // Update local state
+            if (this.setupState) {
+                this.setupState.media_folder_configured = true;
+                this.setupState.media_folder_id = response.folder_id;
+            }
         } catch (err) {
             const errorEl = document.getElementById('folder-error');
             errorEl.textContent = err.message || 'Could not access this folder.';
             errorEl.classList.remove('hidden');
         } finally {
             this._showLoading(false);
+        }
+    },
+
+    /**
+     * Trigger media indexing for the configured folder.
+     */
+    async startIndexing() {
+        document.getElementById('indexing-error').classList.add('hidden');
+        document.getElementById('indexing-result').classList.add('hidden');
+        document.getElementById('indexing-progress').classList.remove('hidden');
+        document.getElementById('btn-start-indexing').disabled = true;
+
+        try {
+            const response = await this._api('/api/onboarding/start-indexing', {
+                init_data: this.initData,
+                chat_id: this.chatId,
+            });
+
+            // Hide progress, show result
+            document.getElementById('indexing-progress').classList.add('hidden');
+            document.getElementById('indexing-new-count').textContent = response.new;
+            document.getElementById('indexing-total-count').textContent = response.total_processed;
+
+            if (response.errors > 0) {
+                document.getElementById('indexing-error-count').textContent = response.errors;
+                document.getElementById('indexing-errors').classList.remove('hidden');
+            }
+
+            document.getElementById('indexing-result').classList.remove('hidden');
+
+            // Update local state
+            if (this.setupState) {
+                this.setupState.media_indexed = true;
+                this.setupState.media_count = response.new;
+            }
+
+            // Auto-advance to schedule step after short delay
+            setTimeout(() => this.goToStep('schedule'), 2000);
+        } catch (err) {
+            document.getElementById('indexing-progress').classList.add('hidden');
+            const errorEl = document.getElementById('indexing-error');
+            errorEl.textContent = err.message || 'Indexing failed. You can try /sync later.';
+            errorEl.classList.remove('hidden');
+            document.getElementById('btn-start-indexing').disabled = false;
         }
     },
 
@@ -240,7 +324,6 @@ const App = {
         }
 
         if (this.setupState.onboarding_completed) {
-            // Already completed — show summary
             this.goToStep('summary');
             return;
         }
@@ -250,7 +333,14 @@ const App = {
         this.schedule.postingHoursStart = this.setupState.posting_hours_start || 14;
         this.schedule.postingHoursEnd = this.setupState.posting_hours_end || 2;
 
-        // Start from the beginning
+        // Resume from saved step if available
+        const step = this.setupState.onboarding_step;
+        if (step && document.getElementById('step-' + step)) {
+            this.goToStep(step);
+            return;
+        }
+
+        // Default: start from the beginning
         this.goToStep('welcome');
     },
 
@@ -279,6 +369,14 @@ const App = {
             document.getElementById('btn-connect-gdrive').textContent = 'Connected';
             document.getElementById('btn-connect-gdrive').disabled = true;
         }
+
+        // Media folder
+        if (s.media_folder_configured) {
+            const folderUrlInput = document.getElementById('folder-url');
+            if (folderUrlInput && s.media_folder_id) {
+                folderUrlInput.value = 'https://drive.google.com/drive/folders/' + s.media_folder_id;
+            }
+        }
     },
 
     /**
@@ -288,10 +386,16 @@ const App = {
         const s = this.setupState || {};
 
         document.getElementById('summary-instagram').textContent =
-            s.instagram_connected ? '@' + (s.instagram_username || 'connected') : 'Not connected';
+            s.instagram_connected ? '@' + (s.instagram_username || 'connected') : 'Skipped';
 
         document.getElementById('summary-gdrive').textContent =
-            s.gdrive_connected ? s.gdrive_email || 'Connected' : 'Not connected';
+            s.gdrive_connected ? s.gdrive_email || 'Connected' : 'Skipped';
+
+        document.getElementById('summary-media-folder').textContent =
+            s.media_folder_configured ? 'Configured' : 'Skipped';
+
+        document.getElementById('summary-media-indexed').textContent =
+            s.media_indexed ? s.media_count + ' files' : 'Skipped';
 
         document.getElementById('summary-schedule').textContent =
             this.schedule.postsPerDay + ' posts/day';

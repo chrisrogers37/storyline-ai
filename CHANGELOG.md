@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Onboarding wizard completion** - Mini App wizard now fully functional end-to-end
+  - Media folder validation saves `media_source_type`, `media_source_root`, and `media_sync_enabled` to `chat_settings`
+  - New `/api/onboarding/start-indexing` endpoint triggers media sync during wizard
+  - Enriched `/api/onboarding/init` response with `media_folder_configured`, `media_indexed`, `media_count`, and `onboarding_step`
+  - Completing onboarding auto-enables `enable_instagram_api` (if connected) and `media_sync_enabled` (if folder configured); `dry_run_mode` always stays true
+  - Onboarding step tracking: each wizard step saves progress to database for resume on reopen
+  - New "Index Media" wizard step with progress indicator and result display
+  - All wizard steps are skippable (Instagram, Google Drive, media folder, indexing, schedule)
+  - Summary step shows configuration status for all setup items
+  - Folder validation no longer auto-advances — shows results with explicit "Continue" button
 - **Per-chat media source configuration** - `media_source_type` and `media_source_root` columns on `chat_settings` table
   - Each Telegram chat can now have its own media source (local path or Google Drive folder ID)
   - `NULL` values fall back to global `MEDIA_SOURCE_TYPE` / `MEDIA_SOURCE_ROOT` env vars (backward compatible)

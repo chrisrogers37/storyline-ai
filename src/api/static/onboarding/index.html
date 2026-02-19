@@ -11,7 +11,7 @@
     <div id="app">
         <!-- Step 1: Welcome -->
         <div class="step" id="step-welcome">
-            <div class="progress-bar"><div class="progress-fill" style="width: 16%"></div></div>
+            <div class="progress-bar"><div class="progress-fill" style="width: 14%"></div></div>
             <div class="step-content">
                 <h1>Welcome to Storyline AI</h1>
                 <p class="subtitle">Let's get your Instagram posting automated in a few quick steps.</p>
@@ -19,7 +19,8 @@
                     <div class="step-item"><span class="step-num">1</span> Connect Instagram</div>
                     <div class="step-item"><span class="step-num">2</span> Connect Google Drive</div>
                     <div class="step-item"><span class="step-num">3</span> Pick media folder</div>
-                    <div class="step-item"><span class="step-num">4</span> Set your schedule</div>
+                    <div class="step-item"><span class="step-num">4</span> Index your media</div>
+                    <div class="step-item"><span class="step-num">5</span> Set your schedule</div>
                 </div>
                 <button class="btn btn-primary" onclick="App.goToStep('instagram')">Get Started</button>
             </div>
@@ -27,7 +28,7 @@
 
         <!-- Step 2: Connect Instagram -->
         <div class="step hidden" id="step-instagram">
-            <div class="progress-bar"><div class="progress-fill" style="width: 33%"></div></div>
+            <div class="progress-bar"><div class="progress-fill" style="width: 28%"></div></div>
             <div class="step-content">
                 <h2>Connect Instagram</h2>
                 <p class="subtitle">Link your Instagram Business or Creator account.</p>
@@ -50,7 +51,7 @@
 
         <!-- Step 3: Connect Google Drive -->
         <div class="step hidden" id="step-gdrive">
-            <div class="progress-bar"><div class="progress-fill" style="width: 50%"></div></div>
+            <div class="progress-bar"><div class="progress-fill" style="width: 43%"></div></div>
             <div class="step-content">
                 <h2>Connect Google Drive</h2>
                 <p class="subtitle">Access your media files stored in Google Drive.</p>
@@ -73,7 +74,7 @@
 
         <!-- Step 4: Media Folder -->
         <div class="step hidden" id="step-media-folder">
-            <div class="progress-bar"><div class="progress-fill" style="width: 66%"></div></div>
+            <div class="progress-bar"><div class="progress-fill" style="width: 57%"></div></div>
             <div class="step-content">
                 <h2>Media Folder</h2>
                 <p class="subtitle">Paste the URL of the Google Drive folder with your media files.</p>
@@ -86,6 +87,7 @@
                         <div class="result-row"><strong>Files found:</strong> <span id="folder-file-count"></span></div>
                         <div class="result-row"><strong>Categories:</strong> <span id="folder-categories"></span></div>
                     </div>
+                    <button class="btn btn-primary" onclick="App.goToStep('indexing')">Continue</button>
                 </div>
                 <div id="folder-error" class="error-text hidden"></div>
                 <div class="step-nav">
@@ -94,9 +96,48 @@
             </div>
         </div>
 
+        <!-- Step 4b: Indexing -->
+        <div class="step hidden" id="step-indexing">
+            <div class="progress-bar"><div class="progress-fill" style="width: 71%"></div></div>
+            <div class="step-content">
+                <h2>Index Media</h2>
+                <p class="subtitle">Import your media files into Storyline so they can be scheduled.</p>
+
+                <div id="indexing-preview" class="result-card">
+                    <div class="result-row"><strong>Files found:</strong> <span id="indexing-file-count">0</span></div>
+                    <div class="result-row"><strong>Categories:</strong> <span id="indexing-categories">-</span></div>
+                </div>
+
+                <button class="btn btn-primary" id="btn-start-indexing" onclick="App.startIndexing()">
+                    Index Files Now
+                </button>
+
+                <div id="indexing-progress" class="polling-indicator hidden">
+                    <div class="spinner"></div>
+                    <span>Indexing media files...</span>
+                </div>
+
+                <div id="indexing-result" class="hidden">
+                    <div class="result-card result-success">
+                        <div class="result-row"><strong>New files indexed:</strong> <span id="indexing-new-count">0</span></div>
+                        <div class="result-row"><strong>Total processed:</strong> <span id="indexing-total-count">0</span></div>
+                        <div id="indexing-errors" class="hidden">
+                            <div class="result-row error-text"><strong>Errors:</strong> <span id="indexing-error-count">0</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="indexing-error" class="error-text hidden"></div>
+
+                <div class="step-nav">
+                    <button class="btn btn-text" onclick="App.goToStep('schedule')">Skip, I'll index later</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Step 5: Schedule -->
         <div class="step hidden" id="step-schedule">
-            <div class="progress-bar"><div class="progress-fill" style="width: 83%"></div></div>
+            <div class="progress-bar"><div class="progress-fill" style="width: 86%"></div></div>
             <div class="step-content">
                 <h2>Posting Schedule</h2>
                 <p class="subtitle">How often and when should Storyline post?</p>
@@ -122,6 +163,9 @@
                 </div>
 
                 <button class="btn btn-primary" onclick="App.saveSchedule()">Continue</button>
+                <div class="step-nav">
+                    <button class="btn btn-text" onclick="App.goToStep('summary')">Skip for now</button>
+                </div>
             </div>
         </div>
 
@@ -140,6 +184,14 @@
                     <div class="summary-row">
                         <span class="summary-label">Google Drive</span>
                         <span class="summary-value" id="summary-gdrive">Not connected</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-label">Media Folder</span>
+                        <span class="summary-value" id="summary-media-folder">Not configured</span>
+                    </div>
+                    <div class="summary-row">
+                        <span class="summary-label">Media Indexed</span>
+                        <span class="summary-value" id="summary-media-indexed">No</span>
                     </div>
                     <div class="summary-row">
                         <span class="summary-label">Schedule</span>

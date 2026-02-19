@@ -1,5 +1,18 @@
 # Phase 02: Complete the Mini App Onboarding Wizard
 
+**Status:** 🔧 IN PROGRESS
+**Started:** 2026-02-19
+
+## Challenge Round Corrections
+
+1. **Step 1 (STRING_SETTINGS) — SKIP**: Phase 01 already added `TEXT_SETTINGS` with identical content. No work needed.
+2. **Step 3 media_sync changes — SKIP**: Phase 01 already added `telegram_chat_id` param to `sync()` and `_create_provider()`.
+3. **Test 5e (STRING_SETTINGS tests) — SKIP**: Phase 01 already added `TestSettingsServiceMediaSource` class.
+4. **goToStep fire-and-forget init call — REMOVED**: `/init` is read-only, doesn't save step. Backend `set_onboarding_step()` calls in Step 6 handle resume.
+5. **Empty folder button disable — REMOVED**: Over-engineering for rare case. Indexing returns `new: 0` which is self-explanatory.
+6. **`complete` redundant media_source_type — REMOVED**: Already set during folder validation. Only `enable_instagram_api` and `media_sync_enabled` needed.
+7. **`_get_setup_state` missing `onboarding_step` — ADDED**: Plan Step 4 return dict now includes `onboarding_step`.
+
 ## 1. Header
 
 | Field | Value |
