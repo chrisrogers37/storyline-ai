@@ -1,5 +1,9 @@
 # Phase 04: `/setup` Command + Smart Delivery Toggle
 
+**Status:** ✅ COMPLETE
+**Started:** 2026-02-19
+**Completed:** 2026-02-19
+
 ## Onboarding and Setup Flow -- Phase 04 Implementation Plan
 
 ---
@@ -18,9 +22,9 @@
 **Files Modified**:
 - `src/services/core/telegram_settings.py` -- Rename command, add Mini App button, update delivery toggle display
 - `src/services/core/telegram_service.py` -- Register `/setup` command, keep `/settings` as alias
-- `src/services/core/telegram_commands.py` -- Update `/pause` and `/resume` response messages to "delivery" language, trigger immediate reschedule on pause
-- `src/services/core/posting.py` -- Add smart reschedule logic when paused
-- `src/repositories/queue_repository.py` -- Add `get_overdue_pending_posts()` and `bulk_reschedule_overdue()` methods
+- `src/services/core/telegram_commands.py` -- Update `/pause` and `/resume` response messages to "delivery" language
+- `src/services/core/posting.py` -- Add smart reschedule logic (fetch overdue, bump +24hr, commit)
+- `src/repositories/queue_repository.py` -- Add `get_overdue_pending()` query method
 - `src/repositories/chat_settings_repository.py` -- Add `get_all_paused()` method for scheduler loop
 - `src/main.py` -- Add reschedule loop for paused tenants
 - `src/services/core/settings_service.py` -- Add `get_all_paused_chats()` method
@@ -95,35 +99,9 @@ def get_overdue_pending(
     )
     query = self._apply_tenant_filter(query, PostingQueue, chat_settings_id)
     return query.order_by(PostingQueue.scheduled_for.asc()).all()
-
-def bulk_reschedule_overdue(
-    self, chat_settings_id: Optional[str] = None
-) -> int:
-    """Bump all overdue pending items forward by +24 hours until they are in the future.
-
-    For each overdue item, repeatedly adds 24 hours to scheduled_for
-    until the time is in the future. Commits all changes in a single transaction.
-
-    Args:
-        chat_settings_id: Optional tenant filter
-
-    Returns:
-        Number of items rescheduled
-    """
-    overdue_items = self.get_overdue_pending(chat_settings_id=chat_settings_id)
-    if not overdue_items:
-        return 0
-
-    now = datetime.utcnow()
-    for item in overdue_items:
-        while item.scheduled_for <= now:
-            item.scheduled_for = item.scheduled_for + timedelta(hours=24)
-
-    self.db.commit()
-    return len(overdue_items)
 ```
 
-**Why a repository method**: The reschedule logic is a pure data operation (bump timestamps). Putting it in the repository keeps business logic in the service layer (which decides when to call it) while the actual data mutation stays in the repository. The `bulk_reschedule_overdue` method combines the query and update into one call for efficiency.
+**Why repo only has the query**: The +24hr bump logic is a business rule that belongs in the service layer. The repo provides the pure query; `PostingService.reschedule_overdue_for_paused_chat()` does the bumping and commits.
 
 ### Step 2: Add `get_all_paused()` to ChatSettingsRepository
 
@@ -211,9 +189,19 @@ def reschedule_overdue_for_paused_chat(
     chat_settings = self._get_chat_settings(telegram_chat_id)
     chat_settings_id = str(chat_settings.id) if chat_settings else None
 
-    rescheduled = self.queue_repo.bulk_reschedule_overdue(
+    overdue_items = self.queue_repo.get_overdue_pending(
         chat_settings_id=chat_settings_id
     )
+    if not overdue_items:
+        return {"rescheduled": 0, "chat_id": telegram_chat_id}
+
+    now = datetime.utcnow()
+    for item in overdue_items:
+        while item.scheduled_for <= now:
+            item.scheduled_for = item.scheduled_for + timedelta(hours=24)
+
+    self.queue_repo.db.commit()
+    rescheduled = len(overdue_items)
 
     if rescheduled > 0:
         logger.info(
@@ -224,7 +212,7 @@ def reschedule_overdue_for_paused_chat(
     return {"rescheduled": rescheduled, "chat_id": telegram_chat_id}
 ```
 
-**Note**: This method is intentionally synchronous (not `async`) because it only does database operations. No `track_execution` wrapper is used to keep it lightweight -- it runs every minute for every paused tenant.
+**Note**: This method is intentionally synchronous (not `async`) because it only does database operations. No `track_execution` wrapper is used to keep it lightweight -- it runs every minute for every paused tenant. The +24hr bump logic lives here (service layer) rather than in the repository, keeping the repo as a pure query layer.
 
 ### Step 5: Add reschedule pass to the scheduler loop
 
@@ -515,35 +503,7 @@ await update.message.reply_text(
 )
 ```
 
-Also add: trigger an immediate reschedule of overdue items when pausing. After `self.service.set_paused(True, user)` on line 445, add:
-
-```python
-self.service.set_paused(True, user)
-
-# Immediately reschedule any currently overdue items
-from src.services.core.posting import PostingService
-with PostingService() as posting_service:
-    result = posting_service.reschedule_overdue_for_paused_chat(
-        telegram_chat_id=update.effective_chat.id
-    )
-rescheduled = result.get("rescheduled", 0)
-
-pending_count = self.service.queue_repo.count_pending()
-reschedule_note = (
-    f"\n🔄 Rescheduled {rescheduled} overdue items +24hr."
-    if rescheduled > 0
-    else ""
-)
-await update.message.reply_text(
-    f"📦 *Delivery OFF*\n\n"
-    f"Automatic delivery has been turned off.\n"
-    f"📊 {pending_count} posts still in queue.{reschedule_note}\n"
-    f"Overdue items will be auto-rescheduled +24hr.\n\n"
-    f"Use /resume to turn delivery back on.\n"
-    f"Use /next to manually send posts.",
-    parse_mode="Markdown",
-)
-```
+**No immediate reschedule on pause.** The scheduler loop picks up paused tenants within ~60 seconds and handles the rescheduling. This keeps the `/pause` handler simple — no inline imports or extra service instantiation.
 
 #### `/resume` handler (lines 465-524)
 
@@ -749,29 +709,36 @@ def posting_service():
 class TestRescheduleOverdueForPausedChat:
     """Tests for PostingService.reschedule_overdue_for_paused_chat()."""
 
-    def test_reschedule_calls_bulk_reschedule(self, posting_service):
-        """reschedule_overdue_for_paused_chat calls queue_repo.bulk_reschedule_overdue."""
+    def test_reschedule_bumps_overdue_items(self, posting_service):
+        """reschedule_overdue_for_paused_chat bumps overdue items +24hr."""
         mock_settings = Mock()
         mock_settings.id = uuid4()
         posting_service.settings_service.get_settings.return_value = mock_settings
-        posting_service.queue_repo.bulk_reschedule_overdue.return_value = 3
+
+        now = datetime.utcnow()
+        item_1 = MagicMock()
+        item_1.scheduled_for = now - timedelta(hours=2)
+        item_2 = MagicMock()
+        item_2.scheduled_for = now - timedelta(hours=50)
+        posting_service.queue_repo.get_overdue_pending.return_value = [item_1, item_2]
+        posting_service.queue_repo.db = Mock()
 
         result = posting_service.reschedule_overdue_for_paused_chat(
             telegram_chat_id=-100123
         )
 
-        posting_service.queue_repo.bulk_reschedule_overdue.assert_called_once_with(
-            chat_settings_id=str(mock_settings.id)
-        )
-        assert result["rescheduled"] == 3
+        assert result["rescheduled"] == 2
         assert result["chat_id"] == -100123
+        assert item_1.scheduled_for > now
+        assert item_2.scheduled_for > now
+        posting_service.queue_repo.db.commit.assert_called_once()
 
     def test_reschedule_with_no_overdue_items(self, posting_service):
         """Returns 0 rescheduled when no items are overdue."""
         mock_settings = Mock()
         mock_settings.id = uuid4()
         posting_service.settings_service.get_settings.return_value = mock_settings
-        posting_service.queue_repo.bulk_reschedule_overdue.return_value = 0
+        posting_service.queue_repo.get_overdue_pending.return_value = []
 
         result = posting_service.reschedule_overdue_for_paused_chat(
             telegram_chat_id=-100123
@@ -784,16 +751,33 @@ class TestRescheduleOverdueForPausedChat:
         mock_settings = Mock()
         mock_settings.id = uuid4()
         posting_service.settings_service.get_settings.return_value = mock_settings
-        posting_service.queue_repo.bulk_reschedule_overdue.return_value = 0
+        posting_service.queue_repo.get_overdue_pending.return_value = []
 
         posting_service.reschedule_overdue_for_paused_chat(telegram_chat_id=-200456)
 
         posting_service.settings_service.get_settings.assert_called_with(-200456)
+
+    def test_reschedule_item_far_in_past_needs_multiple_bumps(self, posting_service):
+        """An item scheduled 5 days ago needs 6 bumps of +24hr."""
+        mock_settings = Mock()
+        mock_settings.id = uuid4()
+        posting_service.settings_service.get_settings.return_value = mock_settings
+
+        now = datetime.utcnow()
+        item = MagicMock()
+        item.scheduled_for = now - timedelta(days=5, hours=1)
+        posting_service.queue_repo.get_overdue_pending.return_value = [item]
+        posting_service.queue_repo.db = Mock()
+
+        posting_service.reschedule_overdue_for_paused_chat(telegram_chat_id=-100123)
+
+        assert item.scheduled_for > now
+        assert item.scheduled_for < now + timedelta(hours=24)
 ```
 
 ### 5b. Updates to `tests/src/repositories/test_queue_repository.py`
 
-Add tests for `get_overdue_pending()` and `bulk_reschedule_overdue()`:
+Add tests for `get_overdue_pending()` (query-only method; bump logic tested in posting service tests):
 
 ```python
 @pytest.mark.unit
@@ -820,44 +804,6 @@ class TestOverduePendingMethods:
             queue_repo.get_overdue_pending(chat_settings_id="tenant-1")
             mock_filter.assert_called_once()
             assert mock_filter.call_args[0][2] == "tenant-1"
-
-    def test_bulk_reschedule_overdue_bumps_items(self, queue_repo, mock_db):
-        """bulk_reschedule_overdue adds 24hr to overdue items until they are future."""
-        now = datetime.utcnow()
-        item_1 = MagicMock()
-        item_1.scheduled_for = now - timedelta(hours=2)  # 2 hours overdue
-        item_2 = MagicMock()
-        item_2.scheduled_for = now - timedelta(hours=50)  # 50 hours overdue (needs 3 bumps)
-
-        with patch.object(queue_repo, "get_overdue_pending", return_value=[item_1, item_2]):
-            count = queue_repo.bulk_reschedule_overdue()
-
-        assert count == 2
-        assert item_1.scheduled_for > now  # Should be ~22hr in future
-        assert item_2.scheduled_for > now  # Should be ~22hr in future after 3 bumps
-        mock_db.commit.assert_called_once()
-
-    def test_bulk_reschedule_overdue_no_items(self, queue_repo, mock_db):
-        """bulk_reschedule_overdue returns 0 when no items overdue."""
-        with patch.object(queue_repo, "get_overdue_pending", return_value=[]):
-            count = queue_repo.bulk_reschedule_overdue()
-
-        assert count == 0
-        mock_db.commit.assert_not_called()
-
-    def test_bulk_reschedule_item_far_in_past_needs_multiple_bumps(self, queue_repo, mock_db):
-        """An item scheduled 5 days ago needs 5 bumps of +24hr."""
-        now = datetime.utcnow()
-        item = MagicMock()
-        item.scheduled_for = now - timedelta(days=5, hours=1)  # 5 days + 1hr ago
-
-        with patch.object(queue_repo, "get_overdue_pending", return_value=[item]):
-            queue_repo.bulk_reschedule_overdue()
-
-        # After 6 bumps of 24hr, should be ~23hr in the future
-        assert item.scheduled_for > now
-        # Should be less than 24hr in the future (6*24 - 5*24 - 1 = 23hr)
-        assert item.scheduled_for < now + timedelta(hours=24)
 ```
 
 ### 5c. Updates to `tests/src/services/test_telegram_settings.py`
@@ -1025,9 +971,8 @@ Add under `## [Unreleased]`:
 - **Smart delivery reschedule** - When delivery is OFF, overdue queue items are automatically bumped +24 hours instead of piling up
   - Runs every minute in the scheduler loop for all paused tenants
   - Items far in the past get multiple +24hr bumps until they are in the future
-  - Immediate reschedule triggered when `/pause` is invoked
-  - New `QueueRepository.get_overdue_pending()` and `bulk_reschedule_overdue()` methods
-  - New `PostingService.reschedule_overdue_for_paused_chat()` method
+  - New `QueueRepository.get_overdue_pending()` query method
+  - New `PostingService.reschedule_overdue_for_paused_chat()` method (owns bump logic)
   - New `SettingsService.get_all_paused_chats()` / `ChatSettingsRepository.get_all_paused()` for scheduler loop
 ```
 
@@ -1127,8 +1072,9 @@ grep -rn '"Paused"\|"Active"' src/services/core/telegram_settings.py
 # 8. Verify Mini App button
 grep -n "WebAppInfo\|Full Settings" src/services/core/telegram_settings.py
 
-# 9. Verify bulk_reschedule_overdue method exists
-grep -n "def bulk_reschedule_overdue\|def get_overdue_pending" src/repositories/queue_repository.py
+# 9. Verify get_overdue_pending query and reschedule method exist
+grep -n "def get_overdue_pending" src/repositories/queue_repository.py
+grep -n "def reschedule_overdue_for_paused_chat" src/services/core/posting.py
 
 # 10. Verify scheduler loop has paused-chat reschedule pass
 grep -n "get_all_paused_chats\|reschedule_overdue_for_paused" src/main.py
@@ -1142,7 +1088,7 @@ grep -n "get_all_paused_chats\|reschedule_overdue_for_paused" src/main.py
 
 2. **Do NOT add a new database column** for the delivery state. The `is_paused` boolean is sufficient. We are only changing the UI label, not the data model.
 
-3. **Do NOT break `/pause` and `/resume` commands**. They still work exactly as before -- they toggle `is_paused`. The only difference is the response message text and the addition of immediate reschedule on pause.
+3. **Do NOT break `/pause` and `/resume` commands**. They still work exactly as before -- they toggle `is_paused`. The only difference is the response message text. The scheduler loop handles rescheduling, not the pause handler.
 
 4. **Do NOT put the reschedule logic inside `process_pending_posts()`**. That method is never called for paused tenants because `get_all_active_chats()` filters them out. The reschedule must happen in a separate pass in the scheduler loop.
 
@@ -1154,7 +1100,7 @@ grep -n "get_all_paused_chats\|reschedule_overdue_for_paused" src/main.py
 
 8. **Do NOT modify `src/api/routes/onboarding.py` or `src/api/static/onboarding/`**. Those are owned by Phases 02 and 03 respectively.
 
-9. **Do NOT use `update_scheduled_time()` in a loop** for the bulk reschedule. That method calls `commit()` after each update. Use `bulk_reschedule_overdue()` which commits once for all items.
+9. **Do NOT put the +24hr bump logic in the repository**. The repo provides `get_overdue_pending()` (pure query). The business rule (while loop adding 24hr) lives in `PostingService.reschedule_overdue_for_paused_chat()`.
 
 10. **Do NOT forget to update the existing `test_paused_toggle_shows_correct_state` test**. It currently looks for "Paused" in the button text. After this change, it needs to look for "Delivery" and "OFF" instead.
 
@@ -1162,7 +1108,7 @@ grep -n "get_all_paused_chats\|reschedule_overdue_for_paused" src/main.py
 
 ### Critical Files for Implementation
 - `/Users/chris/Projects/storyline-ai/src/services/core/telegram_settings.py` - Primary file: rename command header, add Mini App button, change delivery toggle label
-- `/Users/chris/Projects/storyline-ai/src/repositories/queue_repository.py` - Add `get_overdue_pending()` and `bulk_reschedule_overdue()` methods for smart reschedule
+- `/Users/chris/Projects/storyline-ai/src/repositories/queue_repository.py` - Add `get_overdue_pending()` query method for smart reschedule
 - `/Users/chris/Projects/storyline-ai/src/main.py` - Add paused-tenant reschedule pass to scheduler loop (critical architectural change)
 - `/Users/chris/Projects/storyline-ai/src/services/core/telegram_service.py` - Register `/setup` command and keep `/settings` alias
 - `/Users/chris/Projects/storyline-ai/src/services/core/telegram_commands.py` - Update `/pause`, `/resume`, `/help`, `/status` messages to delivery language, add immediate reschedule on pause

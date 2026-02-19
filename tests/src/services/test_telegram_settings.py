@@ -92,7 +92,7 @@ class TestBuildSettingsKeyboard:
             -100123
         )
 
-        assert "Bot Settings" in message
+        assert "Quick Setup" in message
         assert markup is not None
 
     def test_verbose_toggle_button_shows_state(self, mock_settings_handlers):
@@ -148,8 +148,8 @@ class TestBuildSettingsKeyboard:
         assert len(dry_run_buttons) == 1
         assert "✅" in dry_run_buttons[0].text
 
-    def test_paused_toggle_shows_correct_state(self, mock_settings_handlers):
-        """Test that pause button shows Paused vs Active."""
+    def test_delivery_toggle_shows_off_when_paused(self, mock_settings_handlers):
+        """Test that delivery button shows OFF when paused."""
         mock_settings_handlers.service.settings_service.get_settings_display.return_value = {
             "dry_run_mode": False,
             "enable_instagram_api": False,
@@ -170,11 +170,35 @@ class TestBuildSettingsKeyboard:
         _, markup = mock_settings_handlers.build_settings_message_and_keyboard(-100123)
 
         all_buttons = [btn for row in markup.inline_keyboard for btn in row]
-        pause_buttons = [
-            b for b in all_buttons if "Paused" in b.text or "Active" in b.text
-        ]
-        assert len(pause_buttons) == 1
-        assert "Paused" in pause_buttons[0].text
+        delivery_buttons = [b for b in all_buttons if "Delivery" in b.text]
+        assert len(delivery_buttons) == 1
+        assert "OFF" in delivery_buttons[0].text
+
+    def test_delivery_toggle_shows_on_when_active(self, mock_settings_handlers):
+        """Test that delivery button shows ON when not paused."""
+        mock_settings_handlers.service.settings_service.get_settings_display.return_value = {
+            "dry_run_mode": False,
+            "enable_instagram_api": False,
+            "is_paused": False,
+            "posts_per_day": 3,
+            "posting_hours_start": 9,
+            "posting_hours_end": 21,
+            "show_verbose_notifications": True,
+            "media_sync_enabled": False,
+            "media_source_type": None,
+            "media_source_root": None,
+        }
+        mock_settings_handlers.service.ig_account_service.get_accounts_for_display.return_value = {
+            "active_account_id": None,
+            "active_account_name": "Not selected",
+        }
+
+        _, markup = mock_settings_handlers.build_settings_message_and_keyboard(-100123)
+
+        all_buttons = [btn for row in markup.inline_keyboard for btn in row]
+        delivery_buttons = [b for b in all_buttons if "Delivery" in b.text]
+        assert len(delivery_buttons) == 1
+        assert "ON" in delivery_buttons[0].text
 
     def test_keyboard_has_schedule_buttons(self, mock_settings_handlers):
         """Test that keyboard includes Regenerate and +7 Days buttons."""
@@ -202,6 +226,65 @@ class TestBuildSettingsKeyboard:
         extend = [b for b in all_buttons if "+7 Days" in b.text]
         assert len(regenerate) == 1
         assert len(extend) == 1
+
+    @patch("src.services.core.telegram_settings.app_settings")
+    def test_mini_app_button_present_when_configured(
+        self, mock_app_settings, mock_settings_handlers
+    ):
+        """Test that 'Open Full Settings' button appears when OAUTH_REDIRECT_BASE_URL is set."""
+        mock_app_settings.OAUTH_REDIRECT_BASE_URL = "https://example.railway.app"
+        mock_settings_handlers.service.settings_service.get_settings_display.return_value = {
+            "dry_run_mode": False,
+            "enable_instagram_api": False,
+            "is_paused": False,
+            "posts_per_day": 3,
+            "posting_hours_start": 9,
+            "posting_hours_end": 21,
+            "show_verbose_notifications": True,
+            "media_sync_enabled": False,
+            "media_source_type": None,
+            "media_source_root": None,
+        }
+        mock_settings_handlers.service.ig_account_service.get_accounts_for_display.return_value = {
+            "active_account_id": None,
+            "active_account_name": "Not selected",
+        }
+
+        _, markup = mock_settings_handlers.build_settings_message_and_keyboard(-100123)
+
+        all_buttons = [btn for row in markup.inline_keyboard for btn in row]
+        mini_app_buttons = [b for b in all_buttons if "Full Settings" in b.text]
+        assert len(mini_app_buttons) == 1
+        assert mini_app_buttons[0].web_app is not None
+
+    @patch("src.services.core.telegram_settings.app_settings")
+    def test_mini_app_button_absent_when_not_configured(
+        self, mock_app_settings, mock_settings_handlers
+    ):
+        """Test that 'Open Full Settings' button is absent when OAUTH_REDIRECT_BASE_URL is None."""
+        mock_app_settings.OAUTH_REDIRECT_BASE_URL = None
+        mock_settings_handlers.service.settings_service.get_settings_display.return_value = {
+            "dry_run_mode": False,
+            "enable_instagram_api": False,
+            "is_paused": False,
+            "posts_per_day": 3,
+            "posting_hours_start": 9,
+            "posting_hours_end": 21,
+            "show_verbose_notifications": True,
+            "media_sync_enabled": False,
+            "media_source_type": None,
+            "media_source_root": None,
+        }
+        mock_settings_handlers.service.ig_account_service.get_accounts_for_display.return_value = {
+            "active_account_id": None,
+            "active_account_name": "Not selected",
+        }
+
+        _, markup = mock_settings_handlers.build_settings_message_and_keyboard(-100123)
+
+        all_buttons = [btn for row in markup.inline_keyboard for btn in row]
+        mini_app_buttons = [b for b in all_buttons if "Full Settings" in b.text]
+        assert len(mini_app_buttons) == 0
 
 
 @pytest.mark.unit
@@ -241,6 +324,7 @@ class TestSettingsCommand:
         mock_update.effective_chat = Mock(id=-100123)
         mock_update.message = AsyncMock()
         mock_update.message.message_id = 1
+        mock_update.message.text = "/settings"
 
         mock_context = Mock()
 
@@ -248,7 +332,7 @@ class TestSettingsCommand:
 
         mock_update.message.reply_text.assert_called_once()
         call_args = mock_update.message.reply_text.call_args
-        assert "Bot Settings" in call_args.args[0]
+        assert "Quick Setup" in call_args.args[0]
 
     async def test_handle_settings_toggle_updates_setting(self, mock_settings_handlers):
         """Test that toggling a setting calls settings_service.toggle_setting."""

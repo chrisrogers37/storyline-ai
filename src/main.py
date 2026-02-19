@@ -64,6 +64,20 @@ async def run_scheduler_loop(
                             f"Error processing chat {chat.telegram_chat_id}: {e}",
                             exc_info=True,
                         )
+                # Smart delivery reschedule for paused tenants
+                paused_chats = settings_service.get_all_paused_chats()
+                for chat in paused_chats:
+                    try:
+                        posting_service.reschedule_overdue_for_paused_chat(
+                            telegram_chat_id=chat.telegram_chat_id
+                        )
+                    except Exception as e:
+                        logger.error(
+                            f"Error rescheduling for paused chat "
+                            f"{chat.telegram_chat_id}: {e}",
+                            exc_info=True,
+                        )
+
             else:
                 # Legacy single-tenant fallback
                 result = await posting_service.process_pending_posts()

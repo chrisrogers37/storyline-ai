@@ -120,7 +120,7 @@ class TelegramCommandHandlers:
         last_posted = self._get_last_posted_display(recent_posts)
 
         dry_run_status = "🧪 ON" if settings.DRY_RUN_MODE else "🚀 OFF"
-        pause_status = "⏸️ PAUSED" if self.service.is_paused else "▶️ Active"
+        pause_status = "📦 Delivery OFF" if self.service.is_paused else "📦 Delivery ON"
         ig_status = self._get_instagram_api_status()
         sync_status_line = self._get_sync_status_line(chat_id)
 
@@ -344,9 +344,9 @@ class TelegramCommandHandlers:
             "/schedule N - Add N days to queue\n"
             "/reset - Reset queue (clear all pending)\n\n"
             "*Control Commands:*\n"
-            "/settings - View/toggle bot settings\n"
-            "/pause - Pause automatic posting\n"
-            "/resume - Resume posting\n"
+            "/setup - Quick settings + open full setup wizard\n"
+            "/pause - Turn delivery off (auto-reschedules queue)\n"
+            "/resume - Turn delivery on\n"
             "/dryrun - Toggle dry run mode\n"
             "/sync - Sync media from source\n"
             "/backfill - Backfill media from Instagram\n"
@@ -452,17 +452,18 @@ class TelegramCommandHandlers:
 
         if self.service.is_paused:
             await update.message.reply_text(
-                "⏸️ *Already Paused*\n\nAutomatic posting is already paused.\nUse /resume to restart.",
+                "📦 *Delivery Already OFF*\n\nDelivery is already turned off.\nUse /resume to turn it back on.",
                 parse_mode="Markdown",
             )
         else:
             self.service.set_paused(True, user)
             pending_count = self.service.queue_repo.count_pending()
             await update.message.reply_text(
-                f"⏸️ *Posting Paused*\n\n"
-                f"Automatic posting has been paused.\n"
-                f"📊 {pending_count} posts still in queue.\n\n"
-                f"Use /resume to restart posting.\n"
+                f"📦 *Delivery OFF*\n\n"
+                f"Automatic delivery has been turned off.\n"
+                f"📊 {pending_count} posts still in queue.\n"
+                f"Overdue items will be auto-rescheduled +24hr.\n\n"
+                f"Use /resume to turn delivery back on.\n"
                 f"Use /next to manually send posts.",
                 parse_mode="Markdown",
             )
@@ -482,7 +483,7 @@ class TelegramCommandHandlers:
 
         if not self.service.is_paused:
             await update.message.reply_text(
-                "▶️ *Already Running*\n\nAutomatic posting is already active.",
+                "📦 *Delivery Already ON*\n\nDelivery is already active.",
                 parse_mode="Markdown",
             )
         else:
@@ -511,7 +512,7 @@ class TelegramCommandHandlers:
                 ]
                 await update.message.reply_text(
                     f"⚠️ *{len(overdue)} Overdue Posts Found*\n\n"
-                    f"These posts were scheduled while paused:\n"
+                    f"These posts were scheduled while delivery was off:\n"
                     f"• {len(overdue)} overdue\n"
                     f"• {len(future)} still scheduled\n\n"
                     f"What would you like to do?",
@@ -521,8 +522,8 @@ class TelegramCommandHandlers:
             else:
                 self.service.set_paused(False, user)
                 await update.message.reply_text(
-                    f"▶️ *Posting Resumed*\n\n"
-                    f"Automatic posting is now active.\n"
+                    f"📦 *Delivery ON*\n\n"
+                    f"Automatic delivery is now active.\n"
                     f"📊 {len(future)} posts scheduled.",
                     parse_mode="Markdown",
                 )

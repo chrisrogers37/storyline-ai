@@ -474,7 +474,7 @@ class TestPauseCommand:
         # Should show paused message
         call_args = mock_update.message.reply_text.call_args
         message_text = call_args.args[0]
-        assert "Posting Paused" in message_text
+        assert "Delivery OFF" in message_text
         assert "10 posts" in message_text
 
     async def test_pause_when_already_paused(self, mock_command_handlers):
@@ -505,7 +505,7 @@ class TestPauseCommand:
 
         call_args = mock_update.message.reply_text.call_args
         message_text = call_args.args[0]
-        assert "Already Paused" in message_text
+        assert "Delivery Already OFF" in message_text
 
 
 @pytest.mark.unit
@@ -541,7 +541,7 @@ class TestResumeCommand:
 
         call_args = mock_update.message.reply_text.call_args
         message_text = call_args.args[0]
-        assert "Already Running" in message_text
+        assert "Delivery Already ON" in message_text
 
     async def test_resume_with_overdue_posts(self, mock_command_handlers):
         """Test /resume shows options when there are overdue posts."""
@@ -632,7 +632,7 @@ class TestResumeCommand:
 
         call_args = mock_update.message.reply_text.call_args
         message_text = call_args.args[0]
-        assert "Posting Resumed" in message_text
+        assert "Delivery ON" in message_text
 
 
 @pytest.mark.unit

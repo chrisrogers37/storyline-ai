@@ -398,15 +398,16 @@ Three tables work together for multi-account support:
 | `/help` | Show available commands | `telegram_commands.py` |
 | `/queue` | View pending scheduled posts | `telegram_commands.py` |
 | `/next` | Force-send next scheduled post | `telegram_commands.py` |
-| `/pause` | Pause automatic posting | `telegram_commands.py` |
-| `/resume` | Resume posting | `telegram_commands.py` |
+| `/pause` | Turn delivery OFF | `telegram_commands.py` |
+| `/resume` | Turn delivery ON | `telegram_commands.py` |
 | `/schedule N` | Create N days of posting schedule | `telegram_commands.py` |
 | `/stats` | Media library statistics | `telegram_commands.py` |
 | `/history N` | Recent post history | `telegram_commands.py` |
 | `/locks` | View permanently rejected items | `telegram_commands.py` |
 | `/reset` | Reset posting queue | `telegram_commands.py` |
 | `/cleanup` | Delete recent bot messages | `telegram_commands.py` |
-| `/settings` | Configure bot settings | `telegram_settings.py` |
+| `/setup` | Quick settings + open full setup wizard | `telegram_settings.py` |
+| `/settings` | Alias for /setup | `telegram_settings.py` |
 | `/dryrun` | Toggle dry-run mode | `telegram_commands.py` |
 | `/sync` | Trigger manual media sync | `telegram_commands.py` |
 | `/backfill` | Backfill media from Instagram | `telegram_commands.py` |

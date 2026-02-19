@@ -116,3 +116,21 @@ class ChatSettingsRepository(BaseRepository):
         )
         self.end_read_transaction()
         return result
+
+    def get_all_paused(self) -> List[ChatSettings]:
+        """Get all paused chat settings records.
+
+        Used by the scheduler loop to run smart delivery reschedule
+        on paused tenants (bumping overdue items +24hr).
+
+        Returns:
+            List of paused ChatSettings, ordered by created_at
+        """
+        result = (
+            self.db.query(ChatSettings)
+            .filter(ChatSettings.is_paused == True)  # noqa: E712
+            .order_by(ChatSettings.created_at.asc())
+            .all()
+        )
+        self.end_read_transaction()
+        return result

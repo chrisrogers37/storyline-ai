@@ -71,6 +71,27 @@ class QueueRepository(BaseRepository):
 
         return query.all()
 
+    def get_overdue_pending(
+        self, chat_settings_id: Optional[str] = None
+    ) -> List[PostingQueue]:
+        """Get all pending queue items whose scheduled_for time has passed.
+
+        Used by the smart delivery reschedule logic to find items that need
+        to be bumped forward when delivery is OFF.
+
+        Args:
+            chat_settings_id: Optional tenant filter
+
+        Returns:
+            List of overdue PostingQueue items, ordered by scheduled_for ASC
+        """
+        now = datetime.utcnow()
+        query = self.db.query(PostingQueue).filter(
+            and_(PostingQueue.status == "pending", PostingQueue.scheduled_for <= now)
+        )
+        query = self._apply_tenant_filter(query, PostingQueue, chat_settings_id)
+        return query.order_by(PostingQueue.scheduled_for.asc()).all()
+
     def get_all(
         self, status: Optional[str] = None, chat_settings_id: Optional[str] = None
     ) -> List[PostingQueue]:
