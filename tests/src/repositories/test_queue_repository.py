@@ -330,3 +330,37 @@ class TestQueueRepositoryTenantFiltering:
             mock_get_all.assert_called_once_with(
                 status="pending", chat_settings_id=self.TENANT_ID
             )
+
+    def test_get_overdue_pending_with_tenant(self, queue_repo, mock_db):
+        """get_overdue_pending passes chat_settings_id through tenant filter."""
+        mock_db.query.return_value.all.return_value = []
+        with patch.object(
+            queue_repo, "_apply_tenant_filter", wraps=queue_repo._apply_tenant_filter
+        ) as mock_filter:
+            queue_repo.get_overdue_pending(chat_settings_id=self.TENANT_ID)
+            mock_filter.assert_called_once()
+            assert mock_filter.call_args[0][2] == self.TENANT_ID
+
+
+@pytest.mark.unit
+class TestOverduePendingQuery:
+    """Tests for get_overdue_pending query method."""
+
+    def test_get_overdue_pending_returns_items(self, queue_repo, mock_db):
+        """get_overdue_pending returns items with scheduled_for in the past."""
+        mock_items = [MagicMock(status="pending"), MagicMock(status="pending")]
+        mock_query = mock_db.query.return_value
+        mock_query.all.return_value = mock_items
+
+        result = queue_repo.get_overdue_pending()
+
+        assert len(result) == 2
+        mock_db.query.assert_called_with(PostingQueue)
+
+    def test_get_overdue_pending_empty(self, queue_repo, mock_db):
+        """get_overdue_pending returns empty list when no overdue items."""
+        mock_db.query.return_value.all.return_value = []
+
+        result = queue_repo.get_overdue_pending()
+
+        assert result == []

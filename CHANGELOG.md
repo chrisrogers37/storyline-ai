@@ -9,10 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`/settings` renamed to `/setup`** - Primary command is now `/setup` with `/settings` kept as an alias. Bot command list updated: `/setup` = "Quick settings + open full setup wizard", `/settings` = "Alias for /setup". Header changed from "Bot Settings" to "Quick Setup".
+- **Delivery language replaces pause/resume language** - All user-facing text reframed around "Delivery ON/OFF" instead of "Paused/Active/Running". Affects `/pause`, `/resume`, `/status`, `/help`, `/settings` toggle, and resume callback messages.
 - **`/start` command always opens Mini App** - Returning users now see an "Open Storyline" button linking to a visual dashboard instead of a text command list. Text fallback retained when `OAUTH_REDIRECT_BASE_URL` is not configured.
 
 ### Added
 
+- **Smart delivery reschedule for paused tenants** - When delivery is OFF, the scheduler loop automatically bumps overdue queue items forward by +24hr increments until they're in the future. Prevents a flood of 50+ items when resuming after extended pause.
+  - New `QueueRepository.get_overdue_pending()` query method
+  - New `ChatSettingsRepository.get_all_paused()` query method
+  - New `SettingsService.get_all_paused_chats()` method
+  - New `PostingService.reschedule_overdue_for_paused_chat()` with +24hr bump logic
+  - Scheduler loop runs reschedule pass for all paused tenants every cycle
+- **Mini App button in settings keyboard** - When `OAUTH_REDIRECT_BASE_URL` is configured, the settings menu includes a "Full Setup Wizard" button that opens the Mini App directly
 - **Mini App home screen for returning users** - Dashboard view showing Instagram connection status, Google Drive connection, posting schedule, and queue status. Each section has an Edit button that jumps to the relevant setup step with a "Save & Return" flow.
 - **Expanded `/api/onboarding/init` response** - Now includes `is_paused`, `dry_run_mode`, `queue_count`, and `last_post_at` fields for the dashboard display
 - **"Run Full Setup Again" button** - Returning users can re-enter the full onboarding wizard from the home screen
