@@ -1,6 +1,7 @@
 """Tests for onboarding Mini App API endpoints."""
 
 import pytest
+from datetime import datetime
 from unittest.mock import Mock, patch
 from uuid import uuid4
 
@@ -41,6 +42,8 @@ def _mock_settings_obj(**overrides):
         onboarding_step=None,
         media_source_root=None,
         media_source_type=None,
+        is_paused=False,
+        dry_run_mode=True,
     )
     defaults.update(overrides)
     return Mock(**defaults)
@@ -264,6 +267,87 @@ class TestOnboardingInit:
         MockSettingsService.return_value.set_onboarding_step.assert_called_once_with(
             CHAT_ID, "welcome"
         )
+
+    def test_init_returns_dashboard_fields(self, client):
+        """Init response includes queue_count, last_post_at, is_paused, dry_run_mode."""
+        mock_settings = _mock_settings_obj(
+            onboarding_completed=True,
+            is_paused=False,
+            dry_run_mode=True,
+        )
+
+        with (
+            _mock_validate(),
+            patch(
+                "src.api.routes.onboarding.ChatSettingsRepository"
+            ) as MockSettingsRepo,
+            patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
+            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
+            patch("src.api.routes.onboarding.QueueRepository") as MockQueueRepo,
+            patch("src.api.routes.onboarding.HistoryRepository") as MockHistoryRepo,
+        ):
+            MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
+            MockSettingsRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.get_token_for_chat.return_value = None
+            MockTokenRepo.return_value.close = Mock()
+            MockIGService.return_value.get_active_account.return_value = None
+            MockIGService.return_value.close = Mock()
+            MockQueueRepo.return_value.count_pending.return_value = 5
+            MockQueueRepo.return_value.close = Mock()
+
+            mock_post = Mock()
+            mock_post.posted_at = datetime(2026, 2, 18, 10, 30, 0)
+            MockHistoryRepo.return_value.get_recent_posts.return_value = [mock_post]
+            MockHistoryRepo.return_value.close = Mock()
+
+            response = client.post(
+                "/api/onboarding/init",
+                json={"init_data": "test", "chat_id": CHAT_ID},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["setup_state"]["is_paused"] is False
+        assert data["setup_state"]["dry_run_mode"] is True
+        assert data["setup_state"]["queue_count"] == 5
+        assert data["setup_state"]["last_post_at"] is not None
+
+    def test_init_dashboard_fields_default_on_error(self, client):
+        """Queue/history errors don't break the init response."""
+        mock_settings = _mock_settings_obj(
+            onboarding_completed=True,
+            is_paused=False,
+            dry_run_mode=False,
+        )
+
+        with (
+            _mock_validate(),
+            patch(
+                "src.api.routes.onboarding.ChatSettingsRepository"
+            ) as MockSettingsRepo,
+            patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
+            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
+            patch(
+                "src.api.routes.onboarding.QueueRepository",
+                side_effect=Exception("DB connection failed"),
+            ),
+        ):
+            MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
+            MockSettingsRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.get_token_for_chat.return_value = None
+            MockTokenRepo.return_value.close = Mock()
+            MockIGService.return_value.get_active_account.return_value = None
+            MockIGService.return_value.close = Mock()
+
+            response = client.post(
+                "/api/onboarding/init",
+                json={"init_data": "test", "chat_id": CHAT_ID},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["setup_state"]["queue_count"] == 0
+        assert data["setup_state"]["last_post_at"] is None
 
 
 # =============================================================================

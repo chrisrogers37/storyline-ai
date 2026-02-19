@@ -1513,8 +1513,10 @@ class TestStartCommand:
         call_args = mock_update.message.reply_text.call_args
         assert "Setup Wizard" in str(call_args)
 
-    async def test_start_returning_user_shows_dashboard(self, mock_command_handlers):
-        """Returning user (onboarding completed) sees the dashboard."""
+    async def test_start_returning_user_shows_webapp_button(
+        self, mock_command_handlers
+    ):
+        """Returning user (onboarding completed) sees 'Open Storyline' Mini App button."""
         handlers = mock_command_handlers
         service = handlers.service
 
@@ -1536,7 +1538,46 @@ class TestStartCommand:
             MockSettings.return_value.get_settings.return_value = mock_chat_settings
             MockSettings.return_value.close = Mock()
 
-            await handlers.handle_start(mock_update, Mock())
+            with patch(
+                "src.services.core.telegram_commands.settings"
+            ) as mock_app_settings:
+                mock_app_settings.OAUTH_REDIRECT_BASE_URL = "https://example.com"
+
+                await handlers.handle_start(mock_update, Mock())
+
+        call_args = mock_update.message.reply_text.call_args
+        assert "Open Storyline" in str(call_args)
+        assert "Welcome back" in str(call_args)
+
+    async def test_start_no_oauth_url_shows_text_fallback(self, mock_command_handlers):
+        """When OAUTH_REDIRECT_BASE_URL is not set, show text command list."""
+        handlers = mock_command_handlers
+        service = handlers.service
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        service.user_repo.get_by_telegram_id.return_value = mock_user
+
+        mock_update = AsyncMock()
+        mock_update.effective_user.id = 12345
+        mock_update.effective_user.first_name = "Test"
+        mock_update.effective_user.username = "testuser"
+        mock_update.effective_chat.id = -100123
+        mock_update.message.message_id = 1
+
+        with patch(
+            "src.services.core.settings_service.SettingsService"
+        ) as MockSettings:
+            mock_chat_settings = Mock(onboarding_completed=True)
+            MockSettings.return_value.get_settings.return_value = mock_chat_settings
+            MockSettings.return_value.close = Mock()
+
+            with patch(
+                "src.services.core.telegram_commands.settings"
+            ) as mock_app_settings:
+                mock_app_settings.OAUTH_REDIRECT_BASE_URL = None
+
+                await handlers.handle_start(mock_update, Mock())
 
         call_text = mock_update.message.reply_text.call_args[0][0]
         assert "/queue" in call_text
