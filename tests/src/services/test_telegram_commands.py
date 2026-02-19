@@ -1244,9 +1244,7 @@ class TestStatusCommand:
                 "src.services.core.media_sync.MediaSyncService",
                 side_effect=Exception("not configured"),
             ),
-            patch(
-                "src.repositories.token_repository.TokenRepository"
-            ) as MockTokenRepo,
+            patch("src.repositories.token_repository.TokenRepository") as MockTokenRepo,
         ):
             mock_settings.DRY_RUN_MODE = False
             mock_settings.ENABLE_INSTAGRAM_API = False
@@ -1301,8 +1299,8 @@ class TestSetupStatus:
     def test_instagram_check_failure(self, mock_command_handlers):
         """Test Instagram check handles exceptions gracefully."""
         handlers = mock_command_handlers
-        handlers.service.ig_account_service.get_active_account.side_effect = (
-            Exception("DB error")
+        handlers.service.ig_account_service.get_active_account.side_effect = Exception(
+            "DB error"
         )
 
         line, ok = handlers._check_instagram_setup(-100123)
@@ -1497,9 +1495,7 @@ class TestStatusIncludesSetup:
                 "src.services.core.media_sync.MediaSyncService",
                 side_effect=Exception("not configured"),
             ),
-            patch(
-                "src.repositories.token_repository.TokenRepository"
-            ) as MockTokenRepo,
+            patch("src.repositories.token_repository.TokenRepository") as MockTokenRepo,
         ):
             mock_settings.DRY_RUN_MODE = False
             mock_settings.ENABLE_INSTAGRAM_API = False

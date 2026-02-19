@@ -257,9 +257,7 @@ class TelegramCommandHandlers:
     def _check_instagram_setup(self, chat_id: int) -> tuple[str, bool]:
         """Check Instagram account connection for setup status."""
         try:
-            active_account = self.service.ig_account_service.get_active_account(
-                chat_id
-            )
+            active_account = self.service.ig_account_service.get_active_account(chat_id)
             if active_account and active_account.instagram_username:
                 return (
                     f"├── 📸 Instagram: ✅ Connected (@{active_account.instagram_username})",
@@ -1178,4 +1176,3 @@ class TelegramCommandHandlers:
             telegram_chat_id=chat_id,
             telegram_message_id=update.message.message_id,
         )
-
