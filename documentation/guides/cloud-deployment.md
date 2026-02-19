@@ -234,7 +234,6 @@ settings - Configure bot settings
 dryrun - Toggle dry-run mode
 sync - Trigger manual media sync
 connect - Connect Instagram account
-connect_drive - Connect Google Drive
 ```
 
 4. Add the bot as admin to your Telegram channel/group
@@ -286,7 +285,7 @@ Google Drive is the recommended media source for cloud deployments.
 
 ### How It Works (Post-Phase 05)
 
-1. User sends `/connect_drive` in Telegram (or uses the onboarding wizard)
+1. User connects Google Drive via the onboarding wizard (`/start`)
 2. Bot replies with "Connect Google Drive" button (OAuth link)
 3. User clicks, authorizes Google account access
 4. Callback exchanges code for tokens, stores encrypted per-tenant in DB
@@ -395,5 +394,5 @@ Use the Telegram bot itself as a health indicator:
 10. [ ] Deploy and verify bot responds to `/start`
 11. [ ] Test onboarding wizard opens from `/start`
 12. [ ] Test Instagram OAuth flow (via `/connect` or wizard)
-13. [ ] Test Google Drive OAuth flow (via `/connect_drive` or wizard)
+13. [ ] Test Google Drive OAuth flow (via onboarding wizard)
 14. [ ] Set `DRY_RUN_MODE=false` when ready for live posting
