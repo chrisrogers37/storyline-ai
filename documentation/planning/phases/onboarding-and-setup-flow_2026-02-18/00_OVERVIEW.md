@@ -12,7 +12,7 @@
 
 | # | Phase | Impact | Effort | Risk | PR |
 |---|-------|--------|--------|------|----|
-| 01 | [Per-Chat Media Source Columns](01_per_chat_media_source_columns.md) | High | Low | Low | |
+| 01 | [Per-Chat Media Source Columns](01_per_chat_media_source_columns.md) | High | Low | Low | #62 |
 | 02 | [Complete Mini App Onboarding Wizard](02_complete_mini_app_wizard.md) | High | Medium | Low | |
 | 03 | [Mini App Home Screen for Returning Users](03_mini_app_home_screen.md) | High | Medium | Low | |
 | 04 | [`/setup` Command + Smart Delivery Toggle](04_setup_command_delivery_toggle.md) | High | Medium | Medium | |
