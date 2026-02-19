@@ -251,3 +251,14 @@ class SettingsService(BaseService):
             List of ChatSettings records where is_paused=False
         """
         return self.settings_repo.get_all_active()
+
+    def get_all_paused_chats(self) -> List[ChatSettings]:
+        """Get all paused chat settings.
+
+        Used by the scheduler loop to run smart delivery reschedule
+        on paused tenants.
+
+        Returns:
+            List of ChatSettings records where is_paused=True
+        """
+        return self.settings_repo.get_all_paused()

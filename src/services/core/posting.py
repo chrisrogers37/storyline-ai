@@ -1,7 +1,7 @@
 """Posting service - orchestrate the posting process."""
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 from src.services.base_service import BaseService
@@ -329,6 +329,46 @@ class PostingService(BaseService):
             self.set_result_summary(run_id, result)
 
             return result
+
+    def reschedule_overdue_for_paused_chat(self, telegram_chat_id: int) -> dict:
+        """Reschedule overdue queue items for a paused (delivery OFF) tenant.
+
+        When delivery is OFF, items whose scheduled_for passes are bumped
+        +24 hours (repeatedly until in the future). This keeps the queue
+        valid without losing any items.
+
+        Called by the scheduler loop for each paused tenant.
+
+        Args:
+            telegram_chat_id: The tenant's Telegram chat ID
+
+        Returns:
+            Dict with results: {"rescheduled": int, "chat_id": int}
+        """
+        chat_settings = self._get_chat_settings(telegram_chat_id)
+        chat_settings_id = str(chat_settings.id) if chat_settings else None
+
+        overdue_items = self.queue_repo.get_overdue_pending(
+            chat_settings_id=chat_settings_id
+        )
+        if not overdue_items:
+            return {"rescheduled": 0, "chat_id": telegram_chat_id}
+
+        now = datetime.utcnow()
+        for item in overdue_items:
+            while item.scheduled_for <= now:
+                item.scheduled_for = item.scheduled_for + timedelta(hours=24)
+
+        self.queue_repo.db.commit()
+        rescheduled = len(overdue_items)
+
+        if rescheduled > 0:
+            logger.info(
+                f"[delivery=OFF, chat={telegram_chat_id}] "
+                f"Rescheduled {rescheduled} overdue items +24hr"
+            )
+
+        return {"rescheduled": rescheduled, "chat_id": telegram_chat_id}
 
     async def _post_via_telegram(self, queue_item) -> bool:
         """
