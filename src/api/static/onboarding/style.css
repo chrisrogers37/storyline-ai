@@ -395,6 +395,11 @@ h2 {
     margin-top: 12px;
 }
 
+/* Indexing result success indicator */
+.result-success {
+    border-left: 3px solid #22c55e;
+}
+
 .hidden {
     display: none !important;
 }

@@ -34,6 +34,11 @@ class MediaFolderRequest(BaseModel):
     folder_url: str
 
 
+class StartIndexingRequest(BaseModel):
+    init_data: str
+    chat_id: int
+
+
 class ScheduleRequest(BaseModel):
     init_data: str
     chat_id: int
@@ -107,15 +112,40 @@ def _get_setup_state(telegram_chat_id: int) -> dict:
             if gdrive_token.token_metadata:
                 gdrive_email = gdrive_token.token_metadata.get("email")
 
+        # Check media folder configuration
+        media_folder_configured = bool(chat_settings.media_source_root)
+        media_folder_id = chat_settings.media_source_root
+
+        # Check if media has been indexed
+        media_count = 0
+        media_indexed = False
+        if media_folder_configured:
+            from src.repositories.media_repository import MediaRepository
+
+            media_repo = MediaRepository()
+            try:
+                active_items = media_repo.get_active_by_source_type(
+                    "google_drive", chat_settings_id=chat_settings_id
+                )
+                media_count = len(active_items)
+                media_indexed = media_count > 0
+            finally:
+                media_repo.close()
+
         return {
             "instagram_connected": instagram_connected,
             "instagram_username": instagram_username,
             "gdrive_connected": gdrive_connected,
             "gdrive_email": gdrive_email,
+            "media_folder_configured": media_folder_configured,
+            "media_folder_id": media_folder_id,
+            "media_indexed": media_indexed,
+            "media_count": media_count,
             "posts_per_day": chat_settings.posts_per_day,
             "posting_hours_start": chat_settings.posting_hours_start,
             "posting_hours_end": chat_settings.posting_hours_end,
             "onboarding_completed": chat_settings.onboarding_completed,
+            "onboarding_step": chat_settings.onboarding_step,
         }
     finally:
         settings_repo.close()
@@ -131,6 +161,17 @@ async def onboarding_init(request: InitRequest):
     user_info = _validate_request(request.init_data, request.chat_id)
 
     setup_state = _get_setup_state(request.chat_id)
+
+    # Set initial onboarding step if not yet started
+    if not setup_state.get("onboarding_completed") and not setup_state.get(
+        "onboarding_step"
+    ):
+        settings_service = SettingsService()
+        try:
+            settings_service.set_onboarding_step(request.chat_id, "welcome")
+        finally:
+            settings_service.close()
+        setup_state["onboarding_step"] = "welcome"
 
     return {
         "chat_id": request.chat_id,
@@ -225,6 +266,8 @@ async def onboarding_media_folder(request: MediaFolderRequest):
             request.chat_id, "media_source_type", "google_drive"
         )
         settings_service.update_setting(request.chat_id, "media_source_root", folder_id)
+        settings_service.update_setting(request.chat_id, "media_sync_enabled", True)
+        settings_service.set_onboarding_step(request.chat_id, "media_folder")
     finally:
         settings_service.close()
 
@@ -232,6 +275,69 @@ async def onboarding_media_folder(request: MediaFolderRequest):
         "folder_id": folder_id,
         "file_count": file_count,
         "categories": sorted(categories),
+        "saved": True,
+    }
+
+
+@router.post("/start-indexing")
+async def onboarding_start_indexing(request: StartIndexingRequest):
+    """Trigger media indexing for this chat's configured folder.
+
+    Requires that media-folder has already been validated and saved.
+    Calls MediaSyncService.sync() with the chat's per-tenant config.
+    """
+    _validate_request(request.init_data, request.chat_id)
+
+    settings_repo = ChatSettingsRepository()
+    try:
+        chat_settings = settings_repo.get_or_create(request.chat_id)
+        source_type = chat_settings.media_source_type
+        source_root = chat_settings.media_source_root
+    finally:
+        settings_repo.close()
+
+    if not source_root:
+        raise HTTPException(
+            status_code=400,
+            detail="No media folder configured. Complete the media folder step first.",
+        )
+
+    from src.services.core.media_sync import MediaSyncService
+
+    sync_service = MediaSyncService()
+    try:
+        result = sync_service.sync(
+            source_type=source_type,
+            source_root=source_root,
+            triggered_by="onboarding",
+            telegram_chat_id=request.chat_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Media indexing failed during onboarding: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Media indexing failed. Please try again or use /sync later.",
+        )
+    finally:
+        sync_service.close()
+
+    # Update onboarding step
+    step_service = SettingsService()
+    try:
+        step_service.set_onboarding_step(request.chat_id, "indexing")
+    finally:
+        step_service.close()
+
+    return {
+        "indexed": True,
+        "new": result.new,
+        "updated": result.updated,
+        "unchanged": result.unchanged,
+        "deactivated": result.deactivated,
+        "errors": result.errors,
+        "total_processed": result.total_processed,
     }
 
 
@@ -251,6 +357,7 @@ async def onboarding_schedule(request: ScheduleRequest):
         settings_service.update_setting(
             request.chat_id, "posting_hours_end", request.posting_hours_end
         )
+        settings_service.set_onboarding_step(request.chat_id, "schedule")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     finally:
@@ -265,11 +372,24 @@ async def onboarding_schedule(request: ScheduleRequest):
 
 @router.post("/complete")
 async def onboarding_complete(request: CompleteRequest):
-    """Mark onboarding as finished, optionally create initial schedule."""
+    """Mark onboarding as finished, auto-configure dependent settings."""
     _validate_request(request.init_data, request.chat_id)
 
     settings_service = SettingsService()
     try:
+        # Auto-configure dependent settings based on what was connected
+        setup_state = _get_setup_state(request.chat_id)
+
+        if setup_state["instagram_connected"]:
+            settings_service.update_setting(
+                request.chat_id, "enable_instagram_api", True
+            )
+
+        if setup_state.get("media_folder_configured"):
+            settings_service.update_setting(request.chat_id, "media_sync_enabled", True)
+
+        # NOTE: dry_run_mode stays True. User flips it manually later.
+
         settings_service.complete_onboarding(request.chat_id)
     finally:
         settings_service.close()
