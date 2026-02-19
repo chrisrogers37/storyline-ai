@@ -7,8 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`/start` command always opens Mini App** - Returning users now see an "Open Storyline" button linking to a visual dashboard instead of a text command list. Text fallback retained when `OAUTH_REDIRECT_BASE_URL` is not configured.
+
 ### Added
 
+- **Mini App home screen for returning users** - Dashboard view showing Instagram connection status, Google Drive connection, posting schedule, and queue status. Each section has an Edit button that jumps to the relevant setup step with a "Save & Return" flow.
+- **Expanded `/api/onboarding/init` response** - Now includes `is_paused`, `dry_run_mode`, `queue_count`, and `last_post_at` fields for the dashboard display
+- **"Run Full Setup Again" button** - Returning users can re-enter the full onboarding wizard from the home screen
 - **Onboarding wizard completion** - Mini App wizard now fully functional end-to-end
   - Media folder validation saves `media_source_type`, `media_source_root`, and `media_sync_enabled` to `chat_settings`
   - New `/api/onboarding/start-indexing` endpoint triggers media sync during wizard
