@@ -1,7 +1,8 @@
 # Phase 04: `/setup` Command + Smart Delivery Toggle
 
-**Status:** 🔧 IN PROGRESS
+**Status:** ✅ COMPLETE
 **Started:** 2026-02-19
+**Completed:** 2026-02-19
 
 ## Onboarding and Setup Flow -- Phase 04 Implementation Plan
 
