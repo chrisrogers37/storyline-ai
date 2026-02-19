@@ -6,6 +6,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from src.repositories.chat_settings_repository import ChatSettingsRepository
+from src.repositories.history_repository import HistoryRepository
+from src.repositories.queue_repository import QueueRepository
 from src.repositories.token_repository import TokenRepository
 from src.services.core.instagram_account_service import InstagramAccountService
 from src.services.core.settings_service import SettingsService
@@ -132,6 +134,27 @@ def _get_setup_state(telegram_chat_id: int) -> dict:
             finally:
                 media_repo.close()
 
+        # Dashboard data: queue count and last post time
+        queue_count = 0
+        last_post_at = None
+        try:
+            queue_repo = QueueRepository()
+            history_repo = HistoryRepository()
+            try:
+                queue_count = queue_repo.count_pending(
+                    chat_settings_id=chat_settings_id
+                )
+                recent_posts = history_repo.get_recent_posts(
+                    hours=720, chat_settings_id=chat_settings_id
+                )
+                if recent_posts:
+                    last_post_at = recent_posts[0].posted_at.isoformat()
+            finally:
+                queue_repo.close()
+                history_repo.close()
+        except Exception:
+            logger.debug("Failed to fetch queue/history for onboarding init")
+
         return {
             "instagram_connected": instagram_connected,
             "instagram_username": instagram_username,
@@ -146,6 +169,10 @@ def _get_setup_state(telegram_chat_id: int) -> dict:
             "posting_hours_end": chat_settings.posting_hours_end,
             "onboarding_completed": chat_settings.onboarding_completed,
             "onboarding_step": chat_settings.onboarding_step,
+            "is_paused": chat_settings.is_paused,
+            "dry_run_mode": chat_settings.dry_run_mode,
+            "queue_count": queue_count,
+            "last_post_at": last_post_at,
         }
     finally:
         settings_repo.close()

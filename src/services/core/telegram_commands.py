@@ -48,31 +48,45 @@ class TelegramCommandHandlers:
         finally:
             settings_service.close()
 
-        if not onboarding_done and settings.OAUTH_REDIRECT_BASE_URL:
-            # New user — show setup wizard button
+        if settings.OAUTH_REDIRECT_BASE_URL:
+            # Always show Mini App button — app decides what to render
             webapp_url = (
                 f"{settings.OAUTH_REDIRECT_BASE_URL}/webapp/onboarding"
                 f"?chat_id={chat_id}"
             )
+
+            if onboarding_done:
+                button_text = "Open Storyline"
+                message_text = (
+                    "Welcome back to *Storyline AI*\\!\n\n"
+                    "Tap the button below to view your dashboard "
+                    "and manage your settings\\."
+                )
+            else:
+                button_text = "Open Setup Wizard"
+                message_text = (
+                    "Welcome to *Storyline AI*\\!\n\n"
+                    "Let's get you set up\\. Tap the button below to "
+                    "connect your accounts and configure your posting schedule\\."
+                )
+
             keyboard = InlineKeyboardMarkup(
                 [
                     [
                         InlineKeyboardButton(
-                            "Open Setup Wizard",
+                            button_text,
                             web_app=WebAppInfo(url=webapp_url),
                         )
                     ]
                 ]
             )
             await update.message.reply_text(
-                "Welcome to *Storyline AI*\\!\n\n"
-                "Let's get you set up\\. Tap the button below to "
-                "connect your accounts and configure your posting schedule\\.",
+                message_text,
                 parse_mode="MarkdownV2",
                 reply_markup=keyboard,
             )
         else:
-            # Returning user — show dashboard
+            # Fallback when OAUTH_REDIRECT_BASE_URL not configured
             await update.message.reply_text(
                 "👋 *Storyline AI Bot*\n\n"
                 "Commands:\n"
