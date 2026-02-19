@@ -3,6 +3,7 @@
 from sqlalchemy import (
     Column,
     String,
+    Text,
     Integer,
     Boolean,
     BigInteger,
@@ -50,6 +51,12 @@ class ChatSettings(Base):
 
     # Media sync (Phase 04 Cloud Media)
     media_sync_enabled = Column(Boolean, default=False)
+
+    # Per-chat media source configuration (NULL = use global env var fallback)
+    media_source_type = Column(String(50), nullable=True)  # 'local' or 'google_drive'
+    media_source_root = Column(
+        Text, nullable=True
+    )  # path (local) or folder ID (google_drive)
 
     # Active Instagram account (for multi-account support)
     active_instagram_account_id = Column(

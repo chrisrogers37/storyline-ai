@@ -255,11 +255,13 @@ class TestOnboardingMediaFolder:
             patch(
                 "src.services.integrations.google_drive.GoogleDriveService"
             ) as MockGDrive,
+            patch("src.api.routes.onboarding.SettingsService") as MockSettings,
         ):
             mock_provider = Mock()
             mock_provider.list_files.return_value = mock_files
             MockGDrive.return_value.get_provider_for_chat.return_value = mock_provider
             MockGDrive.return_value.close = Mock()
+            MockSettings.return_value.close = Mock()
 
             response = client.post(
                 "/api/onboarding/media-folder",
@@ -276,6 +278,13 @@ class TestOnboardingMediaFolder:
         assert data["file_count"] == 3
         assert "memes" in data["categories"]
         assert "merch" in data["categories"]
+        # Verify folder config was saved to per-chat settings
+        MockSettings.return_value.update_setting.assert_any_call(
+            CHAT_ID, "media_source_type", "google_drive"
+        )
+        MockSettings.return_value.update_setting.assert_any_call(
+            CHAT_ID, "media_source_root", "abc123"
+        )
 
     def test_invalid_folder_url_returns_400(self, client):
         """Non-Drive URL returns 400."""

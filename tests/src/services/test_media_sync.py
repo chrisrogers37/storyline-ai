@@ -523,6 +523,23 @@ class TestMediaSyncServiceProviderCreation:
 
     @patch("src.services.core.media_sync.settings")
     @patch("src.services.core.media_sync.MediaSourceFactory")
+    def test_create_provider_google_drive_with_chat_id(
+        self, mock_factory, mock_settings, sync_service
+    ):
+        """Per-chat telegram_chat_id overrides global TELEGRAM_CHANNEL_ID."""
+        mock_settings.TELEGRAM_CHANNEL_ID = -100123456789
+        sync_service._create_provider(
+            "google_drive", "folder_xyz", telegram_chat_id=-100999
+        )
+
+        mock_factory.create.assert_called_once_with(
+            "google_drive",
+            root_folder_id="folder_xyz",
+            telegram_chat_id=-100999,
+        )
+
+    @patch("src.services.core.media_sync.settings")
+    @patch("src.services.core.media_sync.MediaSourceFactory")
     def test_sync_local_fallback_to_media_dir(
         self, mock_factory, mock_settings, sync_service
     ):
@@ -674,3 +691,58 @@ class TestMediaSyncServiceSettingsResolution:
         sync_service.sync(source_root="/custom/path")
 
         mock_factory.create.assert_called_once_with("local", base_path="/custom/path")
+
+    @patch("src.services.core.media_sync.settings")
+    @patch("src.services.core.media_sync.MediaSourceFactory")
+    def test_sync_with_telegram_chat_id_reads_per_chat_config(
+        self, mock_factory, mock_settings, sync_service
+    ):
+        """When telegram_chat_id is provided, reads per-chat config via SettingsService."""
+        mock_settings.MEDIA_SOURCE_TYPE = "local"
+        mock_settings.MEDIA_SOURCE_ROOT = "/default"
+        mock_settings.MEDIA_DIR = "/media"
+        mock_settings.TELEGRAM_CHANNEL_ID = -100123456789
+
+        mock_provider = Mock()
+        mock_factory.create.return_value = mock_provider
+        mock_provider.is_configured.return_value = True
+        mock_provider.list_files.return_value = []
+        sync_service.media_repo.get_active_by_source_type.return_value = []
+
+        with patch(
+            "src.services.core.settings_service.SettingsService"
+        ) as MockSettingsSvc:
+            mock_svc_instance = MockSettingsSvc.return_value
+            mock_svc_instance.get_media_source_config.return_value = (
+                "google_drive",
+                "per_chat_folder",
+            )
+
+            sync_service.sync(triggered_by="scheduler", telegram_chat_id=-100999)
+
+        mock_svc_instance.get_media_source_config.assert_called_once_with(-100999)
+        mock_svc_instance.close.assert_called_once()
+
+    @patch("src.services.core.media_sync.settings")
+    @patch("src.services.core.media_sync.MediaSourceFactory")
+    def test_sync_explicit_params_override_per_chat_config(
+        self, mock_factory, mock_settings, sync_service
+    ):
+        """Explicit source_type/source_root params override per-chat config."""
+        mock_settings.MEDIA_SOURCE_TYPE = "local"
+        mock_settings.MEDIA_SOURCE_ROOT = "/default"
+        mock_settings.MEDIA_DIR = "/media"
+
+        mock_provider = Mock()
+        mock_factory.create.return_value = mock_provider
+        mock_provider.is_configured.return_value = True
+        mock_provider.list_files.return_value = []
+        sync_service.media_repo.get_active_by_source_type.return_value = []
+
+        sync_service.sync(
+            source_type="local",
+            source_root="/explicit/path",
+            telegram_chat_id=-100999,
+        )
+
+        mock_factory.create.assert_called_once_with("local", base_path="/explicit/path")

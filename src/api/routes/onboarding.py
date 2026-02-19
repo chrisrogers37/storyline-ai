@@ -218,7 +218,15 @@ async def onboarding_media_folder(request: MediaFolderRequest):
     finally:
         gdrive_service.close()
 
-    # TODO: Store folder_id in chat_settings when media_source_root column exists
+    # Persist folder config to per-chat settings
+    settings_service = SettingsService()
+    try:
+        settings_service.update_setting(
+            request.chat_id, "media_source_type", "google_drive"
+        )
+        settings_service.update_setting(request.chat_id, "media_source_root", folder_id)
+    finally:
+        settings_service.close()
 
     return {
         "folder_id": folder_id,

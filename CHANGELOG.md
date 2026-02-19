@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Per-chat media source configuration** - `media_source_type` and `media_source_root` columns on `chat_settings` table
+  - Each Telegram chat can now have its own media source (local path or Google Drive folder ID)
+  - `NULL` values fall back to global `MEDIA_SOURCE_TYPE` / `MEDIA_SOURCE_ROOT` env vars (backward compatible)
+  - New `SettingsService.get_media_source_config()` resolves per-chat config with env var fallback
+  - `MediaSyncService.sync()` accepts `telegram_chat_id` for per-chat sync
+  - Onboarding media-folder endpoint now saves selected folder to chat settings
+  - Migration: `scripts/migrations/017_add_media_source_to_chat_settings.sql`
+
 ### Fixed
 
 - **Google Drive media sync auth** - Media sync now passes tenant chat ID when creating Google Drive provider, enabling per-tenant OAuth credential lookup instead of falling back to non-existent service account

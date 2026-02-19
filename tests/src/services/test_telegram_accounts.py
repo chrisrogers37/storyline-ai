@@ -292,6 +292,8 @@ class TestAccountSelectionMenu:
             "posting_hours_end": 21,
             "show_verbose_notifications": True,
             "media_sync_enabled": False,
+            "media_source_type": None,
+            "media_source_root": None,
         }
         mock_account_handlers.service.ig_account_service.get_accounts_for_display.return_value = {
             "active_account_id": "acc1",
