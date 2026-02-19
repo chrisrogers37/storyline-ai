@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from src.config.constants import (
     MAX_POSTING_HOUR,
@@ -12,6 +12,7 @@ from src.config.constants import (
     MIN_POSTING_HOUR,
     MIN_POSTS_PER_DAY,
 )
+from src.config.settings import settings as app_settings
 from src.services.core.telegram_utils import CANCEL_KEYBOARD, clear_settings_edit_state
 from src.utils.logger import logger
 
@@ -40,7 +41,7 @@ class TelegramSettingsHandlers:
         account_data = self.service.ig_account_service.get_accounts_for_display(chat_id)
 
         message = (
-            "⚙️ *Bot Settings*\n\n"
+            "⚙️ *Quick Setup*\n\n"
             "_Regenerate: Clears queue, creates new schedule_\n"
             "_+7 Days: Extends existing queue_"
         )
@@ -62,7 +63,9 @@ class TelegramSettingsHandlers:
             ],
             [
                 InlineKeyboardButton(
-                    "⏸️ Paused" if settings_data["is_paused"] else "▶️ Active",
+                    "📦 Delivery: ❌ OFF"
+                    if settings_data["is_paused"]
+                    else "📦 Delivery: ✅ ON",
                     callback_data="settings_toggle:is_paused",
                 ),
             ],
@@ -106,8 +109,26 @@ class TelegramSettingsHandlers:
                     "📅 +7 Days", callback_data="schedule_action:extend"
                 ),
             ],
-            [InlineKeyboardButton("❌ Close", callback_data="settings_close")],
         ]
+
+        # "Open Full Settings" button (only if Mini App URL is configured)
+        if app_settings.OAUTH_REDIRECT_BASE_URL:
+            webapp_url = (
+                f"{app_settings.OAUTH_REDIRECT_BASE_URL}/webapp/onboarding"
+                f"?chat_id={chat_id}"
+            )
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        "🔧 Open Full Settings",
+                        web_app=WebAppInfo(url=webapp_url),
+                    )
+                ]
+            )
+
+        keyboard.append(
+            [InlineKeyboardButton("❌ Close", callback_data="settings_close")]
+        )
 
         return message, InlineKeyboardMarkup(keyboard)
 
@@ -116,10 +137,13 @@ class TelegramSettingsHandlers:
         user = self.service._get_or_create_user(update.effective_user)
         chat_id = update.effective_chat.id
 
-        # Log interaction
+        # Log the actual command used (could be /setup or /settings alias)
+        command_text = (
+            update.message.text.split()[0] if update.message.text else "/setup"
+        )
         self.service.interaction_service.log_command(
             user_id=str(user.id),
-            command="/settings",
+            command=command_text,
             telegram_chat_id=chat_id,
             telegram_message_id=update.message.message_id,
         )

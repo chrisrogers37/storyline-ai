@@ -142,6 +142,7 @@ class TelegramService(BaseService):
             "connect": self.commands.handle_connect,
             "connect_drive": self.commands.handle_connect_drive,
             "settings": self.settings_handler.handle_settings,
+            "setup": self.settings_handler.handle_settings,
         }
         for cmd, handler in command_map.items():
             self.application.add_handler(CommandHandler(cmd, handler))
@@ -170,7 +171,8 @@ class TelegramService(BaseService):
             BotCommand("locks", "View permanently rejected items"),
             BotCommand("reset", "Reset posting queue to empty"),
             BotCommand("cleanup", "Delete recent bot messages"),
-            BotCommand("settings", "Configure bot settings"),
+            BotCommand("setup", "Quick settings + open full setup wizard"),
+            BotCommand("settings", "Alias for /setup"),
             BotCommand("dryrun", "Toggle dry-run mode"),
             BotCommand("sync", "Sync media from configured source"),
             BotCommand("backfill", "Backfill media from Instagram"),

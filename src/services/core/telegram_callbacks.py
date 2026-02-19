@@ -390,7 +390,7 @@ class TelegramCallbackHandlers:
 
             self.service.set_paused(False, user)
             await query.edit_message_text(
-                f"✅ *Posting Resumed*\n\n"
+                f"📦 *Delivery ON*\n\n"
                 f"🔄 Rescheduled {rescheduled} overdue posts.\n"
                 f"First post in ~1 hour.",
                 parse_mode="Markdown",
@@ -410,7 +410,7 @@ class TelegramCallbackHandlers:
             self.service.set_paused(False, user)
             remaining = len(all_pending) - cleared
             await query.edit_message_text(
-                f"✅ *Posting Resumed*\n\n"
+                f"📦 *Delivery ON*\n\n"
                 f"🗑️ Cleared {cleared} overdue posts.\n"
                 f"📊 {remaining} scheduled posts remaining.",
                 parse_mode="Markdown",
@@ -424,7 +424,7 @@ class TelegramCallbackHandlers:
             # Resume without handling overdue - they'll be processed immediately
             self.service.set_paused(False, user)
             await query.edit_message_text(
-                f"✅ *Posting Resumed*\n\n"
+                f"📦 *Delivery ON*\n\n"
                 f"⚠️ {len(overdue)} overdue posts will be processed immediately.",
                 parse_mode="Markdown",
             )
