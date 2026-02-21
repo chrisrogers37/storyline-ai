@@ -252,6 +252,17 @@ class SettingsService(BaseService):
         """
         return self.settings_repo.get_all_active()
 
+    def get_all_sync_enabled_chats(self) -> List[ChatSettings]:
+        """Get all chat settings with media sync enabled.
+
+        Used by the media sync loop to iterate over tenants
+        that need media synced from cloud providers.
+
+        Returns:
+            List of ChatSettings where media_sync_enabled=True
+        """
+        return self.settings_repo.get_all_sync_enabled()
+
     def get_all_paused_chats(self) -> List[ChatSettings]:
         """Get all paused chat settings.
 

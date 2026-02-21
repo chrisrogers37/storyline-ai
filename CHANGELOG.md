@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Multi-tenant media sync** - Sync loop now iterates all tenants with `media_sync_enabled=true` instead of relying on global env var. New tenants completing onboarding will have their media synced automatically.
+
 ### Changed
 
 - **Telegram command cleanup** - Consolidated bot commands from 18 to 11 for a cleaner daily experience

@@ -117,6 +117,25 @@ class ChatSettingsRepository(BaseRepository):
         self.end_read_transaction()
         return result
 
+    def get_all_sync_enabled(self) -> List[ChatSettings]:
+        """Get all chat settings with media sync enabled.
+
+        Used by the media sync loop to iterate over tenants
+        that should have their media synced from cloud providers.
+
+        Returns:
+            List of ChatSettings where media_sync_enabled=True,
+            ordered by created_at
+        """
+        result = (
+            self.db.query(ChatSettings)
+            .filter(ChatSettings.media_sync_enabled == True)  # noqa: E712
+            .order_by(ChatSettings.created_at.asc())
+            .all()
+        )
+        self.end_read_transaction()
+        return result
+
     def get_all_paused(self) -> List[ChatSettings]:
         """Get all paused chat settings records.
 
