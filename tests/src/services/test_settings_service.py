@@ -282,6 +282,30 @@ class TestSettingsServiceUnit:
 
         assert result == []
 
+    def test_get_all_sync_enabled_chats_delegates_to_repository(self):
+        """get_all_sync_enabled_chats delegates to settings_repo.get_all_sync_enabled."""
+        service = SettingsService()
+        mock_repo = Mock()
+        mock_chat = Mock(spec=ChatSettings)
+        mock_repo.get_all_sync_enabled.return_value = [mock_chat]
+        service.settings_repo = mock_repo
+
+        result = service.get_all_sync_enabled_chats()
+
+        assert len(result) == 1
+        mock_repo.get_all_sync_enabled.assert_called_once()
+
+    def test_get_all_sync_enabled_chats_returns_empty_list(self):
+        """get_all_sync_enabled_chats returns empty list when none enabled."""
+        service = SettingsService()
+        mock_repo = Mock()
+        mock_repo.get_all_sync_enabled.return_value = []
+        service.settings_repo = mock_repo
+
+        result = service.get_all_sync_enabled_chats()
+
+        assert result == []
+
 
 # =============================================================================
 # ARCHITECTURE VALIDATION TESTS

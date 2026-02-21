@@ -158,3 +158,26 @@ class TestChatSettingsRepository:
         result = settings_repo.get_all_active()
 
         assert result == []
+
+    def test_get_all_sync_enabled_returns_sync_chats(self, settings_repo, mock_db):
+        """get_all_sync_enabled returns only chats with media_sync_enabled=True."""
+        mock_chat1 = Mock(spec=ChatSettings, media_sync_enabled=True)
+        mock_query = mock_db.query.return_value
+        mock_query.filter.return_value.order_by.return_value.all.return_value = [
+            mock_chat1,
+        ]
+
+        result = settings_repo.get_all_sync_enabled()
+
+        assert len(result) == 1
+        mock_db.query.assert_called_with(ChatSettings)
+        mock_db.commit.assert_called_once()  # end_read_transaction
+
+    def test_get_all_sync_enabled_returns_empty_when_none(self, settings_repo, mock_db):
+        """get_all_sync_enabled returns empty list when no chats have sync enabled."""
+        mock_query = mock_db.query.return_value
+        mock_query.filter.return_value.order_by.return_value.all.return_value = []
+
+        result = settings_repo.get_all_sync_enabled()
+
+        assert result == []
