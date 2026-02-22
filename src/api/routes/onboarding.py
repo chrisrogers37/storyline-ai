@@ -12,7 +12,7 @@ from src.repositories.token_repository import TokenRepository
 from src.services.core.instagram_account_service import InstagramAccountService
 from src.services.core.settings_service import SettingsService
 from src.utils.logger import logger
-from src.utils.webapp_auth import validate_init_data
+from src.utils.webapp_auth import validate_init_data, validate_url_token
 
 router = APIRouter(tags=["onboarding"])
 
@@ -60,20 +60,29 @@ class CompleteRequest(BaseModel):
 
 
 def _validate_request(init_data: str, chat_id: int) -> dict:
-    """Validate initData and verify chat_id matches.
+    """Validate initData or URL token, and verify chat_id matches.
+
+    Accepts either Telegram WebApp initData (from Mini App) or a signed
+    URL token (from group chat browser links). The init_data field carries
+    whichever credential the frontend provides.
 
     Raises HTTPException on auth failure or chat_id mismatch.
     """
+    # Try Telegram initData first, fall back to URL token
     try:
         user_info = validate_init_data(init_data)
-    except ValueError as e:
-        raise HTTPException(status_code=401, detail=str(e))
+    except ValueError:
+        # Not valid initData — try URL token format
+        try:
+            user_info = validate_url_token(init_data)
+        except ValueError as e:
+            raise HTTPException(status_code=401, detail=str(e))
 
-    # If initData contains a chat_id (group chats), verify it matches the request
+    # If auth contains a chat_id, verify it matches the request
     signed_chat_id = user_info.get("chat_id")
     if signed_chat_id is not None and signed_chat_id != chat_id:
         logger.warning(
-            f"Chat ID mismatch: initData has {signed_chat_id}, "
+            f"Chat ID mismatch: auth has {signed_chat_id}, "
             f"request has {chat_id} (user_id={user_info.get('user_id')})"
         )
         raise HTTPException(status_code=403, detail="Chat ID mismatch")

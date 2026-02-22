@@ -37,27 +37,26 @@ const App = {
      */
     async init() {
         const tg = window.Telegram && window.Telegram.WebApp;
-        if (!tg) {
-            this._showError('This page must be opened from Telegram.');
-            return;
-        }
 
-        tg.ready();
-        tg.expand();
-
-        // Apply Telegram theme
-        this._applyTheme(tg.themeParams);
-
-        // Get initData for API authentication
-        this.initData = tg.initData;
-        if (!this.initData) {
-            this._showError('Missing authentication data. Please reopen from Telegram.');
-            return;
-        }
-
-        // Get chat_id from URL parameter
+        // Get URL parameters (chat_id and optional token for browser access)
         const params = new URLSearchParams(window.location.search);
         this.chatId = parseInt(params.get('chat_id'), 10);
+        const urlToken = params.get('token');
+
+        if (tg && tg.initData) {
+            // Opened as Telegram Mini App — use native auth
+            tg.ready();
+            tg.expand();
+            this._applyTheme(tg.themeParams);
+            this.initData = tg.initData;
+        } else if (urlToken) {
+            // Opened via browser URL with signed token (group chats)
+            this.initData = urlToken;
+        } else {
+            this._showError('Missing authentication data. Please open from Telegram.');
+            return;
+        }
+
         if (!this.chatId) {
             this._showError('Missing chat context. Please use /start in your Telegram chat.');
             return;

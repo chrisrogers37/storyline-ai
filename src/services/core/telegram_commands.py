@@ -9,6 +9,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from src.config.settings import settings
 from src.services.core.telegram_service import _escape_markdown
 from src.utils.logger import logger
+from src.utils.webapp_auth import generate_url_token
 
 from datetime import datetime
 import asyncio
@@ -47,7 +48,6 @@ class TelegramCommandHandlers:
             settings_service.close()
 
         if settings.OAUTH_REDIRECT_BASE_URL:
-            # Always show Mini App button — app decides what to render
             webapp_url = (
                 f"{settings.OAUTH_REDIRECT_BASE_URL}/webapp/onboarding"
                 f"?chat_id={chat_id}"
@@ -68,16 +68,21 @@ class TelegramCommandHandlers:
                     "connect your accounts and configure your posting schedule\\."
                 )
 
-            keyboard = InlineKeyboardMarkup(
-                [
-                    [
-                        InlineKeyboardButton(
-                            button_text,
-                            web_app=WebAppInfo(url=webapp_url),
-                        )
-                    ]
-                ]
-            )
+            # WebAppInfo buttons don't work in groups; use a signed URL
+            # token so the webapp can authenticate without initData.
+            is_private = update.effective_chat.type == "private"
+            if is_private:
+                button = InlineKeyboardButton(
+                    button_text,
+                    web_app=WebAppInfo(url=webapp_url),
+                )
+            else:
+                user_id = update.effective_user.id
+                token = generate_url_token(chat_id, user_id)
+                signed_url = f"{webapp_url}&token={token}"
+                button = InlineKeyboardButton(button_text, url=signed_url)
+
+            keyboard = InlineKeyboardMarkup([[button]])
             await update.message.reply_text(
                 message_text,
                 parse_mode="MarkdownV2",

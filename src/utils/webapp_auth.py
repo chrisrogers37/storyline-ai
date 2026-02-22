@@ -1,4 +1,4 @@
-"""Telegram WebApp initData validation for Mini App authentication."""
+"""Telegram WebApp initData validation and URL token authentication."""
 
 import hashlib
 import hmac
@@ -9,6 +9,7 @@ from urllib.parse import parse_qs
 from src.config.settings import settings
 
 INIT_DATA_TTL = 3600  # 1 hour
+URL_TOKEN_TTL = 3600  # 1 hour
 
 
 def validate_init_data(init_data: str) -> dict:
@@ -72,3 +73,65 @@ def validate_init_data(init_data: str) -> dict:
         result["chat_id"] = chat_data.get("id")
 
     return result
+
+
+def generate_url_token(chat_id: int, user_id: int) -> str:
+    """Generate a signed URL token for browser-based webapp access.
+
+    Used when WebAppInfo buttons aren't available (e.g. group chats)
+    and the webapp is opened via a regular URL button instead.
+
+    Token format: {chat_id}:{user_id}:{timestamp}:{signature}
+    """
+    timestamp = int(time.time())
+    payload = f"{chat_id}:{user_id}:{timestamp}"
+    secret_key = hmac.new(
+        b"UrlToken", settings.TELEGRAM_BOT_TOKEN.encode(), hashlib.sha256
+    ).digest()
+    signature = hmac.new(secret_key, payload.encode(), hashlib.sha256).hexdigest()
+    return f"{payload}:{signature}"
+
+
+def validate_url_token(token: str) -> dict:
+    """Validate a signed URL token and extract chat/user info.
+
+    Args:
+        token: The token string from the URL parameter.
+
+    Returns:
+        dict with user_id, chat_id
+
+    Raises:
+        ValueError: If signature is invalid or token is expired.
+    """
+    if not token:
+        raise ValueError("Empty token")
+
+    parts = token.split(":")
+    if len(parts) != 4:
+        raise ValueError("Invalid token format")
+
+    chat_id_str, user_id_str, timestamp_str, received_sig = parts
+
+    try:
+        chat_id = int(chat_id_str)
+        user_id = int(user_id_str)
+        timestamp = int(timestamp_str)
+    except (ValueError, TypeError):
+        raise ValueError("Invalid token values")
+
+    # Verify signature
+    payload = f"{chat_id}:{user_id}:{timestamp}"
+    secret_key = hmac.new(
+        b"UrlToken", settings.TELEGRAM_BOT_TOKEN.encode(), hashlib.sha256
+    ).digest()
+    computed_sig = hmac.new(secret_key, payload.encode(), hashlib.sha256).hexdigest()
+
+    if not hmac.compare_digest(computed_sig, received_sig):
+        raise ValueError("Invalid token signature")
+
+    # Check TTL
+    if time.time() - timestamp > URL_TOKEN_TTL:
+        raise ValueError("Token expired")
+
+    return {"user_id": user_id, "chat_id": chat_id}
