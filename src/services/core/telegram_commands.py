@@ -68,21 +68,16 @@ class TelegramCommandHandlers:
                     "connect your accounts and configure your posting schedule\\."
                 )
 
-            # WebAppInfo buttons only work in private chats;
-            # use a regular URL button in groups/supergroups.
-            is_private = update.effective_chat.type == "private"
-            if is_private:
-                button = InlineKeyboardButton(
-                    button_text,
-                    web_app=WebAppInfo(url=webapp_url),
-                )
-            else:
-                button = InlineKeyboardButton(
-                    button_text,
-                    url=webapp_url,
-                )
-
-            keyboard = InlineKeyboardMarkup([[button]])
+            keyboard = InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton(
+                            button_text,
+                            web_app=WebAppInfo(url=webapp_url),
+                        )
+                    ]
+                ]
+            )
             await update.message.reply_text(
                 message_text,
                 parse_mode="MarkdownV2",
