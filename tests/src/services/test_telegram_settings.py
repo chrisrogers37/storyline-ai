@@ -250,12 +250,25 @@ class TestBuildSettingsKeyboard:
             "active_account_name": "Not selected",
         }
 
+        # In group chats (is_private=False), should use url= instead of web_app=
         _, markup = mock_settings_handlers.build_settings_message_and_keyboard(-100123)
-
         all_buttons = [btn for row in markup.inline_keyboard for btn in row]
         mini_app_buttons = [b for b in all_buttons if "Full Settings" in b.text]
         assert len(mini_app_buttons) == 1
-        assert mini_app_buttons[0].web_app is not None
+        assert mini_app_buttons[0].url is not None
+
+        # In private chats (is_private=True), should use web_app=
+        _, markup_private = mock_settings_handlers.build_settings_message_and_keyboard(
+            -100123, is_private=True
+        )
+        all_buttons_private = [
+            btn for row in markup_private.inline_keyboard for btn in row
+        ]
+        mini_app_private = [
+            b for b in all_buttons_private if "Full Settings" in b.text
+        ]
+        assert len(mini_app_private) == 1
+        assert mini_app_private[0].web_app is not None
 
     @patch("src.services.core.telegram_settings.app_settings")
     def test_mini_app_button_absent_when_not_configured(

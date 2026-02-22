@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **WebApp buttons in group chats** - `/start` and `/settings` failed with `Button_type_invalid` because Telegram `WebAppInfo` buttons only work in private chats. Now uses regular URL buttons in groups/supergroups, falling back to `web_app=` only in DMs.
 - **Telegram bot polling on Railway** - Bot was not responding to commands since migration from Pi. Fixed three issues:
   - Polling task completed immediately after starting background updater; now blocks to keep task alive
   - Added explicit `allowed_updates` and `drop_pending_updates=True` to ensure clean startup
