@@ -89,3 +89,12 @@ def get_logger(name: str = "storyline-ai") -> logging.Logger:
 
 # Default logger instance
 logger = setup_logger()
+
+# Route python-telegram-bot and httpx logs through our logger's handlers
+# so they appear in Railway logs (otherwise they go to root logger / stderr)
+for _lib_logger_name in ("telegram", "telegram.ext", "httpx"):
+    _lib_logger = logging.getLogger(_lib_logger_name)
+    _lib_logger.setLevel(logging.WARNING)
+    for _handler in logger.handlers:
+        _lib_logger.addHandler(_handler)
+    _lib_logger.propagate = False
