@@ -739,11 +739,40 @@ class TelegramService(BaseService):
             logger.error(f"Failed to send shutdown notification: {e}")
 
     async def start_polling(self):
-        """Start bot polling."""
+        """Start bot polling.
+
+        Starts the Telegram updater and blocks forever to keep the
+        polling task alive.  An application-level error handler is
+        registered so handler exceptions are logged instead of silently
+        swallowed.
+        """
         logger.info("Starting Telegram bot polling...")
+
+        # Register application error handler so handler errors are logged
+        async def _error_handler(update, context):
+            logger.error(
+                f"Telegram handler error: {context.error}",
+                exc_info=context.error,
+            )
+
+        self.application.add_error_handler(_error_handler)
+
         await self.application.initialize()
         await self.application.start()
-        await self.application.updater.start_polling()
+        await self.application.updater.start_polling(
+            allowed_updates=[
+                "message",
+                "callback_query",
+                "my_chat_member",
+            ],
+            drop_pending_updates=True,
+        )
+        logger.info("Telegram bot polling started successfully")
+
+        # Block forever — the updater runs as a background task but this
+        # coroutine must stay alive to keep the asyncio task running.
+        stop_event = asyncio.Event()
+        await stop_event.wait()
 
     async def stop_polling(self):
         """Stop bot polling."""
