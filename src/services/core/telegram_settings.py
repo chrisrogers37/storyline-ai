@@ -15,6 +15,7 @@ from src.config.constants import (
 from src.config.settings import settings as app_settings
 from src.services.core.telegram_utils import CANCEL_KEYBOARD, clear_settings_edit_state
 from src.utils.logger import logger
+from src.utils.webapp_auth import generate_url_token
 
 if TYPE_CHECKING:
     from src.services.core.telegram_service import TelegramService
@@ -31,11 +32,18 @@ class TelegramSettingsHandlers:
     def __init__(self, service: TelegramService):
         self.service = service
 
-    def build_settings_message_and_keyboard(self, chat_id: int):
+    def build_settings_message_and_keyboard(
+        self, chat_id: int, *, user_id: int | None = None, is_private: bool = False
+    ):
         """Build the settings message text and inline keyboard.
 
         Returns (message, reply_markup) tuple. Used by handle_settings,
         refresh_settings_message, and send_settings_message_by_chat_id.
+
+        Args:
+            chat_id: Telegram chat ID.
+            user_id: Telegram user ID (needed for signed URL tokens in groups).
+            is_private: True when called from a private chat (uses WebAppInfo).
         """
         settings_data = self.service.settings_service.get_settings_display(chat_id)
         account_data = self.service.ig_account_service.get_accounts_for_display(chat_id)
@@ -117,14 +125,18 @@ class TelegramSettingsHandlers:
                 f"{app_settings.OAUTH_REDIRECT_BASE_URL}/webapp/onboarding"
                 f"?chat_id={chat_id}"
             )
-            keyboard.append(
-                [
-                    InlineKeyboardButton(
-                        "🔧 Open Full Settings",
-                        web_app=WebAppInfo(url=webapp_url),
-                    )
-                ]
-            )
+            if is_private:
+                settings_button = InlineKeyboardButton(
+                    "🔧 Open Full Settings",
+                    web_app=WebAppInfo(url=webapp_url),
+                )
+            else:
+                token = generate_url_token(chat_id, user_id or 0)
+                signed_url = f"{webapp_url}&token={token}"
+                settings_button = InlineKeyboardButton(
+                    "🔧 Open Full Settings", url=signed_url
+                )
+            keyboard.append([settings_button])
 
         keyboard.append(
             [InlineKeyboardButton("❌ Close", callback_data="settings_close")]
@@ -148,7 +160,11 @@ class TelegramSettingsHandlers:
             telegram_message_id=update.message.message_id,
         )
 
-        message, reply_markup = self.build_settings_message_and_keyboard(chat_id)
+        message, reply_markup = self.build_settings_message_and_keyboard(
+            chat_id,
+            user_id=update.effective_user.id,
+            is_private=update.effective_chat.type == "private",
+        )
 
         await update.message.reply_text(
             message, parse_mode="Markdown", reply_markup=reply_markup
@@ -181,7 +197,11 @@ class TelegramSettingsHandlers:
     async def refresh_settings_message(self, query, show_answer: bool = True):
         """Refresh the settings message with current values."""
         chat_id = query.message.chat_id
-        message, reply_markup = self.build_settings_message_and_keyboard(chat_id)
+        user_id = query.from_user.id if query.from_user else None
+        is_private = query.message.chat.type == "private"
+        message, reply_markup = self.build_settings_message_and_keyboard(
+            chat_id, user_id=user_id, is_private=is_private
+        )
 
         await query.edit_message_text(
             text=message,
