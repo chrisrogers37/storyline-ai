@@ -31,18 +31,11 @@ class TelegramSettingsHandlers:
     def __init__(self, service: TelegramService):
         self.service = service
 
-    def build_settings_message_and_keyboard(
-        self, chat_id: int, is_private: bool = False
-    ):
+    def build_settings_message_and_keyboard(self, chat_id: int):
         """Build the settings message text and inline keyboard.
 
         Returns (message, reply_markup) tuple. Used by handle_settings,
         refresh_settings_message, and send_settings_message_by_chat_id.
-
-        Args:
-            chat_id: Telegram chat ID.
-            is_private: True when called from a private (DM) chat.
-                WebAppInfo buttons only work in private chats.
         """
         settings_data = self.service.settings_service.get_settings_display(chat_id)
         account_data = self.service.ig_account_service.get_accounts_for_display(chat_id)
@@ -124,19 +117,14 @@ class TelegramSettingsHandlers:
                 f"{app_settings.OAUTH_REDIRECT_BASE_URL}/webapp/onboarding"
                 f"?chat_id={chat_id}"
             )
-            # WebAppInfo buttons only work in private chats;
-            # use a regular URL button in groups/supergroups.
-            if is_private:
-                settings_button = InlineKeyboardButton(
-                    "🔧 Open Full Settings",
-                    web_app=WebAppInfo(url=webapp_url),
-                )
-            else:
-                settings_button = InlineKeyboardButton(
-                    "🔧 Open Full Settings",
-                    url=webapp_url,
-                )
-            keyboard.append([settings_button])
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        "🔧 Open Full Settings",
+                        web_app=WebAppInfo(url=webapp_url),
+                    )
+                ]
+            )
 
         keyboard.append(
             [InlineKeyboardButton("❌ Close", callback_data="settings_close")]
@@ -160,10 +148,7 @@ class TelegramSettingsHandlers:
             telegram_message_id=update.message.message_id,
         )
 
-        is_private = update.effective_chat.type == "private"
-        message, reply_markup = self.build_settings_message_and_keyboard(
-            chat_id, is_private=is_private
-        )
+        message, reply_markup = self.build_settings_message_and_keyboard(chat_id)
 
         await update.message.reply_text(
             message, parse_mode="Markdown", reply_markup=reply_markup
@@ -196,10 +181,7 @@ class TelegramSettingsHandlers:
     async def refresh_settings_message(self, query, show_answer: bool = True):
         """Refresh the settings message with current values."""
         chat_id = query.message.chat_id
-        is_private = query.message.chat.type == "private"
-        message, reply_markup = self.build_settings_message_and_keyboard(
-            chat_id, is_private=is_private
-        )
+        message, reply_markup = self.build_settings_message_and_keyboard(chat_id)
 
         await query.edit_message_text(
             text=message,
