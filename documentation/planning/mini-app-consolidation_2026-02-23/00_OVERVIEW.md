@@ -138,7 +138,7 @@ Backend changes (`onboarding.py`):
 
 Note: **In-channel post account selector stays unchanged** — switching account on a specific post notification is a contextual action that belongs in the channel.
 
-### Phase 3: Status & Health in Mini App
+### Phase 3: Status & Health in Mini App ✅ COMPLETE (PR #75)
 **Move /status reporting to Mini App**
 
 Add a new collapsible **System Status card** to the dashboard (positioned after Quick Controls) showing:
