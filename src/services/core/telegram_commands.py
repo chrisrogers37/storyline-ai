@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram import InlineKeyboardMarkup
 
 from src.config.settings import settings
 from src.utils.logger import logger
-from src.utils.webapp_auth import generate_url_token
-
+from src.services.core.telegram_utils import build_webapp_button
 from datetime import datetime
 import asyncio
 
@@ -64,19 +63,13 @@ class TelegramCommandHandlers:
                     "connect your accounts and configure your posting schedule\\."
                 )
 
-            # WebAppInfo buttons don't work in groups; use a signed URL
-            # token so the webapp can authenticate without initData.
-            is_private = update.effective_chat.type == "private"
-            if is_private:
-                button = InlineKeyboardButton(
-                    button_text,
-                    web_app=WebAppInfo(url=webapp_url),
-                )
-            else:
-                user_id = update.effective_user.id
-                token = generate_url_token(chat_id, user_id)
-                signed_url = f"{webapp_url}&token={token}"
-                button = InlineKeyboardButton(button_text, url=signed_url)
+            button = build_webapp_button(
+                text=button_text,
+                webapp_url=webapp_url,
+                chat_type=update.effective_chat.type,
+                chat_id=chat_id,
+                user_id=update.effective_user.id,
+            )
 
             keyboard = InlineKeyboardMarkup([[button]])
             await update.message.reply_text(
@@ -161,17 +154,13 @@ class TelegramCommandHandlers:
                 f"{settings.OAUTH_REDIRECT_BASE_URL}/webapp/onboarding"
                 f"?chat_id={chat_id}"
             )
-            is_private = update.effective_chat.type == "private"
-            if is_private:
-                button = InlineKeyboardButton(
-                    "📊 Open Dashboard",
-                    web_app=WebAppInfo(url=webapp_url),
-                )
-            else:
-                user_id = update.effective_user.id
-                token = generate_url_token(chat_id, user_id)
-                signed_url = f"{webapp_url}&token={token}"
-                button = InlineKeyboardButton("📊 Open Dashboard", url=signed_url)
+            button = build_webapp_button(
+                text="📊 Open Dashboard",
+                webapp_url=webapp_url,
+                chat_type=update.effective_chat.type,
+                chat_id=chat_id,
+                user_id=update.effective_user.id,
+            )
             reply_markup = InlineKeyboardMarkup([[button]])
 
         await update.message.reply_text(
@@ -252,7 +241,8 @@ class TelegramCommandHandlers:
                 f"🔄 Media Sync: ⚠️ Last sync failed"
                 f"\n   └─ {last_sync.get('started_at', 'N/A')[:16]}"
             )
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Sync status check failed: {e}")
             return "🔄 Media Sync: ❓ Check failed"
 
     # ==================== Setup Status Helpers ====================
@@ -298,7 +288,8 @@ class TelegramCommandHandlers:
                     True,
                 )
             return ("├── 📸 Instagram: ⚠️ Not connected", False)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Instagram setup check failed: {e}")
             return ("├── 📸 Instagram: ❓ Check failed", False)
 
     def _check_gdrive_setup(self, chat_id: int) -> tuple[str, bool]:
@@ -325,7 +316,8 @@ class TelegramCommandHandlers:
                         )
                     return ("├── 📁 Google Drive: ✅ Connected", True)
                 return ("├── 📁 Google Drive: ⚠️ Not connected", False)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Google Drive setup check failed: {e}")
             return ("├── 📁 Google Drive: ❓ Check failed", False)
 
     def _check_media_setup(self, chat_id: int) -> tuple[str, bool]:
@@ -343,7 +335,8 @@ class TelegramCommandHandlers:
                     False,
                 )
             return ("├── 📂 Media Library: ⚠️ Not configured", False)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Media setup check failed: {e}")
             return ("├── 📂 Media Library: ❓ Check failed", False)
 
     def _check_schedule_setup(self, chat_id: int) -> tuple[str, bool]:
@@ -357,7 +350,8 @@ class TelegramCommandHandlers:
                 f"├── 📅 Schedule: ✅ {ppd}/day, {start:02d}:00-{end:02d}:00 UTC",
                 True,
             )
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Schedule setup check failed: {e}")
             return ("├── 📅 Schedule: ❓ Check failed", False)
 
     def _check_delivery_setup(self, chat_id: int) -> tuple[str, bool]:
@@ -369,7 +363,8 @@ class TelegramCommandHandlers:
             if chat_settings.dry_run_mode:
                 return ("└── 📦 Delivery: 🧪 Dry Run (not posting)", True)
             return ("└── 📦 Delivery: ✅ Live", True)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Delivery setup check failed: {e}")
             return ("└── 📦 Delivery: ❓ Check failed", False)
 
     async def handle_next(self, update, context):

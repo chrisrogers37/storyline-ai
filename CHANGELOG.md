@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **WebApp button builder extracted** — Deduplicated private-vs-group WebApp button logic from 3 locations into shared `build_webapp_button()` utility in `telegram_utils.py`
+
+### Fixed
+- **Observability gaps** — Added `logger.debug()` to 6 silent exception handlers in status check helpers (`telegram_commands.py`), replacing bare `except Exception:` blocks that swallowed errors with zero logging
+- **Docstring cleanup** — Replaced `print()` examples in `cloud_storage.py` and `instagram_api.py` docstrings with comments to avoid setting bad patterns
+
 ### Added
 
 - **Enhanced Mini App Dashboard** - Richer home screen with collapsible cards for deeper functionality without scroll overload

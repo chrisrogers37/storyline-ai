@@ -10,9 +10,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from src.utils.logger import logger
+from src.utils.webapp_auth import generate_url_token
 
 if TYPE_CHECKING:
     from src.services.core.telegram_service import TelegramService
@@ -369,3 +370,41 @@ async def cleanup_conversation_messages(
         except Exception as e:
             logger.debug(f"Could not delete conversation message {msg_id}: {e}")
     return deleted
+
+
+# =========================================================================
+# Pattern 7: WebApp Button Builder
+# =========================================================================
+
+
+def build_webapp_button(
+    text: str,
+    webapp_url: str,
+    chat_type: str,
+    chat_id: int,
+    user_id: int,
+) -> InlineKeyboardButton:
+    """Build a WebApp button appropriate for the chat type.
+
+    Private chats use WebAppInfo (opens the Mini App inline).
+    Group chats use a signed URL token (opens in browser).
+
+    Args:
+        text: Button label text (e.g., "Open Storyline", "Open Dashboard")
+        webapp_url: The base webapp URL including query params
+        chat_type: Telegram chat type string (from update.effective_chat.type)
+        chat_id: Telegram chat ID (for URL token signing)
+        user_id: Telegram user ID (for URL token signing)
+
+    Returns:
+        InlineKeyboardButton configured for the chat type
+    """
+    if chat_type == "private":
+        return InlineKeyboardButton(
+            text,
+            web_app=WebAppInfo(url=webapp_url),
+        )
+
+    token = generate_url_token(chat_id, user_id)
+    signed_url = f"{webapp_url}&token={token}"
+    return InlineKeyboardButton(text, url=signed_url)

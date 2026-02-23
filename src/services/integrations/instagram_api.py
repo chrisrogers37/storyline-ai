@@ -38,7 +38,7 @@ class InstagramAPIService(BaseService):
 
         # Post a story
         result = await service.post_story(media_url="https://...")
-        print(result["story_id"])
+        # result["story_id"] → The Instagram story ID
 
         # Check rate limits
         remaining = service.get_rate_limit_remaining()
