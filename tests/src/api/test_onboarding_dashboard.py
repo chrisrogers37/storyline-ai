@@ -115,13 +115,22 @@ class TestQueueDetail:
             patch("src.api.routes.onboarding.MediaRepository") as MockMediaRepo,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockQueueRepo.return_value.get_all.return_value = queue_items
-            MockQueueRepo.return_value.close = Mock()
+            MockQueueRepo.return_value.__enter__ = Mock(
+                return_value=MockQueueRepo.return_value
+            )
+            MockQueueRepo.return_value.__exit__ = Mock(return_value=False)
             MockMediaRepo.return_value.get_by_id.side_effect = (
                 lambda mid: media_map.get(mid)
             )
-            MockMediaRepo.return_value.close = Mock()
+            MockMediaRepo.return_value.__enter__ = Mock(
+                return_value=MockMediaRepo.return_value
+            )
+            MockMediaRepo.return_value.__exit__ = Mock(return_value=False)
 
             response = client.get(
                 "/api/onboarding/queue-detail",
@@ -163,10 +172,19 @@ class TestQueueDetail:
             patch("src.api.routes.onboarding.MediaRepository") as MockMediaRepo,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockQueueRepo.return_value.get_all.return_value = []
-            MockQueueRepo.return_value.close = Mock()
-            MockMediaRepo.return_value.close = Mock()
+            MockQueueRepo.return_value.__enter__ = Mock(
+                return_value=MockQueueRepo.return_value
+            )
+            MockQueueRepo.return_value.__exit__ = Mock(return_value=False)
+            MockMediaRepo.return_value.__enter__ = Mock(
+                return_value=MockMediaRepo.return_value
+            )
+            MockMediaRepo.return_value.__exit__ = Mock(return_value=False)
 
             response = client.get(
                 "/api/onboarding/queue-detail",
@@ -238,13 +256,22 @@ class TestHistoryDetail:
             patch("src.api.routes.onboarding.MediaRepository") as MockMediaRepo,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockHistoryRepo.return_value.get_all.return_value = history_items
-            MockHistoryRepo.return_value.close = Mock()
+            MockHistoryRepo.return_value.__enter__ = Mock(
+                return_value=MockHistoryRepo.return_value
+            )
+            MockHistoryRepo.return_value.__exit__ = Mock(return_value=False)
             MockMediaRepo.return_value.get_by_id.side_effect = (
                 lambda mid: media_map.get(mid)
             )
-            MockMediaRepo.return_value.close = Mock()
+            MockMediaRepo.return_value.__enter__ = Mock(
+                return_value=MockMediaRepo.return_value
+            )
+            MockMediaRepo.return_value.__exit__ = Mock(return_value=False)
 
             response = client.get(
                 "/api/onboarding/history-detail",
@@ -272,10 +299,19 @@ class TestHistoryDetail:
             patch("src.api.routes.onboarding.MediaRepository") as MockMediaRepo,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockHistoryRepo.return_value.get_all.return_value = []
-            MockHistoryRepo.return_value.close = Mock()
-            MockMediaRepo.return_value.close = Mock()
+            MockHistoryRepo.return_value.__enter__ = Mock(
+                return_value=MockHistoryRepo.return_value
+            )
+            MockHistoryRepo.return_value.__exit__ = Mock(return_value=False)
+            MockMediaRepo.return_value.__enter__ = Mock(
+                return_value=MockMediaRepo.return_value
+            )
+            MockMediaRepo.return_value.__exit__ = Mock(return_value=False)
 
             response = client.get(
                 "/api/onboarding/history-detail",
@@ -316,9 +352,15 @@ class TestMediaStats:
             patch("src.api.routes.onboarding.MediaRepository") as MockMediaRepo,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockMediaRepo.return_value.get_all.return_value = media_items
-            MockMediaRepo.return_value.close = Mock()
+            MockMediaRepo.return_value.__enter__ = Mock(
+                return_value=MockMediaRepo.return_value
+            )
+            MockMediaRepo.return_value.__exit__ = Mock(return_value=False)
 
             response = client.get(
                 "/api/onboarding/media-stats",
@@ -349,9 +391,15 @@ class TestMediaStats:
             patch("src.api.routes.onboarding.MediaRepository") as MockMediaRepo,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockMediaRepo.return_value.get_all.return_value = []
-            MockMediaRepo.return_value.close = Mock()
+            MockMediaRepo.return_value.__enter__ = Mock(
+                return_value=MockMediaRepo.return_value
+            )
+            MockMediaRepo.return_value.__exit__ = Mock(return_value=False)
 
             response = client.get(
                 "/api/onboarding/media-stats",
@@ -380,7 +428,10 @@ class TestToggleSetting:
             patch("src.api.routes.onboarding.SettingsService") as MockService,
         ):
             MockService.return_value.toggle_setting.return_value = True
-            MockService.return_value.close = Mock()
+            MockService.return_value.__enter__ = Mock(
+                return_value=MockService.return_value
+            )
+            MockService.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/toggle-setting",
@@ -403,7 +454,10 @@ class TestToggleSetting:
             patch("src.api.routes.onboarding.SettingsService") as MockService,
         ):
             MockService.return_value.toggle_setting.return_value = False
-            MockService.return_value.close = Mock()
+            MockService.return_value.__enter__ = Mock(
+                return_value=MockService.return_value
+            )
+            MockService.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/toggle-setting",
@@ -426,7 +480,10 @@ class TestToggleSetting:
             patch("src.api.routes.onboarding.SettingsService") as MockService,
         ):
             MockService.return_value.toggle_setting.return_value = True
-            MockService.return_value.close = Mock()
+            MockService.return_value.__enter__ = Mock(
+                return_value=MockService.return_value
+            )
+            MockService.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/toggle-setting",
@@ -447,7 +504,10 @@ class TestToggleSetting:
             patch("src.api.routes.onboarding.SettingsService") as MockService,
         ):
             MockService.return_value.toggle_setting.return_value = False
-            MockService.return_value.close = Mock()
+            MockService.return_value.__enter__ = Mock(
+                return_value=MockService.return_value
+            )
+            MockService.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/toggle-setting",
@@ -468,7 +528,10 @@ class TestToggleSetting:
             patch("src.api.routes.onboarding.SettingsService") as MockService,
         ):
             MockService.return_value.toggle_setting.return_value = True
-            MockService.return_value.close = Mock()
+            MockService.return_value.__enter__ = Mock(
+                return_value=MockService.return_value
+            )
+            MockService.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/toggle-setting",
@@ -536,7 +599,10 @@ class TestUpdateSetting:
             _mock_validate(),
             patch("src.api.routes.onboarding.SettingsService") as MockService,
         ):
-            MockService.return_value.close = Mock()
+            MockService.return_value.__enter__ = Mock(
+                return_value=MockService.return_value
+            )
+            MockService.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/update-setting",
@@ -562,7 +628,10 @@ class TestUpdateSetting:
             _mock_validate(),
             patch("src.api.routes.onboarding.SettingsService") as MockService,
         ):
-            MockService.return_value.close = Mock()
+            MockService.return_value.__enter__ = Mock(
+                return_value=MockService.return_value
+            )
+            MockService.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/update-setting",
@@ -583,7 +652,10 @@ class TestUpdateSetting:
             _mock_validate(),
             patch("src.api.routes.onboarding.SettingsService") as MockService,
         ):
-            MockService.return_value.close = Mock()
+            MockService.return_value.__enter__ = Mock(
+                return_value=MockService.return_value
+            )
+            MockService.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/update-setting",
@@ -675,7 +747,10 @@ class TestExtendSchedule:
                 "total_slots": 21,
                 "extended_from": "2026-02-28T00:00:00",
             }
-            MockScheduler.return_value.close = Mock()
+            MockScheduler.return_value.__enter__ = Mock(
+                return_value=MockScheduler.return_value
+            )
+            MockScheduler.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/extend-schedule",
@@ -703,7 +778,10 @@ class TestExtendSchedule:
                 "skipped": 0,
                 "total_slots": 21,
             }
-            MockScheduler.return_value.close = Mock()
+            MockScheduler.return_value.__enter__ = Mock(
+                return_value=MockScheduler.return_value
+            )
+            MockScheduler.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/extend-schedule",
@@ -738,15 +816,24 @@ class TestRegenerateSchedule:
             patch("src.services.core.scheduler.SchedulerService") as MockScheduler,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockQueueRepo.return_value.delete_all_pending.return_value = 42
-            MockQueueRepo.return_value.close = Mock()
+            MockQueueRepo.return_value.__enter__ = Mock(
+                return_value=MockQueueRepo.return_value
+            )
+            MockQueueRepo.return_value.__exit__ = Mock(return_value=False)
             MockScheduler.return_value.create_schedule.return_value = {
                 "scheduled": 21,
                 "skipped": 0,
                 "total_slots": 21,
             }
-            MockScheduler.return_value.close = Mock()
+            MockScheduler.return_value.__enter__ = Mock(
+                return_value=MockScheduler.return_value
+            )
+            MockScheduler.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/regenerate-schedule",
@@ -826,15 +913,30 @@ class TestEnhancedSetupState:
             patch("src.api.routes.onboarding.HistoryRepository") as MockHistoryRepo,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockTokenRepo.return_value.get_token_for_chat.return_value = None
-            MockTokenRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.__enter__ = Mock(
+                return_value=MockTokenRepo.return_value
+            )
+            MockTokenRepo.return_value.__exit__ = Mock(return_value=False)
             MockIGService.return_value.get_active_account.return_value = None
-            MockIGService.return_value.close = Mock()
+            MockIGService.return_value.__enter__ = Mock(
+                return_value=MockIGService.return_value
+            )
+            MockIGService.return_value.__exit__ = Mock(return_value=False)
             MockQueueRepo.return_value.get_all.return_value = queue_items
-            MockQueueRepo.return_value.close = Mock()
+            MockQueueRepo.return_value.__enter__ = Mock(
+                return_value=MockQueueRepo.return_value
+            )
+            MockQueueRepo.return_value.__exit__ = Mock(return_value=False)
             MockHistoryRepo.return_value.get_recent_posts.return_value = []
-            MockHistoryRepo.return_value.close = Mock()
+            MockHistoryRepo.return_value.__enter__ = Mock(
+                return_value=MockHistoryRepo.return_value
+            )
+            MockHistoryRepo.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/init",
@@ -868,15 +970,30 @@ class TestEnhancedSetupState:
             patch("src.api.routes.onboarding.HistoryRepository") as MockHistoryRepo,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockTokenRepo.return_value.get_token_for_chat.return_value = None
-            MockTokenRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.__enter__ = Mock(
+                return_value=MockTokenRepo.return_value
+            )
+            MockTokenRepo.return_value.__exit__ = Mock(return_value=False)
             MockIGService.return_value.get_active_account.return_value = None
-            MockIGService.return_value.close = Mock()
+            MockIGService.return_value.__enter__ = Mock(
+                return_value=MockIGService.return_value
+            )
+            MockIGService.return_value.__exit__ = Mock(return_value=False)
             MockQueueRepo.return_value.get_all.return_value = []
-            MockQueueRepo.return_value.close = Mock()
+            MockQueueRepo.return_value.__enter__ = Mock(
+                return_value=MockQueueRepo.return_value
+            )
+            MockQueueRepo.return_value.__exit__ = Mock(return_value=False)
             MockHistoryRepo.return_value.get_recent_posts.return_value = []
-            MockHistoryRepo.return_value.close = Mock()
+            MockHistoryRepo.return_value.__enter__ = Mock(
+                return_value=MockHistoryRepo.return_value
+            )
+            MockHistoryRepo.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/init",
@@ -908,15 +1025,30 @@ class TestEnhancedSetupState:
             patch("src.api.routes.onboarding.HistoryRepository") as MockHistoryRepo,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockTokenRepo.return_value.get_token_for_chat.return_value = None
-            MockTokenRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.__enter__ = Mock(
+                return_value=MockTokenRepo.return_value
+            )
+            MockTokenRepo.return_value.__exit__ = Mock(return_value=False)
             MockIGService.return_value.get_active_account.return_value = None
-            MockIGService.return_value.close = Mock()
+            MockIGService.return_value.__enter__ = Mock(
+                return_value=MockIGService.return_value
+            )
+            MockIGService.return_value.__exit__ = Mock(return_value=False)
             MockQueueRepo.return_value.get_all.return_value = []
-            MockQueueRepo.return_value.close = Mock()
+            MockQueueRepo.return_value.__enter__ = Mock(
+                return_value=MockQueueRepo.return_value
+            )
+            MockQueueRepo.return_value.__exit__ = Mock(return_value=False)
             MockHistoryRepo.return_value.get_recent_posts.return_value = []
-            MockHistoryRepo.return_value.close = Mock()
+            MockHistoryRepo.return_value.__enter__ = Mock(
+                return_value=MockHistoryRepo.return_value
+            )
+            MockHistoryRepo.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/init",
@@ -1083,9 +1215,15 @@ class TestSyncMedia:
             patch("src.services.core.media_sync.MediaSyncService") as MockSyncService,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockSyncService.return_value.sync.return_value = mock_result
-            MockSyncService.return_value.close = Mock()
+            MockSyncService.return_value.__enter__ = Mock(
+                return_value=MockSyncService.return_value
+            )
+            MockSyncService.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/sync-media",
@@ -1118,7 +1256,10 @@ class TestSyncMedia:
             ) as MockSettingsRepo,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/sync-media",
@@ -1140,9 +1281,15 @@ class TestSyncMedia:
             patch("src.services.core.media_sync.MediaSyncService") as MockSyncService,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockSyncService.return_value.sync.side_effect = RuntimeError("Drive error")
-            MockSyncService.return_value.close = Mock()
+            MockSyncService.return_value.__enter__ = Mock(
+                return_value=MockSyncService.return_value
+            )
+            MockSyncService.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/sync-media",
@@ -1208,9 +1355,15 @@ class TestAccounts:
             ) as MockSettingsRepo,
         ):
             MockIGService.return_value.list_accounts.return_value = [acct_1, acct_2]
-            MockIGService.return_value.close = Mock()
+            MockIGService.return_value.__enter__ = Mock(
+                return_value=MockIGService.return_value
+            )
+            MockIGService.return_value.__exit__ = Mock(return_value=False)
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
 
             response = client.get(
                 "/api/onboarding/accounts",
@@ -1238,9 +1391,15 @@ class TestAccounts:
             ) as MockSettingsRepo,
         ):
             MockIGService.return_value.list_accounts.return_value = []
-            MockIGService.return_value.close = Mock()
+            MockIGService.return_value.__enter__ = Mock(
+                return_value=MockIGService.return_value
+            )
+            MockIGService.return_value.__exit__ = Mock(return_value=False)
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
 
             response = client.get(
                 "/api/onboarding/accounts",
@@ -1290,7 +1449,10 @@ class TestSwitchAccount:
             patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
         ):
             MockIGService.return_value.switch_account.return_value = acct
-            MockIGService.return_value.close = Mock()
+            MockIGService.return_value.__enter__ = Mock(
+                return_value=MockIGService.return_value
+            )
+            MockIGService.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/switch-account",
@@ -1319,7 +1481,10 @@ class TestSwitchAccount:
             MockIGService.return_value.switch_account.side_effect = ValueError(
                 "Account not found"
             )
-            MockIGService.return_value.close = Mock()
+            MockIGService.return_value.__enter__ = Mock(
+                return_value=MockIGService.return_value
+            )
+            MockIGService.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/switch-account",
@@ -1375,7 +1540,10 @@ class TestRemoveAccount:
             patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
         ):
             MockIGService.return_value.deactivate_account.return_value = acct
-            MockIGService.return_value.close = Mock()
+            MockIGService.return_value.__enter__ = Mock(
+                return_value=MockIGService.return_value
+            )
+            MockIGService.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/remove-account",
@@ -1403,7 +1571,10 @@ class TestRemoveAccount:
             MockIGService.return_value.deactivate_account.side_effect = ValueError(
                 "Account not found"
             )
-            MockIGService.return_value.close = Mock()
+            MockIGService.return_value.__enter__ = Mock(
+                return_value=MockIGService.return_value
+            )
+            MockIGService.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/remove-account",

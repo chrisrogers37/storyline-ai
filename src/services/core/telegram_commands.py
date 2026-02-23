@@ -39,12 +39,9 @@ class TelegramCommandHandlers:
         # Check onboarding status
         from src.services.core.settings_service import SettingsService
 
-        settings_service = SettingsService()
-        try:
+        with SettingsService() as settings_service:
             chat_settings = settings_service.get_settings(chat_id)
             onboarding_done = chat_settings.onboarding_completed
-        finally:
-            settings_service.close()
 
         if settings.OAUTH_REDIRECT_BASE_URL:
             webapp_url = (
@@ -313,8 +310,7 @@ class TelegramCommandHandlers:
             if not chat_settings:
                 return ("├── 📁 Google Drive: ⚠️ Not connected", False)
 
-            token_repo = TokenRepository()
-            try:
+            with TokenRepository() as token_repo:
                 gdrive_token = token_repo.get_token_for_chat(
                     "google_drive", "oauth_access", str(chat_settings.id)
                 )
@@ -329,8 +325,6 @@ class TelegramCommandHandlers:
                         )
                     return ("├── 📁 Google Drive: ✅ Connected", True)
                 return ("├── 📁 Google Drive: ⚠️ Not connected", False)
-            finally:
-                token_repo.close()
         except Exception:
             return ("├── 📁 Google Drive: ❓ Check failed", False)
 
