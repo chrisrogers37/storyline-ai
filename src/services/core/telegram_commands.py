@@ -244,7 +244,8 @@ class TelegramCommandHandlers:
                 f"🔄 Media Sync: ⚠️ Last sync failed"
                 f"\n   └─ {last_sync.get('started_at', 'N/A')[:16]}"
             )
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Sync status check failed: {e}")
             return "🔄 Media Sync: ❓ Check failed"
 
     # ==================== Setup Status Helpers ====================
@@ -290,7 +291,8 @@ class TelegramCommandHandlers:
                     True,
                 )
             return ("├── 📸 Instagram: ⚠️ Not connected", False)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Instagram setup check failed: {e}")
             return ("├── 📸 Instagram: ❓ Check failed", False)
 
     def _check_gdrive_setup(self, chat_id: int) -> tuple[str, bool]:
@@ -320,7 +322,8 @@ class TelegramCommandHandlers:
                 return ("├── 📁 Google Drive: ⚠️ Not connected", False)
             finally:
                 token_repo.close()
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Google Drive setup check failed: {e}")
             return ("├── 📁 Google Drive: ❓ Check failed", False)
 
     def _check_media_setup(self, chat_id: int) -> tuple[str, bool]:
@@ -338,7 +341,8 @@ class TelegramCommandHandlers:
                     False,
                 )
             return ("├── 📂 Media Library: ⚠️ Not configured", False)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Media setup check failed: {e}")
             return ("├── 📂 Media Library: ❓ Check failed", False)
 
     def _check_schedule_setup(self, chat_id: int) -> tuple[str, bool]:
@@ -352,7 +356,8 @@ class TelegramCommandHandlers:
                 f"├── 📅 Schedule: ✅ {ppd}/day, {start:02d}:00-{end:02d}:00 UTC",
                 True,
             )
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Schedule setup check failed: {e}")
             return ("├── 📅 Schedule: ❓ Check failed", False)
 
     def _check_delivery_setup(self, chat_id: int) -> tuple[str, bool]:
@@ -364,7 +369,8 @@ class TelegramCommandHandlers:
             if chat_settings.dry_run_mode:
                 return ("└── 📦 Delivery: 🧪 Dry Run (not posting)", True)
             return ("└── 📦 Delivery: ✅ Live", True)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Delivery setup check failed: {e}")
             return ("└── 📦 Delivery: ❓ Check failed", False)
 
     async def handle_next(self, update, context):
