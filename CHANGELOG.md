@@ -50,6 +50,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Badge shows "Healthy"/"All Set" or issue count based on health check results
   - `GET /api/onboarding/system-status` - Aggregated health data from HealthCheckService
 
+- **Sync Media action in Mini App** - Trigger media sync directly from the dashboard (Phase 4 of Mini App Consolidation)
+  - "Sync Media" button in Quick Controls card below settings
+  - Inline result display showing new/updated/removed/error counts
+  - `POST /api/onboarding/sync-media` - Calls MediaSyncService with per-tenant config
+
 ### Fixed
 
 - **Google Drive media download in `/next` and auto-post** - Fixed "No Google Drive credentials found" error when sending notifications. The media download path was using the service account credential lookup instead of per-chat OAuth tokens. Now passes `telegram_chat_id` through `MediaSourceFactory.get_provider_for_media_item()` so Google Drive files are fetched with the correct user OAuth credentials.

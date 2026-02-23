@@ -754,6 +754,60 @@ async def onboarding_system_status(
         health_service.history_repo.close()
 
 
+@router.post("/sync-media")
+async def onboarding_sync_media(request: InitRequest):
+    """Trigger media sync from the dashboard.
+
+    Calls MediaSyncService.sync() with the chat's per-tenant config.
+    Returns sync result counts (new, updated, deactivated, etc).
+    """
+    _validate_request(request.init_data, request.chat_id)
+
+    settings_repo = ChatSettingsRepository()
+    try:
+        chat_settings = settings_repo.get_or_create(request.chat_id)
+        source_type = chat_settings.media_source_type
+        source_root = chat_settings.media_source_root
+    finally:
+        settings_repo.close()
+
+    if not source_root:
+        raise HTTPException(
+            status_code=400,
+            detail="No media folder configured. Set up a media folder first.",
+        )
+
+    from src.services.core.media_sync import MediaSyncService
+
+    sync_service = MediaSyncService()
+    try:
+        result = sync_service.sync(
+            source_type=source_type,
+            source_root=source_root,
+            triggered_by="dashboard",
+            telegram_chat_id=request.chat_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Media sync from dashboard failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Media sync failed. Please try again.",
+        )
+    finally:
+        sync_service.close()
+
+    return {
+        "new": result.new,
+        "updated": result.updated,
+        "deactivated": result.deactivated,
+        "unchanged": result.unchanged,
+        "errors": result.errors,
+        "total_processed": result.total_processed,
+    }
+
+
 @router.post("/toggle-setting")
 async def onboarding_toggle_setting(request: ToggleSettingRequest):
     """Toggle a boolean setting (is_paused, dry_run_mode) from dashboard."""
