@@ -91,7 +91,7 @@ The in-channel post notification with action buttons stays exactly as-is:
 
 ## Phased Implementation Plan
 
-### Phase 1: Complete Settings in Quick Controls Card
+### Phase 1: Complete Settings in Quick Controls Card ✅ COMPLETE (PR #73)
 **Expand the existing Quick Controls card to include all settings**
 
 The Quick Controls card already has Delivery and Dry Run toggles. This phase adds the remaining 3 toggles and numeric settings editing inline.
