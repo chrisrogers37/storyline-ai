@@ -26,7 +26,7 @@ def _mock_validate(return_value=None):
     Pass chat_id in return_value to test group-chat initData.
     """
     return patch(
-        "src.api.routes.onboarding.validate_init_data",
+        "src.api.routes.onboarding.helpers.validate_init_data",
         return_value=return_value or VALID_USER,
     )
 
@@ -57,10 +57,10 @@ def _mock_init_repos(mock_settings=None, instagram_account=None, gdrive_token=No
     if mock_settings is None:
         mock_settings = _mock_settings_obj()
 
-    settings_repo = patch("src.api.routes.onboarding.ChatSettingsRepository")
-    token_repo = patch("src.api.routes.onboarding.TokenRepository")
-    ig_service = patch("src.api.routes.onboarding.InstagramAccountService")
-    settings_service = patch("src.api.routes.onboarding.SettingsService")
+    settings_repo = patch("src.api.routes.onboarding.helpers.ChatSettingsRepository")
+    token_repo = patch("src.api.routes.onboarding.helpers.TokenRepository")
+    ig_service = patch("src.api.routes.onboarding.helpers.InstagramAccountService")
+    settings_service = patch("src.api.routes.onboarding.setup.SettingsService")
 
     return (
         settings_repo,
@@ -89,11 +89,15 @@ class TestOnboardingInit:
         with (
             _mock_validate(),
             patch(
-                "src.api.routes.onboarding.ChatSettingsRepository"
+                "src.api.routes.onboarding.helpers.ChatSettingsRepository"
             ) as MockSettingsRepo,
-            patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
-            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
-            patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
+            patch("src.api.routes.onboarding.helpers.TokenRepository") as MockTokenRepo,
+            patch(
+                "src.api.routes.onboarding.helpers.InstagramAccountService"
+            ) as MockIGService,
+            patch(
+                "src.api.routes.onboarding.setup.SettingsService"
+            ) as MockSettingsService,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
             MockSettingsRepo.return_value.__enter__ = Mock(
@@ -136,11 +140,15 @@ class TestOnboardingInit:
         with (
             _mock_validate(),
             patch(
-                "src.api.routes.onboarding.ChatSettingsRepository"
+                "src.api.routes.onboarding.helpers.ChatSettingsRepository"
             ) as MockSettingsRepo,
-            patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
-            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
-            patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
+            patch("src.api.routes.onboarding.helpers.TokenRepository") as MockTokenRepo,
+            patch(
+                "src.api.routes.onboarding.helpers.InstagramAccountService"
+            ) as MockIGService,
+            patch(
+                "src.api.routes.onboarding.setup.SettingsService"
+            ) as MockSettingsService,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
             MockSettingsRepo.return_value.__enter__ = Mock(
@@ -179,11 +187,15 @@ class TestOnboardingInit:
         with (
             _mock_validate(),
             patch(
-                "src.api.routes.onboarding.ChatSettingsRepository"
+                "src.api.routes.onboarding.helpers.ChatSettingsRepository"
             ) as MockSettingsRepo,
-            patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
-            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
-            patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
+            patch("src.api.routes.onboarding.helpers.TokenRepository") as MockTokenRepo,
+            patch(
+                "src.api.routes.onboarding.helpers.InstagramAccountService"
+            ) as MockIGService,
+            patch(
+                "src.api.routes.onboarding.setup.SettingsService"
+            ) as MockSettingsService,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
             MockSettingsRepo.return_value.__enter__ = Mock(
@@ -217,7 +229,7 @@ class TestOnboardingInit:
     def test_init_invalid_data_returns_401(self, client):
         """Invalid initData returns 401."""
         with patch(
-            "src.api.routes.onboarding.validate_init_data",
+            "src.api.routes.onboarding.helpers.validate_init_data",
             side_effect=ValueError("Invalid initData signature"),
         ):
             response = client.post(
@@ -239,12 +251,16 @@ class TestOnboardingInit:
         with (
             _mock_validate(),
             patch(
-                "src.api.routes.onboarding.ChatSettingsRepository"
+                "src.api.routes.onboarding.helpers.ChatSettingsRepository"
             ) as MockSettingsRepo,
-            patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
-            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
-            patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
-            patch("src.repositories.media_repository.MediaRepository") as MockMediaRepo,
+            patch("src.api.routes.onboarding.helpers.TokenRepository") as MockTokenRepo,
+            patch(
+                "src.api.routes.onboarding.helpers.InstagramAccountService"
+            ) as MockIGService,
+            patch(
+                "src.api.routes.onboarding.setup.SettingsService"
+            ) as MockSettingsService,
+            patch("src.api.routes.onboarding.helpers.MediaRepository") as MockMediaRepo,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
             MockSettingsRepo.return_value.__enter__ = Mock(
@@ -296,11 +312,15 @@ class TestOnboardingInit:
         with (
             _mock_validate(),
             patch(
-                "src.api.routes.onboarding.ChatSettingsRepository"
+                "src.api.routes.onboarding.helpers.ChatSettingsRepository"
             ) as MockSettingsRepo,
-            patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
-            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
-            patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
+            patch("src.api.routes.onboarding.helpers.TokenRepository") as MockTokenRepo,
+            patch(
+                "src.api.routes.onboarding.helpers.InstagramAccountService"
+            ) as MockIGService,
+            patch(
+                "src.api.routes.onboarding.setup.SettingsService"
+            ) as MockSettingsService,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
             MockSettingsRepo.return_value.__enter__ = Mock(
@@ -345,12 +365,16 @@ class TestOnboardingInit:
         with (
             _mock_validate(),
             patch(
-                "src.api.routes.onboarding.ChatSettingsRepository"
+                "src.api.routes.onboarding.helpers.ChatSettingsRepository"
             ) as MockSettingsRepo,
-            patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
-            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
-            patch("src.api.routes.onboarding.QueueRepository") as MockQueueRepo,
-            patch("src.api.routes.onboarding.HistoryRepository") as MockHistoryRepo,
+            patch("src.api.routes.onboarding.helpers.TokenRepository") as MockTokenRepo,
+            patch(
+                "src.api.routes.onboarding.helpers.InstagramAccountService"
+            ) as MockIGService,
+            patch("src.api.routes.onboarding.helpers.QueueRepository") as MockQueueRepo,
+            patch(
+                "src.api.routes.onboarding.helpers.HistoryRepository"
+            ) as MockHistoryRepo,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
             MockSettingsRepo.return_value.__enter__ = Mock(
@@ -407,12 +431,14 @@ class TestOnboardingInit:
         with (
             _mock_validate(),
             patch(
-                "src.api.routes.onboarding.ChatSettingsRepository"
+                "src.api.routes.onboarding.helpers.ChatSettingsRepository"
             ) as MockSettingsRepo,
-            patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
-            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
+            patch("src.api.routes.onboarding.helpers.TokenRepository") as MockTokenRepo,
             patch(
-                "src.api.routes.onboarding.QueueRepository",
+                "src.api.routes.onboarding.helpers.InstagramAccountService"
+            ) as MockIGService,
+            patch(
+                "src.api.routes.onboarding.helpers.QueueRepository",
                 side_effect=Exception("DB connection failed"),
             ),
         ):
@@ -456,7 +482,7 @@ class TestOnboardingOAuthUrl:
         """Instagram provider returns OAuth authorization URL."""
         with (
             _mock_validate(),
-            patch("src.services.core.oauth_service.OAuthService") as MockOAuth,
+            patch("src.api.routes.onboarding.setup.OAuthService") as MockOAuth,
         ):
             MockOAuth.return_value.generate_authorization_url.return_value = (
                 "https://facebook.com/dialog/oauth?client_id=123"
@@ -476,7 +502,7 @@ class TestOnboardingOAuthUrl:
         with (
             _mock_validate(),
             patch(
-                "src.services.integrations.google_drive_oauth.GoogleDriveOAuthService"
+                "src.api.routes.onboarding.setup.GoogleDriveOAuthService"
             ) as MockGDrive,
         ):
             MockGDrive.return_value.generate_authorization_url.return_value = (
@@ -508,7 +534,7 @@ class TestOnboardingOAuthUrl:
     def test_invalid_init_data_returns_401(self, client):
         """Invalid initData on oauth-url returns 401."""
         with patch(
-            "src.api.routes.onboarding.validate_init_data",
+            "src.api.routes.onboarding.helpers.validate_init_data",
             side_effect=ValueError("Missing hash"),
         ):
             response = client.get(
@@ -537,10 +563,8 @@ class TestOnboardingMediaFolder:
 
         with (
             _mock_validate(),
-            patch(
-                "src.services.integrations.google_drive.GoogleDriveService"
-            ) as MockGDrive,
-            patch("src.api.routes.onboarding.SettingsService") as MockSettings,
+            patch("src.api.routes.onboarding.setup.GoogleDriveService") as MockGDrive,
+            patch("src.api.routes.onboarding.setup.SettingsService") as MockSettings,
         ):
             mock_provider = Mock()
             mock_provider.list_files.return_value = mock_files
@@ -603,9 +627,7 @@ class TestOnboardingMediaFolder:
         """Folder that can't be accessed returns 400."""
         with (
             _mock_validate(),
-            patch(
-                "src.services.integrations.google_drive.GoogleDriveService"
-            ) as MockGDrive,
+            patch("src.api.routes.onboarding.setup.GoogleDriveService") as MockGDrive,
         ):
             MockGDrive.return_value.get_provider_for_chat.side_effect = Exception(
                 "No credentials"
@@ -655,10 +677,10 @@ class TestOnboardingStartIndexing:
         with (
             _mock_validate(),
             patch(
-                "src.api.routes.onboarding.ChatSettingsRepository"
+                "src.api.routes.onboarding.setup.ChatSettingsRepository"
             ) as MockSettingsRepo,
-            patch("src.services.core.media_sync.MediaSyncService") as MockSync,
-            patch("src.api.routes.onboarding.SettingsService") as MockStepService,
+            patch("src.api.routes.onboarding.setup.MediaSyncService") as MockSync,
+            patch("src.api.routes.onboarding.setup.SettingsService") as MockStepService,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
             MockSettingsRepo.return_value.__enter__ = Mock(
@@ -697,7 +719,7 @@ class TestOnboardingStartIndexing:
         with (
             _mock_validate(),
             patch(
-                "src.api.routes.onboarding.ChatSettingsRepository"
+                "src.api.routes.onboarding.setup.ChatSettingsRepository"
             ) as MockSettingsRepo,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
@@ -724,9 +746,9 @@ class TestOnboardingStartIndexing:
         with (
             _mock_validate(),
             patch(
-                "src.api.routes.onboarding.ChatSettingsRepository"
+                "src.api.routes.onboarding.setup.ChatSettingsRepository"
             ) as MockSettingsRepo,
-            patch("src.services.core.media_sync.MediaSyncService") as MockSync,
+            patch("src.api.routes.onboarding.setup.MediaSyncService") as MockSync,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
             MockSettingsRepo.return_value.__enter__ = Mock(
@@ -755,9 +777,9 @@ class TestOnboardingStartIndexing:
         with (
             _mock_validate(),
             patch(
-                "src.api.routes.onboarding.ChatSettingsRepository"
+                "src.api.routes.onboarding.setup.ChatSettingsRepository"
             ) as MockSettingsRepo,
-            patch("src.services.core.media_sync.MediaSyncService") as MockSync,
+            patch("src.api.routes.onboarding.setup.MediaSyncService") as MockSync,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
             MockSettingsRepo.return_value.__enter__ = Mock(
@@ -791,7 +813,7 @@ class TestOnboardingSchedule:
         """Valid schedule config saves to settings."""
         with (
             _mock_validate(),
-            patch("src.api.routes.onboarding.SettingsService") as MockSettings,
+            patch("src.api.routes.onboarding.setup.SettingsService") as MockSettings,
         ):
             MockSettings.return_value.__enter__ = Mock(
                 return_value=MockSettings.return_value
@@ -824,7 +846,7 @@ class TestOnboardingSchedule:
         """Service-level validation error returns 400."""
         with (
             _mock_validate(),
-            patch("src.api.routes.onboarding.SettingsService") as MockSettings,
+            patch("src.api.routes.onboarding.setup.SettingsService") as MockSettings,
         ):
             MockSettings.return_value.update_setting.side_effect = ValueError(
                 "Invalid setting value"
@@ -863,12 +885,16 @@ class TestOnboardingComplete:
 
         with (
             _mock_validate(),
-            patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
             patch(
-                "src.api.routes.onboarding.ChatSettingsRepository"
+                "src.api.routes.onboarding.setup.SettingsService"
+            ) as MockSettingsService,
+            patch(
+                "src.api.routes.onboarding.helpers.ChatSettingsRepository"
             ) as MockSettingsRepo,
-            patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
-            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
+            patch("src.api.routes.onboarding.helpers.TokenRepository") as MockTokenRepo,
+            patch(
+                "src.api.routes.onboarding.helpers.InstagramAccountService"
+            ) as MockIGService,
         ):
             MockSettingsService.return_value.__enter__ = Mock(
                 return_value=MockSettingsService.return_value
@@ -914,13 +940,17 @@ class TestOnboardingComplete:
 
         with (
             _mock_validate(),
-            patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
             patch(
-                "src.api.routes.onboarding.ChatSettingsRepository"
+                "src.api.routes.onboarding.setup.SettingsService"
+            ) as MockSettingsService,
+            patch(
+                "src.api.routes.onboarding.helpers.ChatSettingsRepository"
             ) as MockSettingsRepo,
-            patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
-            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
-            patch("src.services.core.scheduler.SchedulerService") as MockScheduler,
+            patch("src.api.routes.onboarding.helpers.TokenRepository") as MockTokenRepo,
+            patch(
+                "src.api.routes.onboarding.helpers.InstagramAccountService"
+            ) as MockIGService,
+            patch("src.api.routes.onboarding.setup.SchedulerService") as MockScheduler,
         ):
             MockSettingsService.return_value.__enter__ = Mock(
                 return_value=MockSettingsService.return_value
@@ -976,13 +1006,17 @@ class TestOnboardingComplete:
 
         with (
             _mock_validate(),
-            patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
             patch(
-                "src.api.routes.onboarding.ChatSettingsRepository"
+                "src.api.routes.onboarding.setup.SettingsService"
+            ) as MockSettingsService,
+            patch(
+                "src.api.routes.onboarding.helpers.ChatSettingsRepository"
             ) as MockSettingsRepo,
-            patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
-            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
-            patch("src.services.core.scheduler.SchedulerService") as MockScheduler,
+            patch("src.api.routes.onboarding.helpers.TokenRepository") as MockTokenRepo,
+            patch(
+                "src.api.routes.onboarding.helpers.InstagramAccountService"
+            ) as MockIGService,
+            patch("src.api.routes.onboarding.setup.SchedulerService") as MockScheduler,
         ):
             MockSettingsService.return_value.__enter__ = Mock(
                 return_value=MockSettingsService.return_value
@@ -1033,12 +1067,16 @@ class TestOnboardingComplete:
 
         with (
             _mock_validate(),
-            patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
             patch(
-                "src.api.routes.onboarding.ChatSettingsRepository"
+                "src.api.routes.onboarding.setup.SettingsService"
+            ) as MockSettingsService,
+            patch(
+                "src.api.routes.onboarding.helpers.ChatSettingsRepository"
             ) as MockSettingsRepo,
-            patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
-            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
+            patch("src.api.routes.onboarding.helpers.TokenRepository") as MockTokenRepo,
+            patch(
+                "src.api.routes.onboarding.helpers.InstagramAccountService"
+            ) as MockIGService,
         ):
             MockSettingsService.return_value.__enter__ = Mock(
                 return_value=MockSettingsService.return_value
@@ -1081,13 +1119,17 @@ class TestOnboardingComplete:
 
         with (
             _mock_validate(),
-            patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
             patch(
-                "src.api.routes.onboarding.ChatSettingsRepository"
+                "src.api.routes.onboarding.setup.SettingsService"
+            ) as MockSettingsService,
+            patch(
+                "src.api.routes.onboarding.helpers.ChatSettingsRepository"
             ) as MockSettingsRepo,
-            patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
-            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
-            patch("src.repositories.media_repository.MediaRepository") as MockMediaRepo,
+            patch("src.api.routes.onboarding.helpers.TokenRepository") as MockTokenRepo,
+            patch(
+                "src.api.routes.onboarding.helpers.InstagramAccountService"
+            ) as MockIGService,
+            patch("src.api.routes.onboarding.helpers.MediaRepository") as MockMediaRepo,
         ):
             MockSettingsService.return_value.__enter__ = Mock(
                 return_value=MockSettingsService.return_value
@@ -1168,11 +1210,15 @@ class TestOnboardingChatIdVerification:
         with (
             _mock_validate(return_value=user_with_chat),
             patch(
-                "src.api.routes.onboarding.ChatSettingsRepository"
+                "src.api.routes.onboarding.helpers.ChatSettingsRepository"
             ) as MockSettingsRepo,
-            patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
-            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
-            patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
+            patch("src.api.routes.onboarding.helpers.TokenRepository") as MockTokenRepo,
+            patch(
+                "src.api.routes.onboarding.helpers.InstagramAccountService"
+            ) as MockIGService,
+            patch(
+                "src.api.routes.onboarding.setup.SettingsService"
+            ) as MockSettingsService,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
             MockSettingsRepo.return_value.__enter__ = Mock(
@@ -1208,11 +1254,15 @@ class TestOnboardingChatIdVerification:
         with (
             _mock_validate(),  # default: no chat_id in return
             patch(
-                "src.api.routes.onboarding.ChatSettingsRepository"
+                "src.api.routes.onboarding.helpers.ChatSettingsRepository"
             ) as MockSettingsRepo,
-            patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
-            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
-            patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
+            patch("src.api.routes.onboarding.helpers.TokenRepository") as MockTokenRepo,
+            patch(
+                "src.api.routes.onboarding.helpers.InstagramAccountService"
+            ) as MockIGService,
+            patch(
+                "src.api.routes.onboarding.setup.SettingsService"
+            ) as MockSettingsService,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
             MockSettingsRepo.return_value.__enter__ = Mock(
