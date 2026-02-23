@@ -82,6 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added explicit `allowed_updates` and `drop_pending_updates=True` to ensure clean startup
   - Added application-level error handler so handler exceptions are logged instead of silently swallowed
   - Routed `telegram`/`httpx` library logs through app logger so internal errors appear in Railway logs
+- **Resource management** — Converted all `try/finally/close()` patterns to context manager `with` statements in `telegram_commands.py` and `onboarding.py`, ensuring consistent database connection cleanup
 - **Multi-tenant media sync** - Sync loop now iterates all tenants with `media_sync_enabled=true` instead of relying on global env var. New tenants completing onboarding will have their media synced automatically.
 
 ### Changed

@@ -96,12 +96,24 @@ class TestOnboardingInit:
             patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockTokenRepo.return_value.get_token_for_chat.return_value = None
-            MockTokenRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.__enter__ = Mock(
+                return_value=MockTokenRepo.return_value
+            )
+            MockTokenRepo.return_value.__exit__ = Mock(return_value=False)
             MockIGService.return_value.get_active_account.return_value = None
-            MockIGService.return_value.close = Mock()
-            MockSettingsService.return_value.close = Mock()
+            MockIGService.return_value.__enter__ = Mock(
+                return_value=MockIGService.return_value
+            )
+            MockIGService.return_value.__exit__ = Mock(return_value=False)
+            MockSettingsService.return_value.__enter__ = Mock(
+                return_value=MockSettingsService.return_value
+            )
+            MockSettingsService.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/init",
@@ -131,12 +143,24 @@ class TestOnboardingInit:
             patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockTokenRepo.return_value.get_token_for_chat.return_value = None
-            MockTokenRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.__enter__ = Mock(
+                return_value=MockTokenRepo.return_value
+            )
+            MockTokenRepo.return_value.__exit__ = Mock(return_value=False)
             MockIGService.return_value.get_active_account.return_value = mock_account
-            MockIGService.return_value.close = Mock()
-            MockSettingsService.return_value.close = Mock()
+            MockIGService.return_value.__enter__ = Mock(
+                return_value=MockIGService.return_value
+            )
+            MockIGService.return_value.__exit__ = Mock(return_value=False)
+            MockSettingsService.return_value.__enter__ = Mock(
+                return_value=MockSettingsService.return_value
+            )
+            MockSettingsService.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/init",
@@ -162,12 +186,24 @@ class TestOnboardingInit:
             patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockTokenRepo.return_value.get_token_for_chat.return_value = mock_token
-            MockTokenRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.__enter__ = Mock(
+                return_value=MockTokenRepo.return_value
+            )
+            MockTokenRepo.return_value.__exit__ = Mock(return_value=False)
             MockIGService.return_value.get_active_account.return_value = None
-            MockIGService.return_value.close = Mock()
-            MockSettingsService.return_value.close = Mock()
+            MockIGService.return_value.__enter__ = Mock(
+                return_value=MockIGService.return_value
+            )
+            MockIGService.return_value.__exit__ = Mock(return_value=False)
+            MockSettingsService.return_value.__enter__ = Mock(
+                return_value=MockSettingsService.return_value
+            )
+            MockSettingsService.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/init",
@@ -211,18 +247,33 @@ class TestOnboardingInit:
             patch("src.repositories.media_repository.MediaRepository") as MockMediaRepo,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockTokenRepo.return_value.get_token_for_chat.return_value = None
-            MockTokenRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.__enter__ = Mock(
+                return_value=MockTokenRepo.return_value
+            )
+            MockTokenRepo.return_value.__exit__ = Mock(return_value=False)
             MockIGService.return_value.get_active_account.return_value = None
-            MockIGService.return_value.close = Mock()
-            MockSettingsService.return_value.close = Mock()
+            MockIGService.return_value.__enter__ = Mock(
+                return_value=MockIGService.return_value
+            )
+            MockIGService.return_value.__exit__ = Mock(return_value=False)
+            MockSettingsService.return_value.__enter__ = Mock(
+                return_value=MockSettingsService.return_value
+            )
+            MockSettingsService.return_value.__exit__ = Mock(return_value=False)
             MockMediaRepo.return_value.get_active_by_source_type.return_value = [
                 Mock(),
                 Mock(),
                 Mock(),
             ]
-            MockMediaRepo.return_value.close = Mock()
+            MockMediaRepo.return_value.__enter__ = Mock(
+                return_value=MockMediaRepo.return_value
+            )
+            MockMediaRepo.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/init",
@@ -252,12 +303,24 @@ class TestOnboardingInit:
             patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockTokenRepo.return_value.get_token_for_chat.return_value = None
-            MockTokenRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.__enter__ = Mock(
+                return_value=MockTokenRepo.return_value
+            )
+            MockTokenRepo.return_value.__exit__ = Mock(return_value=False)
             MockIGService.return_value.get_active_account.return_value = None
-            MockIGService.return_value.close = Mock()
-            MockSettingsService.return_value.close = Mock()
+            MockIGService.return_value.__enter__ = Mock(
+                return_value=MockIGService.return_value
+            )
+            MockIGService.return_value.__exit__ = Mock(return_value=False)
+            MockSettingsService.return_value.__enter__ = Mock(
+                return_value=MockSettingsService.return_value
+            )
+            MockSettingsService.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/init",
@@ -290,21 +353,36 @@ class TestOnboardingInit:
             patch("src.api.routes.onboarding.HistoryRepository") as MockHistoryRepo,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockTokenRepo.return_value.get_token_for_chat.return_value = None
-            MockTokenRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.__enter__ = Mock(
+                return_value=MockTokenRepo.return_value
+            )
+            MockTokenRepo.return_value.__exit__ = Mock(return_value=False)
             MockIGService.return_value.get_active_account.return_value = None
-            MockIGService.return_value.close = Mock()
+            MockIGService.return_value.__enter__ = Mock(
+                return_value=MockIGService.return_value
+            )
+            MockIGService.return_value.__exit__ = Mock(return_value=False)
             mock_queue_items = [
                 Mock(scheduled_for=datetime(2026, 2, 20, 10, 0, 0)) for _ in range(5)
             ]
             MockQueueRepo.return_value.get_all.return_value = mock_queue_items
-            MockQueueRepo.return_value.close = Mock()
+            MockQueueRepo.return_value.__enter__ = Mock(
+                return_value=MockQueueRepo.return_value
+            )
+            MockQueueRepo.return_value.__exit__ = Mock(return_value=False)
 
             mock_post = Mock()
             mock_post.posted_at = datetime(2026, 2, 18, 10, 30, 0)
             MockHistoryRepo.return_value.get_recent_posts.return_value = [mock_post]
-            MockHistoryRepo.return_value.close = Mock()
+            MockHistoryRepo.return_value.__enter__ = Mock(
+                return_value=MockHistoryRepo.return_value
+            )
+            MockHistoryRepo.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/init",
@@ -339,11 +417,20 @@ class TestOnboardingInit:
             ),
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockTokenRepo.return_value.get_token_for_chat.return_value = None
-            MockTokenRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.__enter__ = Mock(
+                return_value=MockTokenRepo.return_value
+            )
+            MockTokenRepo.return_value.__exit__ = Mock(return_value=False)
             MockIGService.return_value.get_active_account.return_value = None
-            MockIGService.return_value.close = Mock()
+            MockIGService.return_value.__enter__ = Mock(
+                return_value=MockIGService.return_value
+            )
+            MockIGService.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/init",
@@ -374,7 +461,8 @@ class TestOnboardingOAuthUrl:
             MockOAuth.return_value.generate_authorization_url.return_value = (
                 "https://facebook.com/dialog/oauth?client_id=123"
             )
-            MockOAuth.return_value.close = Mock()
+            MockOAuth.return_value.__enter__ = Mock(return_value=MockOAuth.return_value)
+            MockOAuth.return_value.__exit__ = Mock(return_value=False)
 
             response = client.get(
                 f"/api/onboarding/oauth-url/instagram?init_data=test&chat_id={CHAT_ID}"
@@ -394,7 +482,10 @@ class TestOnboardingOAuthUrl:
             MockGDrive.return_value.generate_authorization_url.return_value = (
                 "https://accounts.google.com/o/oauth2/auth?client_id=123"
             )
-            MockGDrive.return_value.close = Mock()
+            MockGDrive.return_value.__enter__ = Mock(
+                return_value=MockGDrive.return_value
+            )
+            MockGDrive.return_value.__exit__ = Mock(return_value=False)
 
             response = client.get(
                 f"/api/onboarding/oauth-url/google-drive"
@@ -454,8 +545,14 @@ class TestOnboardingMediaFolder:
             mock_provider = Mock()
             mock_provider.list_files.return_value = mock_files
             MockGDrive.return_value.get_provider_for_chat.return_value = mock_provider
-            MockGDrive.return_value.close = Mock()
-            MockSettings.return_value.close = Mock()
+            MockGDrive.return_value.__enter__ = Mock(
+                return_value=MockGDrive.return_value
+            )
+            MockGDrive.return_value.__exit__ = Mock(return_value=False)
+            MockSettings.return_value.__enter__ = Mock(
+                return_value=MockSettings.return_value
+            )
+            MockSettings.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/media-folder",
@@ -513,7 +610,10 @@ class TestOnboardingMediaFolder:
             MockGDrive.return_value.get_provider_for_chat.side_effect = Exception(
                 "No credentials"
             )
-            MockGDrive.return_value.close = Mock()
+            MockGDrive.return_value.__enter__ = Mock(
+                return_value=MockGDrive.return_value
+            )
+            MockGDrive.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/media-folder",
@@ -561,10 +661,17 @@ class TestOnboardingStartIndexing:
             patch("src.api.routes.onboarding.SettingsService") as MockStepService,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockSync.return_value.sync.return_value = mock_sync_result
-            MockSync.return_value.close = Mock()
-            MockStepService.return_value.close = Mock()
+            MockSync.return_value.__enter__ = Mock(return_value=MockSync.return_value)
+            MockSync.return_value.__exit__ = Mock(return_value=False)
+            MockStepService.return_value.__enter__ = Mock(
+                return_value=MockStepService.return_value
+            )
+            MockStepService.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/start-indexing",
@@ -594,7 +701,10 @@ class TestOnboardingStartIndexing:
             ) as MockSettingsRepo,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/start-indexing",
@@ -619,9 +729,13 @@ class TestOnboardingStartIndexing:
             patch("src.services.core.media_sync.MediaSyncService") as MockSync,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockSync.return_value.sync.side_effect = Exception("Connection timeout")
-            MockSync.return_value.close = Mock()
+            MockSync.return_value.__enter__ = Mock(return_value=MockSync.return_value)
+            MockSync.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/start-indexing",
@@ -646,11 +760,15 @@ class TestOnboardingStartIndexing:
             patch("src.services.core.media_sync.MediaSyncService") as MockSync,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockSync.return_value.sync.side_effect = ValueError(
                 "Provider not configured"
             )
-            MockSync.return_value.close = Mock()
+            MockSync.return_value.__enter__ = Mock(return_value=MockSync.return_value)
+            MockSync.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/start-indexing",
@@ -675,7 +793,10 @@ class TestOnboardingSchedule:
             _mock_validate(),
             patch("src.api.routes.onboarding.SettingsService") as MockSettings,
         ):
-            MockSettings.return_value.close = Mock()
+            MockSettings.return_value.__enter__ = Mock(
+                return_value=MockSettings.return_value
+            )
+            MockSettings.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/schedule",
@@ -708,7 +829,10 @@ class TestOnboardingSchedule:
             MockSettings.return_value.update_setting.side_effect = ValueError(
                 "Invalid setting value"
             )
-            MockSettings.return_value.close = Mock()
+            MockSettings.return_value.__enter__ = Mock(
+                return_value=MockSettings.return_value
+            )
+            MockSettings.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/schedule",
@@ -746,13 +870,25 @@ class TestOnboardingComplete:
             patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
             patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
         ):
-            MockSettingsService.return_value.close = Mock()
+            MockSettingsService.return_value.__enter__ = Mock(
+                return_value=MockSettingsService.return_value
+            )
+            MockSettingsService.return_value.__exit__ = Mock(return_value=False)
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockTokenRepo.return_value.get_token_for_chat.return_value = None
-            MockTokenRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.__enter__ = Mock(
+                return_value=MockTokenRepo.return_value
+            )
+            MockTokenRepo.return_value.__exit__ = Mock(return_value=False)
             MockIGService.return_value.get_active_account.return_value = None
-            MockIGService.return_value.close = Mock()
+            MockIGService.return_value.__enter__ = Mock(
+                return_value=MockIGService.return_value
+            )
+            MockIGService.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/complete",
@@ -786,18 +922,33 @@ class TestOnboardingComplete:
             patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
             patch("src.services.core.scheduler.SchedulerService") as MockScheduler,
         ):
-            MockSettingsService.return_value.close = Mock()
+            MockSettingsService.return_value.__enter__ = Mock(
+                return_value=MockSettingsService.return_value
+            )
+            MockSettingsService.return_value.__exit__ = Mock(return_value=False)
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockTokenRepo.return_value.get_token_for_chat.return_value = None
-            MockTokenRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.__enter__ = Mock(
+                return_value=MockTokenRepo.return_value
+            )
+            MockTokenRepo.return_value.__exit__ = Mock(return_value=False)
             MockIGService.return_value.get_active_account.return_value = None
-            MockIGService.return_value.close = Mock()
+            MockIGService.return_value.__enter__ = Mock(
+                return_value=MockIGService.return_value
+            )
+            MockIGService.return_value.__exit__ = Mock(return_value=False)
             MockScheduler.return_value.create_schedule.return_value = {
                 "scheduled": 21,
                 "total_slots": 21,
             }
-            MockScheduler.return_value.close = Mock()
+            MockScheduler.return_value.__enter__ = Mock(
+                return_value=MockScheduler.return_value
+            )
+            MockScheduler.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/complete",
@@ -833,17 +984,32 @@ class TestOnboardingComplete:
             patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
             patch("src.services.core.scheduler.SchedulerService") as MockScheduler,
         ):
-            MockSettingsService.return_value.close = Mock()
+            MockSettingsService.return_value.__enter__ = Mock(
+                return_value=MockSettingsService.return_value
+            )
+            MockSettingsService.return_value.__exit__ = Mock(return_value=False)
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockTokenRepo.return_value.get_token_for_chat.return_value = None
-            MockTokenRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.__enter__ = Mock(
+                return_value=MockTokenRepo.return_value
+            )
+            MockTokenRepo.return_value.__exit__ = Mock(return_value=False)
             MockIGService.return_value.get_active_account.return_value = None
-            MockIGService.return_value.close = Mock()
+            MockIGService.return_value.__enter__ = Mock(
+                return_value=MockIGService.return_value
+            )
+            MockIGService.return_value.__exit__ = Mock(return_value=False)
             MockScheduler.return_value.create_schedule.side_effect = Exception(
                 "No media items"
             )
-            MockScheduler.return_value.close = Mock()
+            MockScheduler.return_value.__enter__ = Mock(
+                return_value=MockScheduler.return_value
+            )
+            MockScheduler.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/complete",
@@ -874,13 +1040,25 @@ class TestOnboardingComplete:
             patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
             patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
         ):
-            MockSettingsService.return_value.close = Mock()
+            MockSettingsService.return_value.__enter__ = Mock(
+                return_value=MockSettingsService.return_value
+            )
+            MockSettingsService.return_value.__exit__ = Mock(return_value=False)
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockTokenRepo.return_value.get_token_for_chat.return_value = None
-            MockTokenRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.__enter__ = Mock(
+                return_value=MockTokenRepo.return_value
+            )
+            MockTokenRepo.return_value.__exit__ = Mock(return_value=False)
             MockIGService.return_value.get_active_account.return_value = mock_account
-            MockIGService.return_value.close = Mock()
+            MockIGService.return_value.__enter__ = Mock(
+                return_value=MockIGService.return_value
+            )
+            MockIGService.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/complete",
@@ -911,17 +1089,32 @@ class TestOnboardingComplete:
             patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
             patch("src.repositories.media_repository.MediaRepository") as MockMediaRepo,
         ):
-            MockSettingsService.return_value.close = Mock()
+            MockSettingsService.return_value.__enter__ = Mock(
+                return_value=MockSettingsService.return_value
+            )
+            MockSettingsService.return_value.__exit__ = Mock(return_value=False)
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockTokenRepo.return_value.get_token_for_chat.return_value = None
-            MockTokenRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.__enter__ = Mock(
+                return_value=MockTokenRepo.return_value
+            )
+            MockTokenRepo.return_value.__exit__ = Mock(return_value=False)
             MockIGService.return_value.get_active_account.return_value = Mock(
                 instagram_username="test"
             )
-            MockIGService.return_value.close = Mock()
+            MockIGService.return_value.__enter__ = Mock(
+                return_value=MockIGService.return_value
+            )
+            MockIGService.return_value.__exit__ = Mock(return_value=False)
             MockMediaRepo.return_value.get_active_by_source_type.return_value = [Mock()]
-            MockMediaRepo.return_value.close = Mock()
+            MockMediaRepo.return_value.__enter__ = Mock(
+                return_value=MockMediaRepo.return_value
+            )
+            MockMediaRepo.return_value.__exit__ = Mock(return_value=False)
 
             client.post(
                 "/api/onboarding/complete",
@@ -982,12 +1175,24 @@ class TestOnboardingChatIdVerification:
             patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockTokenRepo.return_value.get_token_for_chat.return_value = None
-            MockTokenRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.__enter__ = Mock(
+                return_value=MockTokenRepo.return_value
+            )
+            MockTokenRepo.return_value.__exit__ = Mock(return_value=False)
             MockIGService.return_value.get_active_account.return_value = None
-            MockIGService.return_value.close = Mock()
-            MockSettingsService.return_value.close = Mock()
+            MockIGService.return_value.__enter__ = Mock(
+                return_value=MockIGService.return_value
+            )
+            MockIGService.return_value.__exit__ = Mock(return_value=False)
+            MockSettingsService.return_value.__enter__ = Mock(
+                return_value=MockSettingsService.return_value
+            )
+            MockSettingsService.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/init",
@@ -1010,12 +1215,24 @@ class TestOnboardingChatIdVerification:
             patch("src.api.routes.onboarding.SettingsService") as MockSettingsService,
         ):
             MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
-            MockSettingsRepo.return_value.close = Mock()
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
             MockTokenRepo.return_value.get_token_for_chat.return_value = None
-            MockTokenRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.__enter__ = Mock(
+                return_value=MockTokenRepo.return_value
+            )
+            MockTokenRepo.return_value.__exit__ = Mock(return_value=False)
             MockIGService.return_value.get_active_account.return_value = None
-            MockIGService.return_value.close = Mock()
-            MockSettingsService.return_value.close = Mock()
+            MockIGService.return_value.__enter__ = Mock(
+                return_value=MockIGService.return_value
+            )
+            MockIGService.return_value.__exit__ = Mock(return_value=False)
+            MockSettingsService.return_value.__enter__ = Mock(
+                return_value=MockSettingsService.return_value
+            )
+            MockSettingsService.return_value.__exit__ = Mock(return_value=False)
 
             response = client.post(
                 "/api/onboarding/init",

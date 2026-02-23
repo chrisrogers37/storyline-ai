@@ -714,8 +714,10 @@ class TestSetupStatusGoogleDrive:
         with patch(
             "src.repositories.token_repository.TokenRepository"
         ) as MockTokenRepo:
-            MockTokenRepo.return_value.get_token_for_chat.return_value = mock_token
-            MockTokenRepo.return_value.close = Mock()
+            mock_repo_instance = MockTokenRepo.return_value
+            mock_repo_instance.__enter__ = Mock(return_value=mock_repo_instance)
+            mock_repo_instance.__exit__ = Mock(return_value=False)
+            mock_repo_instance.get_token_for_chat.return_value = mock_token
 
             line, ok = handlers._check_gdrive_setup(-100123)
 
@@ -734,8 +736,10 @@ class TestSetupStatusGoogleDrive:
         with patch(
             "src.repositories.token_repository.TokenRepository"
         ) as MockTokenRepo:
-            MockTokenRepo.return_value.get_token_for_chat.return_value = None
-            MockTokenRepo.return_value.close = Mock()
+            mock_repo_instance = MockTokenRepo.return_value
+            mock_repo_instance.__enter__ = Mock(return_value=mock_repo_instance)
+            mock_repo_instance.__exit__ = Mock(return_value=False)
+            mock_repo_instance.get_token_for_chat.return_value = None
 
             line, ok = handlers._check_gdrive_setup(-100123)
 
@@ -1118,9 +1122,11 @@ class TestStartCommand:
         with patch(
             "src.services.core.settings_service.SettingsService"
         ) as MockSettings:
+            mock_settings_instance = MockSettings.return_value
+            mock_settings_instance.__enter__ = Mock(return_value=mock_settings_instance)
+            mock_settings_instance.__exit__ = Mock(return_value=False)
             mock_chat_settings = Mock(onboarding_completed=False)
-            MockSettings.return_value.get_settings.return_value = mock_chat_settings
-            MockSettings.return_value.close = Mock()
+            mock_settings_instance.get_settings.return_value = mock_chat_settings
 
             with patch(
                 "src.services.core.telegram_commands.settings"
@@ -1153,9 +1159,11 @@ class TestStartCommand:
         with patch(
             "src.services.core.settings_service.SettingsService"
         ) as MockSettings:
+            mock_settings_instance = MockSettings.return_value
+            mock_settings_instance.__enter__ = Mock(return_value=mock_settings_instance)
+            mock_settings_instance.__exit__ = Mock(return_value=False)
             mock_chat_settings = Mock(onboarding_completed=True)
-            MockSettings.return_value.get_settings.return_value = mock_chat_settings
-            MockSettings.return_value.close = Mock()
+            mock_settings_instance.get_settings.return_value = mock_chat_settings
 
             with patch(
                 "src.services.core.telegram_commands.settings"
@@ -1187,9 +1195,11 @@ class TestStartCommand:
         with patch(
             "src.services.core.settings_service.SettingsService"
         ) as MockSettings:
+            mock_settings_instance = MockSettings.return_value
+            mock_settings_instance.__enter__ = Mock(return_value=mock_settings_instance)
+            mock_settings_instance.__exit__ = Mock(return_value=False)
             mock_chat_settings = Mock(onboarding_completed=True)
-            MockSettings.return_value.get_settings.return_value = mock_chat_settings
-            MockSettings.return_value.close = Mock()
+            mock_settings_instance.get_settings.return_value = mock_chat_settings
 
             with patch(
                 "src.services.core.telegram_commands.settings"
@@ -1221,9 +1231,11 @@ class TestStartCommand:
         with patch(
             "src.services.core.settings_service.SettingsService"
         ) as MockSettings:
+            mock_settings_instance = MockSettings.return_value
+            mock_settings_instance.__enter__ = Mock(return_value=mock_settings_instance)
+            mock_settings_instance.__exit__ = Mock(return_value=False)
             mock_chat_settings = Mock(onboarding_completed=True)
-            MockSettings.return_value.get_settings.return_value = mock_chat_settings
-            MockSettings.return_value.close = Mock()
+            mock_settings_instance.get_settings.return_value = mock_chat_settings
 
             await handlers.handle_start(mock_update, Mock())
 

@@ -124,24 +124,21 @@ def _validate_request(init_data: str, chat_id: int) -> dict:
 
 def _get_setup_state(telegram_chat_id: int) -> dict:
     """Build the current setup state for a chat."""
-    settings_repo = ChatSettingsRepository()
-    token_repo = TokenRepository()
-
-    try:
+    with (
+        ChatSettingsRepository() as settings_repo,
+        TokenRepository() as token_repo,
+    ):
         chat_settings = settings_repo.get_or_create(telegram_chat_id)
         chat_settings_id = str(chat_settings.id)
 
         # Check Instagram connection
         instagram_connected = False
         instagram_username = None
-        account_service = InstagramAccountService()
-        try:
+        with InstagramAccountService() as account_service:
             active_account = account_service.get_active_account(telegram_chat_id)
             if active_account:
                 instagram_connected = True
                 instagram_username = active_account.instagram_username
-        finally:
-            account_service.close()
 
         # Check Google Drive connection
         gdrive_connected = False
@@ -165,15 +162,12 @@ def _get_setup_state(telegram_chat_id: int) -> dict:
         if media_folder_configured:
             from src.repositories.media_repository import MediaRepository
 
-            media_repo = MediaRepository()
-            try:
+            with MediaRepository() as media_repo:
                 active_items = media_repo.get_active_by_source_type(
                     "google_drive", chat_settings_id=chat_settings_id
                 )
                 media_count = len(active_items)
                 media_indexed = media_count > 0
-            finally:
-                media_repo.close()
 
         # Dashboard data: queue count, last post time, schedule bounds
         queue_count = 0
@@ -181,9 +175,7 @@ def _get_setup_state(telegram_chat_id: int) -> dict:
         next_post_at = None
         schedule_end_date = None
         try:
-            queue_repo = QueueRepository()
-            history_repo = HistoryRepository()
-            try:
+            with QueueRepository() as queue_repo, HistoryRepository() as history_repo:
                 pending_items = queue_repo.get_all(
                     status="pending", chat_settings_id=chat_settings_id
                 )
@@ -197,9 +189,6 @@ def _get_setup_state(telegram_chat_id: int) -> dict:
                 )
                 if recent_posts:
                     last_post_at = recent_posts[0].posted_at.isoformat()
-            finally:
-                queue_repo.close()
-                history_repo.close()
         except Exception:
             logger.debug("Failed to fetch queue/history for onboarding init")
 
@@ -227,9 +216,6 @@ def _get_setup_state(telegram_chat_id: int) -> dict:
             "next_post_at": next_post_at,
             "schedule_end_date": schedule_end_date,
         }
-    finally:
-        settings_repo.close()
-        token_repo.close()
 
 
 # --- Endpoints ---
@@ -246,11 +232,8 @@ async def onboarding_init(request: InitRequest):
     if not setup_state.get("onboarding_completed") and not setup_state.get(
         "onboarding_step"
     ):
-        settings_service = SettingsService()
-        try:
+        with SettingsService() as settings_service:
             settings_service.set_onboarding_step(request.chat_id, "welcome")
-        finally:
-            settings_service.close()
         setup_state["onboarding_step"] = "welcome"
 
     return {
@@ -272,13 +255,11 @@ async def onboarding_oauth_url(
     if provider == "instagram":
         from src.services.core.oauth_service import OAuthService
 
-        service = OAuthService()
-        try:
-            auth_url = service.generate_authorization_url(chat_id)
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
-        finally:
-            service.close()
+        with OAuthService() as service:
+            try:
+                auth_url = service.generate_authorization_url(chat_id)
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e))
         return {"auth_url": auth_url}
 
     elif provider == "google-drive":
@@ -286,13 +267,11 @@ async def onboarding_oauth_url(
             GoogleDriveOAuthService,
         )
 
-        service = GoogleDriveOAuthService()
-        try:
-            auth_url = service.generate_authorization_url(chat_id)
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
-        finally:
-            service.close()
+        with GoogleDriveOAuthService() as service:
+            try:
+                auth_url = service.generate_authorization_url(chat_id)
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e))
         return {"auth_url": auth_url}
 
     else:
@@ -318,38 +297,33 @@ async def onboarding_media_folder(request: MediaFolderRequest):
     # Validate folder access using user's OAuth credentials
     from src.services.integrations.google_drive import GoogleDriveService
 
-    gdrive_service = GoogleDriveService()
-    try:
-        provider = gdrive_service.get_provider_for_chat(
-            request.chat_id, root_folder_id=folder_id
-        )
-        # List files to verify access and get count
-        files = provider.list_files()
-        file_count = len(files)
+    with GoogleDriveService() as gdrive_service:
+        try:
+            provider = gdrive_service.get_provider_for_chat(
+                request.chat_id, root_folder_id=folder_id
+            )
+            # List files to verify access and get count
+            files = provider.list_files()
+            file_count = len(files)
 
-        # Extract unique categories (subfolder names)
-        categories = list({f.get("category", "uncategorized") for f in files})
-    except Exception as e:
-        logger.error(f"Failed to access Google Drive folder: {e}")
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot access this folder. Make sure you've shared it "
-            "with the connected Google account.",
-        )
-    finally:
-        gdrive_service.close()
+            # Extract unique categories (subfolder names)
+            categories = list({f.get("category", "uncategorized") for f in files})
+        except Exception as e:
+            logger.error(f"Failed to access Google Drive folder: {e}")
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot access this folder. Make sure you've shared it "
+                "with the connected Google account.",
+            )
 
     # Persist folder config to per-chat settings
-    settings_service = SettingsService()
-    try:
+    with SettingsService() as settings_service:
         settings_service.update_setting(
             request.chat_id, "media_source_type", "google_drive"
         )
         settings_service.update_setting(request.chat_id, "media_source_root", folder_id)
         settings_service.update_setting(request.chat_id, "media_sync_enabled", True)
         settings_service.set_onboarding_step(request.chat_id, "media_folder")
-    finally:
-        settings_service.close()
 
     return {
         "folder_id": folder_id,
@@ -368,13 +342,10 @@ async def onboarding_start_indexing(request: StartIndexingRequest):
     """
     _validate_request(request.init_data, request.chat_id)
 
-    settings_repo = ChatSettingsRepository()
-    try:
+    with ChatSettingsRepository() as settings_repo:
         chat_settings = settings_repo.get_or_create(request.chat_id)
         source_type = chat_settings.media_source_type
         source_root = chat_settings.media_source_root
-    finally:
-        settings_repo.close()
 
     if not source_root:
         raise HTTPException(
@@ -384,31 +355,26 @@ async def onboarding_start_indexing(request: StartIndexingRequest):
 
     from src.services.core.media_sync import MediaSyncService
 
-    sync_service = MediaSyncService()
-    try:
-        result = sync_service.sync(
-            source_type=source_type,
-            source_root=source_root,
-            triggered_by="onboarding",
-            telegram_chat_id=request.chat_id,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Media indexing failed during onboarding: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Media indexing failed. Please try again or use /sync later.",
-        )
-    finally:
-        sync_service.close()
+    with MediaSyncService() as sync_service:
+        try:
+            result = sync_service.sync(
+                source_type=source_type,
+                source_root=source_root,
+                triggered_by="onboarding",
+                telegram_chat_id=request.chat_id,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            logger.error(f"Media indexing failed during onboarding: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail="Media indexing failed. Please try again or use /sync later.",
+            )
 
     # Update onboarding step
-    step_service = SettingsService()
-    try:
+    with SettingsService() as step_service:
         step_service.set_onboarding_step(request.chat_id, "indexing")
-    finally:
-        step_service.close()
 
     return {
         "indexed": True,
@@ -426,22 +392,20 @@ async def onboarding_schedule(request: ScheduleRequest):
     """Save posting schedule configuration."""
     _validate_request(request.init_data, request.chat_id)
 
-    settings_service = SettingsService()
-    try:
-        settings_service.update_setting(
-            request.chat_id, "posts_per_day", request.posts_per_day
-        )
-        settings_service.update_setting(
-            request.chat_id, "posting_hours_start", request.posting_hours_start
-        )
-        settings_service.update_setting(
-            request.chat_id, "posting_hours_end", request.posting_hours_end
-        )
-        settings_service.set_onboarding_step(request.chat_id, "schedule")
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        settings_service.close()
+    with SettingsService() as settings_service:
+        try:
+            settings_service.update_setting(
+                request.chat_id, "posts_per_day", request.posts_per_day
+            )
+            settings_service.update_setting(
+                request.chat_id, "posting_hours_start", request.posting_hours_start
+            )
+            settings_service.update_setting(
+                request.chat_id, "posting_hours_end", request.posting_hours_end
+            )
+            settings_service.set_onboarding_step(request.chat_id, "schedule")
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
     return {
         "posts_per_day": request.posts_per_day,
@@ -455,8 +419,7 @@ async def onboarding_complete(request: CompleteRequest):
     """Mark onboarding as finished, auto-configure dependent settings."""
     _validate_request(request.init_data, request.chat_id)
 
-    settings_service = SettingsService()
-    try:
+    with SettingsService() as settings_service:
         # Auto-configure dependent settings based on what was connected
         setup_state = _get_setup_state(request.chat_id)
 
@@ -471,31 +434,27 @@ async def onboarding_complete(request: CompleteRequest):
         # NOTE: dry_run_mode stays True. User flips it manually later.
 
         settings_service.complete_onboarding(request.chat_id)
-    finally:
-        settings_service.close()
 
     result = {"onboarding_completed": True, "schedule_created": False}
 
     if request.create_schedule:
         from src.services.core.scheduler import SchedulerService
 
-        scheduler = SchedulerService()
-        try:
-            schedule_result = scheduler.create_schedule(
-                days=request.schedule_days,
-                telegram_chat_id=request.chat_id,
-            )
-            result["schedule_created"] = True
-            result["schedule_summary"] = {
-                "scheduled": schedule_result.get("scheduled", 0),
-                "total_slots": schedule_result.get("total_slots", 0),
-                "days": request.schedule_days,
-            }
-        except Exception as e:
-            logger.error(f"Failed to create schedule during onboarding: {e}")
-            result["schedule_error"] = str(e)
-        finally:
-            scheduler.close()
+        with SchedulerService() as scheduler:
+            try:
+                schedule_result = scheduler.create_schedule(
+                    days=request.schedule_days,
+                    telegram_chat_id=request.chat_id,
+                )
+                result["schedule_created"] = True
+                result["schedule_summary"] = {
+                    "scheduled": schedule_result.get("scheduled", 0),
+                    "total_slots": schedule_result.get("total_slots", 0),
+                    "days": request.schedule_days,
+                }
+            except Exception as e:
+                logger.error(f"Failed to create schedule during onboarding: {e}")
+                result["schedule_error"] = str(e)
 
     return result
 
@@ -512,9 +471,10 @@ async def onboarding_queue_detail(
     """Return detailed queue items with schedule summary for dashboard."""
     _validate_request(init_data, chat_id)
 
-    settings_repo = ChatSettingsRepository()
-    queue_repo = QueueRepository()
-    try:
+    with (
+        ChatSettingsRepository() as settings_repo,
+        QueueRepository() as queue_repo,
+    ):
         chat_settings = settings_repo.get_or_create(chat_id)
         chat_settings_id = str(chat_settings.id)
 
@@ -534,8 +494,7 @@ async def onboarding_queue_detail(
 
         # Build item list (limited) with media info
         items = []
-        media_repo = MediaRepository()
-        try:
+        with MediaRepository() as media_repo:
             for item in pending_items[:limit]:
                 media = media_repo.get_by_id(str(item.media_item_id))
                 items.append(
@@ -546,8 +505,6 @@ async def onboarding_queue_detail(
                         or "uncategorized",
                     }
                 )
-        finally:
-            media_repo.close()
 
         schedule_end = None
         days_remaining = None
@@ -566,9 +523,6 @@ async def onboarding_queue_detail(
             "days_remaining": days_remaining,
             "day_summary": day_summary,
         }
-    finally:
-        settings_repo.close()
-        queue_repo.close()
 
 
 @router.get("/history-detail")
@@ -580,9 +534,10 @@ async def onboarding_history_detail(
     """Return recent posting history with media info for dashboard."""
     _validate_request(init_data, chat_id)
 
-    settings_repo = ChatSettingsRepository()
-    history_repo = HistoryRepository()
-    try:
+    with (
+        ChatSettingsRepository() as settings_repo,
+        HistoryRepository() as history_repo,
+    ):
         chat_settings = settings_repo.get_or_create(chat_id)
         chat_settings_id = str(chat_settings.id)
 
@@ -591,8 +546,7 @@ async def onboarding_history_detail(
         )
 
         items = []
-        media_repo = MediaRepository()
-        try:
+        with MediaRepository() as media_repo:
             for item in history_items:
                 media = media_repo.get_by_id(str(item.media_item_id))
                 items.append(
@@ -605,13 +559,8 @@ async def onboarding_history_detail(
                         "posting_method": item.posting_method,
                     }
                 )
-        finally:
-            media_repo.close()
 
         return {"items": items}
-    finally:
-        settings_repo.close()
-        history_repo.close()
 
 
 @router.get("/media-stats")
@@ -622,13 +571,11 @@ async def onboarding_media_stats(
     """Return media library breakdown by category for dashboard."""
     _validate_request(init_data, chat_id)
 
-    settings_repo = ChatSettingsRepository()
-    try:
+    with ChatSettingsRepository() as settings_repo:
         chat_settings = settings_repo.get_or_create(chat_id)
         chat_settings_id = str(chat_settings.id)
 
-        media_repo = MediaRepository()
-        try:
+        with MediaRepository() as media_repo:
             all_active = media_repo.get_all(
                 is_active=True, chat_settings_id=chat_settings_id
             )
@@ -650,10 +597,6 @@ async def onboarding_media_stats(
                 "total_active": len(all_active),
                 "categories": categories,
             }
-        finally:
-            media_repo.close()
-    finally:
-        settings_repo.close()
 
 
 @router.get("/accounts")
@@ -664,9 +607,10 @@ async def onboarding_accounts(
     """List all active Instagram accounts with active account for this chat marked."""
     _validate_request(init_data, chat_id)
 
-    account_service = InstagramAccountService()
-    settings_repo = ChatSettingsRepository()
-    try:
+    with (
+        InstagramAccountService() as account_service,
+        ChatSettingsRepository() as settings_repo,
+    ):
         accounts = account_service.list_accounts(include_inactive=False)
         chat_settings = settings_repo.get_or_create(chat_id)
         active_account_id = (
@@ -687,9 +631,6 @@ async def onboarding_accounts(
             )
 
         return {"accounts": items, "active_account_id": active_account_id}
-    finally:
-        account_service.close()
-        settings_repo.close()
 
 
 @router.post("/switch-account")
@@ -697,21 +638,19 @@ async def onboarding_switch_account(request: SwitchAccountRequest):
     """Switch the active Instagram account for this chat."""
     _validate_request(request.init_data, request.chat_id)
 
-    account_service = InstagramAccountService()
-    try:
-        account = account_service.switch_account(
-            telegram_chat_id=request.chat_id,
-            account_id=request.account_id,
-        )
-        return {
-            "account_id": str(account.id),
-            "display_name": account.display_name,
-            "instagram_username": account.instagram_username,
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        account_service.close()
+    with InstagramAccountService() as account_service:
+        try:
+            account = account_service.switch_account(
+                telegram_chat_id=request.chat_id,
+                account_id=request.account_id,
+            )
+            return {
+                "account_id": str(account.id),
+                "display_name": account.display_name,
+                "instagram_username": account.instagram_username,
+            }
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/remove-account")
@@ -719,20 +658,18 @@ async def onboarding_remove_account(request: RemoveAccountRequest):
     """Deactivate (soft-delete) an Instagram account."""
     _validate_request(request.init_data, request.chat_id)
 
-    account_service = InstagramAccountService()
-    try:
-        account = account_service.deactivate_account(
-            account_id=request.account_id,
-        )
-        return {
-            "account_id": str(account.id),
-            "display_name": account.display_name,
-            "removed": True,
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        account_service.close()
+    with InstagramAccountService() as account_service:
+        try:
+            account = account_service.deactivate_account(
+                account_id=request.account_id,
+            )
+            return {
+                "account_id": str(account.id),
+                "display_name": account.display_name,
+                "removed": True,
+            }
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/system-status")
@@ -763,13 +700,10 @@ async def onboarding_sync_media(request: InitRequest):
     """
     _validate_request(request.init_data, request.chat_id)
 
-    settings_repo = ChatSettingsRepository()
-    try:
+    with ChatSettingsRepository() as settings_repo:
         chat_settings = settings_repo.get_or_create(request.chat_id)
         source_type = chat_settings.media_source_type
         source_root = chat_settings.media_source_root
-    finally:
-        settings_repo.close()
 
     if not source_root:
         raise HTTPException(
@@ -779,24 +713,22 @@ async def onboarding_sync_media(request: InitRequest):
 
     from src.services.core.media_sync import MediaSyncService
 
-    sync_service = MediaSyncService()
-    try:
-        result = sync_service.sync(
-            source_type=source_type,
-            source_root=source_root,
-            triggered_by="dashboard",
-            telegram_chat_id=request.chat_id,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Media sync from dashboard failed: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="Media sync failed. Please try again.",
-        )
-    finally:
-        sync_service.close()
+    with MediaSyncService() as sync_service:
+        try:
+            result = sync_service.sync(
+                source_type=source_type,
+                source_root=source_root,
+                triggered_by="dashboard",
+                telegram_chat_id=request.chat_id,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            logger.error(f"Media sync from dashboard failed: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail="Media sync failed. Please try again.",
+            )
 
     return {
         "new": result.new,
@@ -827,19 +759,17 @@ async def onboarding_toggle_setting(request: ToggleSettingRequest):
             f"Allowed: {', '.join(sorted(allowed_settings))}",
         )
 
-    settings_service = SettingsService()
-    try:
-        new_value = settings_service.toggle_setting(
-            request.chat_id, request.setting_name
-        )
-        return {
-            "setting_name": request.setting_name,
-            "new_value": new_value,
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        settings_service.close()
+    with SettingsService() as settings_service:
+        try:
+            new_value = settings_service.toggle_setting(
+                request.chat_id, request.setting_name
+            )
+            return {
+                "setting_name": request.setting_name,
+                "new_value": new_value,
+            }
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/update-setting")
@@ -855,19 +785,17 @@ async def onboarding_update_setting(request: UpdateSettingRequest):
             f"Allowed: {', '.join(sorted(allowed_settings))}",
         )
 
-    settings_service = SettingsService()
-    try:
-        settings_service.update_setting(
-            request.chat_id, request.setting_name, request.value
-        )
-        return {
-            "setting_name": request.setting_name,
-            "new_value": request.value,
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        settings_service.close()
+    with SettingsService() as settings_service:
+        try:
+            settings_service.update_setting(
+                request.chat_id, request.setting_name, request.value
+            )
+            return {
+                "setting_name": request.setting_name,
+                "new_value": request.value,
+            }
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/extend-schedule")
@@ -877,23 +805,21 @@ async def onboarding_extend_schedule(request: ScheduleActionRequest):
 
     from src.services.core.scheduler import SchedulerService
 
-    scheduler = SchedulerService()
-    try:
-        result = scheduler.extend_schedule(
-            days=request.days,
-            telegram_chat_id=request.chat_id,
-        )
-        return {
-            "scheduled": result.get("scheduled", 0),
-            "skipped": result.get("skipped", 0),
-            "total_slots": result.get("total_slots", 0),
-            "extended_from": result.get("extended_from"),
-        }
-    except Exception as e:
-        logger.error(f"Failed to extend schedule: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        scheduler.close()
+    with SchedulerService() as scheduler:
+        try:
+            result = scheduler.extend_schedule(
+                days=request.days,
+                telegram_chat_id=request.chat_id,
+            )
+            return {
+                "scheduled": result.get("scheduled", 0),
+                "skipped": result.get("skipped", 0),
+                "total_slots": result.get("total_slots", 0),
+                "extended_from": result.get("extended_from"),
+            }
+        except Exception as e:
+            logger.error(f"Failed to extend schedule: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/regenerate-schedule")
@@ -901,9 +827,10 @@ async def onboarding_regenerate_schedule(request: ScheduleActionRequest):
     """Clear all pending queue items and create a fresh schedule."""
     _validate_request(request.init_data, request.chat_id)
 
-    settings_repo = ChatSettingsRepository()
-    queue_repo = QueueRepository()
-    try:
+    with (
+        ChatSettingsRepository() as settings_repo,
+        QueueRepository() as queue_repo,
+    ):
         chat_settings = settings_repo.get_or_create(request.chat_id)
         chat_settings_id = str(chat_settings.id)
 
@@ -912,26 +839,21 @@ async def onboarding_regenerate_schedule(request: ScheduleActionRequest):
             f"Regenerate schedule: cleared {deleted} pending items "
             f"for chat {request.chat_id}"
         )
-    finally:
-        settings_repo.close()
-        queue_repo.close()
 
     from src.services.core.scheduler import SchedulerService
 
-    scheduler = SchedulerService()
-    try:
-        result = scheduler.create_schedule(
-            days=request.days,
-            telegram_chat_id=request.chat_id,
-        )
-        return {
-            "scheduled": result.get("scheduled", 0),
-            "skipped": result.get("skipped", 0),
-            "total_slots": result.get("total_slots", 0),
-            "cleared": deleted,
-        }
-    except Exception as e:
-        logger.error(f"Failed to regenerate schedule: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        scheduler.close()
+    with SchedulerService() as scheduler:
+        try:
+            result = scheduler.create_schedule(
+                days=request.days,
+                telegram_chat_id=request.chat_id,
+            )
+            return {
+                "scheduled": result.get("scheduled", 0),
+                "skipped": result.get("skipped", 0),
+                "total_slots": result.get("total_slots", 0),
+                "cleared": deleted,
+            }
+        except Exception as e:
+            logger.error(f"Failed to regenerate schedule: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
