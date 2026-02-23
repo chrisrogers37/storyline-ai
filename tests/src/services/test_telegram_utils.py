@@ -1,10 +1,11 @@
 """Tests for telegram_utils shared utility functions."""
 
 import pytest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 from src.services.core.telegram_utils import (
     build_account_management_keyboard,
+    build_webapp_button,
     cleanup_conversation_messages,
 )
 
@@ -163,3 +164,58 @@ class TestCleanupConversationMessages:
         )
 
         assert result == 0
+
+
+class TestBuildWebappButton:
+    """Tests for build_webapp_button utility."""
+
+    @patch("src.services.core.telegram_utils.generate_url_token")
+    def test_private_chat_uses_webappinfo(self, mock_token):
+        """Private chats should use WebAppInfo for inline Mini App."""
+        button = build_webapp_button(
+            text="Open App",
+            webapp_url="https://example.com/app?chat_id=123",
+            chat_type="private",
+            chat_id=123,
+            user_id=456,
+        )
+
+        assert button.text == "Open App"
+        assert button.web_app is not None
+        assert button.web_app.url == "https://example.com/app?chat_id=123"
+        assert button.url is None
+        mock_token.assert_not_called()
+
+    @patch("src.services.core.telegram_utils.generate_url_token")
+    def test_group_chat_uses_signed_url(self, mock_token):
+        """Group chats should use signed URL token."""
+        mock_token.return_value = "test-token-abc"
+
+        button = build_webapp_button(
+            text="Open Dashboard",
+            webapp_url="https://example.com/app?chat_id=-100",
+            chat_type="group",
+            chat_id=-100,
+            user_id=789,
+        )
+
+        assert button.text == "Open Dashboard"
+        assert button.web_app is None
+        assert "token=test-token-abc" in button.url
+        mock_token.assert_called_once_with(-100, 789)
+
+    @patch("src.services.core.telegram_utils.generate_url_token")
+    def test_supergroup_uses_signed_url(self, mock_token):
+        """Supergroups should also use signed URL (not WebAppInfo)."""
+        mock_token.return_value = "sg-token"
+
+        button = build_webapp_button(
+            text="Open",
+            webapp_url="https://example.com/app?chat_id=-200",
+            chat_type="supergroup",
+            chat_id=-200,
+            user_id=111,
+        )
+
+        assert button.url is not None
+        assert button.web_app is None

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from src.config.constants import (
     MAX_POSTING_HOUR,
@@ -13,9 +13,12 @@ from src.config.constants import (
     MIN_POSTS_PER_DAY,
 )
 from src.config.settings import settings as app_settings
-from src.services.core.telegram_utils import CANCEL_KEYBOARD, clear_settings_edit_state
+from src.services.core.telegram_utils import (
+    CANCEL_KEYBOARD,
+    build_webapp_button,
+    clear_settings_edit_state,
+)
 from src.utils.logger import logger
-from src.utils.webapp_auth import generate_url_token
 
 if TYPE_CHECKING:
     from src.services.core.telegram_service import TelegramService
@@ -125,17 +128,13 @@ class TelegramSettingsHandlers:
                 f"{app_settings.OAUTH_REDIRECT_BASE_URL}/webapp/onboarding"
                 f"?chat_id={chat_id}"
             )
-            if is_private:
-                settings_button = InlineKeyboardButton(
-                    "🔧 Open Full Settings",
-                    web_app=WebAppInfo(url=webapp_url),
-                )
-            else:
-                token = generate_url_token(chat_id, user_id or 0)
-                signed_url = f"{webapp_url}&token={token}"
-                settings_button = InlineKeyboardButton(
-                    "🔧 Open Full Settings", url=signed_url
-                )
+            settings_button = build_webapp_button(
+                text="🔧 Open Full Settings",
+                webapp_url=webapp_url,
+                chat_type="private" if is_private else "group",
+                chat_id=chat_id,
+                user_id=user_id or 0,
+            )
             keyboard.append([settings_button])
 
         keyboard.append(
