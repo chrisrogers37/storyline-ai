@@ -983,7 +983,9 @@ class TestSystemStatus:
         """System status returns health checks when all healthy."""
         with (
             _mock_validate(),
-            patch("src.services.core.health_check.HealthCheckService") as MockHealthService,
+            patch(
+                "src.services.core.health_check.HealthCheckService"
+            ) as MockHealthService,
         ):
             MockHealthService.return_value.check_all.return_value = (
                 _mock_health_checks()
@@ -1013,7 +1015,9 @@ class TestSystemStatus:
 
         with (
             _mock_validate(),
-            patch("src.services.core.health_check.HealthCheckService") as MockHealthService,
+            patch(
+                "src.services.core.health_check.HealthCheckService"
+            ) as MockHealthService,
         ):
             MockHealthService.return_value.check_all.return_value = health_data
             MockHealthService.return_value.queue_repo = Mock()
@@ -1045,6 +1049,124 @@ class TestSystemStatus:
             response = client.get(
                 "/api/onboarding/system-status",
                 params={"init_data": "invalid", "chat_id": CHAT_ID},
+            )
+
+        assert response.status_code == 401
+
+
+# =============================================================================
+# POST /api/onboarding/sync-media
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestSyncMedia:
+    """Test POST /api/onboarding/sync-media."""
+
+    def test_sync_media_success(self, client):
+        """Sync media calls service and returns result counts."""
+        mock_settings = _mock_settings_obj()
+
+        mock_result = Mock()
+        mock_result.new = 5
+        mock_result.updated = 2
+        mock_result.deactivated = 1
+        mock_result.unchanged = 100
+        mock_result.errors = 0
+        mock_result.total_processed = 108
+
+        with (
+            _mock_validate(),
+            patch(
+                "src.api.routes.onboarding.ChatSettingsRepository"
+            ) as MockSettingsRepo,
+            patch("src.services.core.media_sync.MediaSyncService") as MockSyncService,
+        ):
+            MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
+            MockSettingsRepo.return_value.close = Mock()
+            MockSyncService.return_value.sync.return_value = mock_result
+            MockSyncService.return_value.close = Mock()
+
+            response = client.post(
+                "/api/onboarding/sync-media",
+                json={"init_data": "test", "chat_id": CHAT_ID},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["new"] == 5
+        assert data["updated"] == 2
+        assert data["deactivated"] == 1
+        assert data["unchanged"] == 100
+        assert data["errors"] == 0
+        assert data["total_processed"] == 108
+        MockSyncService.return_value.sync.assert_called_once_with(
+            source_type="google_drive",
+            source_root="folder123",
+            triggered_by="dashboard",
+            telegram_chat_id=CHAT_ID,
+        )
+
+    def test_sync_media_no_folder_configured(self, client):
+        """Sync media returns 400 when no media folder is configured."""
+        mock_settings = _mock_settings_obj(media_source_root=None)
+
+        with (
+            _mock_validate(),
+            patch(
+                "src.api.routes.onboarding.ChatSettingsRepository"
+            ) as MockSettingsRepo,
+        ):
+            MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
+            MockSettingsRepo.return_value.close = Mock()
+
+            response = client.post(
+                "/api/onboarding/sync-media",
+                json={"init_data": "test", "chat_id": CHAT_ID},
+            )
+
+        assert response.status_code == 400
+        assert "No media folder" in response.json()["detail"]
+
+    def test_sync_media_service_error(self, client):
+        """Sync media returns 500 when sync service fails."""
+        mock_settings = _mock_settings_obj()
+
+        with (
+            _mock_validate(),
+            patch(
+                "src.api.routes.onboarding.ChatSettingsRepository"
+            ) as MockSettingsRepo,
+            patch("src.services.core.media_sync.MediaSyncService") as MockSyncService,
+        ):
+            MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
+            MockSettingsRepo.return_value.close = Mock()
+            MockSyncService.return_value.sync.side_effect = RuntimeError("Drive error")
+            MockSyncService.return_value.close = Mock()
+
+            response = client.post(
+                "/api/onboarding/sync-media",
+                json={"init_data": "test", "chat_id": CHAT_ID},
+            )
+
+        assert response.status_code == 500
+        assert "sync failed" in response.json()["detail"].lower()
+
+    def test_sync_media_unauthorized(self, client):
+        """Sync media rejects invalid auth."""
+        with (
+            patch(
+                "src.api.routes.onboarding.validate_init_data",
+                side_effect=ValueError("bad"),
+            ),
+            patch(
+                "src.api.routes.onboarding.validate_url_token",
+                side_effect=ValueError("bad"),
+            ),
+        ):
+            response = client.post(
+                "/api/onboarding/sync-media",
+                json={"init_data": "invalid", "chat_id": CHAT_ID},
             )
 
         assert response.status_code == 401

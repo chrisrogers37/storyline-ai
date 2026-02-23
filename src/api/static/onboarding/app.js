@@ -975,6 +975,59 @@ const App = {
     },
 
     /**
+     * Trigger media sync from the dashboard.
+     */
+    async syncMedia() {
+        const btn = document.getElementById('btn-sync-media');
+        const resultEl = document.getElementById('sync-result');
+        if (btn) btn.disabled = true;
+        if (resultEl) {
+            resultEl.classList.add('hidden');
+            resultEl.textContent = '';
+        }
+
+        this._showLoading(true);
+        try {
+            const data = await this._api('/api/onboarding/sync-media', {
+                init_data: this.initData,
+                chat_id: this.chatId,
+            });
+
+            // Build result message
+            const parts = [];
+            if (data.new > 0) parts.push(data.new + ' new');
+            if (data.updated > 0) parts.push(data.updated + ' updated');
+            if (data.deactivated > 0) parts.push(data.deactivated + ' removed');
+            if (data.errors > 0) parts.push(data.errors + ' errors');
+
+            const msg = parts.length > 0
+                ? 'Synced: ' + parts.join(', ')
+                : 'No changes found';
+
+            if (resultEl) {
+                resultEl.textContent = msg;
+                resultEl.className = 'sync-result' + (data.errors > 0 ? ' sync-result-warning' : '');
+            }
+
+            // Update media count in local state
+            if (this.setupState && data.new > 0) {
+                this.setupState.media_count = (this.setupState.media_count || 0) + data.new;
+                this.setupState.media_indexed = true;
+                const mediaCount = this.setupState.media_count;
+                this._setHomeBadge('media', 'connected', mediaCount.toLocaleString() + ' files');
+            }
+        } catch (err) {
+            if (resultEl) {
+                resultEl.textContent = err.message || 'Sync failed';
+                resultEl.className = 'sync-result sync-result-warning';
+            }
+        } finally {
+            this._showLoading(false);
+            if (btn) btn.disabled = false;
+        }
+    },
+
+    /**
      * Extend the schedule by N days.
      */
     async extendSchedule(days) {

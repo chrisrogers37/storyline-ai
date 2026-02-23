@@ -1,6 +1,6 @@
 # Mini App Consolidation — Command Cleanup & Feature Unification
 
-**Status**: 🔧 IN PROGRESS (Phase 3)
+**Status**: 🔧 IN PROGRESS (Phase 4)
 **Started**: 2026-02-23
 **Created**: 2026-02-23
 **Priority**: High
@@ -91,7 +91,7 @@ The in-channel post notification with action buttons stays exactly as-is:
 
 ## Phased Implementation Plan
 
-### Phase 1: Complete Settings in Quick Controls Card ✅ COMPLETE (PR #73)
+### Phase 1: Complete Settings in Quick Controls Card — ✅ COMPLETE (PR #73)
 **Expand the existing Quick Controls card to include all settings**
 
 The Quick Controls card already has Delivery and Dry Run toggles. This phase adds the remaining 3 toggles and numeric settings editing inline.
@@ -109,7 +109,7 @@ Backend changes (`onboarding.py`):
 
 No changes to `/settings` command in this phase.
 
-### Phase 2: Account Management in Mini App
+### Phase 2: Account Management in Mini App — ✅ COMPLETE (PR #74)
 **Move add/switch/remove accounts to Mini App**
 
 Expand the existing Instagram card to be collapsible with account management:
@@ -166,20 +166,29 @@ Backend changes (`onboarding.py`):
 
 No changes to `/status` command in this phase.
 
-### Phase 4: Quick Actions in Mini App
-**Add /next, /sync, and overdue handling equivalents**
+### Phase 4: Sync Media Action in Mini App — 🔧 IN PROGRESS
+**Add media sync trigger to Quick Controls card**
+Started: 2026-02-22
 
-Add to the existing Quick Controls card or a dedicated action area:
-- "Send Next Now" button (equivalent to `/next`) with confirmation dialog
-- "Sync Media" button (equivalent to `/sync`) with result display
+Simplified scope after challenge round:
+- **Dropped**: "Send Next Now" — stays as `/next` in Telegram (one word, instant, power-user shortcut)
+- **Dropped**: Overdue handling — rare scenario, keep in Telegram via `/resume`
+- **Kept**: "Sync Media" trigger button — natural fit alongside the Media Sync toggle
 
-Add to the Schedule card:
-- When overdue items exist, show inline options: Reschedule / Clear / Force — same as `/resume` flow but in Mini App UI
+Add to Quick Controls card body:
+- "Sync Media" trigger button below the existing settings
+- Visual divider separating settings from actions
+- Inline result display (e.g., "3 new, 1 updated" or "No changes")
+- Loading state while sync runs
+- Error handling for sync failures
 
 Backend:
-- `POST /api/onboarding/force-next` — calls existing `PostingService.force_post_next()`
-- `POST /api/onboarding/sync-media` — calls existing `MediaSyncService.sync()`
-- `POST /api/onboarding/handle-overdue` — calls existing reschedule/clear logic from `TelegramCommandHandlers.handle_resume()`
+- `POST /api/onboarding/sync-media` — calls existing `MediaSyncService.sync(telegram_chat_id=chat_id)`
+
+Tests:
+- `test_sync_media_success` — verify endpoint calls service and returns result
+- `test_sync_media_unauthorized` — verify auth check
+- `test_sync_media_error` — verify error handling
 
 ### Phase 5: Command Cleanup
 **Retire redundant commands, slim remaining ones**
@@ -274,7 +283,7 @@ These are contextual actions on specific posts and MUST stay in the channel. The
 | 1 | `onboarding.py`, `index.html`, `app.js`, `style.css`, tests | Expand Quick Controls |
 | 2 | `onboarding.py`, `index.html`, `app.js`, `style.css`, tests | Account management |
 | 3 | `onboarding.py`, `index.html`, `app.js`, `style.css`, tests | Status/health card |
-| 4 | `onboarding.py`, `index.html`, `app.js`, `style.css`, tests | Quick actions + overdue |
+| 4 | `onboarding.py`, `index.html`, `app.js`, `style.css`, tests | Sync Media trigger button |
 | 5 | `telegram_commands.py`, `telegram_settings.py`, tests | Command slimming + retirements |
 | 6 | BotFather config (manual) | Menu button |
 
