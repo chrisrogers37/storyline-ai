@@ -928,3 +928,272 @@ class TestEnhancedSetupState:
         assert state["next_post_at"] is None
         assert state["schedule_end_date"] is None
         assert state["queue_count"] == 0
+
+
+# =============================================================================
+# GET /api/onboarding/accounts
+# =============================================================================
+
+
+def _mock_account(
+    display_name="Thursday Lines", username="thursday.lines", acct_id=None
+):
+    acct = Mock()
+    acct.id = acct_id or uuid4()
+    acct.display_name = display_name
+    acct.instagram_username = username
+    acct.is_active = True
+    return acct
+
+
+@pytest.mark.unit
+class TestAccounts:
+    """Test GET /api/onboarding/accounts."""
+
+    def test_accounts_returns_list(self, client):
+        """Accounts endpoint returns all active accounts with active marker."""
+        acct_1 = _mock_account("Thursday Lines", "thursday.lines")
+        acct_2 = _mock_account("Side Project", "sideproject")
+        mock_settings = _mock_settings_obj(
+            active_instagram_account_id=acct_1.id,
+        )
+
+        with (
+            _mock_validate(),
+            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
+            patch(
+                "src.api.routes.onboarding.ChatSettingsRepository"
+            ) as MockSettingsRepo,
+        ):
+            MockIGService.return_value.list_accounts.return_value = [acct_1, acct_2]
+            MockIGService.return_value.close = Mock()
+            MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
+            MockSettingsRepo.return_value.close = Mock()
+
+            response = client.get(
+                "/api/onboarding/accounts",
+                params={"init_data": "test", "chat_id": CHAT_ID},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["accounts"]) == 2
+        assert data["accounts"][0]["display_name"] == "Thursday Lines"
+        assert data["accounts"][0]["is_active"] is True
+        assert data["accounts"][1]["display_name"] == "Side Project"
+        assert data["accounts"][1]["is_active"] is False
+        assert data["active_account_id"] == str(acct_1.id)
+
+    def test_accounts_empty(self, client):
+        """Accounts endpoint returns empty list when no accounts."""
+        mock_settings = _mock_settings_obj(active_instagram_account_id=None)
+
+        with (
+            _mock_validate(),
+            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
+            patch(
+                "src.api.routes.onboarding.ChatSettingsRepository"
+            ) as MockSettingsRepo,
+        ):
+            MockIGService.return_value.list_accounts.return_value = []
+            MockIGService.return_value.close = Mock()
+            MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
+            MockSettingsRepo.return_value.close = Mock()
+
+            response = client.get(
+                "/api/onboarding/accounts",
+                params={"init_data": "test", "chat_id": CHAT_ID},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["accounts"] == []
+        assert data["active_account_id"] is None
+
+    def test_accounts_unauthorized(self, client):
+        """Accounts rejects invalid auth."""
+        with (
+            patch(
+                "src.api.routes.onboarding.validate_init_data",
+                side_effect=ValueError("bad"),
+            ),
+            patch(
+                "src.api.routes.onboarding.validate_url_token",
+                side_effect=ValueError("bad"),
+            ),
+        ):
+            response = client.get(
+                "/api/onboarding/accounts",
+                params={"init_data": "invalid", "chat_id": CHAT_ID},
+            )
+
+        assert response.status_code == 401
+
+
+# =============================================================================
+# POST /api/onboarding/switch-account
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestSwitchAccount:
+    """Test POST /api/onboarding/switch-account."""
+
+    def test_switch_account_success(self, client):
+        """Switch account returns new active account info."""
+        acct = _mock_account("Side Project", "sideproject")
+
+        with (
+            _mock_validate(),
+            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
+        ):
+            MockIGService.return_value.switch_account.return_value = acct
+            MockIGService.return_value.close = Mock()
+
+            response = client.post(
+                "/api/onboarding/switch-account",
+                json={
+                    "init_data": "test",
+                    "chat_id": CHAT_ID,
+                    "account_id": str(acct.id),
+                },
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["display_name"] == "Side Project"
+        assert data["instagram_username"] == "sideproject"
+        MockIGService.return_value.switch_account.assert_called_once_with(
+            telegram_chat_id=CHAT_ID,
+            account_id=str(acct.id),
+        )
+
+    def test_switch_account_not_found(self, client):
+        """Switch account returns 400 for unknown account."""
+        with (
+            _mock_validate(),
+            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
+        ):
+            MockIGService.return_value.switch_account.side_effect = ValueError(
+                "Account not found"
+            )
+            MockIGService.return_value.close = Mock()
+
+            response = client.post(
+                "/api/onboarding/switch-account",
+                json={
+                    "init_data": "test",
+                    "chat_id": CHAT_ID,
+                    "account_id": "nonexistent",
+                },
+            )
+
+        assert response.status_code == 400
+        assert "not found" in response.json()["detail"]
+
+    def test_switch_account_unauthorized(self, client):
+        """Switch account rejects invalid auth."""
+        with (
+            patch(
+                "src.api.routes.onboarding.validate_init_data",
+                side_effect=ValueError("bad"),
+            ),
+            patch(
+                "src.api.routes.onboarding.validate_url_token",
+                side_effect=ValueError("bad"),
+            ),
+        ):
+            response = client.post(
+                "/api/onboarding/switch-account",
+                json={
+                    "init_data": "invalid",
+                    "chat_id": CHAT_ID,
+                    "account_id": str(uuid4()),
+                },
+            )
+
+        assert response.status_code == 401
+
+
+# =============================================================================
+# POST /api/onboarding/remove-account
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestRemoveAccount:
+    """Test POST /api/onboarding/remove-account."""
+
+    def test_remove_account_success(self, client):
+        """Remove account deactivates and returns confirmation."""
+        acct = _mock_account("Old Account", "oldaccount")
+
+        with (
+            _mock_validate(),
+            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
+        ):
+            MockIGService.return_value.deactivate_account.return_value = acct
+            MockIGService.return_value.close = Mock()
+
+            response = client.post(
+                "/api/onboarding/remove-account",
+                json={
+                    "init_data": "test",
+                    "chat_id": CHAT_ID,
+                    "account_id": str(acct.id),
+                },
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["display_name"] == "Old Account"
+        assert data["removed"] is True
+        MockIGService.return_value.deactivate_account.assert_called_once_with(
+            account_id=str(acct.id),
+        )
+
+    def test_remove_account_not_found(self, client):
+        """Remove account returns 400 for unknown account."""
+        with (
+            _mock_validate(),
+            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
+        ):
+            MockIGService.return_value.deactivate_account.side_effect = ValueError(
+                "Account not found"
+            )
+            MockIGService.return_value.close = Mock()
+
+            response = client.post(
+                "/api/onboarding/remove-account",
+                json={
+                    "init_data": "test",
+                    "chat_id": CHAT_ID,
+                    "account_id": "nonexistent",
+                },
+            )
+
+        assert response.status_code == 400
+        assert "not found" in response.json()["detail"]
+
+    def test_remove_account_unauthorized(self, client):
+        """Remove account rejects invalid auth."""
+        with (
+            patch(
+                "src.api.routes.onboarding.validate_init_data",
+                side_effect=ValueError("bad"),
+            ),
+            patch(
+                "src.api.routes.onboarding.validate_url_token",
+                side_effect=ValueError("bad"),
+            ),
+        ):
+            response = client.post(
+                "/api/onboarding/remove-account",
+                json={
+                    "init_data": "invalid",
+                    "chat_id": CHAT_ID,
+                    "account_id": str(uuid4()),
+                },
+            )
+
+        assert response.status_code == 401

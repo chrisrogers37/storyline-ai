@@ -661,6 +661,77 @@ h2 {
     padding: 0 2px;
 }
 
+/* ==================== Account Management ==================== */
+
+.account-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    font-size: 14px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.account-row:last-child {
+    border-bottom: none;
+}
+
+.account-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.account-name {
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.account-username {
+    font-size: 12px;
+    color: var(--tg-theme-hint-color);
+    margin-top: 1px;
+}
+
+.account-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+
+.account-active-badge {
+    font-size: 12px;
+    color: #16a34a;
+    font-weight: 500;
+    padding: 4px 8px;
+}
+
+.btn-account-action {
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.btn-account-action:active {
+    opacity: 0.7;
+}
+
+.btn-account-switch {
+    background: var(--tg-theme-button-color);
+    color: var(--tg-theme-button-text-color);
+}
+
+.btn-account-remove {
+    background: rgba(239, 68, 68, 0.1);
+    color: #dc2626;
+}
+
 /* ==================== Queue / History Items ==================== */
 
 .queue-item-row, .history-item-row {

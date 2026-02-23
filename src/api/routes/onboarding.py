@@ -70,6 +70,18 @@ class UpdateSettingRequest(BaseModel):
     value: int = Field(ge=0, le=50)
 
 
+class SwitchAccountRequest(BaseModel):
+    init_data: str
+    chat_id: int
+    account_id: str
+
+
+class RemoveAccountRequest(BaseModel):
+    init_data: str
+    chat_id: int
+    account_id: str
+
+
 class ScheduleActionRequest(BaseModel):
     init_data: str
     chat_id: int
@@ -642,6 +654,85 @@ async def onboarding_media_stats(
             media_repo.close()
     finally:
         settings_repo.close()
+
+
+@router.get("/accounts")
+async def onboarding_accounts(
+    init_data: str,
+    chat_id: int,
+):
+    """List all active Instagram accounts with active account for this chat marked."""
+    _validate_request(init_data, chat_id)
+
+    account_service = InstagramAccountService()
+    settings_repo = ChatSettingsRepository()
+    try:
+        accounts = account_service.list_accounts(include_inactive=False)
+        chat_settings = settings_repo.get_or_create(chat_id)
+        active_account_id = (
+            str(chat_settings.active_instagram_account_id)
+            if chat_settings.active_instagram_account_id
+            else None
+        )
+
+        items = []
+        for acct in accounts:
+            items.append(
+                {
+                    "id": str(acct.id),
+                    "display_name": acct.display_name,
+                    "instagram_username": acct.instagram_username,
+                    "is_active": str(acct.id) == active_account_id,
+                }
+            )
+
+        return {"accounts": items, "active_account_id": active_account_id}
+    finally:
+        account_service.close()
+        settings_repo.close()
+
+
+@router.post("/switch-account")
+async def onboarding_switch_account(request: SwitchAccountRequest):
+    """Switch the active Instagram account for this chat."""
+    _validate_request(request.init_data, request.chat_id)
+
+    account_service = InstagramAccountService()
+    try:
+        account = account_service.switch_account(
+            telegram_chat_id=request.chat_id,
+            account_id=request.account_id,
+        )
+        return {
+            "account_id": str(account.id),
+            "display_name": account.display_name,
+            "instagram_username": account.instagram_username,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        account_service.close()
+
+
+@router.post("/remove-account")
+async def onboarding_remove_account(request: RemoveAccountRequest):
+    """Deactivate (soft-delete) an Instagram account."""
+    _validate_request(request.init_data, request.chat_id)
+
+    account_service = InstagramAccountService()
+    try:
+        account = account_service.deactivate_account(
+            account_id=request.account_id,
+        )
+        return {
+            "account_id": str(account.id),
+            "display_name": account.display_name,
+            "removed": True,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        account_service.close()
 
 
 @router.post("/toggle-setting")

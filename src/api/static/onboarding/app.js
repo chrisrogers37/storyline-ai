@@ -484,6 +484,7 @@ const App = {
      */
     async _loadCardData(cardId) {
         const loaders = {
+            instagram: () => this._loadAccounts(),
             schedule: () => this._loadQueueDetail('schedule'),
             queue: () => this._loadQueueDetail('queue'),
             history: () => this._loadHistoryDetail(),
@@ -576,6 +577,150 @@ const App = {
             }
         } finally {
             if (loadingEl) loadingEl.classList.add('hidden');
+        }
+    },
+
+    // ==================== Account Management ====================
+
+    // Track account pending removal (for confirmation dialog)
+    _pendingRemoveAccountId: null,
+
+    /**
+     * Fetch and render Instagram accounts.
+     */
+    async _loadAccounts() {
+        const loadingEl = document.getElementById('instagram-account-loading');
+        if (loadingEl) loadingEl.classList.remove('hidden');
+
+        try {
+            const params = new URLSearchParams({
+                init_data: this.initData,
+                chat_id: this.chatId,
+            });
+            const data = await this._apiGet('/api/onboarding/accounts?' + params.toString());
+            this._renderAccounts(data.accounts);
+        } catch (err) {
+            const container = document.getElementById('instagram-account-list');
+            if (container) {
+                container.innerHTML = '<div class="card-body-empty">Failed to load accounts</div>';
+            }
+        } finally {
+            if (loadingEl) loadingEl.classList.add('hidden');
+        }
+    },
+
+    /**
+     * Render account list into the Instagram card body.
+     */
+    _renderAccounts(accounts) {
+        const container = document.getElementById('instagram-account-list');
+        if (!container) return;
+
+        if (!accounts || accounts.length === 0) {
+            container.innerHTML = '<div class="card-body-empty">No accounts connected</div>';
+            return;
+        }
+
+        let html = '';
+        for (const acct of accounts) {
+            html += '<div class="account-row">' +
+                '<div class="account-info">' +
+                '<div class="account-name">' + this._escapeHtml(acct.display_name) + '</div>' +
+                '<div class="account-username">@' + this._escapeHtml(acct.instagram_username || '') + '</div>' +
+                '</div>' +
+                '<div class="account-actions">';
+
+            if (acct.is_active) {
+                html += '<span class="account-active-badge">Active</span>';
+            } else {
+                html += '<button class="btn-account-action btn-account-switch" ' +
+                    'onclick="App.switchAccount(\'' + this._escapeHtml(acct.id) + '\')">Switch</button>';
+            }
+            html += '<button class="btn-account-action btn-account-remove" ' +
+                'onclick="App.confirmRemoveAccount(\'' + this._escapeHtml(acct.id) + '\')">Remove</button>';
+            html += '</div></div>';
+        }
+
+        container.innerHTML = html;
+    },
+
+    /**
+     * Switch active Instagram account.
+     */
+    async switchAccount(accountId) {
+        this._showLoading(true);
+        try {
+            const data = await this._api('/api/onboarding/switch-account', {
+                init_data: this.initData,
+                chat_id: this.chatId,
+                account_id: accountId,
+            });
+
+            // Update local state
+            if (this.setupState) {
+                this.setupState.instagram_connected = true;
+                this.setupState.instagram_username = data.instagram_username;
+            }
+
+            // Update card summary
+            this._setHomeBadge('instagram', 'connected', 'Connected');
+            this._setHomeDetail('instagram',
+                '@' + this._escapeHtml(data.instagram_username || 'unknown'));
+
+            // Reload account list to reflect new active state
+            this._cardDataLoaded['instagram'] = false;
+            await this._loadAccounts();
+        } catch (err) {
+            // Show inline error
+        } finally {
+            this._showLoading(false);
+        }
+    },
+
+    /**
+     * Show confirmation dialog for removing an account.
+     */
+    confirmRemoveAccount(accountId) {
+        this._pendingRemoveAccountId = accountId;
+        const confirm = document.getElementById('remove-account-confirm');
+        const actions = document.getElementById('instagram-account-actions');
+        if (confirm) confirm.classList.remove('hidden');
+        if (actions) actions.classList.add('hidden');
+    },
+
+    /**
+     * Cancel account removal.
+     */
+    cancelRemoveAccount() {
+        this._pendingRemoveAccountId = null;
+        const confirm = document.getElementById('remove-account-confirm');
+        const actions = document.getElementById('instagram-account-actions');
+        if (confirm) confirm.classList.add('hidden');
+        if (actions) actions.classList.remove('hidden');
+    },
+
+    /**
+     * Execute account removal after confirmation.
+     */
+    async executeRemoveAccount() {
+        const accountId = this._pendingRemoveAccountId;
+        if (!accountId) return;
+
+        this.cancelRemoveAccount();
+        this._showLoading(true);
+        try {
+            await this._api('/api/onboarding/remove-account', {
+                init_data: this.initData,
+                chat_id: this.chatId,
+                account_id: accountId,
+            });
+
+            // Refresh home to get updated state
+            await this._refreshHome({ keepExpanded: true });
+        } catch (err) {
+            // Show inline error
+        } finally {
+            this._showLoading(false);
         }
     },
 
@@ -1106,7 +1251,10 @@ const App = {
                     this._updateStatusIndicators();
 
                     // Auto-advance depends on mode
-                    if (this.editingFrom) {
+                    if (this.mode === 'home') {
+                        // Added account from dashboard — refresh home
+                        setTimeout(() => this._refreshHome({ keepExpanded: true }), 800);
+                    } else if (this.editingFrom) {
                         setTimeout(() => this.returnToHome(), 800);
                     } else if (provider === 'instagram') {
                         setTimeout(() => this.goToStep('gdrive'), 800);

@@ -1,6 +1,6 @@
 # Mini App Consolidation — Command Cleanup & Feature Unification
 
-**Status**: 🔧 IN PROGRESS (Phase 1)
+**Status**: 🔧 IN PROGRESS (Phase 2)
 **Started**: 2026-02-23
 **Created**: 2026-02-23
 **Priority**: High
@@ -113,17 +113,28 @@ No changes to `/settings` command in this phase.
 **Move add/switch/remove accounts to Mini App**
 
 Expand the existing Instagram card to be collapsible with account management:
-- List of all connected accounts (active marked with checkmark)
-- "Switch" button per account
-- "Add Account" button → opens OAuth flow (reuse existing `connectOAuth('instagram')` pattern)
-- "Remove" button per account (with confirmation)
-- Active account badge on card header
+- List of all connected accounts globally (active for this chat marked with checkmark)
+- "Switch" button per inactive account (calls switch-account endpoint)
+- "Add Account" button → opens OAuth flow (reuse existing `connectOAuth('instagram')` pattern — OAuth only, no manual token input)
+- "Remove" button per account (with inline confirmation dialog, calls deactivate)
+- Active account badge on card header (e.g., "@username")
+- If no accounts exist, show "Connect Instagram" button (same OAuth flow)
 
-Backend:
-- `GET /api/onboarding/accounts` — list all accounts for this chat (uses `InstagramAccountService.list_accounts()`)
-- `POST /api/onboarding/switch-account` — switch active account (uses `InstagramAccountService.switch_account()`)
+Frontend changes (`index.html` + `app.js` + `style.css`):
+- Make Instagram card expandable (add `home-card-expandable` class, chevron, `onclick`)
+- Card body: account list with switch/remove buttons, add button at bottom
+- Lazy-load account list on first expand (follow `toggleCard()` + `_loadCardData()` pattern)
+- `_loadAccounts()` — fetch and render account list
+- `switchAccount(accountId)` — POST switch, update UI
+- `removeAccount(accountId)` — show inline confirm, POST deactivate, re-render list
+- Reuse `connectOAuth('instagram')` for adding accounts (already polls for completion)
+- Update card summary text after any account change
+
+Backend changes (`onboarding.py`):
+- `GET /api/onboarding/accounts` — list all active accounts + mark which is active for this chat (uses `InstagramAccountService.list_accounts()` + `ChatSettingsRepository` for active_instagram_account_id)
+- `POST /api/onboarding/switch-account` — switch active account for this chat (uses `InstagramAccountService.switch_account()`)
 - `POST /api/onboarding/remove-account` — deactivate account (uses `InstagramAccountService.deactivate_account()`)
-- Reuse existing OAuth flow for adding accounts
+- Reuse existing OAuth flow for adding accounts (existing `/oauth-url/instagram` endpoint)
 
 Note: **In-channel post account selector stays unchanged** — switching account on a specific post notification is a contextual action that belongs in the channel.
 
