@@ -42,7 +42,7 @@ Tech debt scan of the Storyline AI codebase focused on production reliability, o
 | 01 | Observability & logging fixes | H1, H2 | Low | Low | None | ✅ PR #78 |
 | 02 | Extract WebApp button builder | M1 | Low | Low | None | ✅ PR #79 |
 | 03 | Consistent resource management | H3 | Medium | Low | None | ✅ PR #80 |
-| 04 | Split onboarding routes | M2 | Medium | Medium | None | ✅ PR #TBD |
+| 04 | Split onboarding routes | M2 | Medium | Medium | None | ✅ PR #81 |
 
 Phases 01-03 are independent and can run in parallel. Phase 04 is independent but higher effort.
 
