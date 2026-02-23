@@ -333,17 +333,22 @@ const App = {
 
     /**
      * Populate the home screen dashboard cards from setupState.
+     * @param {Object} opts - Options
+     * @param {boolean} opts.keepExpanded - If true, don't collapse cards or reset loaded state
      */
-    _populateHome() {
+    _populateHome(opts) {
         const s = this.setupState || {};
+        const keepExpanded = opts && opts.keepExpanded;
 
-        // Reset card data loaded state on each home populate
-        this._cardDataLoaded = {};
+        if (!keepExpanded) {
+            // Reset card data loaded state on each home populate
+            this._cardDataLoaded = {};
 
-        // Collapse all cards
-        document.querySelectorAll('.home-card-expandable').forEach(card => {
-            card.classList.remove('expanded');
-        });
+            // Collapse all cards
+            document.querySelectorAll('.home-card-expandable').forEach(card => {
+                card.classList.remove('expanded');
+            });
+        }
 
         // Instagram card
         if (s.instagram_connected) {
@@ -607,17 +612,14 @@ const App = {
     async extendSchedule(days) {
         this._showLoading(true);
         try {
-            const data = await this._api('/api/onboarding/extend-schedule', {
+            await this._api('/api/onboarding/extend-schedule', {
                 init_data: this.initData,
                 chat_id: this.chatId,
                 days: days,
             });
 
-            // Refresh dashboard state and queue detail
-            await this._refreshHome();
-            this._cardDataLoaded['schedule'] = false;
-            this._cardDataLoaded['queue'] = false;
-            await this._loadQueueDetail('schedule');
+            // Refresh state without collapsing cards
+            await this._refreshHome({ keepExpanded: true });
         } catch (err) {
             // Show error inline
         } finally {
@@ -658,10 +660,8 @@ const App = {
                 days: 7,
             });
 
-            await this._refreshHome();
-            this._cardDataLoaded['schedule'] = false;
-            this._cardDataLoaded['queue'] = false;
-            await this._loadQueueDetail('schedule');
+            // Refresh state without collapsing cards
+            await this._refreshHome({ keepExpanded: true });
         } catch (err) {
             // Show error inline
         } finally {
@@ -671,15 +671,27 @@ const App = {
 
     /**
      * Re-fetch setup state to refresh dashboard numbers.
+     * @param {Object} opts - Options passed to _populateHome
+     * @param {boolean} opts.keepExpanded - If true, don't collapse cards
      */
-    async _refreshHome() {
+    async _refreshHome(opts) {
         try {
             const response = await this._api('/api/onboarding/init', {
                 init_data: this.initData,
                 chat_id: this.chatId,
             });
             this.setupState = response.setup_state;
-            this._populateHome();
+            this._populateHome(opts);
+
+            // If keeping cards expanded, reload data for any currently expanded cards
+            if (opts && opts.keepExpanded) {
+                const expandedCards = document.querySelectorAll('.home-card-expandable.expanded');
+                for (const card of expandedCards) {
+                    const cardId = card.id.replace('home-card-', '');
+                    this._cardDataLoaded[cardId] = false;
+                    await this._loadCardData(cardId);
+                }
+            }
         } catch (err) {
             // Non-critical
         }
