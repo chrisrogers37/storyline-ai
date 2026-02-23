@@ -133,6 +133,28 @@
                     </div>
                 </div>
 
+                <!-- System Status (expandable) -->
+                <div class="home-card home-card-expandable" id="home-card-status">
+                    <div class="home-card-header" onclick="App.toggleCard('status')">
+                        <div class="home-card-title">
+                            <span class="home-card-icon">&#x1F4E1;</span>
+                            <span>System Status</span>
+                        </div>
+                        <div class="home-card-header-right">
+                            <span class="home-card-badge" id="home-badge-status"></span>
+                            <span class="home-card-chevron">&#x25B8;</span>
+                        </div>
+                    </div>
+                    <div class="home-card-detail" id="home-detail-status"></div>
+                    <div class="home-card-body" id="home-body-status">
+                        <div class="card-body-loading hidden" id="status-loading">
+                            <div class="spinner"></div>
+                        </div>
+                        <div id="status-checklist"></div>
+                        <div id="status-health-checks"></div>
+                    </div>
+                </div>
+
                 <!-- Schedule (expandable) -->
                 <div class="home-card home-card-expandable" id="home-card-schedule">
                     <div class="home-card-header" onclick="App.toggleCard('schedule')">

@@ -735,6 +735,25 @@ async def onboarding_remove_account(request: RemoveAccountRequest):
         account_service.close()
 
 
+@router.get("/system-status")
+async def onboarding_system_status(
+    init_data: str,
+    chat_id: int,
+):
+    """Return system health checks for the dashboard status card."""
+    _validate_request(init_data, chat_id)
+
+    from src.services.core.health_check import HealthCheckService
+
+    health_service = HealthCheckService()
+    try:
+        result = health_service.check_all()
+        return result
+    finally:
+        health_service.queue_repo.close()
+        health_service.history_repo.close()
+
+
 @router.post("/toggle-setting")
 async def onboarding_toggle_setting(request: ToggleSettingRequest):
     """Toggle a boolean setting (is_paused, dry_run_mode) from dashboard."""
