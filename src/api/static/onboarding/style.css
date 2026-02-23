@@ -608,6 +608,59 @@ h2 {
     transform: translateX(16px);
 }
 
+/* ==================== Settings Numeric Controls ==================== */
+
+.settings-divider {
+    height: 1px;
+    background: rgba(0, 0, 0, 0.06);
+    margin: 8px 0;
+}
+
+.setting-row-numeric {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    font-size: 14px;
+}
+
+.stepper {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    background: var(--tg-theme-bg-color);
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.stepper-btn {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: none;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--tg-theme-button-color);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.stepper-btn:active {
+    background: var(--tg-theme-secondary-bg-color);
+}
+
+.stepper-value {
+    min-width: 36px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 0 2px;
+}
+
 /* ==================== Queue / History Items ==================== */
 
 .queue-item-row, .history-item-row {

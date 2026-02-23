@@ -63,6 +63,13 @@ class ToggleSettingRequest(BaseModel):
     setting_name: str
 
 
+class UpdateSettingRequest(BaseModel):
+    init_data: str
+    chat_id: int
+    setting_name: str
+    value: int = Field(ge=0, le=50)
+
+
 class ScheduleActionRequest(BaseModel):
     init_data: str
     chat_id: int
@@ -200,6 +207,9 @@ def _get_setup_state(telegram_chat_id: int) -> dict:
             "onboarding_step": chat_settings.onboarding_step,
             "is_paused": chat_settings.is_paused,
             "dry_run_mode": chat_settings.dry_run_mode,
+            "enable_instagram_api": chat_settings.enable_instagram_api,
+            "show_verbose_notifications": chat_settings.show_verbose_notifications,
+            "media_sync_enabled": chat_settings.media_sync_enabled,
             "queue_count": queue_count,
             "last_post_at": last_post_at,
             "next_post_at": next_post_at,
@@ -639,7 +649,13 @@ async def onboarding_toggle_setting(request: ToggleSettingRequest):
     """Toggle a boolean setting (is_paused, dry_run_mode) from dashboard."""
     _validate_request(request.init_data, request.chat_id)
 
-    allowed_settings = {"is_paused", "dry_run_mode"}
+    allowed_settings = {
+        "is_paused",
+        "dry_run_mode",
+        "enable_instagram_api",
+        "show_verbose_notifications",
+        "media_sync_enabled",
+    }
     if request.setting_name not in allowed_settings:
         raise HTTPException(
             status_code=400,
@@ -655,6 +671,34 @@ async def onboarding_toggle_setting(request: ToggleSettingRequest):
         return {
             "setting_name": request.setting_name,
             "new_value": new_value,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        settings_service.close()
+
+
+@router.post("/update-setting")
+async def onboarding_update_setting(request: UpdateSettingRequest):
+    """Update a numeric setting (posts_per_day, posting hours) from dashboard."""
+    _validate_request(request.init_data, request.chat_id)
+
+    allowed_settings = {"posts_per_day", "posting_hours_start", "posting_hours_end"}
+    if request.setting_name not in allowed_settings:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Setting '{request.setting_name}' cannot be updated from dashboard. "
+            f"Allowed: {', '.join(sorted(allowed_settings))}",
+        )
+
+    settings_service = SettingsService()
+    try:
+        settings_service.update_setting(
+            request.chat_id, request.setting_name, request.value
+        )
+        return {
+            "setting_name": request.setting_name,
+            "new_value": request.value,
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

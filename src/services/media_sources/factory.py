@@ -69,9 +69,7 @@ class MediaSourceFactory:
             return provider_class(base_path=base_path)
 
         if source_type == "google_drive":
-            root_folder_id = kwargs.get(
-                "root_folder_id", settings.MEDIA_SOURCE_ROOT
-            )
+            root_folder_id = kwargs.get("root_folder_id", settings.MEDIA_SOURCE_ROOT)
             service_account_info = kwargs.get("service_account_info")
             oauth_credentials = kwargs.get("oauth_credentials")
             telegram_chat_id = kwargs.get("telegram_chat_id")

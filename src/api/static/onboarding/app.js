@@ -378,8 +378,21 @@ const App = {
         // Set toggle states
         const deliveryToggle = document.getElementById('toggle-delivery');
         const dryRunToggle = document.getElementById('toggle-dryrun');
+        const igApiToggle = document.getElementById('toggle-instagram-api');
+        const verboseToggle = document.getElementById('toggle-verbose');
+        const mediaSyncToggle = document.getElementById('toggle-media-sync');
         if (deliveryToggle) deliveryToggle.checked = deliveryOn;
         if (dryRunToggle) dryRunToggle.checked = dryRunOn;
+        if (igApiToggle) igApiToggle.checked = !!s.enable_instagram_api;
+        if (verboseToggle) verboseToggle.checked = !!s.show_verbose_notifications;
+        if (mediaSyncToggle) mediaSyncToggle.checked = !!s.media_sync_enabled;
+
+        // Set numeric setting displays
+        this._updateSettingDisplay('posts_per_day', s.posts_per_day || 3);
+        this._updateSettingDisplay('posting_hours_start',
+            s.posting_hours_start != null ? s.posting_hours_start : 14);
+        this._updateSettingDisplay('posting_hours_end',
+            s.posting_hours_end != null ? s.posting_hours_end : 2);
 
         // Schedule card
         const postsPerDay = s.posts_per_day || 3;
@@ -566,8 +579,17 @@ const App = {
         }
     },
 
+    // Toggle element IDs mapped to setting names
+    _toggleIds: {
+        'is_paused': 'toggle-delivery',
+        'dry_run_mode': 'toggle-dryrun',
+        'enable_instagram_api': 'toggle-instagram-api',
+        'show_verbose_notifications': 'toggle-verbose',
+        'media_sync_enabled': 'toggle-media-sync',
+    },
+
     /**
-     * Toggle a setting (is_paused or dry_run_mode) via API.
+     * Toggle a boolean setting via API.
      */
     async toggleSetting(settingName) {
         try {
@@ -583,11 +605,7 @@ const App = {
             }
 
             // Update summary text
-            const deliveryOn = !this.setupState.is_paused;
-            const dryRunOn = this.setupState.dry_run_mode;
-            this._setHomeDetail('controls',
-                'Delivery: ' + (deliveryOn ? 'ON' : 'OFF') +
-                ' \u00B7 Dry Run: ' + (dryRunOn ? 'ON' : 'OFF'));
+            this._updateControlsSummary();
 
             // Update schedule badge
             if (settingName === 'is_paused') {
@@ -599,11 +617,79 @@ const App = {
             }
         } catch (err) {
             // Revert toggle on failure
-            const toggle = settingName === 'is_paused'
-                ? document.getElementById('toggle-delivery')
-                : document.getElementById('toggle-dryrun');
-            if (toggle) toggle.checked = !toggle.checked;
+            const toggleId = this._toggleIds[settingName];
+            if (toggleId) {
+                const toggle = document.getElementById(toggleId);
+                if (toggle) toggle.checked = !toggle.checked;
+            }
         }
+    },
+
+    /**
+     * Adjust a numeric setting by a delta (stepper +/- buttons).
+     */
+    async adjustSetting(settingName, delta) {
+        const s = this.setupState || {};
+        const current = s[settingName] || 0;
+        let newValue = current + delta;
+
+        // Clamp values
+        if (settingName === 'posts_per_day') {
+            newValue = Math.max(1, Math.min(50, newValue));
+        } else {
+            // Hours: wrap around 0-23
+            newValue = ((newValue % 24) + 24) % 24;
+        }
+
+        if (newValue === current) return;
+
+        // Optimistic UI update
+        this.setupState[settingName] = newValue;
+        this._updateSettingDisplay(settingName, newValue);
+
+        try {
+            await this._api('/api/onboarding/update-setting', {
+                init_data: this.initData,
+                chat_id: this.chatId,
+                setting_name: settingName,
+                value: newValue,
+            });
+
+            // Update controls summary
+            this._updateControlsSummary();
+        } catch (err) {
+            // Revert on failure
+            this.setupState[settingName] = current;
+            this._updateSettingDisplay(settingName, current);
+        }
+    },
+
+    /**
+     * Update the displayed value for a numeric setting.
+     */
+    _updateSettingDisplay(settingName, value) {
+        const displayMap = {
+            'posts_per_day': { id: 'setting-posts-per-day', fmt: v => String(v) },
+            'posting_hours_start': { id: 'setting-posting-hours-start', fmt: v => this._formatHour(v) },
+            'posting_hours_end': { id: 'setting-posting-hours-end', fmt: v => this._formatHour(v) },
+        };
+        const mapping = displayMap[settingName];
+        if (mapping) {
+            const el = document.getElementById(mapping.id);
+            if (el) el.textContent = mapping.fmt(value);
+        }
+    },
+
+    /**
+     * Update the Quick Controls card summary text.
+     */
+    _updateControlsSummary() {
+        const s = this.setupState || {};
+        const deliveryOn = !s.is_paused;
+        const dryRunOn = s.dry_run_mode;
+        this._setHomeDetail('controls',
+            'Delivery: ' + (deliveryOn ? 'ON' : 'OFF') +
+            ' \u00B7 Dry Run: ' + (dryRunOn ? 'ON' : 'OFF'));
     },
 
     /**

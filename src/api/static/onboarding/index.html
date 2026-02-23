@@ -66,6 +66,52 @@
                                 <span class="toggle-slider"></span>
                             </label>
                         </div>
+                        <div class="toggle-row-compact">
+                            <span>Instagram API</span>
+                            <label class="toggle toggle-sm">
+                                <input type="checkbox" id="toggle-instagram-api" onchange="App.toggleSetting('enable_instagram_api')">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="toggle-row-compact">
+                            <span>Verbose Notifications</span>
+                            <label class="toggle toggle-sm">
+                                <input type="checkbox" id="toggle-verbose" onchange="App.toggleSetting('show_verbose_notifications')">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="toggle-row-compact">
+                            <span>Media Sync</span>
+                            <label class="toggle toggle-sm">
+                                <input type="checkbox" id="toggle-media-sync" onchange="App.toggleSetting('media_sync_enabled')">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="settings-divider"></div>
+                        <div class="setting-row-numeric">
+                            <span>Posts / Day</span>
+                            <div class="stepper">
+                                <button class="stepper-btn" onclick="App.adjustSetting('posts_per_day', -1)">&#x2212;</button>
+                                <span class="stepper-value" id="setting-posts-per-day">3</span>
+                                <button class="stepper-btn" onclick="App.adjustSetting('posts_per_day', 1)">+</button>
+                            </div>
+                        </div>
+                        <div class="setting-row-numeric">
+                            <span>Hours Start</span>
+                            <div class="stepper">
+                                <button class="stepper-btn" onclick="App.adjustSetting('posting_hours_start', -1)">&#x2212;</button>
+                                <span class="stepper-value" id="setting-posting-hours-start">2pm</span>
+                                <button class="stepper-btn" onclick="App.adjustSetting('posting_hours_start', 1)">+</button>
+                            </div>
+                        </div>
+                        <div class="setting-row-numeric">
+                            <span>Hours End</span>
+                            <div class="stepper">
+                                <button class="stepper-btn" onclick="App.adjustSetting('posting_hours_end', -1)">&#x2212;</button>
+                                <span class="stepper-value" id="setting-posting-hours-end">2am</span>
+                                <button class="stepper-btn" onclick="App.adjustSetting('posting_hours_end', 1)">+</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

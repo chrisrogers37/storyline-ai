@@ -44,6 +44,9 @@ def _mock_settings_obj(**overrides):
         media_source_type=None,
         is_paused=False,
         dry_run_mode=True,
+        enable_instagram_api=False,
+        show_verbose_notifications=False,
+        media_sync_enabled=False,
     )
     defaults.update(overrides)
     return Mock(**defaults)
