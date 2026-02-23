@@ -32,10 +32,17 @@ class BaseRepository:
             if not self._db.is_active:
                 self._db.rollback()
         except Exception as e:
-            # Suppressed: rollback during session recovery is best-effort.
-            # If this fails, the session may be unusable, but raising here
-            # would mask the original error that caused the bad state.
-            logger.debug(f"Suppressed error during session recovery rollback: {e}")
+            # Rollback failed — connection is likely severed (e.g. Neon idle timeout).
+            # Create a fresh session instead of returning a broken one.
+            logger.warning(
+                f"Session recovery rollback failed, creating new session: {e}"
+            )
+            try:
+                self._db.close()
+            except Exception:
+                pass
+            self._db_generator = get_db()
+            self._db = next(self._db_generator)
         return self._db
 
     def commit(self):

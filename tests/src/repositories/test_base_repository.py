@@ -45,6 +45,19 @@ class TestBaseRepository:
         _ = repo.db
         mock_db.rollback.assert_called_once()
 
+    def test_db_property_creates_new_session_when_rollback_fails(self, repo, mock_db):
+        """Test that db property creates a fresh session if rollback fails (severed connection)."""
+        mock_db.is_active = False
+        mock_db.rollback.side_effect = Exception("connection is closed")
+
+        new_session = MagicMock()
+        with patch("src.repositories.base_repository.get_db") as mock_get_db:
+            mock_get_db.return_value = iter([new_session])
+            result = repo.db
+
+        assert result is new_session
+        mock_db.close.assert_called_once()
+
     def test_commit_calls_session_commit(self, repo, mock_db):
         """Test that commit() delegates to session.commit()."""
         repo.commit()
