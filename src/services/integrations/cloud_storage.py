@@ -26,7 +26,7 @@ class CloudStorageService(BaseService):
 
         # Upload media
         result = service.upload_media("/path/to/image.jpg")
-        print(result["url"])  # Public URL for Instagram API
+        # result["url"] → Public URL for Instagram API
 
         # Delete after posting
         service.delete_media(result["public_id"])
