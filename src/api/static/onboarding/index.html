@@ -15,17 +15,35 @@
                 <h1>Storyline AI</h1>
                 <p class="subtitle">Your posting dashboard</p>
 
-                <!-- Instagram (static, not expandable) -->
-                <div class="home-card" id="home-card-instagram">
-                    <div class="home-card-header">
+                <!-- Instagram (expandable with account management) -->
+                <div class="home-card home-card-expandable" id="home-card-instagram">
+                    <div class="home-card-header" onclick="App.toggleCard('instagram')">
                         <div class="home-card-title">
                             <span class="home-card-icon">&#x1F4F8;</span>
                             <span>Instagram</span>
                         </div>
-                        <span class="home-card-badge" id="home-badge-instagram"></span>
+                        <div class="home-card-header-right">
+                            <span class="home-card-badge" id="home-badge-instagram"></span>
+                            <span class="home-card-chevron">&#x25B8;</span>
+                        </div>
                     </div>
                     <div class="home-card-detail" id="home-detail-instagram"></div>
-                    <button class="btn btn-card-edit" onclick="App.editSection('instagram')">Edit</button>
+                    <div class="home-card-body" id="home-body-instagram">
+                        <div class="card-body-loading hidden" id="instagram-account-loading">
+                            <div class="spinner"></div>
+                        </div>
+                        <div id="instagram-account-list"></div>
+                        <div class="confirm-dialog hidden" id="remove-account-confirm">
+                            <p>Remove this account? It can be re-added later.</p>
+                            <div class="confirm-actions">
+                                <button class="btn btn-action-sm btn-action-danger" id="btn-confirm-remove" onclick="App.executeRemoveAccount()">Yes, Remove</button>
+                                <button class="btn btn-action-sm" onclick="App.cancelRemoveAccount()">Cancel</button>
+                            </div>
+                        </div>
+                        <div class="card-body-actions" id="instagram-account-actions">
+                            <button class="btn btn-action-sm" onclick="App.connectOAuth('instagram')">Add Account</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Google Drive (static, not expandable) -->
