@@ -757,10 +757,10 @@ class TestRecordSuccessfulPost:
 class TestHandleAutopostError:
     """Tests for _handle_autopost_error helper."""
 
-    async def test_edits_message_with_error_caption(
+    async def test_generic_exception_shows_fallback_message(
         self, mock_autopost_handler, make_autopost_ctx
     ):
-        """Test error handler shows error message."""
+        """Test generic exceptions show user-friendly fallback."""
         handler = mock_autopost_handler
         ctx = make_autopost_ctx()
 
@@ -769,8 +769,72 @@ class TestHandleAutopostError:
         ctx.query.edit_message_caption.assert_called_once()
         call_kwargs = ctx.query.edit_message_caption.call_args.kwargs
         assert "Auto Post Failed" in call_kwargs["caption"]
+        assert "unexpected error" in call_kwargs["caption"]
         assert "Connection timeout" in call_kwargs["caption"]
         assert call_kwargs["reply_markup"] is not None
+
+    async def test_media_upload_error_hides_internals(
+        self, mock_autopost_handler, make_autopost_ctx
+    ):
+        """Test MediaUploadError shows user-friendly message without provider details."""
+        from src.exceptions.instagram import MediaUploadError
+
+        handler = mock_autopost_handler
+        ctx = make_autopost_ctx()
+
+        await handler._handle_autopost_error(
+            ctx, MediaUploadError("Cloudinary upload failed: Unknown API key 123")
+        )
+
+        call_kwargs = ctx.query.edit_message_caption.call_args.kwargs
+        assert "Cloudinary" not in call_kwargs["caption"]
+        assert "server issue" in call_kwargs["caption"]
+
+    async def test_rate_limit_error_message(
+        self, mock_autopost_handler, make_autopost_ctx
+    ):
+        """Test RateLimitError shows rate limit message."""
+        from src.exceptions.instagram import RateLimitError
+
+        handler = mock_autopost_handler
+        ctx = make_autopost_ctx()
+
+        await handler._handle_autopost_error(ctx, RateLimitError())
+
+        call_kwargs = ctx.query.edit_message_caption.call_args.kwargs
+        assert "rate limit" in call_kwargs["caption"].lower()
+
+    async def test_token_expired_error_message(
+        self, mock_autopost_handler, make_autopost_ctx
+    ):
+        """Test TokenExpiredError shows reconnect message."""
+        from src.exceptions.instagram import TokenExpiredError
+
+        handler = mock_autopost_handler
+        ctx = make_autopost_ctx()
+
+        await handler._handle_autopost_error(ctx, TokenExpiredError())
+
+        call_kwargs = ctx.query.edit_message_caption.call_args.kwargs
+        assert "expired" in call_kwargs["caption"].lower()
+        assert "reconnect" in call_kwargs["caption"].lower()
+
+    async def test_instagram_api_error_shows_instagram_message(
+        self, mock_autopost_handler, make_autopost_ctx
+    ):
+        """Test InstagramAPIError passes through Instagram's message."""
+        from src.exceptions.instagram import InstagramAPIError
+
+        handler = mock_autopost_handler
+        ctx = make_autopost_ctx()
+
+        await handler._handle_autopost_error(
+            ctx, InstagramAPIError("Media too large for story")
+        )
+
+        call_kwargs = ctx.query.edit_message_caption.call_args.kwargs
+        assert "Instagram rejected" in call_kwargs["caption"]
+        assert "Media too large" in call_kwargs["caption"]
 
     async def test_logs_failure_interaction(
         self, mock_autopost_handler, make_autopost_ctx

@@ -8,6 +8,12 @@ from typing import TYPE_CHECKING
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from src.config.settings import settings
+from src.exceptions.instagram import (
+    InstagramAPIError,
+    MediaUploadError,
+    RateLimitError,
+    TokenExpiredError,
+)
 from src.repositories.history_repository import HistoryCreateParams
 from src.services.core.telegram_service import _escape_markdown
 from src.services.core.telegram_utils import (
@@ -444,12 +450,12 @@ class TelegramAutopostHandler:
 
     async def _handle_autopost_error(self, ctx: AutopostContext, e: Exception) -> None:
         """Handle auto-post failure: show error message with recovery options."""
-        error_msg = str(e)
-        logger.error(f"Auto-post failed: {error_msg}", exc_info=True)
+        logger.error(f"Auto-post failed: {e}", exc_info=True)
 
+        user_msg = self._get_user_friendly_error(e)
         caption = (
             f"❌ *Auto Post Failed*\n\n"
-            f"Error: {error_msg[:200]}\n\n"
+            f"{user_msg}\n\n"
             f"You can try again or use manual posting."
         )
 
@@ -472,8 +478,21 @@ class TelegramAutopostHandler:
                 "media_filename": ctx.media_item.file_name,
                 "dry_run": False,
                 "success": False,
-                "error": error_msg[:200],
+                "error": str(e)[:200],
             },
             telegram_chat_id=ctx.query.message.chat_id,
             telegram_message_id=ctx.query.message.message_id,
         )
+
+    @staticmethod
+    def _get_user_friendly_error(e: Exception) -> str:
+        """Map internal exceptions to user-friendly error messages."""
+        if isinstance(e, MediaUploadError):
+            return "Failed to prepare media for Instagram. This is a server issue — please contact the admin."
+        if isinstance(e, RateLimitError):
+            return "Instagram rate limit reached. Please try again later."
+        if isinstance(e, TokenExpiredError):
+            return "Instagram connection has expired. Please reconnect your account in Settings."
+        if isinstance(e, InstagramAPIError):
+            return f"Instagram rejected the post: {e}"
+        return f"An unexpected error occurred: {str(e)[:150]}"
