@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **WebApp button builder extracted** — Deduplicated private-vs-group WebApp button logic from 3 locations into shared `build_webapp_button()` utility in `telegram_utils.py`
+
 ### Added
 
 - **Enhanced Mini App Dashboard** - Richer home screen with collapsible cards for deeper functionality without scroll overload

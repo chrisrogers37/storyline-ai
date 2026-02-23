@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram import InlineKeyboardMarkup
 
 from src.config.settings import settings
 from src.utils.logger import logger
-from src.utils.webapp_auth import generate_url_token
-
+from src.services.core.telegram_utils import build_webapp_button
 from datetime import datetime
 import asyncio
 
@@ -67,19 +66,13 @@ class TelegramCommandHandlers:
                     "connect your accounts and configure your posting schedule\\."
                 )
 
-            # WebAppInfo buttons don't work in groups; use a signed URL
-            # token so the webapp can authenticate without initData.
-            is_private = update.effective_chat.type == "private"
-            if is_private:
-                button = InlineKeyboardButton(
-                    button_text,
-                    web_app=WebAppInfo(url=webapp_url),
-                )
-            else:
-                user_id = update.effective_user.id
-                token = generate_url_token(chat_id, user_id)
-                signed_url = f"{webapp_url}&token={token}"
-                button = InlineKeyboardButton(button_text, url=signed_url)
+            button = build_webapp_button(
+                text=button_text,
+                webapp_url=webapp_url,
+                chat_type=update.effective_chat.type,
+                chat_id=chat_id,
+                user_id=update.effective_user.id,
+            )
 
             keyboard = InlineKeyboardMarkup([[button]])
             await update.message.reply_text(
@@ -164,17 +157,13 @@ class TelegramCommandHandlers:
                 f"{settings.OAUTH_REDIRECT_BASE_URL}/webapp/onboarding"
                 f"?chat_id={chat_id}"
             )
-            is_private = update.effective_chat.type == "private"
-            if is_private:
-                button = InlineKeyboardButton(
-                    "📊 Open Dashboard",
-                    web_app=WebAppInfo(url=webapp_url),
-                )
-            else:
-                user_id = update.effective_user.id
-                token = generate_url_token(chat_id, user_id)
-                signed_url = f"{webapp_url}&token={token}"
-                button = InlineKeyboardButton("📊 Open Dashboard", url=signed_url)
+            button = build_webapp_button(
+                text="📊 Open Dashboard",
+                webapp_url=webapp_url,
+                chat_type=update.effective_chat.type,
+                chat_id=chat_id,
+                user_id=update.effective_user.id,
+            )
             reply_markup = InlineKeyboardMarkup([[button]])
 
         await update.message.reply_text(
