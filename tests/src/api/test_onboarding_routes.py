@@ -292,7 +292,10 @@ class TestOnboardingInit:
             MockTokenRepo.return_value.close = Mock()
             MockIGService.return_value.get_active_account.return_value = None
             MockIGService.return_value.close = Mock()
-            MockQueueRepo.return_value.count_pending.return_value = 5
+            mock_queue_items = [
+                Mock(scheduled_for=datetime(2026, 2, 20, 10, 0, 0)) for _ in range(5)
+            ]
+            MockQueueRepo.return_value.get_all.return_value = mock_queue_items
             MockQueueRepo.return_value.close = Mock()
 
             mock_post = Mock()

@@ -2,11 +2,12 @@
 
 import re
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from src.repositories.chat_settings_repository import ChatSettingsRepository
 from src.repositories.history_repository import HistoryRepository
+from src.repositories.media_repository import MediaRepository
 from src.repositories.queue_repository import QueueRepository
 from src.repositories.token_repository import TokenRepository
 from src.services.core.instagram_account_service import InstagramAccountService
@@ -54,6 +55,18 @@ class CompleteRequest(BaseModel):
     chat_id: int
     create_schedule: bool = False
     schedule_days: int = Field(default=7, ge=1, le=30)
+
+
+class ToggleSettingRequest(BaseModel):
+    init_data: str
+    chat_id: int
+    setting_name: str
+
+
+class ScheduleActionRequest(BaseModel):
+    init_data: str
+    chat_id: int
+    days: int = Field(default=7, ge=1, le=30)
 
 
 # --- Helpers ---
@@ -143,16 +156,23 @@ def _get_setup_state(telegram_chat_id: int) -> dict:
             finally:
                 media_repo.close()
 
-        # Dashboard data: queue count and last post time
+        # Dashboard data: queue count, last post time, schedule bounds
         queue_count = 0
         last_post_at = None
+        next_post_at = None
+        schedule_end_date = None
         try:
             queue_repo = QueueRepository()
             history_repo = HistoryRepository()
             try:
-                queue_count = queue_repo.count_pending(
-                    chat_settings_id=chat_settings_id
+                pending_items = queue_repo.get_all(
+                    status="pending", chat_settings_id=chat_settings_id
                 )
+                queue_count = len(pending_items)
+                if pending_items:
+                    # Items are ordered by scheduled_for ASC
+                    next_post_at = pending_items[0].scheduled_for.isoformat()
+                    schedule_end_date = pending_items[-1].scheduled_for.isoformat()
                 recent_posts = history_repo.get_recent_posts(
                     hours=720, chat_settings_id=chat_settings_id
                 )
@@ -182,6 +202,8 @@ def _get_setup_state(telegram_chat_id: int) -> dict:
             "dry_run_mode": chat_settings.dry_run_mode,
             "queue_count": queue_count,
             "last_post_at": last_post_at,
+            "next_post_at": next_post_at,
+            "schedule_end_date": schedule_end_date,
         }
     finally:
         settings_repo.close()
@@ -454,3 +476,254 @@ async def onboarding_complete(request: CompleteRequest):
             scheduler.close()
 
     return result
+
+
+# --- Dashboard Detail Endpoints ---
+
+
+@router.get("/queue-detail")
+async def onboarding_queue_detail(
+    init_data: str,
+    chat_id: int,
+    limit: int = Query(default=10, ge=1, le=50),
+):
+    """Return detailed queue items with schedule summary for dashboard."""
+    _validate_request(init_data, chat_id)
+
+    settings_repo = ChatSettingsRepository()
+    queue_repo = QueueRepository()
+    try:
+        chat_settings = settings_repo.get_or_create(chat_id)
+        chat_settings_id = str(chat_settings.id)
+
+        pending_items = queue_repo.get_all(
+            status="pending", chat_settings_id=chat_settings_id
+        )
+
+        # Build day summary from all pending items
+        day_counts: dict[str, int] = {}
+        for item in pending_items:
+            day_key = item.scheduled_for.strftime("%Y-%m-%d")
+            day_counts[day_key] = day_counts.get(day_key, 0) + 1
+
+        day_summary = [
+            {"date": date, "count": count} for date, count in sorted(day_counts.items())
+        ]
+
+        # Build item list (limited) with media info
+        items = []
+        media_repo = MediaRepository()
+        try:
+            for item in pending_items[:limit]:
+                media = media_repo.get_by_id(str(item.media_item_id))
+                items.append(
+                    {
+                        "scheduled_for": item.scheduled_for.isoformat(),
+                        "media_name": media.file_name if media else "Unknown",
+                        "category": (media.category if media else None)
+                        or "uncategorized",
+                    }
+                )
+        finally:
+            media_repo.close()
+
+        schedule_end = None
+        days_remaining = None
+        if pending_items:
+            from datetime import datetime, timezone
+
+            schedule_end = pending_items[-1].scheduled_for.isoformat()
+            now = datetime.now(timezone.utc)
+            delta = pending_items[-1].scheduled_for.replace(tzinfo=timezone.utc) - now
+            days_remaining = max(0, delta.days)
+
+        return {
+            "items": items,
+            "total_pending": len(pending_items),
+            "schedule_end": schedule_end,
+            "days_remaining": days_remaining,
+            "day_summary": day_summary,
+        }
+    finally:
+        settings_repo.close()
+        queue_repo.close()
+
+
+@router.get("/history-detail")
+async def onboarding_history_detail(
+    init_data: str,
+    chat_id: int,
+    limit: int = Query(default=10, ge=1, le=50),
+):
+    """Return recent posting history with media info for dashboard."""
+    _validate_request(init_data, chat_id)
+
+    settings_repo = ChatSettingsRepository()
+    history_repo = HistoryRepository()
+    try:
+        chat_settings = settings_repo.get_or_create(chat_id)
+        chat_settings_id = str(chat_settings.id)
+
+        history_items = history_repo.get_all(
+            limit=limit, chat_settings_id=chat_settings_id
+        )
+
+        items = []
+        media_repo = MediaRepository()
+        try:
+            for item in history_items:
+                media = media_repo.get_by_id(str(item.media_item_id))
+                items.append(
+                    {
+                        "posted_at": item.posted_at.isoformat(),
+                        "media_name": media.file_name if media else "Unknown",
+                        "category": (media.category if media else None)
+                        or "uncategorized",
+                        "status": item.status,
+                        "posting_method": item.posting_method,
+                    }
+                )
+        finally:
+            media_repo.close()
+
+        return {"items": items}
+    finally:
+        settings_repo.close()
+        history_repo.close()
+
+
+@router.get("/media-stats")
+async def onboarding_media_stats(
+    init_data: str,
+    chat_id: int,
+):
+    """Return media library breakdown by category for dashboard."""
+    _validate_request(init_data, chat_id)
+
+    settings_repo = ChatSettingsRepository()
+    try:
+        chat_settings = settings_repo.get_or_create(chat_id)
+        chat_settings_id = str(chat_settings.id)
+
+        media_repo = MediaRepository()
+        try:
+            all_active = media_repo.get_all(
+                is_active=True, chat_settings_id=chat_settings_id
+            )
+
+            # Count by category
+            category_counts: dict[str, int] = {}
+            for item in all_active:
+                cat = item.category or "uncategorized"
+                category_counts[cat] = category_counts.get(cat, 0) + 1
+
+            categories = [
+                {"name": name, "count": count}
+                for name, count in sorted(
+                    category_counts.items(), key=lambda x: x[1], reverse=True
+                )
+            ]
+
+            return {
+                "total_active": len(all_active),
+                "categories": categories,
+            }
+        finally:
+            media_repo.close()
+    finally:
+        settings_repo.close()
+
+
+@router.post("/toggle-setting")
+async def onboarding_toggle_setting(request: ToggleSettingRequest):
+    """Toggle a boolean setting (is_paused, dry_run_mode) from dashboard."""
+    _validate_request(request.init_data, request.chat_id)
+
+    allowed_settings = {"is_paused", "dry_run_mode"}
+    if request.setting_name not in allowed_settings:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Setting '{request.setting_name}' cannot be toggled from dashboard. "
+            f"Allowed: {', '.join(sorted(allowed_settings))}",
+        )
+
+    settings_service = SettingsService()
+    try:
+        new_value = settings_service.toggle_setting(
+            request.chat_id, request.setting_name
+        )
+        return {
+            "setting_name": request.setting_name,
+            "new_value": new_value,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        settings_service.close()
+
+
+@router.post("/extend-schedule")
+async def onboarding_extend_schedule(request: ScheduleActionRequest):
+    """Extend the posting schedule by N days."""
+    _validate_request(request.init_data, request.chat_id)
+
+    from src.services.core.scheduler import SchedulerService
+
+    scheduler = SchedulerService()
+    try:
+        result = scheduler.extend_schedule(
+            days=request.days,
+            telegram_chat_id=request.chat_id,
+        )
+        return {
+            "scheduled": result.get("scheduled", 0),
+            "skipped": result.get("skipped", 0),
+            "total_slots": result.get("total_slots", 0),
+            "extended_from": result.get("extended_from"),
+        }
+    except Exception as e:
+        logger.error(f"Failed to extend schedule: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        scheduler.close()
+
+
+@router.post("/regenerate-schedule")
+async def onboarding_regenerate_schedule(request: ScheduleActionRequest):
+    """Clear all pending queue items and create a fresh schedule."""
+    _validate_request(request.init_data, request.chat_id)
+
+    settings_repo = ChatSettingsRepository()
+    queue_repo = QueueRepository()
+    try:
+        chat_settings = settings_repo.get_or_create(request.chat_id)
+        chat_settings_id = str(chat_settings.id)
+
+        deleted = queue_repo.delete_all_pending(chat_settings_id=chat_settings_id)
+        logger.info(
+            f"Regenerate schedule: cleared {deleted} pending items "
+            f"for chat {request.chat_id}"
+        )
+    finally:
+        settings_repo.close()
+        queue_repo.close()
+
+    from src.services.core.scheduler import SchedulerService
+
+    scheduler = SchedulerService()
+    try:
+        result = scheduler.create_schedule(
+            days=request.days,
+            telegram_chat_id=request.chat_id,
+        )
+        return {
+            "scheduled": result.get("scheduled", 0),
+            "skipped": result.get("skipped", 0),
+            "total_slots": result.get("total_slots", 0),
+            "cleared": deleted,
+        }
+    except Exception as e:
+        logger.error(f"Failed to regenerate schedule: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        scheduler.close()

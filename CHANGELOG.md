@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Enhanced Mini App Dashboard** - Richer home screen with collapsible cards for deeper functionality without scroll overload
+  - **Quick Controls card** - Toggle Delivery (pause/resume) and Dry Run mode directly from the dashboard
+  - **Schedule card** - Expandable day-by-day breakdown, Extend (+7 Days) and Regenerate schedule actions with confirmation dialog
+  - **Queue card** - Expandable list of next 10 upcoming posts with media name, category, and relative time
+  - **Recent Activity card** - Last 10 posts with status (posted/skipped/failed) and posting method (API/Manual)
+  - **Media Library card** - Category breakdown with visual bar chart showing file distribution
+  - Cards lazy-load data on first expand to keep initial load fast
+  - Schedule timing info (next post, schedule end date) shown in card summaries
+
+- **Dashboard API endpoints** - Six new endpoints powering the enhanced dashboard
+  - `GET /api/onboarding/queue-detail` - Queue items with day summary and schedule bounds
+  - `GET /api/onboarding/history-detail` - Recent posting history with media info
+  - `GET /api/onboarding/media-stats` - Media library category breakdown
+  - `POST /api/onboarding/toggle-setting` - Toggle is_paused or dry_run_mode from dashboard
+  - `POST /api/onboarding/extend-schedule` - Extend schedule by N days
+  - `POST /api/onboarding/regenerate-schedule` - Clear queue and rebuild schedule
+
 ### Fixed
 
 - **WebApp buttons in group chats** - `/start` and `/settings` failed with `Button_type_invalid` because Telegram rejects `WebAppInfo` buttons in groups. Now uses signed URL tokens for browser-based access in groups (`web_app=` in DMs, `url=` + HMAC token in groups). API accepts both `initData` and URL tokens for authentication.

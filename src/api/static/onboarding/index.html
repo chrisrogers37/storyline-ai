@@ -15,6 +15,7 @@
                 <h1>Storyline AI</h1>
                 <p class="subtitle">Your posting dashboard</p>
 
+                <!-- Instagram (static, not expandable) -->
                 <div class="home-card" id="home-card-instagram">
                     <div class="home-card-header">
                         <div class="home-card-title">
@@ -27,6 +28,7 @@
                     <button class="btn btn-card-edit" onclick="App.editSection('instagram')">Edit</button>
                 </div>
 
+                <!-- Google Drive (static, not expandable) -->
                 <div class="home-card" id="home-card-gdrive">
                     <div class="home-card-header">
                         <div class="home-card-title">
@@ -39,27 +41,125 @@
                     <button class="btn btn-card-edit" onclick="App.editSection('gdrive')">Edit</button>
                 </div>
 
-                <div class="home-card" id="home-card-schedule">
-                    <div class="home-card-header">
+                <!-- Quick Controls (expandable) -->
+                <div class="home-card home-card-expandable" id="home-card-controls">
+                    <div class="home-card-header" onclick="App.toggleCard('controls')">
+                        <div class="home-card-title">
+                            <span class="home-card-icon">&#x2699;&#xFE0F;</span>
+                            <span>Quick Controls</span>
+                        </div>
+                        <span class="home-card-chevron">&#x25B8;</span>
+                    </div>
+                    <div class="home-card-detail" id="home-detail-controls"></div>
+                    <div class="home-card-body" id="home-body-controls">
+                        <div class="toggle-row-compact">
+                            <span>Delivery</span>
+                            <label class="toggle toggle-sm">
+                                <input type="checkbox" id="toggle-delivery" onchange="App.toggleSetting('is_paused')">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="toggle-row-compact">
+                            <span>Dry Run</span>
+                            <label class="toggle toggle-sm">
+                                <input type="checkbox" id="toggle-dryrun" onchange="App.toggleSetting('dry_run_mode')">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Schedule (expandable) -->
+                <div class="home-card home-card-expandable" id="home-card-schedule">
+                    <div class="home-card-header" onclick="App.toggleCard('schedule')">
                         <div class="home-card-title">
                             <span class="home-card-icon">&#x1F4C5;</span>
                             <span>Schedule</span>
                         </div>
-                        <span class="home-card-badge" id="home-badge-schedule"></span>
+                        <div class="home-card-header-right">
+                            <span class="home-card-badge" id="home-badge-schedule"></span>
+                            <span class="home-card-chevron">&#x25B8;</span>
+                        </div>
                     </div>
                     <div class="home-card-detail" id="home-detail-schedule"></div>
-                    <button class="btn btn-card-edit" onclick="App.editSection('schedule')">Edit</button>
+                    <div class="home-card-body" id="home-body-schedule">
+                        <div class="card-body-loading hidden" id="schedule-loading">
+                            <div class="spinner"></div>
+                        </div>
+                        <div id="schedule-day-summary"></div>
+                        <div class="card-body-actions" id="schedule-actions">
+                            <button class="btn btn-action-sm" onclick="App.extendSchedule(7)">+ 7 Days</button>
+                            <button class="btn btn-action-sm btn-action-danger" onclick="App.confirmRegenerate()">Regenerate</button>
+                            <button class="btn btn-card-edit-inline" onclick="App.editSection('schedule')">Edit Settings</button>
+                        </div>
+                        <div class="confirm-dialog hidden" id="regenerate-confirm">
+                            <p>Clear all pending posts and create a new schedule?</p>
+                            <div class="confirm-actions">
+                                <button class="btn btn-action-sm btn-action-danger" onclick="App.regenerateSchedule()">Yes, Regenerate</button>
+                                <button class="btn btn-action-sm" onclick="App.cancelRegenerate()">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="home-card" id="home-card-queue">
-                    <div class="home-card-header">
+                <!-- Queue (expandable) -->
+                <div class="home-card home-card-expandable" id="home-card-queue">
+                    <div class="home-card-header" onclick="App.toggleCard('queue')">
                         <div class="home-card-title">
                             <span class="home-card-icon">&#x1F4CA;</span>
-                            <span>Queue Status</span>
+                            <span>Queue</span>
                         </div>
-                        <span class="home-card-badge" id="home-badge-queue"></span>
+                        <div class="home-card-header-right">
+                            <span class="home-card-badge" id="home-badge-queue"></span>
+                            <span class="home-card-chevron">&#x25B8;</span>
+                        </div>
                     </div>
                     <div class="home-card-detail" id="home-detail-queue"></div>
+                    <div class="home-card-body" id="home-body-queue">
+                        <div class="card-body-loading hidden" id="queue-loading">
+                            <div class="spinner"></div>
+                        </div>
+                        <div id="queue-items-list"></div>
+                    </div>
+                </div>
+
+                <!-- Recent Activity (expandable) -->
+                <div class="home-card home-card-expandable" id="home-card-history">
+                    <div class="home-card-header" onclick="App.toggleCard('history')">
+                        <div class="home-card-title">
+                            <span class="home-card-icon">&#x1F4DC;</span>
+                            <span>Recent Activity</span>
+                        </div>
+                        <span class="home-card-chevron">&#x25B8;</span>
+                    </div>
+                    <div class="home-card-detail" id="home-detail-history"></div>
+                    <div class="home-card-body" id="home-body-history">
+                        <div class="card-body-loading hidden" id="history-loading">
+                            <div class="spinner"></div>
+                        </div>
+                        <div id="history-items-list"></div>
+                    </div>
+                </div>
+
+                <!-- Media Library (expandable) -->
+                <div class="home-card home-card-expandable" id="home-card-media">
+                    <div class="home-card-header" onclick="App.toggleCard('media')">
+                        <div class="home-card-title">
+                            <span class="home-card-icon">&#x1F5C2;</span>
+                            <span>Media Library</span>
+                        </div>
+                        <div class="home-card-header-right">
+                            <span class="home-card-badge" id="home-badge-media"></span>
+                            <span class="home-card-chevron">&#x25B8;</span>
+                        </div>
+                    </div>
+                    <div class="home-card-detail" id="home-detail-media"></div>
+                    <div class="home-card-body" id="home-body-media">
+                        <div class="card-body-loading hidden" id="media-loading">
+                            <div class="spinner"></div>
+                        </div>
+                        <div id="media-category-list"></div>
+                    </div>
                 </div>
 
                 <div class="home-divider"></div>

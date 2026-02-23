@@ -328,11 +328,22 @@ const App = {
 
     // ==================== Home Screen Methods ====================
 
+    // Track which cards have been loaded (lazy loading)
+    _cardDataLoaded: {},
+
     /**
      * Populate the home screen dashboard cards from setupState.
      */
     _populateHome() {
         const s = this.setupState || {};
+
+        // Reset card data loaded state on each home populate
+        this._cardDataLoaded = {};
+
+        // Collapse all cards
+        document.querySelectorAll('.home-card-expandable').forEach(card => {
+            card.classList.remove('expanded');
+        });
 
         // Instagram card
         if (s.instagram_connected) {
@@ -353,6 +364,18 @@ const App = {
             this._setHomeDetail('gdrive', 'Tap Edit to connect Google Drive');
         }
 
+        // Quick Controls card summary
+        const deliveryOn = !s.is_paused;
+        const dryRunOn = s.dry_run_mode;
+        this._setHomeDetail('controls',
+            'Delivery: ' + (deliveryOn ? 'ON' : 'OFF') +
+            ' \u00B7 Dry Run: ' + (dryRunOn ? 'ON' : 'OFF'));
+        // Set toggle states
+        const deliveryToggle = document.getElementById('toggle-delivery');
+        const dryRunToggle = document.getElementById('toggle-dryrun');
+        if (deliveryToggle) deliveryToggle.checked = deliveryOn;
+        if (dryRunToggle) dryRunToggle.checked = dryRunOn;
+
         // Schedule card
         const postsPerDay = s.posts_per_day || 3;
         const start = s.posting_hours_start != null ? s.posting_hours_start : 14;
@@ -363,10 +386,14 @@ const App = {
         } else {
             this._setHomeBadge('schedule', 'connected', 'Active');
         }
-        this._setHomeDetail('schedule',
-            postsPerDay + ' posts/day, ' +
-            this._formatHour(start) + ' - ' + this._formatHour(end) + ' UTC' +
-            (s.dry_run_mode ? '<br><span class="home-card-tag">Dry run ON</span>' : ''));
+
+        let scheduleDetail = postsPerDay + '/day, ' +
+            this._formatHour(start) + '-' + this._formatHour(end) + ' UTC';
+        if (s.schedule_end_date) {
+            const endDate = new Date(s.schedule_end_date);
+            scheduleDetail += ' \u00B7 Ends ' + this._formatShortDate(endDate);
+        }
+        this._setHomeDetail('schedule', scheduleDetail);
 
         // Queue status card
         const queueCount = s.queue_count || 0;
@@ -376,23 +403,31 @@ const App = {
             this._setHomeBadge('queue', 'neutral', 'Empty');
         }
 
-        let queueDetail = queueCount + ' posts in queue';
-        if (s.last_post_at) {
-            const lastDate = new Date(s.last_post_at);
-            const now = new Date();
-            const hoursAgo = Math.floor((now - lastDate) / (1000 * 60 * 60));
-            if (hoursAgo < 1) {
-                queueDetail += ' \u00B7 Last post: < 1h ago';
-            } else if (hoursAgo < 24) {
-                queueDetail += ' \u00B7 Last post: ' + hoursAgo + 'h ago';
-            } else {
-                const daysAgo = Math.floor(hoursAgo / 24);
-                queueDetail += ' \u00B7 Last post: ' + daysAgo + 'd ago';
-            }
+        let queueDetail = '';
+        if (s.next_post_at) {
+            const nextDate = new Date(s.next_post_at);
+            queueDetail = 'Next: ' + this._formatRelativeTime(nextDate);
         } else {
-            queueDetail += ' \u00B7 No posts yet';
+            queueDetail = 'No posts scheduled';
         }
         this._setHomeDetail('queue', queueDetail);
+
+        // Recent Activity card summary
+        if (s.last_post_at) {
+            const lastDate = new Date(s.last_post_at);
+            this._setHomeDetail('history', 'Last post: ' + this._formatRelativeTime(lastDate));
+        } else {
+            this._setHomeDetail('history', 'No posts yet');
+        }
+
+        // Media Library card
+        const mediaCount = s.media_count || 0;
+        if (mediaCount > 0) {
+            this._setHomeBadge('media', 'connected', mediaCount.toLocaleString() + ' files');
+        } else {
+            this._setHomeBadge('media', 'neutral', 'Empty');
+        }
+        this._setHomeDetail('media', 'Tap to see categories');
     },
 
     _setHomeBadge(section, type, text) {
@@ -408,6 +443,352 @@ const App = {
         if (el) {
             el.innerHTML = html;
         }
+    },
+
+    /**
+     * Toggle a collapsible card open/closed.
+     * Lazy-loads data on first expand.
+     */
+    toggleCard(cardId) {
+        const card = document.getElementById('home-card-' + cardId);
+        if (!card) return;
+
+        const isExpanded = card.classList.toggle('expanded');
+
+        if (isExpanded && !this._cardDataLoaded[cardId]) {
+            this._cardDataLoaded[cardId] = true;
+            this._loadCardData(cardId);
+        }
+    },
+
+    /**
+     * Load data for a specific card on first expand.
+     */
+    async _loadCardData(cardId) {
+        const loaders = {
+            schedule: () => this._loadQueueDetail('schedule'),
+            queue: () => this._loadQueueDetail('queue'),
+            history: () => this._loadHistoryDetail(),
+            media: () => this._loadMediaStats(),
+        };
+
+        const loader = loaders[cardId];
+        if (loader) await loader();
+    },
+
+    /**
+     * Fetch queue detail and render into schedule or queue card.
+     */
+    async _loadQueueDetail(target) {
+        const loadingId = target + '-loading';
+        const loadingEl = document.getElementById(loadingId);
+        if (loadingEl) loadingEl.classList.remove('hidden');
+
+        try {
+            const params = new URLSearchParams({
+                init_data: this.initData,
+                chat_id: this.chatId,
+                limit: 10,
+            });
+            const data = await this._apiGet('/api/onboarding/queue-detail?' + params.toString());
+
+            if (target === 'schedule' || target === 'queue') {
+                // Both cards share the same data source
+                this._renderDaySummary(data.day_summary, data.days_remaining);
+                this._renderQueueItems(data.items);
+                // Mark both as loaded
+                this._cardDataLoaded['schedule'] = true;
+                this._cardDataLoaded['queue'] = true;
+            }
+        } catch (err) {
+            const container = target === 'schedule'
+                ? document.getElementById('schedule-day-summary')
+                : document.getElementById('queue-items-list');
+            if (container) {
+                container.innerHTML = '<div class="card-body-empty">Failed to load data</div>';
+            }
+        } finally {
+            if (loadingEl) loadingEl.classList.add('hidden');
+        }
+    },
+
+    /**
+     * Fetch and render recent posting history.
+     */
+    async _loadHistoryDetail() {
+        const loadingEl = document.getElementById('history-loading');
+        if (loadingEl) loadingEl.classList.remove('hidden');
+
+        try {
+            const params = new URLSearchParams({
+                init_data: this.initData,
+                chat_id: this.chatId,
+                limit: 10,
+            });
+            const data = await this._apiGet('/api/onboarding/history-detail?' + params.toString());
+            this._renderHistoryItems(data.items);
+        } catch (err) {
+            const container = document.getElementById('history-items-list');
+            if (container) {
+                container.innerHTML = '<div class="card-body-empty">Failed to load history</div>';
+            }
+        } finally {
+            if (loadingEl) loadingEl.classList.add('hidden');
+        }
+    },
+
+    /**
+     * Fetch and render media library stats.
+     */
+    async _loadMediaStats() {
+        const loadingEl = document.getElementById('media-loading');
+        if (loadingEl) loadingEl.classList.remove('hidden');
+
+        try {
+            const params = new URLSearchParams({
+                init_data: this.initData,
+                chat_id: this.chatId,
+            });
+            const data = await this._apiGet('/api/onboarding/media-stats?' + params.toString());
+            this._renderCategoryBreakdown(data.categories, data.total_active);
+        } catch (err) {
+            const container = document.getElementById('media-category-list');
+            if (container) {
+                container.innerHTML = '<div class="card-body-empty">Failed to load media stats</div>';
+            }
+        } finally {
+            if (loadingEl) loadingEl.classList.add('hidden');
+        }
+    },
+
+    /**
+     * Toggle a setting (is_paused or dry_run_mode) via API.
+     */
+    async toggleSetting(settingName) {
+        try {
+            const data = await this._api('/api/onboarding/toggle-setting', {
+                init_data: this.initData,
+                chat_id: this.chatId,
+                setting_name: settingName,
+            });
+
+            // Update local state
+            if (this.setupState) {
+                this.setupState[settingName] = data.new_value;
+            }
+
+            // Update summary text
+            const deliveryOn = !this.setupState.is_paused;
+            const dryRunOn = this.setupState.dry_run_mode;
+            this._setHomeDetail('controls',
+                'Delivery: ' + (deliveryOn ? 'ON' : 'OFF') +
+                ' \u00B7 Dry Run: ' + (dryRunOn ? 'ON' : 'OFF'));
+
+            // Update schedule badge
+            if (settingName === 'is_paused') {
+                if (this.setupState.is_paused) {
+                    this._setHomeBadge('schedule', 'error', 'Paused');
+                } else {
+                    this._setHomeBadge('schedule', 'connected', 'Active');
+                }
+            }
+        } catch (err) {
+            // Revert toggle on failure
+            const toggle = settingName === 'is_paused'
+                ? document.getElementById('toggle-delivery')
+                : document.getElementById('toggle-dryrun');
+            if (toggle) toggle.checked = !toggle.checked;
+        }
+    },
+
+    /**
+     * Extend the schedule by N days.
+     */
+    async extendSchedule(days) {
+        this._showLoading(true);
+        try {
+            const data = await this._api('/api/onboarding/extend-schedule', {
+                init_data: this.initData,
+                chat_id: this.chatId,
+                days: days,
+            });
+
+            // Refresh dashboard state and queue detail
+            await this._refreshHome();
+            this._cardDataLoaded['schedule'] = false;
+            this._cardDataLoaded['queue'] = false;
+            await this._loadQueueDetail('schedule');
+        } catch (err) {
+            // Show error inline
+        } finally {
+            this._showLoading(false);
+        }
+    },
+
+    /**
+     * Show the regenerate confirmation dialog.
+     */
+    confirmRegenerate() {
+        const actions = document.getElementById('schedule-actions');
+        const confirm = document.getElementById('regenerate-confirm');
+        if (actions) actions.classList.add('hidden');
+        if (confirm) confirm.classList.remove('hidden');
+    },
+
+    /**
+     * Cancel the regenerate confirmation.
+     */
+    cancelRegenerate() {
+        const actions = document.getElementById('schedule-actions');
+        const confirm = document.getElementById('regenerate-confirm');
+        if (actions) actions.classList.remove('hidden');
+        if (confirm) confirm.classList.add('hidden');
+    },
+
+    /**
+     * Regenerate the schedule (clear + rebuild).
+     */
+    async regenerateSchedule() {
+        this.cancelRegenerate();
+        this._showLoading(true);
+        try {
+            await this._api('/api/onboarding/regenerate-schedule', {
+                init_data: this.initData,
+                chat_id: this.chatId,
+                days: 7,
+            });
+
+            await this._refreshHome();
+            this._cardDataLoaded['schedule'] = false;
+            this._cardDataLoaded['queue'] = false;
+            await this._loadQueueDetail('schedule');
+        } catch (err) {
+            // Show error inline
+        } finally {
+            this._showLoading(false);
+        }
+    },
+
+    /**
+     * Re-fetch setup state to refresh dashboard numbers.
+     */
+    async _refreshHome() {
+        try {
+            const response = await this._api('/api/onboarding/init', {
+                init_data: this.initData,
+                chat_id: this.chatId,
+            });
+            this.setupState = response.setup_state;
+            this._populateHome();
+        } catch (err) {
+            // Non-critical
+        }
+    },
+
+    // ==================== Render Helpers ====================
+
+    _renderDaySummary(daySummary, daysRemaining) {
+        const container = document.getElementById('schedule-day-summary');
+        if (!container) return;
+
+        if (!daySummary || daySummary.length === 0) {
+            container.innerHTML = '<div class="card-body-empty">No scheduled days</div>';
+            return;
+        }
+
+        let html = '';
+        for (const day of daySummary) {
+            const date = new Date(day.date + 'T00:00:00');
+            const label = this._formatShortDate(date);
+            html += '<div class="day-summary-row">' +
+                '<span class="day-summary-date">' + this._escapeHtml(label) + '</span>' +
+                '<span class="day-summary-count">' + day.count + ' posts</span>' +
+                '</div>';
+        }
+
+        container.innerHTML = html;
+    },
+
+    _renderQueueItems(items) {
+        const container = document.getElementById('queue-items-list');
+        if (!container) return;
+
+        if (!items || items.length === 0) {
+            container.innerHTML = '<div class="card-body-empty">Queue is empty</div>';
+            return;
+        }
+
+        let html = '';
+        for (const item of items) {
+            const time = new Date(item.scheduled_for);
+            html += '<div class="queue-item-row">' +
+                '<div class="item-row-left">' +
+                '<div class="item-row-name">' + this._escapeHtml(item.media_name) + '</div>' +
+                '<div class="item-row-meta">' + this._escapeHtml(item.category) + '</div>' +
+                '</div>' +
+                '<div class="item-row-right">' +
+                '<div class="item-row-time">' + this._formatRelativeTime(time) + '</div>' +
+                '</div>' +
+                '</div>';
+        }
+
+        container.innerHTML = html;
+    },
+
+    _renderHistoryItems(items) {
+        const container = document.getElementById('history-items-list');
+        if (!container) return;
+
+        if (!items || items.length === 0) {
+            container.innerHTML = '<div class="card-body-empty">No posting history</div>';
+            return;
+        }
+
+        let html = '';
+        for (const item of items) {
+            const time = new Date(item.posted_at);
+            const statusClass = 'status-' + (item.status || 'posted');
+            html += '<div class="history-item-row">' +
+                '<div class="item-row-left">' +
+                '<div class="item-row-name">' + this._escapeHtml(item.media_name) + '</div>' +
+                '<div class="item-row-meta">' + this._escapeHtml(item.category) +
+                ' \u00B7 ' + this._escapeHtml(item.posting_method === 'instagram_api' ? 'API' : 'Manual') +
+                '</div>' +
+                '</div>' +
+                '<div class="item-row-right">' +
+                '<span class="item-row-status ' + statusClass + '">' +
+                this._escapeHtml(item.status || 'posted') + '</span>' +
+                '<div class="item-row-time">' + this._formatRelativeTime(time) + '</div>' +
+                '</div>' +
+                '</div>';
+        }
+
+        container.innerHTML = html;
+    },
+
+    _renderCategoryBreakdown(categories, totalActive) {
+        const container = document.getElementById('media-category-list');
+        if (!container) return;
+
+        if (!categories || categories.length === 0) {
+            container.innerHTML = '<div class="card-body-empty">No media indexed</div>';
+            return;
+        }
+
+        const maxCount = categories[0].count;
+        let html = '';
+        for (const cat of categories) {
+            const pct = maxCount > 0 ? Math.round((cat.count / maxCount) * 100) : 0;
+            html += '<div class="category-row">' +
+                '<span class="category-name">' + this._escapeHtml(cat.name) + '</span>' +
+                '<div class="category-bar-wrap">' +
+                '<div class="category-bar" style="width:' + pct + '%"></div>' +
+                '</div>' +
+                '<span class="category-count">' + cat.count + '</span>' +
+                '</div>';
+        }
+
+        container.innerHTML = html;
     },
 
     /**
@@ -730,6 +1111,30 @@ const App = {
         if (h === 12) return '12pm';
         if (h < 12) return h + 'am';
         return (h - 12) + 'pm';
+    },
+
+    _formatRelativeTime(date) {
+        const now = new Date();
+        const diffMs = now - date;
+        const absDiffMs = Math.abs(diffMs);
+        const isFuture = diffMs < 0;
+
+        const minutes = Math.floor(absDiffMs / (1000 * 60));
+        const hours = Math.floor(absDiffMs / (1000 * 60 * 60));
+        const days = Math.floor(absDiffMs / (1000 * 60 * 60 * 24));
+
+        if (minutes < 1) return isFuture ? 'now' : 'just now';
+        if (minutes < 60) return isFuture ? 'in ' + minutes + 'm' : minutes + 'm ago';
+        if (hours < 24) return isFuture ? 'in ' + hours + 'h' : hours + 'h ago';
+        if (days < 7) return isFuture ? 'in ' + days + 'd' : days + 'd ago';
+
+        return this._formatShortDate(date);
+    },
+
+    _formatShortDate(date) {
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+            'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        return months[date.getMonth()] + ' ' + date.getDate();
     },
 };
 

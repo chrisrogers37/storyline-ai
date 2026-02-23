@@ -528,3 +528,302 @@ h2 {
 .step-nav-return.hidden {
     display: none;
 }
+
+/* ==================== Expandable Cards ==================== */
+
+.home-card-expandable {
+    cursor: default;
+}
+
+.home-card-expandable .home-card-header {
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.home-card-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.home-card-chevron {
+    font-size: 14px;
+    color: var(--tg-theme-hint-color);
+    transition: transform 0.2s ease;
+    display: inline-block;
+}
+
+.home-card-expandable.expanded .home-card-chevron {
+    transform: rotate(90deg);
+}
+
+.home-card-body {
+    display: none;
+    padding-top: 12px;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    margin-top: 10px;
+}
+
+.home-card-expandable.expanded .home-card-body {
+    display: block;
+    animation: fadeIn 0.2s ease;
+}
+
+/* Card body loading spinner */
+.card-body-loading {
+    display: flex;
+    justify-content: center;
+    padding: 16px 0;
+}
+
+.card-body-loading.hidden {
+    display: none;
+}
+
+/* ==================== Quick Controls ==================== */
+
+.toggle-row-compact {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    font-size: 14px;
+}
+
+.toggle-row-compact:last-child {
+    padding-bottom: 0;
+}
+
+.toggle-sm {
+    width: 40px;
+    height: 24px;
+}
+
+.toggle-sm .toggle-slider::before {
+    width: 20px;
+    height: 20px;
+}
+
+.toggle-sm input:checked + .toggle-slider::before {
+    transform: translateX(16px);
+}
+
+/* ==================== Queue / History Items ==================== */
+
+.queue-item-row, .history-item-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 8px 0;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.queue-item-row:last-child, .history-item-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.item-row-left {
+    flex: 1;
+    min-width: 0;
+}
+
+.item-row-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 500;
+}
+
+.item-row-meta {
+    color: var(--tg-theme-hint-color);
+    font-size: 12px;
+    margin-top: 2px;
+}
+
+.item-row-right {
+    flex-shrink: 0;
+    margin-left: 8px;
+    text-align: right;
+}
+
+.item-row-time {
+    font-size: 12px;
+    color: var(--tg-theme-hint-color);
+}
+
+.item-row-status {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 1px 6px;
+    border-radius: 4px;
+}
+
+.status-posted {
+    background: rgba(34, 197, 94, 0.15);
+    color: #16a34a;
+}
+
+.status-failed {
+    background: rgba(239, 68, 68, 0.15);
+    color: #dc2626;
+}
+
+.status-skipped {
+    background: rgba(245, 158, 11, 0.15);
+    color: #d97706;
+}
+
+.status-rejected {
+    background: rgba(239, 68, 68, 0.15);
+    color: #dc2626;
+}
+
+/* ==================== Day Summary ==================== */
+
+.day-summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    font-size: 13px;
+}
+
+.day-summary-row:last-child {
+    padding-bottom: 0;
+}
+
+.day-summary-date {
+    color: var(--tg-theme-text-color);
+}
+
+.day-summary-count {
+    color: var(--tg-theme-hint-color);
+    font-size: 12px;
+}
+
+/* ==================== Category Breakdown ==================== */
+
+.category-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+    font-size: 13px;
+}
+
+.category-row:last-child {
+    padding-bottom: 0;
+}
+
+.category-name {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.category-bar-wrap {
+    flex: 1;
+    height: 6px;
+    background: rgba(0, 0, 0, 0.06);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.category-bar {
+    height: 100%;
+    background: var(--tg-theme-button-color);
+    border-radius: 3px;
+    min-width: 2px;
+}
+
+.category-count {
+    flex-shrink: 0;
+    color: var(--tg-theme-hint-color);
+    font-size: 12px;
+    min-width: 30px;
+    text-align: right;
+}
+
+/* ==================== Action Buttons ==================== */
+
+.card-body-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+}
+
+.btn-action-sm {
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 8px;
+    background: var(--tg-theme-button-color);
+    color: var(--tg-theme-button-text-color);
+    border: none;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.btn-action-sm:active {
+    opacity: 0.7;
+}
+
+.btn-action-danger {
+    background: rgba(239, 68, 68, 0.12);
+    color: #dc2626;
+}
+
+.btn-card-edit-inline {
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 8px;
+    background: none;
+    color: var(--tg-theme-link-color);
+    border: none;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.btn-card-edit-inline:active {
+    opacity: 0.6;
+}
+
+/* ==================== Confirm Dialog ==================== */
+
+.confirm-dialog {
+    margin-top: 12px;
+    padding: 12px;
+    background: rgba(239, 68, 68, 0.06);
+    border-radius: 8px;
+    border: 1px solid rgba(239, 68, 68, 0.15);
+}
+
+.confirm-dialog p {
+    font-size: 13px;
+    margin-bottom: 10px;
+    color: var(--tg-theme-text-color);
+}
+
+.confirm-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.confirm-dialog.hidden {
+    display: none;
+}
+
+/* ==================== Empty State ==================== */
+
+.card-body-empty {
+    text-align: center;
+    padding: 12px 0;
+    font-size: 13px;
+    color: var(--tg-theme-hint-color);
+}
