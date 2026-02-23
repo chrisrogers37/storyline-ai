@@ -1,6 +1,6 @@
 # Mini App Consolidation — Command Cleanup & Feature Unification
 
-**Status**: 🔧 IN PROGRESS (Phase 5)
+**Status**: 🔧 IN PROGRESS (Phase 6)
 **Started**: 2026-02-23
 **Created**: 2026-02-23
 **Priority**: High
@@ -190,9 +190,10 @@ Tests:
 - `test_sync_media_unauthorized` — verify auth check
 - `test_sync_media_error` — verify error handling
 
-### Phase 5: Command Cleanup — 🔧 IN PROGRESS
+### Phase 5: Command Cleanup — ✅ COMPLETE (PR #77)
 **Retire redundant commands, keep /status and /settings as full handlers**
 Started: 2026-02-23
+Completed: 2026-02-23
 
 After Phases 1-4, the Mini App has full feature parity. Now retire redundant commands.
 
