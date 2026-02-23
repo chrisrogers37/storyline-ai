@@ -69,7 +69,9 @@ class MediaSourceFactory:
             return provider_class(base_path=base_path)
 
         if source_type == "google_drive":
-            root_folder_id = kwargs.get("root_folder_id")
+            root_folder_id = kwargs.get(
+                "root_folder_id", settings.MEDIA_SOURCE_ROOT
+            )
             service_account_info = kwargs.get("service_account_info")
             oauth_credentials = kwargs.get("oauth_credentials")
             telegram_chat_id = kwargs.get("telegram_chat_id")
@@ -87,10 +89,11 @@ class MediaSourceFactory:
                         return gdrive_service.get_provider_for_chat(
                             telegram_chat_id, root_folder_id
                         )
-                    except Exception:
-                        logger.debug(
-                            "No user OAuth for chat %s, falling back to service account",
+                    except Exception as e:
+                        logger.warning(
+                            "User OAuth failed for chat %s: %s, falling back to service account",
                             telegram_chat_id,
+                            e,
                         )
 
                 return gdrive_service.get_provider(root_folder_id)
