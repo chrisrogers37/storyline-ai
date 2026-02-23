@@ -1,6 +1,6 @@
 # Mini App Consolidation — Command Cleanup & Feature Unification
 
-**Status**: 🔧 IN PROGRESS (Phase 4)
+**Status**: 🔧 IN PROGRESS (Phase 6)
 **Started**: 2026-02-23
 **Created**: 2026-02-23
 **Priority**: High
@@ -190,41 +190,54 @@ Tests:
 - `test_sync_media_unauthorized` — verify auth check
 - `test_sync_media_error` — verify error handling
 
-### Phase 5: Command Cleanup
-**Retire redundant commands, slim remaining ones**
+### Phase 5: Command Cleanup — ✅ COMPLETE (PR #77)
+**Retire redundant commands, keep /status and /settings as full handlers**
+Started: 2026-02-23
+Completed: 2026-02-23
 
-After Phases 1-4, the Mini App has full feature parity. Now slim down Telegram:
+After Phases 1-4, the Mini App has full feature parity. Now retire redundant commands.
 
-Slim down `/status`:
-```
-📊 Status: ✅ Healthy · 210 queued · Next in 2h · Last 4d ago
-[Open Dashboard ↗]
-```
-One-line summary + button to Mini App.
+**Challenge round decision**: Keep `/status` and `/settings` as full handlers (not one-line summaries).
+- `/status` is genuinely useful for in-chat troubleshooting (setup checklist, system health)
+- `/settings` is the quick BotFather-style control panel users rely on
+- The 11→6 reduction comes entirely from retiring 5 commands, not slimming these
+- Add "Open Dashboard" button to `/status` (already exists on `/settings`)
 
-Slim down `/settings`:
-```
-⚙️ Settings: 15/day · 12pm-4am · Delivery ON · Dry Run OFF
-[Open Settings ↗]
-```
-One line of current config + button to Mini App.
+**Retire** (add redirect messages to existing `handle_removed_command` dict):
+- `/queue` → "View your queue in the dashboard" + redirect
+- `/pause` → "Use Quick Controls in the dashboard" + redirect
+- `/resume` → "Use Quick Controls in the dashboard" + redirect
+- `/history` → "View recent activity in the dashboard" + redirect
+- `/sync` → "Sync from the dashboard" + redirect
 
-**Retire** (add redirect messages):
-- `/queue` → "View your queue in the dashboard" + button
-- `/pause` → "Use Quick Controls in the dashboard" + button
-- `/resume` → "Use Quick Controls in the dashboard" + button
-- `/history` → "View recent activity in the dashboard" + button
-- `/sync` → "Sync from the dashboard" + button
+**Enhance** `/status`:
+- Add "Open Dashboard" inline button (WebAppInfo for private, signed URL for groups)
+
+**Update** `/help`:
+- Show only 6 active commands (remove queue, pause, resume, history, sync references)
+
+**Update** `/start` fallback:
+- Remove references to retired commands in the fallback text (no OAUTH_REDIRECT_BASE_URL)
+
+**Update** command registration:
+- Move 5 commands from active to `handle_removed_command` in `command_map`
+- Trim `BotCommand` list from 11 to 6
+
+**Update** tests:
+- Remove test classes for retired commands (TestQueueCommand, TestPauseCommand, TestResumeCommand, TestHistoryCommand)
+- Add tests for new redirect messages
+- Add test for "Open Dashboard" button on `/status`
+- Keep TestSyncCommand tests in separate file (test_telegram_sync_command.py) — those test the sync service, not the Telegram handler
 
 The command structure becomes:
 
 | Command | Behavior | Purpose |
 |---------|----------|---------|
-| `/start` | Opens Mini App | **Primary entry point** |
-| `/status` | One-line summary + "Open Dashboard" button | **Quick glance** |
-| `/settings` | One-line config + "Open Settings" button | **Quick glance** |
+| `/start` | Opens Mini App (unchanged) | **Primary entry point** |
+| `/status` | Full health report + "Open Dashboard" button | **Diagnostics** |
+| `/settings` | Toggle panel + "Open Full Settings" button (unchanged) | **Quick controls** |
 | `/next` | Force-send (unchanged) | **Power-user shortcut** |
-| `/help` | Slim command reference | **Reference** |
+| `/help` | Slim command reference (updated) | **Reference** |
 | `/cleanup` | Delete bot messages (unchanged) | **Utility** |
 
 This takes us from **11 active commands** down to **6** (with 5 joining the 7 already-retired commands as redirects).
@@ -248,8 +261,8 @@ Instead of the hamburger menu showing a command list, the main menu button opens
 ### After (6 commands)
 ```
 /start     → Opens Mini App (primary interface)
-/status    → One-line summary + [Open Dashboard] button
-/settings  → One-line config + [Open Settings] button
+/status    → Full health report + [Open Dashboard] button
+/settings  → Toggle panel + [Open Full Settings] button
 /next      → Force-send next post (power-user action)
 /help      → Slim reference card
 /cleanup   → Delete bot messages (utility)

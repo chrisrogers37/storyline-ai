@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from src.config.settings import settings
-from src.services.core.telegram_service import _escape_markdown
 from src.utils.logger import logger
 from src.utils.webapp_auth import generate_url_token
 
@@ -93,9 +92,9 @@ class TelegramCommandHandlers:
             await update.message.reply_text(
                 "👋 *Storyline AI Bot*\n\n"
                 "Commands:\n"
-                "/queue - View upcoming posts\n"
+                "/status - System health & overview\n"
                 "/next - Force send next post\n"
-                "/status - Check system status\n"
+                "/setup - Quick settings & toggles\n"
                 "/help - Show all commands",
                 parse_mode="Markdown",
             )
@@ -158,7 +157,29 @@ class TelegramCommandHandlers:
             f"📈 24h: {len(recent_posts)} posts"
         )
 
-        await update.message.reply_text(status_msg, parse_mode="Markdown")
+        # Add "Open Dashboard" button if Mini App URL is configured
+        reply_markup = None
+        if settings.OAUTH_REDIRECT_BASE_URL:
+            webapp_url = (
+                f"{settings.OAUTH_REDIRECT_BASE_URL}/webapp/onboarding"
+                f"?chat_id={chat_id}"
+            )
+            is_private = update.effective_chat.type == "private"
+            if is_private:
+                button = InlineKeyboardButton(
+                    "📊 Open Dashboard",
+                    web_app=WebAppInfo(url=webapp_url),
+                )
+            else:
+                user_id = update.effective_user.id
+                token = generate_url_token(chat_id, user_id)
+                signed_url = f"{webapp_url}&token={token}"
+                button = InlineKeyboardButton("📊 Open Dashboard", url=signed_url)
+            reply_markup = InlineKeyboardMarkup([[button]])
+
+        await update.message.reply_text(
+            status_msg, parse_mode="Markdown", reply_markup=reply_markup
+        )
 
         self.service.interaction_service.log_command(
             user_id=str(user.id),
@@ -357,54 +378,6 @@ class TelegramCommandHandlers:
         except Exception:
             return ("└── 📦 Delivery: ❓ Check failed", False)
 
-    async def handle_queue(self, update, context):
-        """Handle /queue command - show upcoming scheduled posts."""
-        user = self.service._get_or_create_user(update.effective_user)
-
-        # Get ALL pending queue items (not just due ones)
-        all_pending = self.service.queue_repo.get_all(status="pending")
-        total_count = len(all_pending)
-        queue_items = all_pending[:10]  # Show first 10
-
-        if not queue_items:
-            await update.message.reply_text(
-                "📭 *Queue Empty*\n\nNo posts scheduled.", parse_mode="Markdown"
-            )
-        else:
-            lines = [f"📅 *Upcoming Queue* ({len(queue_items)} of {total_count})\n"]
-
-            for i, item in enumerate(queue_items, 1):
-                # Get media info
-                media_item = self.service.media_repo.get_by_id(str(item.media_item_id))
-                filename = media_item.file_name if media_item else "Unknown"
-                category = (
-                    media_item.category if media_item and media_item.category else "-"
-                )
-
-                # Escape markdown special characters in dynamic content
-                filename = _escape_markdown(filename)
-                category = _escape_markdown(category)
-
-                # Format scheduled time
-                scheduled = item.scheduled_for.strftime("%b %d %H:%M UTC")
-
-                lines.append(f"{i}. 🕐 {scheduled}")
-                lines.append(f"    📁 {filename} ({category})\n")
-
-            await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
-
-        # Log interaction
-        self.service.interaction_service.log_command(
-            user_id=str(user.id),
-            command="/queue",
-            context={
-                "items_shown": len(queue_items),
-                "total_queue": total_count,
-            },
-            telegram_chat_id=update.effective_chat.id,
-            telegram_message_id=update.message.message_id,
-        )
-
     async def handle_next(self, update, context):
         """
         Handle /next command - force send next scheduled post immediately.
@@ -472,19 +445,12 @@ class TelegramCommandHandlers:
 
         help_text = (
             "📖 *Storyline AI Help*\n\n"
-            "*Daily Commands:*\n"
-            "/queue - View upcoming posts\n"
-            "/next - Send next post now\n"
+            "*Commands:*\n"
+            "/start - Open dashboard & settings\n"
             "/status - System health & overview\n"
-            "/history - Recent post history\n\n"
-            "*Control Commands:*\n"
-            "/pause - Pause delivery\n"
-            "/resume - Resume delivery\n"
+            "/next - Send next post now\n"
             "/setup - Quick settings & toggles\n"
-            "/sync - Sync media from source\n"
-            "/cleanup - Delete recent bot messages\n\n"
-            "*Getting Started:*\n"
-            "/start - Open setup wizard\n"
+            "/cleanup - Delete recent bot messages\n"
             "/help - Show this help\n\n"
             "*Button Actions:*\n"
             "🤖 Auto Post - Post via Instagram API\n"
@@ -499,147 +465,6 @@ class TelegramCommandHandlers:
         self.service.interaction_service.log_command(
             user_id=str(user.id),
             command="/help",
-            telegram_chat_id=update.effective_chat.id,
-            telegram_message_id=update.message.message_id,
-        )
-
-    async def handle_pause(self, update, context):
-        """Handle /pause command - pause automatic posting."""
-        user = self.service._get_or_create_user(update.effective_user)
-
-        if self.service.is_paused:
-            await update.message.reply_text(
-                "📦 *Delivery Already OFF*\n\nDelivery is already turned off.\nUse /resume to turn it back on.",
-                parse_mode="Markdown",
-            )
-        else:
-            self.service.set_paused(True, user)
-            pending_count = self.service.queue_repo.count_pending()
-            await update.message.reply_text(
-                f"📦 *Delivery OFF*\n\n"
-                f"Automatic delivery has been turned off.\n"
-                f"📊 {pending_count} posts still in queue.\n"
-                f"Overdue items will be auto-rescheduled +24hr.\n\n"
-                f"Use /resume to turn delivery back on.\n"
-                f"Use /next to manually send posts.",
-                parse_mode="Markdown",
-            )
-            logger.info(f"Posting paused by {self.service._get_display_name(user)}")
-
-        self.service.interaction_service.log_command(
-            user_id=str(user.id),
-            command="/pause",
-            context={"was_paused": self.service.is_paused},
-            telegram_chat_id=update.effective_chat.id,
-            telegram_message_id=update.message.message_id,
-        )
-
-    async def handle_resume(self, update, context):
-        """Handle /resume command - resume automatic posting."""
-        user = self.service._get_or_create_user(update.effective_user)
-
-        if not self.service.is_paused:
-            await update.message.reply_text(
-                "📦 *Delivery Already ON*\n\nDelivery is already active.",
-                parse_mode="Markdown",
-            )
-        else:
-            # Check for overdue posts
-            now = datetime.utcnow()
-            all_pending = self.service.queue_repo.get_all(status="pending")
-            overdue = [p for p in all_pending if p.scheduled_for < now]
-            future = [p for p in all_pending if p.scheduled_for >= now]
-
-            if overdue:
-                # Show options for handling overdue posts
-                keyboard = [
-                    [
-                        InlineKeyboardButton(
-                            "🔄 Reschedule", callback_data="resume:reschedule"
-                        ),
-                        InlineKeyboardButton(
-                            "🗑️ Clear Overdue", callback_data="resume:clear"
-                        ),
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            "▶️ Resume Anyway", callback_data="resume:force"
-                        ),
-                    ],
-                ]
-                await update.message.reply_text(
-                    f"⚠️ *{len(overdue)} Overdue Posts Found*\n\n"
-                    f"These posts were scheduled while delivery was off:\n"
-                    f"• {len(overdue)} overdue\n"
-                    f"• {len(future)} still scheduled\n\n"
-                    f"What would you like to do?",
-                    parse_mode="Markdown",
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                )
-            else:
-                self.service.set_paused(False, user)
-                await update.message.reply_text(
-                    f"📦 *Delivery ON*\n\n"
-                    f"Automatic delivery is now active.\n"
-                    f"📊 {len(future)} posts scheduled.",
-                    parse_mode="Markdown",
-                )
-                logger.info(
-                    f"Posting resumed by {self.service._get_display_name(user)}"
-                )
-
-        self.service.interaction_service.log_command(
-            user_id=str(user.id),
-            command="/resume",
-            telegram_chat_id=update.effective_chat.id,
-            telegram_message_id=update.message.message_id,
-        )
-
-    async def handle_history(self, update, context):
-        """Handle /history command - show recent post history."""
-        user = self.service._get_or_create_user(update.effective_user)
-
-        # Parse limit argument
-        try:
-            limit = int(context.args[0]) if context.args else 5
-            limit = min(max(limit, 1), 20)  # Clamp between 1 and 20
-        except (ValueError, IndexError):
-            limit = 5
-
-        recent = self.service.history_repo.get_recent_posts(hours=168)[
-            :limit
-        ]  # Last 7 days
-
-        if not recent:
-            await update.message.reply_text(
-                "📜 *No Recent History*\n\nNo posts in the last 7 days.",
-                parse_mode="Markdown",
-            )
-            return
-
-        lines = [f"📜 *Recent Posts* (last {len(recent)})\n"]
-        for post in recent:
-            status_emoji = (
-                "✅"
-                if post.status == "posted"
-                else "⏭️"
-                if post.status == "skipped"
-                else "🚫"
-            )
-            time_str = post.posted_at.strftime("%b %d %H:%M") if post.posted_at else "?"
-            username = (
-                f"@{post.posted_by_telegram_username}"
-                if post.posted_by_telegram_username
-                else "system"
-            )
-            lines.append(f"{status_emoji} {time_str} - {username}")
-
-        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
-
-        self.service.interaction_service.log_command(
-            user_id=str(user.id),
-            command="/history",
-            context={"limit": limit, "returned": len(recent)},
             telegram_chat_id=update.effective_chat.id,
             telegram_message_id=update.message.message_id,
         )
@@ -714,109 +539,6 @@ class TelegramCommandHandlers:
         except Exception:
             pass  # Ignore errors if already deleted
 
-    async def handle_sync(self, update, context):
-        """Handle /sync command - trigger manual media sync and report results.
-
-        Usage:
-            /sync - Run a manual media sync against the configured provider
-        """
-        user = self.service._get_or_create_user(update.effective_user)
-        chat_id = update.effective_chat.id
-
-        # Check if sync is configured
-        source_type = settings.MEDIA_SOURCE_TYPE
-        source_root = settings.MEDIA_SOURCE_ROOT
-
-        if not source_root and source_type == "local":
-            source_root = settings.MEDIA_DIR
-
-        if not source_root:
-            await update.message.reply_text(
-                "⚠️ *Media Sync Not Configured*\n\n"
-                "No media source root is set.\n"
-                "Configure `MEDIA_SOURCE_ROOT` in `.env` or connect a Google Drive.",
-                parse_mode="Markdown",
-            )
-            self.service.interaction_service.log_command(
-                user_id=str(user.id),
-                command="/sync",
-                context={"error": "not_configured"},
-                telegram_chat_id=chat_id,
-                telegram_message_id=update.message.message_id,
-            )
-            return
-
-        # Send "syncing..." message
-        status_msg = await update.message.reply_text(
-            f"🔄 *Syncing media...*\n\n"
-            f"Source: `{source_type}`\n"
-            f"Root: `{source_root[:40]}{'...' if len(source_root) > 40 else ''}`",
-            parse_mode="Markdown",
-        )
-
-        try:
-            from src.services.core.media_sync import MediaSyncService
-
-            sync_service = MediaSyncService()
-            result = sync_service.sync(
-                source_type=source_type,
-                source_root=source_root,
-                triggered_by="telegram",
-            )
-
-            # Build result message
-            lines = ["✅ *Sync Complete*\n"]
-
-            if result.new > 0:
-                lines.append(f"📥 New: {result.new}")
-            if result.updated > 0:
-                lines.append(f"✏️ Updated: {result.updated}")
-            if result.deactivated > 0:
-                lines.append(f"🗑️ Removed: {result.deactivated}")
-            if result.reactivated > 0:
-                lines.append(f"♻️ Restored: {result.reactivated}")
-
-            lines.append(f"📁 Unchanged: {result.unchanged}")
-
-            if result.errors > 0:
-                lines.append(f"⚠️ Errors: {result.errors}")
-
-            lines.append(f"\n📊 Total: {result.total_processed}")
-
-            await status_msg.edit_text(
-                "\n".join(lines),
-                parse_mode="Markdown",
-            )
-
-            # Log interaction
-            self.service.interaction_service.log_command(
-                user_id=str(user.id),
-                command="/sync",
-                context=result.to_dict(),
-                telegram_chat_id=chat_id,
-                telegram_message_id=update.message.message_id,
-            )
-
-            logger.info(
-                f"Manual sync triggered by {self.service._get_display_name(user)}: "
-                f"{result.new} new, {result.updated} updated, "
-                f"{result.deactivated} deactivated"
-            )
-
-        except ValueError as e:
-            await status_msg.edit_text(
-                f"❌ *Sync Failed*\n\n{str(e)}",
-                parse_mode="Markdown",
-            )
-            logger.error(f"Manual sync failed (config): {e}")
-
-        except Exception as e:
-            await status_msg.edit_text(
-                f"❌ *Sync Failed*\n\n{str(e)[:200]}",
-                parse_mode="Markdown",
-            )
-            logger.error(f"Manual sync failed: {e}", exc_info=True)
-
     async def handle_removed_command(self, update, context):
         """Handle removed commands with a helpful redirect message."""
         command = update.message.text.split()[0].split("@")[0]  # Extract /command
@@ -829,6 +551,11 @@ class TelegramCommandHandlers:
             "/dryrun": "Use /settings to toggle dry-run mode.",
             "/backfill": "Use the CLI: storyline-cli backfill-instagram",
             "/connect": "Use /start to open the setup wizard and connect Instagram.",
+            "/queue": "View your queue in the dashboard. Use /start to open it.",
+            "/pause": "Use Quick Controls in the dashboard. Use /start to open it.",
+            "/resume": "Use Quick Controls in the dashboard. Use /start to open it.",
+            "/history": "View recent activity in the dashboard. Use /start to open it.",
+            "/sync": "Sync from the dashboard. Use /start to open it.",
         }
 
         message = redirects.get(command, "This command has been removed.")

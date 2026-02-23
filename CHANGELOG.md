@@ -55,6 +55,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Inline result display showing new/updated/removed/error counts
   - `POST /api/onboarding/sync-media` - Calls MediaSyncService with per-tenant config
 
+- **"Open Dashboard" button on /status** - Quick link to the Mini App from the status command (Phase 5 of Mini App Consolidation)
+
+### Changed
+
+- **Command cleanup** - Reduced active Telegram commands from 11 to 6 (Phase 5 of Mini App Consolidation)
+  - **Retired 5 commands** as redirects: `/queue`, `/pause`, `/resume`, `/history`, `/sync` — all now show a helpful message pointing to the Mini App dashboard
+  - **Updated `/help`** to show only 6 active commands: `/start`, `/status`, `/setup`, `/next`, `/cleanup`, `/help`
+  - **Updated BotCommand menu** from 11 to 6 entries in Telegram autocomplete
+  - `/status` and `/settings` kept as full handlers (not slimmed down) since they provide valuable in-chat diagnostics and quick controls
+  - Total retired commands now: 12 (5 new + 7 from previous cleanup)
+
 ### Fixed
 
 - **Google Drive media download in `/next` and auto-post** - Fixed "No Google Drive credentials found" error when sending notifications. The media download path was using the service account credential lookup instead of per-chat OAuth tokens. Now passes `telegram_chat_id` through `MediaSourceFactory.get_provider_for_media_item()` so Google Drive files are fetched with the correct user OAuth credentials.

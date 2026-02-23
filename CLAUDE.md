@@ -394,19 +394,14 @@ Three tables work together for multi-account support:
 | Command | Description | Handler Module |
 |---------|-------------|----------------|
 | `/start` | Open setup wizard or show dashboard | `telegram_commands.py` |
-| `/status` | System health, media stats, queue status | `telegram_commands.py` |
+| `/status` | System health, media stats, queue status + Open Dashboard button | `telegram_commands.py` |
 | `/help` | Show available commands | `telegram_commands.py` |
-| `/queue` | View pending scheduled posts | `telegram_commands.py` |
 | `/next` | Force-send next scheduled post | `telegram_commands.py` |
-| `/pause` | Pause automatic posting | `telegram_commands.py` |
-| `/resume` | Resume posting | `telegram_commands.py` |
-| `/history N` | Recent post history | `telegram_commands.py` |
 | `/cleanup` | Delete recent bot messages | `telegram_commands.py` |
 | `/setup` | Quick settings & toggles | `telegram_settings.py` |
 | `/settings` | Alias for /setup | `telegram_settings.py` |
-| `/sync` | Trigger manual media sync | `telegram_commands.py` |
 
-> **Retired commands:** `/schedule`, `/stats`, `/locks`, `/reset`, `/dryrun`, `/backfill`, `/connect` still respond with a helpful redirect message but are not listed in the bot menu. Their functionality is available through `/settings`, `/status`, `/start` (setup wizard), or the CLI.
+> **Retired commands:** `/queue`, `/pause`, `/resume`, `/history`, `/sync`, `/schedule`, `/stats`, `/locks`, `/reset`, `/dryrun`, `/backfill`, `/connect` still respond with a helpful redirect message but are not listed in the bot menu. Their functionality is available through the Mini App dashboard, `/settings`, `/status`, `/start`, or the CLI.
 
 ### Telegram Callback Actions
 
