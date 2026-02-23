@@ -18,13 +18,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Cards lazy-load data on first expand to keep initial load fast
   - Schedule timing info (next post, schedule end date) shown in card summaries
 
-- **Dashboard API endpoints** - Six new endpoints powering the enhanced dashboard
+- **Dashboard API endpoints** - Seven new endpoints powering the enhanced dashboard
   - `GET /api/onboarding/queue-detail` - Queue items with day summary and schedule bounds
   - `GET /api/onboarding/history-detail` - Recent posting history with media info
   - `GET /api/onboarding/media-stats` - Media library category breakdown
-  - `POST /api/onboarding/toggle-setting` - Toggle is_paused or dry_run_mode from dashboard
+  - `POST /api/onboarding/toggle-setting` - Toggle boolean settings from dashboard (all 5: is_paused, dry_run_mode, enable_instagram_api, show_verbose_notifications, media_sync_enabled)
+  - `POST /api/onboarding/update-setting` - Update numeric settings from dashboard (posts_per_day, posting_hours_start, posting_hours_end)
   - `POST /api/onboarding/extend-schedule` - Extend schedule by N days
   - `POST /api/onboarding/regenerate-schedule` - Clear queue and rebuild schedule
+
+- **Full Settings in Quick Controls card** - All settings now editable from the Mini App dashboard (Phase 1 of Mini App Consolidation)
+  - 3 new toggle switches: Instagram API, Verbose Notifications, Media Sync
+  - Stepper controls for Posts/Day (1-50) and Posting Hours (start/end with wraparound)
+  - Optimistic UI updates with automatic rollback on API failure
+  - Setup state now returns all boolean settings for dashboard hydration
 
 ### Fixed
 

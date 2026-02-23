@@ -38,6 +38,9 @@ def _mock_settings_obj(**overrides):
         media_source_type="google_drive",
         is_paused=False,
         dry_run_mode=True,
+        enable_instagram_api=True,
+        show_verbose_notifications=False,
+        media_sync_enabled=True,
     )
     defaults.update(overrides)
     return Mock(**defaults)
@@ -416,6 +419,69 @@ class TestToggleSetting:
         assert data["setting_name"] == "dry_run_mode"
         assert data["new_value"] is False
 
+    def test_toggle_setting_instagram_api(self, client):
+        """Toggle enable_instagram_api returns new value."""
+        with (
+            _mock_validate(),
+            patch("src.api.routes.onboarding.SettingsService") as MockService,
+        ):
+            MockService.return_value.toggle_setting.return_value = True
+            MockService.return_value.close = Mock()
+
+            response = client.post(
+                "/api/onboarding/toggle-setting",
+                json={
+                    "init_data": "test",
+                    "chat_id": CHAT_ID,
+                    "setting_name": "enable_instagram_api",
+                },
+            )
+
+        assert response.status_code == 200
+        assert response.json()["new_value"] is True
+
+    def test_toggle_setting_verbose(self, client):
+        """Toggle show_verbose_notifications returns new value."""
+        with (
+            _mock_validate(),
+            patch("src.api.routes.onboarding.SettingsService") as MockService,
+        ):
+            MockService.return_value.toggle_setting.return_value = False
+            MockService.return_value.close = Mock()
+
+            response = client.post(
+                "/api/onboarding/toggle-setting",
+                json={
+                    "init_data": "test",
+                    "chat_id": CHAT_ID,
+                    "setting_name": "show_verbose_notifications",
+                },
+            )
+
+        assert response.status_code == 200
+        assert response.json()["new_value"] is False
+
+    def test_toggle_setting_media_sync(self, client):
+        """Toggle media_sync_enabled returns new value."""
+        with (
+            _mock_validate(),
+            patch("src.api.routes.onboarding.SettingsService") as MockService,
+        ):
+            MockService.return_value.toggle_setting.return_value = True
+            MockService.return_value.close = Mock()
+
+            response = client.post(
+                "/api/onboarding/toggle-setting",
+                json={
+                    "init_data": "test",
+                    "chat_id": CHAT_ID,
+                    "setting_name": "media_sync_enabled",
+                },
+            )
+
+        assert response.status_code == 200
+        assert response.json()["new_value"] is True
+
     def test_toggle_setting_disallowed(self, client):
         """Cannot toggle settings not in the allowed list."""
         with _mock_validate():
@@ -424,7 +490,7 @@ class TestToggleSetting:
                 json={
                     "init_data": "test",
                     "chat_id": CHAT_ID,
-                    "setting_name": "enable_instagram_api",
+                    "setting_name": "posts_per_day",
                 },
             )
 
@@ -449,6 +515,139 @@ class TestToggleSetting:
                     "init_data": "invalid",
                     "chat_id": CHAT_ID,
                     "setting_name": "is_paused",
+                },
+            )
+
+        assert response.status_code == 401
+
+
+# =============================================================================
+# POST /api/onboarding/update-setting
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestUpdateSetting:
+    """Test POST /api/onboarding/update-setting."""
+
+    def test_update_posts_per_day(self, client):
+        """Update posts_per_day returns new value."""
+        with (
+            _mock_validate(),
+            patch("src.api.routes.onboarding.SettingsService") as MockService,
+        ):
+            MockService.return_value.close = Mock()
+
+            response = client.post(
+                "/api/onboarding/update-setting",
+                json={
+                    "init_data": "test",
+                    "chat_id": CHAT_ID,
+                    "setting_name": "posts_per_day",
+                    "value": 10,
+                },
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["setting_name"] == "posts_per_day"
+        assert data["new_value"] == 10
+        MockService.return_value.update_setting.assert_called_once_with(
+            CHAT_ID, "posts_per_day", 10
+        )
+
+    def test_update_posting_hours_start(self, client):
+        """Update posting_hours_start returns new value."""
+        with (
+            _mock_validate(),
+            patch("src.api.routes.onboarding.SettingsService") as MockService,
+        ):
+            MockService.return_value.close = Mock()
+
+            response = client.post(
+                "/api/onboarding/update-setting",
+                json={
+                    "init_data": "test",
+                    "chat_id": CHAT_ID,
+                    "setting_name": "posting_hours_start",
+                    "value": 9,
+                },
+            )
+
+        assert response.status_code == 200
+        assert response.json()["new_value"] == 9
+
+    def test_update_posting_hours_end(self, client):
+        """Update posting_hours_end returns new value."""
+        with (
+            _mock_validate(),
+            patch("src.api.routes.onboarding.SettingsService") as MockService,
+        ):
+            MockService.return_value.close = Mock()
+
+            response = client.post(
+                "/api/onboarding/update-setting",
+                json={
+                    "init_data": "test",
+                    "chat_id": CHAT_ID,
+                    "setting_name": "posting_hours_end",
+                    "value": 21,
+                },
+            )
+
+        assert response.status_code == 200
+        assert response.json()["new_value"] == 21
+
+    def test_update_setting_disallowed(self, client):
+        """Cannot update settings not in the allowed list."""
+        with _mock_validate():
+            response = client.post(
+                "/api/onboarding/update-setting",
+                json={
+                    "init_data": "test",
+                    "chat_id": CHAT_ID,
+                    "setting_name": "is_paused",
+                    "value": 1,
+                },
+            )
+
+        assert response.status_code == 400
+        assert "cannot be updated" in response.json()["detail"]
+
+    def test_update_setting_validation_error(self, client):
+        """Update rejects invalid values via Pydantic validation."""
+        with _mock_validate():
+            response = client.post(
+                "/api/onboarding/update-setting",
+                json={
+                    "init_data": "test",
+                    "chat_id": CHAT_ID,
+                    "setting_name": "posts_per_day",
+                    "value": -1,
+                },
+            )
+
+        assert response.status_code == 422
+
+    def test_update_setting_unauthorized(self, client):
+        """Update rejects invalid auth."""
+        with (
+            patch(
+                "src.api.routes.onboarding.validate_init_data",
+                side_effect=ValueError("bad"),
+            ),
+            patch(
+                "src.api.routes.onboarding.validate_url_token",
+                side_effect=ValueError("bad"),
+            ),
+        ):
+            response = client.post(
+                "/api/onboarding/update-setting",
+                json={
+                    "init_data": "invalid",
+                    "chat_id": CHAT_ID,
+                    "setting_name": "posts_per_day",
+                    "value": 5,
                 },
             )
 
@@ -647,6 +846,50 @@ class TestEnhancedSetupState:
         assert state["next_post_at"] == now.isoformat()
         assert state["schedule_end_date"] == later.isoformat()
         assert state["queue_count"] == 2
+
+    def test_setup_state_includes_all_settings(self, client):
+        """Init response includes all boolean settings for Quick Controls."""
+        mock_settings = _mock_settings_obj(
+            onboarding_completed=True,
+            media_source_root=None,
+            enable_instagram_api=True,
+            show_verbose_notifications=False,
+            media_sync_enabled=True,
+        )
+
+        with (
+            _mock_validate(),
+            patch(
+                "src.api.routes.onboarding.ChatSettingsRepository"
+            ) as MockSettingsRepo,
+            patch("src.api.routes.onboarding.TokenRepository") as MockTokenRepo,
+            patch("src.api.routes.onboarding.InstagramAccountService") as MockIGService,
+            patch("src.api.routes.onboarding.QueueRepository") as MockQueueRepo,
+            patch("src.api.routes.onboarding.HistoryRepository") as MockHistoryRepo,
+        ):
+            MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
+            MockSettingsRepo.return_value.close = Mock()
+            MockTokenRepo.return_value.get_token_for_chat.return_value = None
+            MockTokenRepo.return_value.close = Mock()
+            MockIGService.return_value.get_active_account.return_value = None
+            MockIGService.return_value.close = Mock()
+            MockQueueRepo.return_value.get_all.return_value = []
+            MockQueueRepo.return_value.close = Mock()
+            MockHistoryRepo.return_value.get_recent_posts.return_value = []
+            MockHistoryRepo.return_value.close = Mock()
+
+            response = client.post(
+                "/api/onboarding/init",
+                json={"init_data": "test", "chat_id": CHAT_ID},
+            )
+
+        assert response.status_code == 200
+        state = response.json()["setup_state"]
+        assert state["enable_instagram_api"] is True
+        assert state["show_verbose_notifications"] is False
+        assert state["media_sync_enabled"] is True
+        assert state["is_paused"] is False
+        assert state["dry_run_mode"] is True
 
     def test_setup_state_empty_queue_no_dates(self, client):
         """Init response with empty queue has null schedule dates."""
