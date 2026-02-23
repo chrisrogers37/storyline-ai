@@ -1,6 +1,6 @@
 # Mini App Consolidation — Command Cleanup & Feature Unification
 
-**Status**: 🔧 IN PROGRESS (Phase 2)
+**Status**: 🔧 IN PROGRESS (Phase 3)
 **Started**: 2026-02-23
 **Created**: 2026-02-23
 **Priority**: High
@@ -138,19 +138,31 @@ Backend changes (`onboarding.py`):
 
 Note: **In-channel post account selector stays unchanged** — switching account on a specific post notification is a contextual action that belongs in the channel.
 
-### Phase 3: Status & Health in Mini App
+### Phase 3: Status & Health in Mini App ✅ COMPLETE (PR #75)
 **Move /status reporting to Mini App**
 
-Add a new collapsible **System Status card** to the dashboard showing:
+Add a new collapsible **System Status card** to the dashboard (positioned after Quick Controls) showing:
 - Delivery mode (active/paused/dry-run)
 - Instagram API status (enabled/disabled, token health)
 - Media sync status (last sync time, source type)
 - Setup completion checklist (5 items with checkmarks)
-- Queue health (pending count, locked count, next post time)
+- Queue health (pending count, next post time)
 
-Backend:
+Design decisions:
+- Setup checks are replicated inline in the endpoint (not extracted to a shared helper) — the 5 checks are simple queries and only 2 consumers exist
+- Lock count omitted — niche info not needed in dashboard
+- Card positioned after Quick Controls for logical grouping with operational controls
+
+Frontend changes (`index.html` + `app.js` + `style.css`):
+- New collapsible card with `home-card-expandable` pattern
+- Badge shows "Healthy" (green) or "N Issues" (warning/error)
+- Card body: setup checklist rows + system health rows
+- Lazy-load via `_loadCardData('status')` pattern
+
+Backend changes (`onboarding.py`):
 - `GET /api/onboarding/system-status` — aggregated health data
-- Reuses existing logic from `TelegramCommandHandlers._get_setup_status()` and `HealthCheckService.check_all()`
+- Calls `HealthCheckService.check_all()` for system checks
+- Replicates setup check logic from `TelegramCommandHandlers._get_setup_status()` inline (account, drive, media, schedule, delivery)
 
 No changes to `/status` command in this phase.
 

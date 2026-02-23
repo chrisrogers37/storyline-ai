@@ -732,6 +732,52 @@ h2 {
     color: #dc2626;
 }
 
+/* ==================== System Status ==================== */
+
+.status-section-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--tg-theme-hint-color);
+    margin-bottom: 6px;
+    margin-top: 8px;
+}
+
+.status-section-label:first-child {
+    margin-top: 0;
+}
+
+.status-check-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 0;
+    font-size: 13px;
+}
+
+.status-check-icon {
+    flex-shrink: 0;
+    font-size: 14px;
+    line-height: 1;
+    width: 20px;
+    text-align: center;
+}
+
+.status-check-name {
+    font-weight: 500;
+    min-width: 90px;
+    flex-shrink: 0;
+}
+
+.status-check-detail {
+    color: var(--tg-theme-hint-color);
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 /* ==================== Queue / History Items ==================== */
 
 .queue-item-row, .history-item-row {

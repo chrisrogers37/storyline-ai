@@ -394,6 +394,23 @@ const App = {
         this._updateSettingDisplay('posting_hours_end',
             s.posting_hours_end != null ? s.posting_hours_end : 2);
 
+        // System Status card summary
+        const setupItems = [
+            s.instagram_connected,
+            s.gdrive_connected,
+            s.media_indexed,
+            s.queue_count > 0,
+            !s.is_paused,
+        ];
+        const configuredCount = setupItems.filter(Boolean).length;
+        if (configuredCount === 5) {
+            this._setHomeBadge('status', 'connected', 'All Set');
+            this._setHomeDetail('status', '5/5 setup items configured');
+        } else {
+            this._setHomeBadge('status', 'warning', configuredCount + '/5');
+            this._setHomeDetail('status', configuredCount + '/5 setup items configured');
+        }
+
         // Schedule card
         const postsPerDay = s.posts_per_day || 3;
         const start = s.posting_hours_start != null ? s.posting_hours_start : 14;
@@ -485,6 +502,7 @@ const App = {
     async _loadCardData(cardId) {
         const loaders = {
             instagram: () => this._loadAccounts(),
+            status: () => this._loadSystemStatus(),
             schedule: () => this._loadQueueDetail('schedule'),
             queue: () => this._loadQueueDetail('queue'),
             history: () => this._loadHistoryDetail(),
@@ -578,6 +596,125 @@ const App = {
         } finally {
             if (loadingEl) loadingEl.classList.add('hidden');
         }
+    },
+
+    /**
+     * Fetch and render system status (setup checklist + health checks).
+     */
+    async _loadSystemStatus() {
+        const loadingEl = document.getElementById('status-loading');
+        if (loadingEl) loadingEl.classList.remove('hidden');
+
+        // Render setup checklist from local state (no API call needed)
+        this._renderSetupChecklist();
+
+        try {
+            const params = new URLSearchParams({
+                init_data: this.initData,
+                chat_id: this.chatId,
+            });
+            const data = await this._apiGet('/api/onboarding/system-status?' + params.toString());
+            this._renderHealthChecks(data.checks);
+
+            // Update badge based on health check results
+            if (data.status === 'healthy') {
+                this._setHomeBadge('status', 'connected', 'Healthy');
+            } else {
+                const unhealthyCount = Object.values(data.checks)
+                    .filter(c => !c.healthy).length;
+                this._setHomeBadge('status', 'error', unhealthyCount + ' Issue' + (unhealthyCount !== 1 ? 's' : ''));
+            }
+        } catch (err) {
+            const container = document.getElementById('status-health-checks');
+            if (container) {
+                container.innerHTML = '<div class="card-body-empty">Failed to load health data</div>';
+            }
+        } finally {
+            if (loadingEl) loadingEl.classList.add('hidden');
+        }
+    },
+
+    /**
+     * Render setup checklist from setupState.
+     */
+    _renderSetupChecklist() {
+        const s = this.setupState || {};
+        const container = document.getElementById('status-checklist');
+        if (!container) return;
+
+        const items = [
+            {
+                name: 'Instagram',
+                ok: s.instagram_connected,
+                detail: s.instagram_username ? '@' + this._escapeHtml(s.instagram_username) : 'Not connected',
+            },
+            {
+                name: 'Google Drive',
+                ok: s.gdrive_connected,
+                detail: s.gdrive_email ? this._escapeHtml(s.gdrive_email) : 'Not connected',
+            },
+            {
+                name: 'Media Library',
+                ok: s.media_indexed,
+                detail: s.media_count ? s.media_count + ' files' : 'Not indexed',
+            },
+            {
+                name: 'Schedule',
+                ok: s.queue_count > 0,
+                detail: s.queue_count > 0
+                    ? s.queue_count + ' queued, ' + (s.posts_per_day || 3) + '/day'
+                    : 'No posts scheduled',
+            },
+            {
+                name: 'Delivery',
+                ok: !s.is_paused,
+                detail: s.is_paused ? 'Paused' : (s.dry_run_mode ? 'Dry Run' : 'Live'),
+            },
+        ];
+
+        let html = '<div class="status-section-label">Setup</div>';
+        for (const item of items) {
+            const icon = item.ok ? '&#x2705;' : '&#x26A0;&#xFE0F;';
+            html += '<div class="status-check-row">' +
+                '<span class="status-check-icon">' + icon + '</span>' +
+                '<span class="status-check-name">' + this._escapeHtml(item.name) + '</span>' +
+                '<span class="status-check-detail">' + item.detail + '</span>' +
+                '</div>';
+        }
+
+        container.innerHTML = html;
+    },
+
+    /**
+     * Render health check results from API.
+     */
+    _renderHealthChecks(checks) {
+        const container = document.getElementById('status-health-checks');
+        if (!container) return;
+
+        const displayOrder = [
+            { key: 'database', label: 'Database' },
+            { key: 'telegram', label: 'Telegram' },
+            { key: 'instagram_api', label: 'Instagram API' },
+            { key: 'queue', label: 'Queue' },
+            { key: 'recent_posts', label: 'Recent Posts' },
+            { key: 'media_sync', label: 'Media Sync' },
+        ];
+
+        let html = '<div class="status-section-label">Health</div>';
+        for (const { key, label } of displayOrder) {
+            const check = checks[key];
+            if (!check) continue;
+
+            const icon = check.healthy ? '&#x2705;' : '&#x274C;';
+            html += '<div class="status-check-row">' +
+                '<span class="status-check-icon">' + icon + '</span>' +
+                '<span class="status-check-name">' + this._escapeHtml(label) + '</span>' +
+                '<span class="status-check-detail">' + this._escapeHtml(check.message || '') + '</span>' +
+                '</div>';
+        }
+
+        container.innerHTML = html;
     },
 
     // ==================== Account Management ====================

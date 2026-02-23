@@ -43,6 +43,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `POST /api/onboarding/switch-account` - Switch active Instagram account
   - `POST /api/onboarding/remove-account` - Deactivate (soft-delete) an account
 
+- **System Status in Mini App** - System health and setup status card in the dashboard (Phase 3 of Mini App Consolidation)
+  - New expandable System Status card positioned after Quick Controls
+  - Setup checklist: 5 items (Instagram, Google Drive, Media Library, Schedule, Delivery) with status icons
+  - System health checks: Database, Telegram, Instagram API, Queue, Recent Posts, Media Sync
+  - Badge shows "Healthy"/"All Set" or issue count based on health check results
+  - `GET /api/onboarding/system-status` - Aggregated health data from HealthCheckService
+
 ### Fixed
 
 - **Google Drive media download in `/next` and auto-post** - Fixed "No Google Drive credentials found" error when sending notifications. The media download path was using the service account credential lookup instead of per-chat OAuth tokens. Now passes `telegram_chat_id` through `MediaSourceFactory.get_provider_for_media_item()` so Google Drive files are fetched with the correct user OAuth credentials.

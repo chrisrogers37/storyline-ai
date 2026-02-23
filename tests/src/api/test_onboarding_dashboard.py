@@ -931,6 +931,126 @@ class TestEnhancedSetupState:
 
 
 # =============================================================================
+# GET /api/onboarding/system-status
+# =============================================================================
+
+
+def _mock_health_checks(overrides=None):
+    """Build a mock HealthCheckService.check_all() result."""
+    checks = {
+        "database": {"healthy": True, "message": "Database connection OK"},
+        "telegram": {"healthy": True, "message": "Telegram configuration OK"},
+        "instagram_api": {
+            "healthy": True,
+            "message": "OK (23/25 posts remaining)",
+            "enabled": True,
+            "rate_limit_remaining": 23,
+        },
+        "queue": {
+            "healthy": True,
+            "message": "Queue healthy (12 pending)",
+            "pending_count": 12,
+        },
+        "recent_posts": {
+            "healthy": True,
+            "message": "5/5 successful in last 48h",
+            "recent_count": 5,
+            "successful_count": 5,
+        },
+        "media_sync": {
+            "healthy": True,
+            "message": "OK (source: google_drive)",
+            "enabled": True,
+            "source_type": "google_drive",
+        },
+    }
+    if overrides:
+        checks.update(overrides)
+    return {
+        "status": "healthy"
+        if all(c["healthy"] for c in checks.values())
+        else "unhealthy",
+        "checks": checks,
+        "timestamp": "2026-02-22T14:00:00",
+    }
+
+
+@pytest.mark.unit
+class TestSystemStatus:
+    """Test GET /api/onboarding/system-status."""
+
+    def test_system_status_healthy(self, client):
+        """System status returns health checks when all healthy."""
+        with (
+            _mock_validate(),
+            patch("src.services.core.health_check.HealthCheckService") as MockHealthService,
+        ):
+            MockHealthService.return_value.check_all.return_value = (
+                _mock_health_checks()
+            )
+            MockHealthService.return_value.queue_repo = Mock()
+            MockHealthService.return_value.history_repo = Mock()
+
+            response = client.get(
+                "/api/onboarding/system-status",
+                params={"init_data": "test", "chat_id": CHAT_ID},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "healthy"
+        assert data["checks"]["database"]["healthy"] is True
+        assert data["checks"]["queue"]["pending_count"] == 12
+        assert data["checks"]["instagram_api"]["rate_limit_remaining"] == 23
+
+    def test_system_status_unhealthy(self, client):
+        """System status returns unhealthy when checks fail."""
+        health_data = _mock_health_checks(
+            overrides={
+                "database": {"healthy": False, "message": "Connection refused"},
+            }
+        )
+
+        with (
+            _mock_validate(),
+            patch("src.services.core.health_check.HealthCheckService") as MockHealthService,
+        ):
+            MockHealthService.return_value.check_all.return_value = health_data
+            MockHealthService.return_value.queue_repo = Mock()
+            MockHealthService.return_value.history_repo = Mock()
+
+            response = client.get(
+                "/api/onboarding/system-status",
+                params={"init_data": "test", "chat_id": CHAT_ID},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "unhealthy"
+        assert data["checks"]["database"]["healthy"] is False
+        assert "Connection refused" in data["checks"]["database"]["message"]
+
+    def test_system_status_unauthorized(self, client):
+        """System status rejects invalid auth."""
+        with (
+            patch(
+                "src.api.routes.onboarding.validate_init_data",
+                side_effect=ValueError("bad"),
+            ),
+            patch(
+                "src.api.routes.onboarding.validate_url_token",
+                side_effect=ValueError("bad"),
+            ),
+        ):
+            response = client.get(
+                "/api/onboarding/system-status",
+                params={"init_data": "invalid", "chat_id": CHAT_ID},
+            )
+
+        assert response.status_code == 401
+
+
+# =============================================================================
 # GET /api/onboarding/accounts
 # =============================================================================
 
