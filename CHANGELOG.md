@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Google Drive media download in `/next` and auto-post** - Fixed "No Google Drive credentials found" error when sending notifications. The media download path was using the service account credential lookup instead of per-chat OAuth tokens. Now passes `telegram_chat_id` through `MediaSourceFactory.get_provider_for_media_item()` so Google Drive files are fetched with the correct user OAuth credentials.
 - **WebApp buttons in group chats** - `/start` and `/settings` failed with `Button_type_invalid` because Telegram rejects `WebAppInfo` buttons in groups. Now uses signed URL tokens for browser-based access in groups (`web_app=` in DMs, `url=` + HMAC token in groups). API accepts both `initData` and URL tokens for authentication.
 - **Telegram bot polling on Railway** - Bot was not responding to commands since migration from Pi. Fixed three issues:
   - Polling task completed immediately after starting background updater; now blocks to keep task alive

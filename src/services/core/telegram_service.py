@@ -368,7 +368,9 @@ class TelegramService(BaseService):
 
             from src.services.media_sources.factory import MediaSourceFactory
 
-            provider = MediaSourceFactory.get_provider_for_media_item(media_item)
+            provider = MediaSourceFactory.get_provider_for_media_item(
+                media_item, telegram_chat_id=self.channel_id
+            )
             file_bytes = provider.download_file(media_item.source_identifier)
 
             photo_buffer = BytesIO(file_bytes)

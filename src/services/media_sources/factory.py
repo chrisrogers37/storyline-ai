@@ -104,11 +104,19 @@ class MediaSourceFactory:
         return provider_class(**kwargs)
 
     @classmethod
-    def get_provider_for_media_item(cls, media_item) -> MediaSourceProvider:
+    def get_provider_for_media_item(
+        cls, media_item, telegram_chat_id: int | None = None
+    ) -> MediaSourceProvider:
         """Get the appropriate provider for an existing media item.
-        Falls back to 'local' if source_type is not set."""
+        Falls back to 'local' if source_type is not set.
+
+        Args:
+            media_item: MediaItem with source_type and source_identifier.
+            telegram_chat_id: Telegram chat ID for per-tenant OAuth lookup
+                (required for Google Drive sources using user OAuth).
+        """
         source_type = media_item.source_type or "local"
-        return cls.create(source_type)
+        return cls.create(source_type, telegram_chat_id=telegram_chat_id)
 
     @classmethod
     def register_provider(

@@ -459,7 +459,9 @@ class PostingService(BaseService):
             logger.info(f"Uploading {media_item.file_name} to cloud storage")
             from src.services.media_sources.factory import MediaSourceFactory
 
-            provider = MediaSourceFactory.get_provider_for_media_item(media_item)
+            provider = MediaSourceFactory.get_provider_for_media_item(
+                media_item, telegram_chat_id=queue_item.telegram_chat_id
+            )
             file_bytes = provider.download_file(media_item.source_identifier)
             upload_result = self.cloud_service.upload_media(
                 file_bytes=file_bytes,

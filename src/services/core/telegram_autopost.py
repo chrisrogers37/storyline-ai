@@ -207,7 +207,9 @@ class TelegramAutopostHandler:
 
         from src.services.media_sources.factory import MediaSourceFactory
 
-        provider = MediaSourceFactory.get_provider_for_media_item(ctx.media_item)
+        provider = MediaSourceFactory.get_provider_for_media_item(
+            ctx.media_item, telegram_chat_id=ctx.chat_id
+        )
         file_bytes = provider.download_file(ctx.media_item.source_identifier)
 
         upload_result = ctx.cloud_service.upload_media(
