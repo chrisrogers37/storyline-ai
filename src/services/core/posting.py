@@ -278,9 +278,9 @@ class PostingService(BaseService):
             if telegram_chat_id:
                 chat_settings_id = str(chat_settings.id) if chat_settings else None
 
-            # Get all pending posts ready to process
+            # Get next pending post (1 per cycle to space out deliveries)
             pending_items = self.queue_repo.get_pending(
-                limit=100, chat_settings_id=chat_settings_id
+                limit=1, chat_settings_id=chat_settings_id
             )
 
             logger.info(f"Processing {len(pending_items)} pending posts")
@@ -512,6 +512,9 @@ class PostingService(BaseService):
                     posting_method="instagram_api",
                     instagram_story_id=result.get("story_id"),
                     retry_count=queue_item.retry_count,
+                    chat_settings_id=str(queue_item.chat_settings_id)
+                    if queue_item.chat_settings_id
+                    else None,
                 )
             )
 
@@ -607,6 +610,9 @@ class PostingService(BaseService):
                 retry_count=queue_item.retry_count,
                 posting_method=posting_method,
                 instagram_story_id=instagram_story_id,
+                chat_settings_id=str(queue_item.chat_settings_id)
+                if queue_item.chat_settings_id
+                else None,
             )
         )
 

@@ -91,6 +91,9 @@ class TelegramCallbackHandlers:
                 success=success,
                 posted_by_user_id=str(user.id),
                 posted_by_telegram_username=user.telegram_username,
+                chat_settings_id=str(queue_item.chat_settings_id)
+                if queue_item.chat_settings_id
+                else None,
             )
         )
 
@@ -317,6 +320,9 @@ class TelegramCallbackHandlers:
                 success=False,
                 posted_by_user_id=str(user.id),
                 posted_by_telegram_username=user.telegram_username,
+                chat_settings_id=str(queue_item.chat_settings_id)
+                if queue_item.chat_settings_id
+                else None,
             )
         )
 

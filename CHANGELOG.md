@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Onboarding routes split into package** — Split monolithic 859-line `onboarding.py` into focused submodules: `models.py`, `helpers.py`, `setup.py`, `dashboard.py`, `settings.py`. Consolidated lazy imports to module-level. No functional changes.
 - **WebApp button builder extracted** — Deduplicated private-vs-group WebApp button logic from 3 locations into shared `build_webapp_button()` utility in `telegram_utils.py`
 
 ### Fixed

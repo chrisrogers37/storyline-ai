@@ -384,6 +384,9 @@ class TelegramAutopostHandler:
                 posted_by_telegram_username=ctx.user.telegram_username,
                 posting_method="instagram_api",
                 instagram_story_id=story_id,
+                chat_settings_id=str(ctx.queue_item.chat_settings_id)
+                if ctx.queue_item.chat_settings_id
+                else None,
             )
         )
         self.service.media_repo.increment_times_posted(
