@@ -58,7 +58,13 @@ class TestQueueRepository:
     def test_get_pending_items(self, queue_repo, mock_db):
         """Test retrieving pending queue items."""
         mock_items = [MagicMock(status="pending"), MagicMock(status="pending")]
+        # Build a self-referential mock chain so filter/order_by/with_for_update
+        # all return the same mock, and .all() returns mock_items
         mock_query = mock_db.query.return_value
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.limit.return_value = mock_query
+        mock_query.with_for_update.return_value = mock_query
         mock_query.all.return_value = mock_items
 
         result = queue_repo.get_pending()

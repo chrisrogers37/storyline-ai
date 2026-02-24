@@ -58,7 +58,11 @@ class QueueRepository(BaseRepository):
     def get_pending(
         self, limit: Optional[int] = None, chat_settings_id: Optional[str] = None
     ) -> List[PostingQueue]:
-        """Get all pending queue items ready to process."""
+        """Get pending queue items ready to process.
+
+        Uses FOR UPDATE SKIP LOCKED to prevent concurrent scheduler
+        instances from claiming the same rows.
+        """
         now = datetime.utcnow()
         query = self.db.query(PostingQueue).filter(
             and_(PostingQueue.status == "pending", PostingQueue.scheduled_for <= now)
@@ -68,6 +72,8 @@ class QueueRepository(BaseRepository):
 
         if limit:
             query = query.limit(limit)
+
+        query = query.with_for_update(skip_locked=True)
 
         return query.all()
 

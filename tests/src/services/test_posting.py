@@ -179,7 +179,7 @@ class TestPostingServiceTenantSupport:
         await posting_service.process_pending_posts(telegram_chat_id=-200456)
 
         posting_service.queue_repo.get_pending.assert_called_once_with(
-            limit=100, chat_settings_id=str(mock_chat_settings.id)
+            limit=1, chat_settings_id=str(mock_chat_settings.id)
         )
 
     @patch("src.services.core.posting.settings")
