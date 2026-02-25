@@ -688,6 +688,140 @@ class TestCompleteQueueAction:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+class TestEarlyProcessingFeedback:
+    """Tests for early keyboard removal before DB operations."""
+
+    async def test_keyboard_removed_before_db_operations(self, mock_callback_handlers):
+        """Inline keyboard is removed immediately after lock, before DB ops."""
+        handlers = mock_callback_handlers
+        service = handlers.service
+        queue_id = str(uuid4())
+
+        mock_queue_item = Mock()
+        mock_queue_item.media_item_id = uuid4()
+        mock_queue_item.created_at = datetime.utcnow()
+        mock_queue_item.scheduled_for = datetime.utcnow()
+        service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "tester"
+
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100123, message_id=1)
+
+        # Track call order
+        call_order = []
+        mock_query.edit_message_reply_markup.side_effect = (
+            lambda **kw: call_order.append("remove_keyboard")
+        )
+        original_create = service.history_repo.create
+        service.history_repo.create.side_effect = lambda *a, **kw: call_order.append(
+            "history_create"
+        )
+
+        await handlers.complete_queue_action(
+            queue_id,
+            mock_user,
+            mock_query,
+            status="skipped",
+            success=False,
+            caption="⏭️ Test",
+            callback_name="skip",
+        )
+
+        assert "remove_keyboard" in call_order
+        assert "history_create" in call_order
+        assert call_order.index("remove_keyboard") < call_order.index("history_create")
+
+    async def test_keyboard_removal_failure_does_not_break_flow(
+        self, mock_callback_handlers
+    ):
+        """Early keyboard removal failure still allows DB ops + caption update."""
+        handlers = mock_callback_handlers
+        service = handlers.service
+        queue_id = str(uuid4())
+
+        mock_queue_item = Mock()
+        mock_queue_item.media_item_id = uuid4()
+        mock_queue_item.created_at = datetime.utcnow()
+        mock_queue_item.scheduled_for = datetime.utcnow()
+        service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "tester"
+
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100123, message_id=1)
+        mock_query.edit_message_reply_markup.side_effect = Exception(
+            "Message is not modified"
+        )
+
+        await handlers.complete_queue_action(
+            queue_id,
+            mock_user,
+            mock_query,
+            status="skipped",
+            success=False,
+            caption="⏭️ Test",
+            callback_name="skip",
+        )
+
+        service.history_repo.create.assert_called_once()
+        service.queue_repo.delete.assert_called_once()
+        mock_query.edit_message_caption.assert_called_once()
+
+    async def test_rejected_removes_keyboard_before_db_ops(
+        self, mock_callback_handlers
+    ):
+        """handle_rejected removes keyboard before creating history/locks."""
+        handlers = mock_callback_handlers
+        service = handlers.service
+        queue_id = str(uuid4())
+
+        mock_queue_item = Mock()
+        mock_queue_item.media_item_id = uuid4()
+        mock_queue_item.created_at = datetime.utcnow()
+        mock_queue_item.scheduled_for = datetime.utcnow()
+        mock_queue_item.chat_settings_id = uuid4()
+        service.queue_repo.get_by_id.return_value = mock_queue_item
+
+        mock_media = Mock()
+        mock_media.file_name = "test.jpg"
+        service.media_repo.get_by_id.return_value = mock_media
+
+        mock_settings = Mock()
+        mock_settings.show_verbose_notifications = False
+        service.settings_service.get_settings.return_value = mock_settings
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "rejecter"
+        mock_user.telegram_first_name = "Test"
+
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100123, message_id=1)
+
+        call_order = []
+        mock_query.edit_message_reply_markup.side_effect = (
+            lambda **kw: call_order.append("remove_keyboard")
+        )
+        service.history_repo.create.side_effect = lambda *a, **kw: call_order.append(
+            "history_create"
+        )
+
+        await handlers.handle_rejected(queue_id, mock_user, mock_query)
+
+        assert "remove_keyboard" in call_order
+        assert "history_create" in call_order
+        assert call_order.index("remove_keyboard") < call_order.index("history_create")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 class TestRaceConditionHandling:
     """Tests for operation lock and cancellation flag race condition handling."""
 

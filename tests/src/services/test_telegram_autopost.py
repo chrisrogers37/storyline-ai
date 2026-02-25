@@ -352,6 +352,30 @@ class TestAutopostErrorRecovery:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+class TestAutopostEarlyFeedback:
+    """Tests for early keyboard removal in autopost handler."""
+
+    async def test_autopost_removes_keyboard_before_processing(
+        self, mock_autopost_handler
+    ):
+        """handle_autopost removes keyboard immediately after lock acquisition."""
+        handler = mock_autopost_handler
+        queue_id = str(uuid4())
+
+        mock_user = Mock()
+        mock_query = AsyncMock()
+
+        # Make _locked_autopost return immediately (we only care about keyboard removal)
+        handler._locked_autopost = AsyncMock()
+
+        await handler.handle_autopost(queue_id, mock_user, mock_query)
+
+        # Keyboard should be removed before _locked_autopost is called
+        mock_query.edit_message_reply_markup.assert_called_once()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 class TestAutopostOperationLock:
     """Tests for the operation lock that prevents duplicate auto-posts."""
 
