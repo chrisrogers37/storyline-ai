@@ -36,12 +36,17 @@ class BaseService(ABC):
         Call this periodically in long-running loops to prevent
         "idle in transaction" connections from piling up.
         This ends open transactions without closing the sessions.
+
+        Also traverses nested BaseService instances (e.g. SettingsService
+        inside PostingService) so their sessions are cleaned up too.
         """
         for attr_name in dir(self):
             try:
                 attr = getattr(self, attr_name, None)
                 if isinstance(attr, BaseRepository):
                     attr.end_read_transaction()
+                elif isinstance(attr, BaseService) and attr is not self:
+                    attr.cleanup_transactions()
             except Exception:
                 pass  # Suppress errors during cleanup
 
@@ -156,6 +161,10 @@ class BaseService(ABC):
                 f"[{self.service_name}.{method_name}] Failed after {duration_ms}ms: {error_message}",
                 exc_info=True,
             )
+
+            # Rollback all sessions (including nested services) so the
+            # next call doesn't hit PendingRollbackError
+            self.cleanup_transactions()
 
             # Re-raise the exception
             raise

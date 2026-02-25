@@ -297,7 +297,7 @@ async def main_async():
     await telegram_service.send_startup_notification()
 
     # Create tasks
-    all_services = [posting_service, telegram_service, lock_service]
+    all_services = [posting_service, telegram_service, lock_service, settings_service]
     tasks = [
         asyncio.create_task(run_scheduler_loop(posting_service, settings_service)),
         asyncio.create_task(cleanup_locks_loop(lock_service)),
