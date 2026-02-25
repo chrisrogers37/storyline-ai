@@ -46,35 +46,39 @@ async def run_scheduler_loop(
             if active_chats:
                 # Multi-tenant mode: process each tenant's queue
                 for chat in active_chats:
+                    # Cache chat_id before try block to avoid lazy-load
+                    # failures in the error handler (ORM objects can expire
+                    # after a failed transaction)
+                    chat_id = chat.telegram_chat_id
                     try:
                         result = await posting_service.process_pending_posts(
-                            telegram_chat_id=chat.telegram_chat_id
+                            telegram_chat_id=chat_id
                         )
 
                         if result["processed"] > 0:
                             session_posts_sent += result["telegram"]
                             logger.info(
-                                f"[chat={chat.telegram_chat_id}] "
+                                f"[chat={chat_id}] "
                                 f"Processed {result['processed']} posts: "
                                 f"{result['telegram']} to Telegram, "
                                 f"{result['failed']} failed"
                             )
                     except Exception as e:
                         logger.error(
-                            f"Error processing chat {chat.telegram_chat_id}: {e}",
+                            f"Error processing chat {chat_id}: {e}",
                             exc_info=True,
                         )
                 # Smart delivery reschedule for paused tenants
                 paused_chats = settings_service.get_all_paused_chats()
                 for chat in paused_chats:
+                    paused_chat_id = chat.telegram_chat_id
                     try:
                         posting_service.reschedule_overdue_for_paused_chat(
-                            telegram_chat_id=chat.telegram_chat_id
+                            telegram_chat_id=paused_chat_id
                         )
                     except Exception as e:
                         logger.error(
-                            f"Error rescheduling for paused chat "
-                            f"{chat.telegram_chat_id}: {e}",
+                            f"Error rescheduling for paused chat {paused_chat_id}: {e}",
                             exc_info=True,
                         )
 

@@ -149,13 +149,16 @@ class BaseService(ABC):
             error_message = str(e)
             stack_trace = traceback.format_exc()
 
-            self.service_run_repo.fail_run(
-                run_id=run_id,
-                error_type=error_type,
-                error_message=error_message,
-                stack_trace=stack_trace,
-                duration_ms=duration_ms,
-            )
+            try:
+                self.service_run_repo.fail_run(
+                    run_id=run_id,
+                    error_type=error_type,
+                    error_message=error_message,
+                    stack_trace=stack_trace,
+                    duration_ms=duration_ms,
+                )
+            except Exception:
+                pass  # Don't let logging failures block recovery
 
             logger.error(
                 f"[{self.service_name}.{method_name}] Failed after {duration_ms}ms: {error_message}",
@@ -166,8 +169,8 @@ class BaseService(ABC):
             # next call doesn't hit PendingRollbackError
             self.cleanup_transactions()
 
-            # Re-raise the exception
-            raise
+            # Re-raise the original exception
+            raise e
 
     def set_result_summary(self, run_id: str, summary: Dict[str, Any]):
         """

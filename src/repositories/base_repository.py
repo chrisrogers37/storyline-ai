@@ -68,6 +68,9 @@ class BaseRepository:
         Call this after read-only operations to prevent "idle in transaction"
         connections. In SQLAlchemy, even SELECT queries start a transaction
         that must be ended.
+
+        If both commit and rollback fail (e.g. dead SSL connection), replaces
+        the session entirely so the next operation starts clean.
         """
         try:
             self._db.commit()
@@ -75,10 +78,16 @@ class BaseRepository:
             # If commit fails on a read-only transaction, rollback
             try:
                 self._db.rollback()
-            except Exception as e:
-                # Suppressed: rollback after failed read-commit is best-effort.
-                # The connection may already be closed or invalidated.
-                logger.debug(f"Suppressed error during read-transaction rollback: {e}")
+            except Exception:
+                # Both commit and rollback failed — connection is dead.
+                # Replace the session entirely.
+                logger.warning("Session unrecoverable, creating fresh session")
+                try:
+                    self._db.close()
+                except Exception:
+                    pass
+                self._db_generator = get_db()
+                self._db = next(self._db_generator)
 
     def close(self):
         """
