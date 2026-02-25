@@ -79,6 +79,7 @@ class TestAutopostQueueItemNotFound:
         queue_id = str(uuid4())
 
         service.queue_repo.get_by_id.return_value = None
+        service.history_repo.get_by_queue_item_id.return_value = None
 
         mock_user = Mock()
         mock_user.id = uuid4()

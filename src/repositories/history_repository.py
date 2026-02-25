@@ -140,3 +140,16 @@ class HistoryRepository(BaseRepository):
         )
         query = self._apply_tenant_filter(query, PostingHistory, chat_settings_id)
         return query.scalar() or 0
+
+    def get_by_queue_item_id(self, queue_item_id: str) -> Optional[PostingHistory]:
+        """Get the most recent history record for a specific queue item.
+
+        Used to determine what happened to a queue item that's no longer
+        in the posting_queue (e.g., after a callback race condition).
+        """
+        return (
+            self.db.query(PostingHistory)
+            .filter(PostingHistory.queue_item_id == queue_item_id)
+            .order_by(PostingHistory.posted_at.desc())
+            .first()
+        )
