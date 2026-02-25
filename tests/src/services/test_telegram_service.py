@@ -824,5 +824,46 @@ class TestVerboseSimpleCaption:
         assert "Brand Account" in caption
 
 
+@pytest.mark.unit
+class TestCleanupTransactions:
+    """Tests for TelegramService.cleanup_transactions() override."""
+
+    def test_cleanup_transactions_cleans_interaction_repo(self, mock_telegram_service):
+        """cleanup_transactions() must clean up InteractionService's repo.
+
+        This is the critical fix: InteractionService does not extend BaseService,
+        so its interaction_repo is invisible to the base cleanup traversal.
+        """
+        service = mock_telegram_service
+        mock_interaction_repo = Mock()
+        service.interaction_service.interaction_repo = mock_interaction_repo
+
+        service.cleanup_transactions()
+
+        mock_interaction_repo.end_read_transaction.assert_called_once()
+
+    def test_cleanup_transactions_suppresses_interaction_repo_errors(
+        self, mock_telegram_service
+    ):
+        """Errors in interaction_repo cleanup are suppressed."""
+        service = mock_telegram_service
+        mock_interaction_repo = Mock()
+        mock_interaction_repo.end_read_transaction.side_effect = Exception("DB error")
+        service.interaction_service.interaction_repo = mock_interaction_repo
+
+        # Should not raise
+        service.cleanup_transactions()
+
+    def test_cleanup_transactions_handles_missing_interaction_service(
+        self, mock_telegram_service
+    ):
+        """Graceful handling if interaction_service is None."""
+        service = mock_telegram_service
+        service.interaction_service = None
+
+        # Should not raise
+        service.cleanup_transactions()
+
+
 # TestBuildSettingsKeyboard has been moved to test_telegram_settings.py
 # TestAccountSelectorCallbacks has been moved to test_telegram_accounts.py

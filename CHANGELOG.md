@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **WebApp button builder extracted** — Deduplicated private-vs-group WebApp button logic from 3 locations into shared `build_webapp_button()` utility in `telegram_utils.py`
 
 ### Fixed
+- **InteractionService session leak** — `TelegramService.cleanup_transactions()` now also cleans up `InteractionService`'s repository session. InteractionService doesn't extend BaseService, so recursive cleanup traversal missed it, leaving idle-in-transaction DB connections after SSL drops.
 - **Duplicate Telegram sends** — Queue items are now claimed (status → "processing") BEFORE sending the Telegram notification, not after. Previously, the scheduler could pick up the same "pending" item again if the next cycle fired before the Telegram API responded, causing duplicate messages in the channel. On send failure, the item is rolled back to "pending".
 - **Queue batch-fire prevention** — Throttled scheduler to process 1 post per 60s cycle (was 100), preventing all overdue items from burst-firing to Telegram simultaneously
 - **Queue race condition** — Added `FOR UPDATE SKIP LOCKED` to `get_pending()` query, preventing concurrent scheduler calls from claiming the same queue item
