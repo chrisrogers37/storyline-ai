@@ -55,6 +55,17 @@ class TelegramCallbackHandlers:
 
         async with lock:
             try:
+                # Immediate visual feedback: remove buttons to signal action received
+                try:
+                    await query.edit_message_reply_markup(
+                        reply_markup=InlineKeyboardMarkup([])
+                    )
+                except Exception:
+                    logger.debug(
+                        f"Could not remove keyboard for queue item {queue_id} "
+                        f"(message may have been already updated)"
+                    )
+
                 await self._do_complete_queue_action(
                     queue_id, user, query, status, success, caption, callback_name
                 )
@@ -303,6 +314,12 @@ class TelegramCallbackHandlers:
         queue_item = await validate_queue_item(self.service, queue_id, query)
         if not queue_item:
             return
+
+        # Immediate visual feedback: remove buttons to signal action received
+        try:
+            await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup([]))
+        except Exception:
+            logger.debug(f"Could not remove keyboard for rejected item {queue_id}")
 
         # Get media item for filename
         media_item = self.service.media_repo.get_by_id(str(queue_item.media_item_id))

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **InteractionService session leak** — `TelegramService.cleanup_transactions()` now also cleans up `InteractionService`'s repository session. InteractionService doesn't extend BaseService, so recursive cleanup traversal missed it, leaving idle-in-transaction DB connections after SSL drops.
+- **Early callback feedback** — Telegram callback handlers now remove the inline keyboard immediately after acquiring the lock, before running DB operations. This gives users instant visual feedback that their button press was received, eliminating the "nothing happened" perception during slow DB calls.
 - **Duplicate Telegram sends** — Queue items are now claimed (status → "processing") BEFORE sending the Telegram notification, not after. Previously, the scheduler could pick up the same "pending" item again if the next cycle fired before the Telegram API responded, causing duplicate messages in the channel. On send failure, the item is rolled back to "pending".
 - **Queue batch-fire prevention** — Throttled scheduler to process 1 post per 60s cycle (was 100), preventing all overdue items from burst-firing to Telegram simultaneously
 - **Queue race condition** — Added `FOR UPDATE SKIP LOCKED` to `get_pending()` query, preventing concurrent scheduler calls from claiming the same queue item

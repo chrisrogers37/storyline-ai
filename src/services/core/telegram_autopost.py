@@ -83,6 +83,16 @@ class TelegramAutopostHandler:
 
         async with lock:
             try:
+                # Immediate visual feedback: remove buttons to signal action received
+                try:
+                    await query.edit_message_reply_markup(
+                        reply_markup=InlineKeyboardMarkup([])
+                    )
+                except Exception:
+                    logger.debug(
+                        f"Could not remove keyboard for autopost item {queue_id}"
+                    )
+
                 await self._locked_autopost(queue_id, user, query, cancel_flag)
             finally:
                 self.service.cleanup_operation_state(queue_id)
