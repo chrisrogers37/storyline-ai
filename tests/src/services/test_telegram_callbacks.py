@@ -5,6 +5,8 @@ from unittest.mock import Mock, patch, AsyncMock
 from datetime import datetime
 from uuid import uuid4
 
+from sqlalchemy.exc import OperationalError
+
 from src.services.core.telegram_service import TelegramService
 from src.services.core.telegram_callbacks import TelegramCallbackHandlers
 
@@ -1056,3 +1058,188 @@ class TestRaceConditionHandling:
 
         # The action should have completed (permanent lock created)
         service.lock_service.create_permanent_lock.assert_called_once()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestSSLRetry:
+    """Tests for OperationalError retry logic in callback handlers."""
+
+    async def test_operational_error_triggers_retry(self, mock_callback_handlers):
+        """OperationalError triggers session refresh + retry."""
+        handlers = mock_callback_handlers
+        service = handlers.service
+        queue_id = str(uuid4())
+
+        mock_queue_item = Mock()
+        mock_queue_item.media_item_id = uuid4()
+        mock_queue_item.created_at = datetime.utcnow()
+        mock_queue_item.scheduled_for = datetime.utcnow()
+        mock_queue_item.chat_settings_id = uuid4()
+        service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "tester"
+
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100123, message_id=1)
+
+        # First history_repo.create raises OperationalError, second succeeds
+        op_error = OperationalError("SSL closed", {}, Exception("SSL"))
+        service.history_repo.create.side_effect = [op_error, Mock()]
+
+        await handlers.complete_queue_action(
+            queue_id,
+            mock_user,
+            mock_query,
+            status="skipped",
+            success=False,
+            caption="⏭️ Test",
+            callback_name="skip",
+        )
+
+        assert service.history_repo.create.call_count == 2
+        mock_query.edit_message_caption.assert_called()
+
+    async def test_non_operational_error_not_retried(self, mock_callback_handlers):
+        """ValueError is not retried."""
+        handlers = mock_callback_handlers
+        service = handlers.service
+        queue_id = str(uuid4())
+
+        mock_queue_item = Mock()
+        mock_queue_item.media_item_id = uuid4()
+        mock_queue_item.created_at = datetime.utcnow()
+        mock_queue_item.scheduled_for = datetime.utcnow()
+        service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "tester"
+
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100123, message_id=1)
+
+        service.history_repo.create.side_effect = ValueError("bad data")
+
+        with pytest.raises(ValueError):
+            await handlers._do_complete_queue_action(
+                queue_id,
+                mock_user,
+                mock_query,
+                status="skipped",
+                success=False,
+                caption="⏭️ Test",
+                callback_name="skip",
+            )
+
+        assert service.history_repo.create.call_count == 1
+
+    async def test_second_failure_propagates(self, mock_callback_handlers):
+        """Both attempts fail -> exception propagates."""
+        handlers = mock_callback_handlers
+        service = handlers.service
+        queue_id = str(uuid4())
+
+        mock_queue_item = Mock()
+        mock_queue_item.media_item_id = uuid4()
+        mock_queue_item.created_at = datetime.utcnow()
+        mock_queue_item.scheduled_for = datetime.utcnow()
+        mock_queue_item.chat_settings_id = uuid4()
+        service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "tester"
+
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100123, message_id=1)
+
+        op_error = OperationalError("SSL closed", {}, Exception("SSL"))
+        service.history_repo.create.side_effect = [op_error, op_error]
+
+        with pytest.raises(OperationalError):
+            await handlers._do_complete_queue_action(
+                queue_id,
+                mock_user,
+                mock_query,
+                status="skipped",
+                success=False,
+                caption="⏭️ Test",
+                callback_name="skip",
+            )
+
+    async def test_queue_item_deleted_during_retry(self, mock_callback_handlers):
+        """Queue item gone after refresh -> shows 'already processed'."""
+        handlers = mock_callback_handlers
+        service = handlers.service
+        queue_id = str(uuid4())
+
+        mock_queue_item = Mock()
+        mock_queue_item.media_item_id = uuid4()
+        mock_queue_item.created_at = datetime.utcnow()
+        mock_queue_item.scheduled_for = datetime.utcnow()
+        # First get_by_id returns item, second returns None (gone after refresh)
+        service.queue_repo.get_by_id.side_effect = [mock_queue_item, None]
+        service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "tester"
+
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100123, message_id=1)
+
+        op_error = OperationalError("SSL closed", {}, Exception("SSL"))
+        service.history_repo.create.side_effect = op_error
+
+        await handlers._do_complete_queue_action(
+            queue_id,
+            mock_user,
+            mock_query,
+            status="skipped",
+            success=False,
+            caption="⏭️ Test",
+            callback_name="skip",
+        )
+
+        assert "already processed" in str(mock_query.edit_message_caption.call_args)
+
+    async def test_rejected_operational_error_triggers_retry(
+        self, mock_callback_handlers
+    ):
+        """handle_rejected also retries on OperationalError."""
+        handlers = mock_callback_handlers
+        service = handlers.service
+        queue_id = str(uuid4())
+
+        mock_queue_item = Mock()
+        mock_queue_item.media_item_id = uuid4()
+        mock_queue_item.created_at = datetime.utcnow()
+        mock_queue_item.scheduled_for = datetime.utcnow()
+        mock_queue_item.chat_settings_id = uuid4()
+        service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
+
+        mock_settings = Mock()
+        mock_settings.show_verbose_notifications = False
+        service.settings_service.get_settings.return_value = mock_settings
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "rejecter"
+        mock_user.telegram_first_name = "Test"
+
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100123, message_id=1)
+
+        op_error = OperationalError("SSL closed", {}, Exception("SSL"))
+        service.history_repo.create.side_effect = [op_error, Mock()]
+
+        await handlers.handle_rejected(queue_id, mock_user, mock_query)
+
+        assert service.history_repo.create.call_count == 2
