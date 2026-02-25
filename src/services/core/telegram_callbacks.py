@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
+from sqlalchemy.exc import OperationalError
+
 from src.config.settings import settings
 from src.repositories.history_repository import HistoryCreateParams
 from src.services.core.telegram_utils import (
@@ -72,24 +74,14 @@ class TelegramCallbackHandlers:
             finally:
                 self.service.cleanup_operation_state(queue_id)
 
-    async def _do_complete_queue_action(
-        self,
-        queue_id: str,
-        user,
-        query,
-        status: str,
-        success: bool,
-        caption: str,
-        callback_name: str,
-    ):
-        """Internal implementation of queue action completion (runs under lock)."""
-        queue_item = await validate_queue_item(self.service, queue_id, query)
-        if not queue_item:
-            return
+    def _execute_complete_db_ops(self, queue_id, queue_item, user, status, success):
+        """Execute core DB operations for completing a queue action.
 
+        Separated to enable retry on OperationalError.
+        Returns the media_item.
+        """
         media_item = self.service.media_repo.get_by_id(str(queue_item.media_item_id))
 
-        # Create history record
         self.service.history_repo.create(
             HistoryCreateParams(
                 media_item_id=str(queue_item.media_item_id),
@@ -108,7 +100,6 @@ class TelegramCallbackHandlers:
             )
         )
 
-        # Posted-specific: track reposting and user stats
         if status == "posted":
             self.service.media_repo.increment_times_posted(
                 str(queue_item.media_item_id)
@@ -116,13 +107,99 @@ class TelegramCallbackHandlers:
             self.service.lock_service.create_lock(str(queue_item.media_item_id))
             self.service.user_repo.increment_posts(str(user.id))
 
-        # Delete from queue
         self.service.queue_repo.delete(queue_id)
+        return media_item
+
+    def _execute_reject_db_ops(self, queue_id, queue_item, user):
+        """Execute core DB operations for rejecting a queue item.
+
+        Separated to enable retry on OperationalError.
+        Returns the media_item.
+        """
+        media_item = self.service.media_repo.get_by_id(str(queue_item.media_item_id))
+
+        self.service.history_repo.create(
+            HistoryCreateParams(
+                media_item_id=str(queue_item.media_item_id),
+                queue_item_id=queue_id,
+                queue_created_at=queue_item.created_at,
+                queue_deleted_at=datetime.utcnow(),
+                scheduled_for=queue_item.scheduled_for,
+                posted_at=datetime.utcnow(),
+                status="rejected",
+                success=False,
+                posted_by_user_id=str(user.id),
+                posted_by_telegram_username=user.telegram_username,
+                chat_settings_id=str(queue_item.chat_settings_id)
+                if queue_item.chat_settings_id
+                else None,
+            )
+        )
+
+        self.service.lock_service.create_permanent_lock(
+            str(queue_item.media_item_id), created_by_user_id=str(user.id)
+        )
+
+        self.service.queue_repo.delete(queue_id)
+        return media_item
+
+    def _refresh_repo_sessions(self):
+        """Force session refresh on all repos used by callback DB operations."""
+        for repo in [
+            self.service.history_repo,
+            self.service.media_repo,
+            self.service.queue_repo,
+            self.service.user_repo,
+        ]:
+            repo.end_read_transaction()
+        self.service.lock_service.lock_repo.end_read_transaction()
+
+    async def _do_complete_queue_action(
+        self,
+        queue_id: str,
+        user,
+        query,
+        status: str,
+        success: bool,
+        caption: str,
+        callback_name: str,
+    ):
+        """Internal implementation of queue action completion (runs under lock)."""
+        queue_item = await validate_queue_item(self.service, queue_id, query)
+        if not queue_item:
+            return
+
+        # Execute DB operations with retry-once on SSL/connection errors
+        try:
+            media_item = self._execute_complete_db_ops(
+                queue_id, queue_item, user, status, success
+            )
+        except OperationalError as e:
+            logger.warning(
+                f"OperationalError during {callback_name} for queue {queue_id[:8]}, "
+                f"refreshing sessions and retrying: {e}"
+            )
+            self._refresh_repo_sessions()
+
+            # Re-fetch — may have been deleted by concurrent operation
+            queue_item = self.service.queue_repo.get_by_id(queue_id)
+            if not queue_item:
+                logger.info(f"Queue item {queue_id[:8]} gone after session refresh")
+                await query.edit_message_caption(
+                    caption="⚠️ This item was already processed."
+                )
+                return
+
+            # Retry once — if this fails, let it propagate
+            media_item = self._execute_complete_db_ops(
+                queue_id, queue_item, user, status, success
+            )
+            logger.info(f"Retry succeeded for {callback_name} on queue {queue_id[:8]}")
 
         # Update message
         await query.edit_message_caption(caption=caption)
 
-        # Log interaction
+        # Log interaction (fire-and-forget, already has its own error handling)
         self.service.interaction_service.log_callback(
             user_id=str(user.id),
             callback_name=callback_name,
@@ -135,7 +212,6 @@ class TelegramCallbackHandlers:
             telegram_message_id=query.message.message_id,
         )
 
-        # Log outgoing bot response
         self.service.interaction_service.log_bot_response(
             response_type="caption_update",
             context={
@@ -321,35 +397,26 @@ class TelegramCallbackHandlers:
         except Exception:
             logger.debug(f"Could not remove keyboard for rejected item {queue_id}")
 
-        # Get media item for filename
-        media_item = self.service.media_repo.get_by_id(str(queue_item.media_item_id))
-
-        # Create history record
-        self.service.history_repo.create(
-            HistoryCreateParams(
-                media_item_id=str(queue_item.media_item_id),
-                queue_item_id=queue_id,
-                queue_created_at=queue_item.created_at,
-                queue_deleted_at=datetime.utcnow(),
-                scheduled_for=queue_item.scheduled_for,
-                posted_at=datetime.utcnow(),
-                status="rejected",
-                success=False,
-                posted_by_user_id=str(user.id),
-                posted_by_telegram_username=user.telegram_username,
-                chat_settings_id=str(queue_item.chat_settings_id)
-                if queue_item.chat_settings_id
-                else None,
+        # Execute DB operations with retry-once on SSL/connection errors
+        try:
+            media_item = self._execute_reject_db_ops(queue_id, queue_item, user)
+        except OperationalError as e:
+            logger.warning(
+                f"OperationalError during reject for queue {queue_id[:8]}, "
+                f"refreshing sessions and retrying: {e}"
             )
-        )
+            self._refresh_repo_sessions()
 
-        # Create PERMANENT lock (infinite TTL)
-        self.service.lock_service.create_permanent_lock(
-            str(queue_item.media_item_id), created_by_user_id=str(user.id)
-        )
+            queue_item = self.service.queue_repo.get_by_id(queue_id)
+            if not queue_item:
+                logger.info(f"Queue item {queue_id[:8]} gone after session refresh")
+                await query.edit_message_caption(
+                    caption="⚠️ This item was already processed."
+                )
+                return
 
-        # Delete from queue
-        self.service.queue_repo.delete(queue_id)
+            media_item = self._execute_reject_db_ops(queue_id, queue_item, user)
+            logger.info(f"Retry succeeded for reject on queue {queue_id[:8]}")
 
         # Update message with clear feedback (respect verbose setting)
         verbose = self.service._is_verbose(query.message.chat_id)
@@ -364,7 +431,7 @@ class TelegramCallbackHandlers:
             caption = f"🚫 Rejected by {self.service._get_display_name(user)}"
         await query.edit_message_caption(caption=caption, parse_mode="Markdown")
 
-        # Log interaction
+        # Log interaction (fire-and-forget)
         self.service.interaction_service.log_callback(
             user_id=str(user.id),
             callback_name="confirm_reject",
@@ -377,7 +444,6 @@ class TelegramCallbackHandlers:
             telegram_message_id=query.message.message_id,
         )
 
-        # Log outgoing bot response
         self.service.interaction_service.log_bot_response(
             response_type="caption_update",
             context={
