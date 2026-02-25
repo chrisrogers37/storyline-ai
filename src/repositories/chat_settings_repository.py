@@ -3,6 +3,8 @@
 from typing import Optional, List
 from datetime import datetime
 
+from sqlalchemy import or_
+
 from src.repositories.base_repository import BaseRepository
 from src.models.chat_settings import ChatSettings
 from src.config.settings import settings as env_settings
@@ -100,17 +102,28 @@ class ChatSettingsRepository(BaseRepository):
         return self.update(telegram_chat_id, **update_data)
 
     def get_all_active(self) -> List[ChatSettings]:
-        """Get all non-paused chat settings records.
+        """Get all eligible active chat settings records.
 
         Used by the scheduler loop to iterate over all active tenants.
-        Returns only records where is_paused is False.
+        Returns only records that are:
+        - Not paused (is_paused == False)
+        - AND have completed onboarding OR have an active Instagram account
+
+        This excludes half-setup test/dev chats that would otherwise
+        produce no-op scheduler runs.
 
         Returns:
             List of active ChatSettings, ordered by created_at
         """
         result = (
             self.db.query(ChatSettings)
-            .filter(ChatSettings.is_paused == False)  # noqa: E712
+            .filter(
+                ChatSettings.is_paused == False,  # noqa: E712
+                or_(
+                    ChatSettings.onboarding_completed == True,  # noqa: E712
+                    ChatSettings.active_instagram_account_id.isnot(None),
+                ),
+            )
             .order_by(ChatSettings.created_at.asc())
             .all()
         )

@@ -243,12 +243,15 @@ class SettingsService(BaseService):
         )
 
     def get_all_active_chats(self) -> List[ChatSettings]:
-        """Get all active (non-paused) chat settings.
+        """Get all eligible active chat settings.
 
         Used by the scheduler loop to iterate over all tenants.
+        Returns only chats that are not paused AND have completed
+        onboarding or have an active Instagram account (excludes
+        half-setup test/dev chats).
 
         Returns:
-            List of ChatSettings records where is_paused=False
+            List of eligible ChatSettings records
         """
         return self.settings_repo.get_all_active()
 
