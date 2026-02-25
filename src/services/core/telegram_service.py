@@ -89,6 +89,21 @@ class TelegramService(BaseService):
         self._operation_locks.pop(queue_id, None)
         self._cancel_flags.pop(queue_id, None)
 
+    def cleanup_transactions(self):
+        """Override to also clean up InteractionService's repository session.
+
+        InteractionService does not extend BaseService (by design — it's
+        fire-and-forget logging that doesn't need execution tracking).
+        The base cleanup_transactions() traversal skips it because it only
+        looks for BaseRepository and BaseService attributes. We explicitly
+        clean up its repo here to prevent "idle in transaction" leaks.
+        """
+        super().cleanup_transactions()
+        try:
+            self.interaction_service.interaction_repo.end_read_transaction()
+        except Exception:
+            pass  # Suppress errors during cleanup (matches base class pattern)
+
     @property
     def is_paused(self) -> bool:
         """Check if bot posting is paused (from database)."""
