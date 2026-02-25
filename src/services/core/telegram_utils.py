@@ -24,12 +24,34 @@ if TYPE_CHECKING:
 # =========================================================================
 
 
+def _build_already_handled_caption(history) -> str:
+    """Build user-friendly caption for a queue item already handled."""
+    status = history.status
+    method = getattr(history, "posting_method", None)
+
+    if status == "posted":
+        if method == "instagram_api":
+            return "✅ Already posted via Instagram API"
+        return "✅ Already marked as posted"
+    elif status == "skipped":
+        return "⏭️ Already skipped"
+    elif status == "rejected":
+        return "🚫 Already rejected"
+    elif status == "failed":
+        return "❌ Previous attempt failed — item removed from queue"
+    else:
+        return f"ℹ️ Already processed (status: {status})"
+
+
 async def validate_queue_item(service: TelegramService, queue_id: str, query):
     """Fetch a queue item by ID, showing an error if not found.
 
     This is the standard validation pattern used by nearly every callback handler.
     On success, returns the queue item. On failure, edits the message caption
     with an error and returns None.
+
+    When the queue item is missing, checks posting_history to provide a
+    contextual message about what happened (e.g., "Already posted via Instagram").
 
     Args:
         service: The parent TelegramService instance (provides queue_repo)
@@ -41,7 +63,18 @@ async def validate_queue_item(service: TelegramService, queue_id: str, query):
     """
     queue_item = service.queue_repo.get_by_id(queue_id)
     if not queue_item:
-        await query.edit_message_caption(caption="⚠️ Queue item not found")
+        # Check posting_history for what happened to this queue item
+        history = service.history_repo.get_by_queue_item_id(queue_id)
+        if history:
+            caption = _build_already_handled_caption(history)
+            logger.info(
+                f"Callback race: queue item {queue_id[:8]} already "
+                f"{history.status} (posting_method={getattr(history, 'posting_method', None)})"
+            )
+        else:
+            caption = "⚠️ Queue item not found"
+            logger.warning(f"Queue item {queue_id[:8]} not found in queue or history")
+        await query.edit_message_caption(caption=caption)
         return None
     return queue_item
 

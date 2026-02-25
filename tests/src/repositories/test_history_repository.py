@@ -217,3 +217,30 @@ class TestHistoryRepositoryTenantFiltering:
             )
             mock_filter.assert_called_once()
             assert mock_filter.call_args[0][2] == self.TENANT_ID
+
+
+@pytest.mark.unit
+class TestGetByQueueItemId:
+    """Tests for get_by_queue_item_id - race condition history lookup."""
+
+    def test_found(self, history_repo, mock_db):
+        """Returns the history record when queue_item_id matches."""
+        mock_history = MagicMock(spec=PostingHistory)
+        mock_query = mock_db.query.return_value
+        mock_query.filter.return_value.order_by.return_value.first.return_value = (
+            mock_history
+        )
+
+        result = history_repo.get_by_queue_item_id("queue-123")
+
+        assert result is mock_history
+        mock_db.query.assert_called_once_with(PostingHistory)
+
+    def test_not_found(self, history_repo, mock_db):
+        """Returns None when no history record for queue_item_id."""
+        mock_query = mock_db.query.return_value
+        mock_query.filter.return_value.order_by.return_value.first.return_value = None
+
+        result = history_repo.get_by_queue_item_id("nonexistent")
+
+        assert result is None

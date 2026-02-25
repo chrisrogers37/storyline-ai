@@ -1,12 +1,14 @@
 """Tests for telegram_utils shared utility functions."""
 
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from src.services.core.telegram_utils import (
+    _build_already_handled_caption,
     build_account_management_keyboard,
     build_webapp_button,
     cleanup_conversation_messages,
+    validate_queue_item,
 )
 
 
@@ -219,3 +221,100 @@ class TestBuildWebappButton:
 
         assert button.url is not None
         assert button.web_app is None
+
+
+@pytest.mark.unit
+class TestBuildAlreadyHandledCaption:
+    """Tests for _build_already_handled_caption helper."""
+
+    def test_posted_via_api(self):
+        history = Mock(status="posted", posting_method="instagram_api")
+        assert "Already posted via Instagram API" in _build_already_handled_caption(
+            history
+        )
+
+    def test_posted_via_manual(self):
+        history = Mock(status="posted", posting_method="telegram_manual")
+        assert "Already marked as posted" in _build_already_handled_caption(history)
+
+    def test_skipped(self):
+        history = Mock(status="skipped", posting_method="telegram_manual")
+        assert "Already skipped" in _build_already_handled_caption(history)
+
+    def test_rejected(self):
+        history = Mock(status="rejected", posting_method="telegram_manual")
+        assert "Already rejected" in _build_already_handled_caption(history)
+
+    def test_failed(self):
+        history = Mock(status="failed", posting_method="telegram_manual")
+        assert "Previous attempt failed" in _build_already_handled_caption(history)
+
+    def test_unknown_status(self):
+        history = Mock(status="custom_status", posting_method=None)
+        result = _build_already_handled_caption(history)
+        assert "Already processed" in result
+        assert "custom_status" in result
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestValidateQueueItem:
+    """Tests for validate_queue_item with history-based race detection."""
+
+    async def test_shows_already_posted_api_when_history_posted_via_api(self):
+        """Race: item auto-posted, second callback gets contextual message."""
+        service = Mock()
+        service.queue_repo.get_by_id.return_value = None
+        service.history_repo.get_by_queue_item_id.return_value = Mock(
+            status="posted", posting_method="instagram_api"
+        )
+        query = AsyncMock()
+
+        result = await validate_queue_item(service, "q-1", query)
+
+        assert result is None
+        caption = (
+            query.edit_message_caption.call_args.kwargs.get("caption")
+            or query.edit_message_caption.call_args[0][0]
+        )
+        assert "Already posted via Instagram API" in caption
+
+    async def test_shows_already_skipped(self):
+        """Race: item was skipped, second callback shows contextual message."""
+        service = Mock()
+        service.queue_repo.get_by_id.return_value = None
+        service.history_repo.get_by_queue_item_id.return_value = Mock(
+            status="skipped", posting_method="telegram_manual"
+        )
+        query = AsyncMock()
+
+        result = await validate_queue_item(service, "q-2", query)
+
+        assert result is None
+        caption = query.edit_message_caption.call_args.kwargs.get("caption", "")
+        assert "Already skipped" in caption
+
+    async def test_shows_generic_not_found_when_no_history(self):
+        """Neither queue nor history -> generic not found message."""
+        service = Mock()
+        service.queue_repo.get_by_id.return_value = None
+        service.history_repo.get_by_queue_item_id.return_value = None
+        query = AsyncMock()
+
+        result = await validate_queue_item(service, "q-3", query)
+
+        assert result is None
+        caption = query.edit_message_caption.call_args.kwargs.get("caption", "")
+        assert "Queue item not found" in caption
+
+    async def test_returns_queue_item_when_found(self):
+        """Normal case: queue item exists, returns it."""
+        mock_item = Mock()
+        service = Mock()
+        service.queue_repo.get_by_id.return_value = mock_item
+        query = AsyncMock()
+
+        result = await validate_queue_item(service, "q-4", query)
+
+        assert result is mock_item
+        query.edit_message_caption.assert_not_called()
