@@ -378,31 +378,46 @@ class PostingService(BaseService):
         needs to see posts to manually review and post them. Dry run mode only
         affects Instagram API posting, not Telegram notifications.
 
+        Claims the queue item (status → "processing") BEFORE sending to
+        prevent duplicate sends if the next scheduler cycle fires before
+        the Telegram API responds. Rolls back to "pending" on failure.
+
         Args:
             queue_item: Queue item to process
 
         Returns:
             True if sent successfully
         """
+        queue_item_id = str(queue_item.id)
         try:
+            # Claim the item BEFORE sending to prevent duplicate sends.
+            # The next scheduler cycle will skip this item because it's
+            # no longer "pending".
+            self.queue_repo.update_status(queue_item_id, "processing")
+
             # Send notification to Telegram (even in dry run mode)
-            success = await self.telegram_service.send_notification(str(queue_item.id))
+            success = await self.telegram_service.send_notification(queue_item_id)
 
             if success:
-                # Update queue status to processing
-                self.queue_repo.update_status(str(queue_item.id), "processing")
                 logger.info(
                     f"Sent Telegram notification for queue item {queue_item.id}"
                 )
             else:
+                # Send failed — release the item back to pending
                 logger.error(
                     f"Failed to send Telegram notification for queue item {queue_item.id}"
                 )
+                self.queue_repo.update_status(queue_item_id, "pending")
 
             return success
 
         except Exception as e:
             logger.error(f"Error sending to Telegram: {e}")
+            # Release the item back to pending on exception
+            try:
+                self.queue_repo.update_status(queue_item_id, "pending")
+            except Exception:
+                pass  # Best-effort rollback
             return False
 
     async def _route_post(self, queue_item, media_item) -> dict:

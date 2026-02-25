@@ -12,9 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **WebApp button builder extracted** — Deduplicated private-vs-group WebApp button logic from 3 locations into shared `build_webapp_button()` utility in `telegram_utils.py`
 
 ### Fixed
+- **Duplicate Telegram sends** — Queue items are now claimed (status → "processing") BEFORE sending the Telegram notification, not after. Previously, the scheduler could pick up the same "pending" item again if the next cycle fired before the Telegram API responded, causing duplicate messages in the channel. On send failure, the item is rolled back to "pending".
 - **Queue batch-fire prevention** — Throttled scheduler to process 1 post per 60s cycle (was 100), preventing all overdue items from burst-firing to Telegram simultaneously
 - **Queue race condition** — Added `FOR UPDATE SKIP LOCKED` to `get_pending()` query, preventing concurrent scheduler calls from claiming the same queue item
 - **Session recovery for nested services** — `cleanup_transactions()` now recursively traverses nested `BaseService` instances (e.g., `SettingsService` inside `PostingService`). Previously, an SSL connection drop could poison a nested service's session, causing an unrecoverable `PendingRollbackError` loop. Also added `settings_service` to the periodic cleanup loop and proactive rollback in the `track_execution` error handler.
+- **Dead SSL session replacement** — `end_read_transaction()` now creates a fresh session when both commit and rollback fail (e.g., Neon SSL drops), and `track_execution` wraps `fail_run()` in try/except so cleanup always runs. Also caches ORM attributes before try blocks to prevent lazy-load failures in error handlers.
 - **Tenant scope on posting history** — All 5 `posting_history` creation paths now propagate `chat_settings_id` from the queue item, fixing NULL tenant scope on history records
 - **Observability gaps** — Added `logger.debug()` to 6 silent exception handlers in status check helpers (`telegram_commands.py`), replacing bare `except Exception:` blocks that swallowed errors with zero logging
 - **Docstring cleanup** — Replaced `print()` examples in `cloud_storage.py` and `instagram_api.py` docstrings with comments to avoid setting bad patterns
