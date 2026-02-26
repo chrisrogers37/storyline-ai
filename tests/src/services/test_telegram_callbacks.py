@@ -720,7 +720,6 @@ class TestEarlyProcessingFeedback:
         mock_query.edit_message_reply_markup.side_effect = (
             lambda **kw: call_order.append("remove_keyboard")
         )
-        original_create = service.history_repo.create
         service.history_repo.create.side_effect = lambda *a, **kw: call_order.append(
             "history_create"
         )
