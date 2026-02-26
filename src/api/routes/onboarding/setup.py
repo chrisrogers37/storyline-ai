@@ -11,7 +11,12 @@ from src.services.integrations.google_drive import GoogleDriveService
 from src.services.integrations.google_drive_oauth import GoogleDriveOAuthService
 from src.utils.logger import logger
 
-from .helpers import GDRIVE_FOLDER_RE, _get_setup_state, _validate_request
+from .helpers import (
+    GDRIVE_FOLDER_RE,
+    _get_setup_state,
+    _validate_request,
+    service_error_handler,
+)
 from .models import (
     CompleteRequest,
     InitRequest,
@@ -55,19 +60,13 @@ async def onboarding_oauth_url(
     _validate_request(init_data, chat_id)
 
     if provider == "instagram":
-        with OAuthService() as service:
-            try:
-                auth_url = service.generate_authorization_url(chat_id)
-            except ValueError as e:
-                raise HTTPException(status_code=400, detail=str(e))
+        with OAuthService() as service, service_error_handler():
+            auth_url = service.generate_authorization_url(chat_id)
         return {"auth_url": auth_url}
 
     elif provider == "google-drive":
-        with GoogleDriveOAuthService() as service:
-            try:
-                auth_url = service.generate_authorization_url(chat_id)
-            except ValueError as e:
-                raise HTTPException(status_code=400, detail=str(e))
+        with GoogleDriveOAuthService() as service, service_error_handler():
+            auth_url = service.generate_authorization_url(chat_id)
         return {"auth_url": auth_url}
 
     else:
@@ -184,20 +183,17 @@ async def onboarding_schedule(request: ScheduleRequest):
     """Save posting schedule configuration."""
     _validate_request(request.init_data, request.chat_id)
 
-    with SettingsService() as settings_service:
-        try:
-            settings_service.update_setting(
-                request.chat_id, "posts_per_day", request.posts_per_day
-            )
-            settings_service.update_setting(
-                request.chat_id, "posting_hours_start", request.posting_hours_start
-            )
-            settings_service.update_setting(
-                request.chat_id, "posting_hours_end", request.posting_hours_end
-            )
-            settings_service.set_onboarding_step(request.chat_id, "schedule")
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+    with SettingsService() as settings_service, service_error_handler():
+        settings_service.update_setting(
+            request.chat_id, "posts_per_day", request.posts_per_day
+        )
+        settings_service.update_setting(
+            request.chat_id, "posting_hours_start", request.posting_hours_start
+        )
+        settings_service.update_setting(
+            request.chat_id, "posting_hours_end", request.posting_hours_end
+        )
+        settings_service.set_onboarding_step(request.chat_id, "schedule")
 
     return {
         "posts_per_day": request.posts_per_day,
