@@ -78,3 +78,4 @@ Thumbs.db
 
 # Claude Code local settings (contains accumulated permissions)
 .claude/settings.local.json
+.claude/worktrees/

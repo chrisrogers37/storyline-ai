@@ -693,19 +693,6 @@ class TestServiceSettingsUsage:
         source = inspect.getsource(SchedulerService.__init__)
         assert "settings_service" in source or "SettingsService" in source
 
-    def test_posting_service_checks_dry_run_from_settings(self):
-        """PostingService should check dry_run from SettingsService, not .env."""
-        from src.services.core.posting import PostingService
-        import inspect
-
-        # Read _post_via_instagram source (this is where dry_run is checked)
-        # Note: _post_via_telegram intentionally does NOT check dry_run because
-        # Telegram notifications should always be sent even in dry run mode
-        source = inspect.getsource(PostingService._post_via_instagram)
-
-        # Should reference chat_settings.dry_run_mode, not settings.DRY_RUN_MODE
-        assert "dry_run_mode" in source.lower()
-
 
 # =============================================================================
 # DEPLOYMENT MODEL DOCUMENTATION TEST

@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- **Dead code in PostingService** — Removed ~258 lines of unreachable code from `posting.py`: `handle_completion()`, `_post_via_instagram()`, `_cleanup_cloud_media()`, `process_next_immediate()`, and related lazy-load properties for Instagram/cloud services. All posting now routes through Telegram; Instagram API posting happens via callback handler, not `PostingService`.
+
 ### Changed
+- **setup.py dependencies synced** — Added 8 missing runtime dependencies to `setup.py` that were in `requirements.txt`: alembic, cloudinary, cryptography, fastapi, google-api-python-client, google-auth, google-auth-oauthlib, uvicorn
 - **Onboarding routes split into package** — Split monolithic 859-line `onboarding.py` into focused submodules: `models.py`, `helpers.py`, `setup.py`, `dashboard.py`, `settings.py`. Consolidated lazy imports to module-level. No functional changes.
 - **WebApp button builder extracted** — Deduplicated private-vs-group WebApp button logic from 3 locations into shared `build_webapp_button()` utility in `telegram_utils.py`
 
