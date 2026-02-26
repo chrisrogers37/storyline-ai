@@ -5,6 +5,7 @@ import html
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from src.api.routes.onboarding.helpers import service_error_handler
 from src.services.core.oauth_service import OAuthService
 from src.services.integrations.google_drive_oauth import GoogleDriveOAuthService
 from src.utils.logger import logger
@@ -24,10 +25,9 @@ async def instagram_oauth_start(
     """
     oauth_service = OAuthService()
     try:
-        auth_url = oauth_service.generate_authorization_url(chat_id)
-        return RedirectResponse(url=auth_url)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        with service_error_handler():
+            auth_url = oauth_service.generate_authorization_url(chat_id)
+            return RedirectResponse(url=auth_url)
     finally:
         oauth_service.close()
 
@@ -123,10 +123,9 @@ async def google_drive_oauth_start(
     """
     gdrive_service = GoogleDriveOAuthService()
     try:
-        auth_url = gdrive_service.generate_authorization_url(chat_id)
-        return RedirectResponse(url=auth_url)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        with service_error_handler():
+            auth_url = gdrive_service.generate_authorization_url(chat_id)
+            return RedirectResponse(url=auth_url)
     finally:
         gdrive_service.close()
 

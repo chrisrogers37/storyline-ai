@@ -10,7 +10,7 @@ from src.services.core.scheduler import SchedulerService
 from src.services.core.settings_service import SettingsService
 from src.utils.logger import logger
 
-from .helpers import _validate_request
+from .helpers import _validate_request, service_error_handler
 from .models import (
     InitRequest,
     RemoveAccountRequest,
@@ -42,17 +42,14 @@ async def onboarding_toggle_setting(request: ToggleSettingRequest):
             f"Allowed: {', '.join(sorted(allowed_settings))}",
         )
 
-    with SettingsService() as settings_service:
-        try:
-            new_value = settings_service.toggle_setting(
-                request.chat_id, request.setting_name
-            )
-            return {
-                "setting_name": request.setting_name,
-                "new_value": new_value,
-            }
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+    with SettingsService() as settings_service, service_error_handler():
+        new_value = settings_service.toggle_setting(
+            request.chat_id, request.setting_name
+        )
+        return {
+            "setting_name": request.setting_name,
+            "new_value": new_value,
+        }
 
 
 @router.post("/update-setting")
@@ -68,17 +65,14 @@ async def onboarding_update_setting(request: UpdateSettingRequest):
             f"Allowed: {', '.join(sorted(allowed_settings))}",
         )
 
-    with SettingsService() as settings_service:
-        try:
-            settings_service.update_setting(
-                request.chat_id, request.setting_name, request.value
-            )
-            return {
-                "setting_name": request.setting_name,
-                "new_value": request.value,
-            }
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+    with SettingsService() as settings_service, service_error_handler():
+        settings_service.update_setting(
+            request.chat_id, request.setting_name, request.value
+        )
+        return {
+            "setting_name": request.setting_name,
+            "new_value": request.value,
+        }
 
 
 @router.post("/switch-account")
@@ -86,19 +80,16 @@ async def onboarding_switch_account(request: SwitchAccountRequest):
     """Switch the active Instagram account for this chat."""
     _validate_request(request.init_data, request.chat_id)
 
-    with InstagramAccountService() as account_service:
-        try:
-            account = account_service.switch_account(
-                telegram_chat_id=request.chat_id,
-                account_id=request.account_id,
-            )
-            return {
-                "account_id": str(account.id),
-                "display_name": account.display_name,
-                "instagram_username": account.instagram_username,
-            }
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+    with InstagramAccountService() as account_service, service_error_handler():
+        account = account_service.switch_account(
+            telegram_chat_id=request.chat_id,
+            account_id=request.account_id,
+        )
+        return {
+            "account_id": str(account.id),
+            "display_name": account.display_name,
+            "instagram_username": account.instagram_username,
+        }
 
 
 @router.post("/remove-account")
@@ -106,18 +97,15 @@ async def onboarding_remove_account(request: RemoveAccountRequest):
     """Deactivate (soft-delete) an Instagram account."""
     _validate_request(request.init_data, request.chat_id)
 
-    with InstagramAccountService() as account_service:
-        try:
-            account = account_service.deactivate_account(
-                account_id=request.account_id,
-            )
-            return {
-                "account_id": str(account.id),
-                "display_name": account.display_name,
-                "removed": True,
-            }
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+    with InstagramAccountService() as account_service, service_error_handler():
+        account = account_service.deactivate_account(
+            account_id=request.account_id,
+        )
+        return {
+            "account_id": str(account.id),
+            "display_name": account.display_name,
+            "removed": True,
+        }
 
 
 @router.post("/sync-media")

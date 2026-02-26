@@ -1,6 +1,7 @@
 """Shared helpers for onboarding API routes."""
 
 import re
+from contextlib import contextmanager
 
 from fastapi import HTTPException
 
@@ -142,3 +143,12 @@ def _get_setup_state(telegram_chat_id: int) -> dict:
             "next_post_at": next_post_at,
             "schedule_end_date": schedule_end_date,
         }
+
+
+@contextmanager
+def service_error_handler():
+    """Convert service ValueError exceptions to HTTP 400 responses."""
+    try:
+        yield
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
