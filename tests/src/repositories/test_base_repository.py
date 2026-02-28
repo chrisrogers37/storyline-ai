@@ -135,6 +135,53 @@ class TestBaseRepository:
         mock_query.filter.assert_not_called()
         assert result is mock_query
 
+    def test_tenant_query_calls_db_query_and_apply_filter(self, repo, mock_db):
+        """Test _tenant_query combines db.query() with _apply_tenant_filter()."""
+        mock_db.is_active = True
+        mock_model = MagicMock()
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+
+        with patch.object(
+            repo, "_apply_tenant_filter", return_value=mock_query
+        ) as mock_filter:
+            result = repo._tenant_query(mock_model, chat_settings_id="tenant-1")
+
+        mock_db.query.assert_called_once_with(mock_model)
+        mock_filter.assert_called_once_with(mock_query, mock_model, "tenant-1")
+        assert result is mock_query
+
+    def test_tenant_query_without_chat_settings_id(self, repo, mock_db):
+        """Test _tenant_query passes None to _apply_tenant_filter when no tenant."""
+        mock_db.is_active = True
+        mock_model = MagicMock()
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+
+        with patch.object(
+            repo, "_apply_tenant_filter", return_value=mock_query
+        ) as mock_filter:
+            result = repo._tenant_query(mock_model)
+
+        mock_db.query.assert_called_once_with(mock_model)
+        mock_filter.assert_called_once_with(mock_query, mock_model, None)
+        assert result is mock_query
+
+    def test_tenant_query_returns_chainable_query(self, repo, mock_db):
+        """Test _tenant_query returns a query object that supports chaining."""
+        mock_db.is_active = True
+        mock_model = MagicMock()
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+
+        with patch.object(repo, "_apply_tenant_filter", return_value=mock_query):
+            result = repo._tenant_query(mock_model, "tenant-1")
+
+        # Verify chaining works (filter, order_by, etc.)
+        result.filter.assert_not_called()  # Not called yet, but should be callable
+        chained = result.filter(mock_model.id == "test")
+        assert chained is mock_query.filter.return_value
+
     def test_check_connection_executes_query(self):
         """Test that check_connection() executes a SELECT 1 query."""
         mock_session = MagicMock()

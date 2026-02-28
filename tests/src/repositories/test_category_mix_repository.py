@@ -15,8 +15,14 @@ class TestCategoryMixRepository:
 
     @pytest.fixture
     def mock_db(self):
-        """Create a mock database session."""
-        return MagicMock()
+        """Create a mock database session with chainable query."""
+        session = MagicMock()
+        mock_query = MagicMock()
+        session.query.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.with_entities.return_value = mock_query
+        return session
 
     @pytest.fixture
     def mix_repo(self, mock_db):
@@ -173,8 +179,14 @@ class TestCategoryMixRepositoryTenantFiltering:
 
     @pytest.fixture
     def mock_db(self):
-        """Create a mock database session."""
-        return MagicMock()
+        """Create a mock database session with chainable query."""
+        session = MagicMock()
+        mock_query = MagicMock()
+        session.query.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.with_entities.return_value = mock_query
+        return session
 
     @pytest.fixture
     def mix_repo(self, mock_db):

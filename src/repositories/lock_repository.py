@@ -17,23 +17,27 @@ class LockRepository(BaseRepository):
         self, lock_id: str, chat_settings_id: Optional[str] = None
     ) -> Optional[MediaPostingLock]:
         """Get lock by ID."""
-        query = self.db.query(MediaPostingLock).filter(MediaPostingLock.id == lock_id)
-        query = self._apply_tenant_filter(query, MediaPostingLock, chat_settings_id)
-        return query.first()
+        return (
+            self._tenant_query(MediaPostingLock, chat_settings_id)
+            .filter(MediaPostingLock.id == lock_id)
+            .first()
+        )
 
     def get_active_lock(
         self, media_id: str, chat_settings_id: Optional[str] = None
     ) -> Optional[MediaPostingLock]:
         """Get active lock for media item (if any)."""
         now = datetime.utcnow()
-        query = self.db.query(MediaPostingLock).filter(
-            MediaPostingLock.media_item_id == media_id,
-            # Lock is active if: locked_until is NULL (permanent) OR locked_until > now
-            (MediaPostingLock.locked_until.is_(None))
-            | (MediaPostingLock.locked_until > now),
+        return (
+            self._tenant_query(MediaPostingLock, chat_settings_id)
+            .filter(
+                MediaPostingLock.media_item_id == media_id,
+                # Lock is active if: locked_until is NULL (permanent) OR locked_until > now
+                (MediaPostingLock.locked_until.is_(None))
+                | (MediaPostingLock.locked_until > now),
+            )
+            .first()
         )
-        query = self._apply_tenant_filter(query, MediaPostingLock, chat_settings_id)
-        return query.first()
 
     def is_locked(self, media_id: str, chat_settings_id: Optional[str] = None) -> bool:
         """Check if media item is currently locked."""
@@ -44,12 +48,15 @@ class LockRepository(BaseRepository):
     ) -> List[MediaPostingLock]:
         """Get all active locks."""
         now = datetime.utcnow()
-        query = self.db.query(MediaPostingLock).filter(
-            (MediaPostingLock.locked_until.is_(None))
-            | (MediaPostingLock.locked_until > now)
+        return (
+            self._tenant_query(MediaPostingLock, chat_settings_id)
+            .filter(
+                (MediaPostingLock.locked_until.is_(None))
+                | (MediaPostingLock.locked_until > now)
+            )
+            .order_by(MediaPostingLock.locked_until.asc().nulls_last())
+            .all()
         )
-        query = self._apply_tenant_filter(query, MediaPostingLock, chat_settings_id)
-        return query.order_by(MediaPostingLock.locked_until.asc().nulls_last()).all()
 
     def create(
         self,
@@ -90,20 +97,25 @@ class LockRepository(BaseRepository):
         self, chat_settings_id: Optional[str] = None
     ) -> List[MediaPostingLock]:
         """Get all permanent locks (locked_until IS NULL)."""
-        query = self.db.query(MediaPostingLock).filter(
-            MediaPostingLock.locked_until.is_(None)
+        return (
+            self._tenant_query(MediaPostingLock, chat_settings_id)
+            .filter(MediaPostingLock.locked_until.is_(None))
+            .order_by(MediaPostingLock.created_at.desc())
+            .all()
         )
-        query = self._apply_tenant_filter(query, MediaPostingLock, chat_settings_id)
-        return query.order_by(MediaPostingLock.created_at.desc()).all()
 
     def cleanup_expired(self, chat_settings_id: Optional[str] = None) -> int:
         """Delete all expired locks. Returns count of deleted locks."""
         now = datetime.utcnow()
-        query = self.db.query(MediaPostingLock).filter(
-            MediaPostingLock.locked_until.isnot(None),  # Don't delete permanent locks
-            MediaPostingLock.locked_until <= now,
+        count = (
+            self._tenant_query(MediaPostingLock, chat_settings_id)
+            .filter(
+                MediaPostingLock.locked_until.isnot(
+                    None
+                ),  # Don't delete permanent locks
+                MediaPostingLock.locked_until <= now,
+            )
+            .delete()
         )
-        query = self._apply_tenant_filter(query, MediaPostingLock, chat_settings_id)
-        count = query.delete()
         self.db.commit()
         return count

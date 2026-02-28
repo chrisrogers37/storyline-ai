@@ -20,25 +20,31 @@ class MediaRepository(BaseRepository):
         self, media_id: str, chat_settings_id: Optional[str] = None
     ) -> Optional[MediaItem]:
         """Get media item by ID."""
-        query = self.db.query(MediaItem).filter(MediaItem.id == media_id)
-        query = self._apply_tenant_filter(query, MediaItem, chat_settings_id)
-        return query.first()
+        return (
+            self._tenant_query(MediaItem, chat_settings_id)
+            .filter(MediaItem.id == media_id)
+            .first()
+        )
 
     def get_by_path(
         self, file_path: str, chat_settings_id: Optional[str] = None
     ) -> Optional[MediaItem]:
         """Get media item by file path."""
-        query = self.db.query(MediaItem).filter(MediaItem.file_path == file_path)
-        query = self._apply_tenant_filter(query, MediaItem, chat_settings_id)
-        return query.first()
+        return (
+            self._tenant_query(MediaItem, chat_settings_id)
+            .filter(MediaItem.file_path == file_path)
+            .first()
+        )
 
     def get_by_hash(
         self, file_hash: str, chat_settings_id: Optional[str] = None
     ) -> List[MediaItem]:
         """Get all media items with the same hash (duplicate content)."""
-        query = self.db.query(MediaItem).filter(MediaItem.file_hash == file_hash)
-        query = self._apply_tenant_filter(query, MediaItem, chat_settings_id)
-        return query.all()
+        return (
+            self._tenant_query(MediaItem, chat_settings_id)
+            .filter(MediaItem.file_hash == file_hash)
+            .all()
+        )
 
     def get_by_instagram_media_id(
         self, instagram_media_id: str, chat_settings_id: Optional[str] = None
@@ -48,11 +54,11 @@ class MediaRepository(BaseRepository):
         Used by InstagramBackfillService to check if an Instagram media item
         has already been backfilled into the system.
         """
-        query = self.db.query(MediaItem).filter(
-            MediaItem.instagram_media_id == instagram_media_id
+        return (
+            self._tenant_query(MediaItem, chat_settings_id)
+            .filter(MediaItem.instagram_media_id == instagram_media_id)
+            .first()
         )
-        query = self._apply_tenant_filter(query, MediaItem, chat_settings_id)
-        return query.first()
 
     def get_backfilled_instagram_media_ids(
         self, chat_settings_id: Optional[str] = None
@@ -62,11 +68,12 @@ class MediaRepository(BaseRepository):
         Returns a set for O(1) lookup during backfill operations.
         This avoids N+1 queries when checking each item during batch backfill.
         """
-        query = self.db.query(MediaItem.instagram_media_id).filter(
-            MediaItem.instagram_media_id.isnot(None)
+        results = (
+            self._tenant_query(MediaItem, chat_settings_id)
+            .with_entities(MediaItem.instagram_media_id)
+            .filter(MediaItem.instagram_media_id.isnot(None))
+            .all()
         )
-        query = self._apply_tenant_filter(query, MediaItem, chat_settings_id)
-        results = query.all()
         self.end_read_transaction()
         return {r[0] for r in results}
 
@@ -86,12 +93,14 @@ class MediaRepository(BaseRepository):
         Returns:
             MediaItem if found, None otherwise
         """
-        query = self.db.query(MediaItem).filter(
-            MediaItem.source_type == source_type,
-            MediaItem.source_identifier == source_identifier,
+        return (
+            self._tenant_query(MediaItem, chat_settings_id)
+            .filter(
+                MediaItem.source_type == source_type,
+                MediaItem.source_identifier == source_identifier,
+            )
+            .first()
         )
-        query = self._apply_tenant_filter(query, MediaItem, chat_settings_id)
-        return query.first()
 
     def get_active_by_source_type(
         self, source_type: str, chat_settings_id: Optional[str] = None
@@ -108,12 +117,14 @@ class MediaRepository(BaseRepository):
         Returns:
             List of active MediaItem instances for the given source type
         """
-        query = self.db.query(MediaItem).filter(
-            MediaItem.source_type == source_type,
-            MediaItem.is_active == True,  # noqa: E712
+        return (
+            self._tenant_query(MediaItem, chat_settings_id)
+            .filter(
+                MediaItem.source_type == source_type,
+                MediaItem.is_active == True,  # noqa: E712
+            )
+            .all()
         )
-        query = self._apply_tenant_filter(query, MediaItem, chat_settings_id)
-        return query.all()
 
     def get_inactive_by_source_identifier(
         self,
@@ -134,13 +145,15 @@ class MediaRepository(BaseRepository):
         Returns:
             Inactive MediaItem if found, None otherwise
         """
-        query = self.db.query(MediaItem).filter(
-            MediaItem.source_type == source_type,
-            MediaItem.source_identifier == source_identifier,
-            MediaItem.is_active == False,  # noqa: E712
+        return (
+            self._tenant_query(MediaItem, chat_settings_id)
+            .filter(
+                MediaItem.source_type == source_type,
+                MediaItem.source_identifier == source_identifier,
+                MediaItem.is_active == False,  # noqa: E712
+            )
+            .first()
         )
-        query = self._apply_tenant_filter(query, MediaItem, chat_settings_id)
-        return query.first()
 
     def reactivate(self, media_id: str) -> MediaItem:
         """Reactivate a previously deactivated media item.
@@ -204,8 +217,7 @@ class MediaRepository(BaseRepository):
         chat_settings_id: Optional[str] = None,
     ) -> List[MediaItem]:
         """Get all media items with optional filters."""
-        query = self.db.query(MediaItem)
-        query = self._apply_tenant_filter(query, MediaItem, chat_settings_id)
+        query = self._tenant_query(MediaItem, chat_settings_id)
 
         if is_active is not None:
             query = query.filter(MediaItem.is_active == is_active)
@@ -225,9 +237,13 @@ class MediaRepository(BaseRepository):
 
     def get_categories(self, chat_settings_id: Optional[str] = None) -> List[str]:
         """Get all unique categories."""
-        query = self.db.query(MediaItem.category).filter(MediaItem.category.isnot(None))
-        query = self._apply_tenant_filter(query, MediaItem, chat_settings_id)
-        result = query.distinct().all()
+        result = (
+            self._tenant_query(MediaItem, chat_settings_id)
+            .with_entities(MediaItem.category)
+            .filter(MediaItem.category.isnot(None))
+            .distinct()
+            .all()
+        )
         return [r[0] for r in result]
 
     def create(
@@ -374,14 +390,14 @@ class MediaRepository(BaseRepository):
         Returns:
             List of tuples (file_hash, count, paths)
         """
-        query = self.db.query(
-            MediaItem.file_hash,
-            func.count(MediaItem.id).label("count"),
-            func.array_agg(MediaItem.file_path).label("paths"),
-        )
-        query = self._apply_tenant_filter(query, MediaItem, chat_settings_id)
         duplicates = (
-            query.group_by(MediaItem.file_hash)
+            self._tenant_query(MediaItem, chat_settings_id)
+            .with_entities(
+                MediaItem.file_hash,
+                func.count(MediaItem.id).label("count"),
+                func.array_agg(MediaItem.file_path).label("paths"),
+            )
+            .group_by(MediaItem.file_hash)
             .having(func.count(MediaItem.id) > 1)
             .all()
         )
@@ -406,8 +422,9 @@ class MediaRepository(BaseRepository):
         Returns:
             The highest-priority eligible MediaItem, or None if no eligible media exists
         """
-        query = self.db.query(MediaItem).filter(MediaItem.is_active)
-        query = self._apply_tenant_filter(query, MediaItem, chat_settings_id)
+        query = self._tenant_query(MediaItem, chat_settings_id).filter(
+            MediaItem.is_active
+        )
 
         # Filter by category if specified
         if category:

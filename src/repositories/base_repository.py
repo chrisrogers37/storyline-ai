@@ -141,6 +141,11 @@ class BaseRepository:
             query = query.filter(model_class.chat_settings_id == chat_settings_id)
         return query
 
+    def _tenant_query(self, model_class, chat_settings_id=None):
+        """Start a query with automatic tenant filtering applied."""
+        query = self.db.query(model_class)
+        return self._apply_tenant_filter(query, model_class, chat_settings_id)
+
     @staticmethod
     def check_connection():
         """

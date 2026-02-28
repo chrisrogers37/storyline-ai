@@ -49,9 +49,11 @@ class HistoryRepository(BaseRepository):
         self, history_id: str, chat_settings_id: Optional[str] = None
     ) -> Optional[PostingHistory]:
         """Get history record by ID."""
-        query = self.db.query(PostingHistory).filter(PostingHistory.id == history_id)
-        query = self._apply_tenant_filter(query, PostingHistory, chat_settings_id)
-        return query.first()
+        return (
+            self._tenant_query(PostingHistory, chat_settings_id)
+            .filter(PostingHistory.id == history_id)
+            .first()
+        )
 
     def get_all(
         self,
@@ -61,8 +63,7 @@ class HistoryRepository(BaseRepository):
         chat_settings_id: Optional[str] = None,
     ) -> List[PostingHistory]:
         """Get all history records with optional filters."""
-        query = self.db.query(PostingHistory)
-        query = self._apply_tenant_filter(query, PostingHistory, chat_settings_id)
+        query = self._tenant_query(PostingHistory, chat_settings_id)
 
         if status:
             query = query.filter(PostingHistory.status == status)
@@ -85,11 +86,11 @@ class HistoryRepository(BaseRepository):
         chat_settings_id: Optional[str] = None,
     ) -> List[PostingHistory]:
         """Get all history records for a specific media item."""
-        query = self.db.query(PostingHistory).filter(
-            PostingHistory.media_item_id == media_id
+        query = (
+            self._tenant_query(PostingHistory, chat_settings_id)
+            .filter(PostingHistory.media_item_id == media_id)
+            .order_by(PostingHistory.posted_at.desc())
         )
-        query = self._apply_tenant_filter(query, PostingHistory, chat_settings_id)
-        query = query.order_by(PostingHistory.posted_at.desc())
 
         if limit:
             query = query.limit(limit)
@@ -111,9 +112,12 @@ class HistoryRepository(BaseRepository):
     ) -> List[PostingHistory]:
         """Get posts from the last N hours."""
         since = datetime.utcnow() - timedelta(hours=hours)
-        query = self.db.query(PostingHistory).filter(PostingHistory.posted_at >= since)
-        query = self._apply_tenant_filter(query, PostingHistory, chat_settings_id)
-        return query.order_by(PostingHistory.posted_at.desc()).all()
+        return (
+            self._tenant_query(PostingHistory, chat_settings_id)
+            .filter(PostingHistory.posted_at >= since)
+            .order_by(PostingHistory.posted_at.desc())
+            .all()
+        )
 
     def count_by_method(
         self, method: str, since: datetime, chat_settings_id: Optional[str] = None
@@ -131,15 +135,19 @@ class HistoryRepository(BaseRepository):
         Returns:
             Count of posts matching criteria
         """
-        query = self.db.query(func.count(PostingHistory.id)).filter(
-            and_(
-                PostingHistory.posting_method == method,
-                PostingHistory.posted_at >= since,
-                PostingHistory.success,
+        return (
+            self._tenant_query(PostingHistory, chat_settings_id)
+            .with_entities(func.count(PostingHistory.id))
+            .filter(
+                and_(
+                    PostingHistory.posting_method == method,
+                    PostingHistory.posted_at >= since,
+                    PostingHistory.success,
+                )
             )
+            .scalar()
+            or 0
         )
-        query = self._apply_tenant_filter(query, PostingHistory, chat_settings_id)
-        return query.scalar() or 0
 
     def get_by_queue_item_id(self, queue_item_id: str) -> Optional[PostingHistory]:
         """Get the most recent history record for a specific queue item.

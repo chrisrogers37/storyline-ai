@@ -19,11 +19,12 @@ class CategoryMixRepository(BaseRepository):
         self, chat_settings_id: Optional[str] = None
     ) -> List[CategoryPostCaseMix]:
         """Get all current (active) category ratios."""
-        query = self.db.query(CategoryPostCaseMix).filter(
-            CategoryPostCaseMix.is_current
+        return (
+            self._tenant_query(CategoryPostCaseMix, chat_settings_id)
+            .filter(CategoryPostCaseMix.is_current)
+            .order_by(CategoryPostCaseMix.category)
+            .all()
         )
-        query = self._apply_tenant_filter(query, CategoryPostCaseMix, chat_settings_id)
-        return query.order_by(CategoryPostCaseMix.category).all()
 
     def get_current_mix_as_dict(
         self, chat_settings_id: Optional[str] = None
@@ -36,8 +37,7 @@ class CategoryMixRepository(BaseRepository):
         self, category: Optional[str] = None, chat_settings_id: Optional[str] = None
     ) -> List[CategoryPostCaseMix]:
         """Get full history, optionally filtered by category."""
-        query = self.db.query(CategoryPostCaseMix)
-        query = self._apply_tenant_filter(query, CategoryPostCaseMix, chat_settings_id)
+        query = self._tenant_query(CategoryPostCaseMix, chat_settings_id)
 
         if category:
             query = query.filter(CategoryPostCaseMix.category == category)
@@ -106,11 +106,12 @@ class CategoryMixRepository(BaseRepository):
 
     def has_current_mix(self, chat_settings_id: Optional[str] = None) -> bool:
         """Check if any current mix ratios exist."""
-        query = self.db.query(func.count(CategoryPostCaseMix.id)).filter(
-            CategoryPostCaseMix.is_current
+        count = (
+            self._tenant_query(CategoryPostCaseMix, chat_settings_id)
+            .with_entities(func.count(CategoryPostCaseMix.id))
+            .filter(CategoryPostCaseMix.is_current)
+            .scalar()
         )
-        query = self._apply_tenant_filter(query, CategoryPostCaseMix, chat_settings_id)
-        count = query.scalar()
         return count > 0
 
     def get_categories_without_ratio(
