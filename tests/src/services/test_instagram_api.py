@@ -130,7 +130,7 @@ class TestInstagramAPIService:
 
     # ==================== is_configured Tests ====================
 
-    @patch("src.services.integrations.instagram_api.settings")
+    @patch("src.services.integrations.instagram_credentials.settings")
     def test_is_configured_all_settings(self, mock_settings, instagram_service):
         """Test is_configured returns True when all settings present."""
         mock_settings.ENABLE_INSTAGRAM_API = True
@@ -139,7 +139,7 @@ class TestInstagramAPIService:
 
         assert instagram_service.is_configured() is True
 
-    @patch("src.services.integrations.instagram_api.settings")
+    @patch("src.services.integrations.instagram_credentials.settings")
     def test_is_configured_missing_enable_flag(self, mock_settings, instagram_service):
         """Test is_configured returns False when feature disabled."""
         mock_settings.ENABLE_INSTAGRAM_API = False
@@ -148,7 +148,7 @@ class TestInstagramAPIService:
 
         assert instagram_service.is_configured() is False
 
-    @patch("src.services.integrations.instagram_api.settings")
+    @patch("src.services.integrations.instagram_credentials.settings")
     def test_is_configured_missing_account_id(self, mock_settings, instagram_service):
         """Test is_configured returns False when no active account and no legacy ID."""
         mock_settings.ENABLE_INSTAGRAM_API = True
@@ -161,7 +161,7 @@ class TestInstagramAPIService:
 
         assert instagram_service.is_configured() is False
 
-    @patch("src.services.integrations.instagram_api.settings")
+    @patch("src.services.integrations.instagram_credentials.settings")
     def test_is_configured_missing_app_id(self, mock_settings, instagram_service):
         """Test is_configured returns False when app ID missing."""
         mock_settings.ENABLE_INSTAGRAM_API = True
@@ -271,12 +271,15 @@ class TestInstagramAPIService:
             await instagram_service.post_story("https://example.com/image.jpg")
 
     @pytest.mark.asyncio
+    @patch("src.services.integrations.instagram_credentials.settings")
     @patch("src.services.integrations.instagram_api.settings")
-    async def test_post_story_no_account_id(self, mock_settings, instagram_service):
+    async def test_post_story_no_account_id(
+        self, mock_api_settings, mock_cred_settings, instagram_service
+    ):
         """Test post_story raises error when no account configured."""
-        mock_settings.INSTAGRAM_POSTS_PER_HOUR = 25
-        mock_settings.INSTAGRAM_ACCOUNT_ID = None
-        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
+        mock_api_settings.INSTAGRAM_POSTS_PER_HOUR = 25
+        mock_api_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
+        mock_cred_settings.INSTAGRAM_ACCOUNT_ID = None
         instagram_service.history_repo.count_by_method.return_value = 0
         instagram_service.token_service.get_token.return_value = "valid_token"
 
@@ -287,11 +290,14 @@ class TestInstagramAPIService:
             await instagram_service.post_story("https://example.com/image.jpg")
 
     @pytest.mark.asyncio
+    @patch("src.services.integrations.instagram_credentials.settings")
     @patch("src.services.integrations.instagram_api.settings")
-    async def test_post_story_success(self, mock_settings, instagram_service):
+    async def test_post_story_success(
+        self, mock_api_settings, mock_cred_settings, instagram_service
+    ):
         """Test successful story posting."""
-        mock_settings.INSTAGRAM_POSTS_PER_HOUR = 25
-        mock_settings.INSTAGRAM_ACCOUNT_ID = "12345678"
+        mock_api_settings.INSTAGRAM_POSTS_PER_HOUR = 25
+        mock_cred_settings.INSTAGRAM_ACCOUNT_ID = "12345678"
         instagram_service.history_repo.count_by_method.return_value = 0
         instagram_service.token_service.get_token.return_value = "valid_token"
 
@@ -329,11 +335,14 @@ class TestInstagramAPIService:
         assert "timestamp" in result
 
     @pytest.mark.asyncio
+    @patch("src.services.integrations.instagram_credentials.settings")
     @patch("src.services.integrations.instagram_api.settings")
-    async def test_post_story_network_error(self, mock_settings, instagram_service):
+    async def test_post_story_network_error(
+        self, mock_api_settings, mock_cred_settings, instagram_service
+    ):
         """Test post_story handles network errors."""
-        mock_settings.INSTAGRAM_POSTS_PER_HOUR = 25
-        mock_settings.INSTAGRAM_ACCOUNT_ID = "12345678"
+        mock_api_settings.INSTAGRAM_POSTS_PER_HOUR = 25
+        mock_cred_settings.INSTAGRAM_ACCOUNT_ID = "12345678"
         instagram_service.history_repo.count_by_method.return_value = 0
         instagram_service.token_service.get_token.return_value = "valid_token"
 
@@ -585,7 +594,7 @@ class TestInstagramAPIService:
         }
 
         with patch(
-            "src.services.integrations.instagram_api.httpx.AsyncClient"
+            "src.services.integrations.instagram_credentials.httpx.AsyncClient"
         ) as mock_client:
             mock_instance = mock_client.return_value
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
@@ -607,7 +616,7 @@ class TestInstagramAPIService:
         mock_response.status_code = 404
 
         with patch(
-            "src.services.integrations.instagram_api.httpx.AsyncClient"
+            "src.services.integrations.instagram_credentials.httpx.AsyncClient"
         ) as mock_client:
             mock_instance = mock_client.return_value
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
@@ -625,7 +634,7 @@ class TestInstagramAPIService:
     async def test_validate_media_url_network_error(self, instagram_service):
         """Test URL validation handles network errors."""
         with patch(
-            "src.services.integrations.instagram_api.httpx.AsyncClient"
+            "src.services.integrations.instagram_credentials.httpx.AsyncClient"
         ) as mock_client:
             mock_instance = mock_client.return_value
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
@@ -647,7 +656,7 @@ class TestInstagramAPIService:
         mock_response.headers = {"content-type": "image/png"}
 
         with patch(
-            "src.services.integrations.instagram_api.httpx.AsyncClient"
+            "src.services.integrations.instagram_credentials.httpx.AsyncClient"
         ) as mock_client:
             mock_instance = mock_client.return_value
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
