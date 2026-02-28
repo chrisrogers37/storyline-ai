@@ -18,9 +18,11 @@ class QueueRepository(BaseRepository):
         self, queue_id: str, chat_settings_id: Optional[str] = None
     ) -> Optional[PostingQueue]:
         """Get queue item by ID."""
-        query = self.db.query(PostingQueue).filter(PostingQueue.id == queue_id)
-        query = self._apply_tenant_filter(query, PostingQueue, chat_settings_id)
-        return query.first()
+        return (
+            self._tenant_query(PostingQueue, chat_settings_id)
+            .filter(PostingQueue.id == queue_id)
+            .first()
+        )
 
     def get_by_id_prefix(
         self, id_prefix: str, chat_settings_id: Optional[str] = None
@@ -39,21 +41,21 @@ class QueueRepository(BaseRepository):
         """
         from sqlalchemy import cast, String
 
-        query = self.db.query(PostingQueue).filter(
-            cast(PostingQueue.id, String).like(f"{id_prefix}%")
+        return (
+            self._tenant_query(PostingQueue, chat_settings_id)
+            .filter(cast(PostingQueue.id, String).like(f"{id_prefix}%"))
+            .first()
         )
-        query = self._apply_tenant_filter(query, PostingQueue, chat_settings_id)
-        return query.first()
 
     def get_by_media_id(
         self, media_id: str, chat_settings_id: Optional[str] = None
     ) -> Optional[PostingQueue]:
         """Get queue item by media ID."""
-        query = self.db.query(PostingQueue).filter(
-            PostingQueue.media_item_id == media_id
+        return (
+            self._tenant_query(PostingQueue, chat_settings_id)
+            .filter(PostingQueue.media_item_id == media_id)
+            .first()
         )
-        query = self._apply_tenant_filter(query, PostingQueue, chat_settings_id)
-        return query.first()
 
     def get_pending(
         self, limit: Optional[int] = None, chat_settings_id: Optional[str] = None
@@ -64,10 +66,9 @@ class QueueRepository(BaseRepository):
         instances from claiming the same rows.
         """
         now = datetime.utcnow()
-        query = self.db.query(PostingQueue).filter(
+        query = self._tenant_query(PostingQueue, chat_settings_id).filter(
             and_(PostingQueue.status == "pending", PostingQueue.scheduled_for <= now)
         )
-        query = self._apply_tenant_filter(query, PostingQueue, chat_settings_id)
         query = query.order_by(PostingQueue.scheduled_for.asc())
 
         if limit:
@@ -92,18 +93,22 @@ class QueueRepository(BaseRepository):
             List of overdue PostingQueue items, ordered by scheduled_for ASC
         """
         now = datetime.utcnow()
-        query = self.db.query(PostingQueue).filter(
-            and_(PostingQueue.status == "pending", PostingQueue.scheduled_for <= now)
+        return (
+            self._tenant_query(PostingQueue, chat_settings_id)
+            .filter(
+                and_(
+                    PostingQueue.status == "pending", PostingQueue.scheduled_for <= now
+                )
+            )
+            .order_by(PostingQueue.scheduled_for.asc())
+            .all()
         )
-        query = self._apply_tenant_filter(query, PostingQueue, chat_settings_id)
-        return query.order_by(PostingQueue.scheduled_for.asc()).all()
 
     def get_all(
         self, status: Optional[str] = None, chat_settings_id: Optional[str] = None
     ) -> List[PostingQueue]:
         """Get all queue items, optionally filtered by status."""
-        query = self.db.query(PostingQueue)
-        query = self._apply_tenant_filter(query, PostingQueue, chat_settings_id)
+        query = self._tenant_query(PostingQueue, chat_settings_id)
 
         if status:
             query = query.filter(PostingQueue.status == status)
@@ -112,17 +117,22 @@ class QueueRepository(BaseRepository):
 
     def count_pending(self, chat_settings_id: Optional[str] = None) -> int:
         """Count number of pending items."""
-        query = self.db.query(PostingQueue).filter(PostingQueue.status == "pending")
-        query = self._apply_tenant_filter(query, PostingQueue, chat_settings_id)
-        return query.count()
+        return (
+            self._tenant_query(PostingQueue, chat_settings_id)
+            .filter(PostingQueue.status == "pending")
+            .count()
+        )
 
     def get_oldest_pending(
         self, chat_settings_id: Optional[str] = None
     ) -> Optional[PostingQueue]:
         """Get the oldest pending item."""
-        query = self.db.query(PostingQueue).filter(PostingQueue.status == "pending")
-        query = self._apply_tenant_filter(query, PostingQueue, chat_settings_id)
-        return query.order_by(PostingQueue.created_at.asc()).first()
+        return (
+            self._tenant_query(PostingQueue, chat_settings_id)
+            .filter(PostingQueue.status == "pending")
+            .order_by(PostingQueue.created_at.asc())
+            .first()
+        )
 
     def create(
         self,
@@ -207,11 +217,34 @@ class QueueRepository(BaseRepository):
 
     def delete_all_pending(self, chat_settings_id: Optional[str] = None) -> int:
         """Delete all pending queue items. Returns count of deleted items."""
-        query = self.db.query(PostingQueue).filter(PostingQueue.status == "pending")
-        query = self._apply_tenant_filter(query, PostingQueue, chat_settings_id)
-        count = query.delete()
+        count = (
+            self._tenant_query(PostingQueue, chat_settings_id)
+            .filter(PostingQueue.status == "pending")
+            .delete()
+        )
         self.db.commit()
         return count
+
+    def reschedule_items(self, items: List[PostingQueue], delta: timedelta) -> int:
+        """Reschedule items by adding delta to their scheduled_for time.
+
+        Applies the delta repeatedly per item until scheduled_for is in the
+        future (past ``now``).  A single pass is the common case; multiple
+        passes handle items that are several periods overdue.
+
+        Args:
+            items: List of PostingQueue items to reschedule
+            delta: Time delta to add to each item's scheduled_for
+
+        Returns:
+            Number of items rescheduled
+        """
+        now = datetime.utcnow()
+        for item in items:
+            while item.scheduled_for <= now:
+                item.scheduled_for = item.scheduled_for + delta
+        self.db.commit()
+        return len(items)
 
     def shift_slots_forward(
         self, from_item_id: str, chat_settings_id: Optional[str] = None

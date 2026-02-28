@@ -20,6 +20,8 @@ def mock_db():
     mock_query.limit.return_value = mock_query
     mock_query.group_by.return_value = mock_query
     mock_query.having.return_value = mock_query
+    mock_query.with_entities.return_value = mock_query
+    mock_query.distinct.return_value = mock_query
     return session
 
 

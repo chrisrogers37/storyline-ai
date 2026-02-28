@@ -349,6 +349,56 @@ class TestQueueRepositoryTenantFiltering:
 
 
 @pytest.mark.unit
+class TestRescheduleItems:
+    """Tests for QueueRepository.reschedule_items()."""
+
+    def test_reschedule_items_basic(self, queue_repo, mock_db):
+        """reschedule_items bumps scheduled_for and commits."""
+        item = MagicMock()
+        # Set scheduled_for to well in the past so the while loop runs once
+        item.scheduled_for = datetime(2026, 1, 1, 10, 0)
+
+        result = queue_repo.reschedule_items([item], timedelta(hours=24))
+
+        assert result == 1
+        # The while loop bumps until past now; at minimum it should be > original
+        assert item.scheduled_for > datetime(2026, 1, 1, 10, 0)
+        mock_db.commit.assert_called_once()
+
+    def test_reschedule_items_multiple(self, queue_repo, mock_db):
+        """reschedule_items handles multiple items."""
+        items = [
+            MagicMock(scheduled_for=datetime(2026, 1, 1, 10, 0)),
+            MagicMock(scheduled_for=datetime(2026, 1, 2, 14, 0)),
+        ]
+
+        result = queue_repo.reschedule_items(items, timedelta(hours=24))
+
+        assert result == 2
+        for item in items:
+            assert item.scheduled_for > datetime(2026, 1, 2, 14, 0)
+        mock_db.commit.assert_called_once()
+
+    def test_reschedule_items_empty(self, queue_repo, mock_db):
+        """reschedule_items with empty list commits and returns 0."""
+        result = queue_repo.reschedule_items([], timedelta(hours=24))
+
+        assert result == 0
+        mock_db.commit.assert_called_once()
+
+    def test_reschedule_items_bumps_until_future(self, queue_repo, mock_db):
+        """reschedule_items applies delta repeatedly until past now."""
+        # Item 3 days overdue with 24h delta should bump 3+ times
+        item = MagicMock()
+        item.scheduled_for = datetime(2026, 1, 1, 10, 0)
+
+        queue_repo.reschedule_items([item], timedelta(hours=24))
+
+        # Should have been bumped many times (since Jan 1 is far in the past)
+        assert item.scheduled_for > datetime(2026, 2, 1, 10, 0)
+
+
+@pytest.mark.unit
 class TestOverduePendingQuery:
     """Tests for get_overdue_pending query method."""
 

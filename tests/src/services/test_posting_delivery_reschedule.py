@@ -40,7 +40,7 @@ class TestRescheduleOverdueForPausedChat:
     """Tests for PostingService.reschedule_overdue_for_paused_chat()."""
 
     def test_reschedule_bumps_overdue_items(self, posting_service):
-        """reschedule_overdue_for_paused_chat bumps overdue items +24hr."""
+        """reschedule_overdue_for_paused_chat delegates to repo.reschedule_items."""
         mock_settings = Mock()
         mock_settings.id = uuid4()
         posting_service.settings_service.get_settings.return_value = mock_settings
@@ -50,8 +50,9 @@ class TestRescheduleOverdueForPausedChat:
         item_1.scheduled_for = now - timedelta(hours=2)
         item_2 = MagicMock()
         item_2.scheduled_for = now - timedelta(hours=50)
-        posting_service.queue_repo.get_overdue_pending.return_value = [item_1, item_2]
-        posting_service.queue_repo.db = Mock()
+        overdue_items = [item_1, item_2]
+        posting_service.queue_repo.get_overdue_pending.return_value = overdue_items
+        posting_service.queue_repo.reschedule_items.return_value = 2
 
         result = posting_service.reschedule_overdue_for_paused_chat(
             telegram_chat_id=-100123
@@ -59,9 +60,9 @@ class TestRescheduleOverdueForPausedChat:
 
         assert result["rescheduled"] == 2
         assert result["chat_id"] == -100123
-        assert item_1.scheduled_for > now
-        assert item_2.scheduled_for > now
-        posting_service.queue_repo.db.commit.assert_called_once()
+        posting_service.queue_repo.reschedule_items.assert_called_once_with(
+            overdue_items, timedelta(hours=24)
+        )
 
     def test_reschedule_with_no_overdue_items(self, posting_service):
         """Returns 0 rescheduled when no items are overdue."""
@@ -87,8 +88,8 @@ class TestRescheduleOverdueForPausedChat:
 
         posting_service.settings_service.get_settings.assert_called_with(-200456)
 
-    def test_reschedule_item_far_in_past_needs_multiple_bumps(self, posting_service):
-        """An item scheduled 5 days ago needs 6 bumps of +24hr."""
+    def test_reschedule_item_far_in_past_delegates_to_repo(self, posting_service):
+        """An item far in the past is delegated to repo.reschedule_items with 24h delta."""
         mock_settings = Mock()
         mock_settings.id = uuid4()
         posting_service.settings_service.get_settings.return_value = mock_settings
@@ -96,13 +97,18 @@ class TestRescheduleOverdueForPausedChat:
         now = datetime.utcnow()
         item = MagicMock()
         item.scheduled_for = now - timedelta(days=5, hours=1)
-        posting_service.queue_repo.get_overdue_pending.return_value = [item]
-        posting_service.queue_repo.db = Mock()
+        overdue_items = [item]
+        posting_service.queue_repo.get_overdue_pending.return_value = overdue_items
+        posting_service.queue_repo.reschedule_items.return_value = 1
 
-        posting_service.reschedule_overdue_for_paused_chat(telegram_chat_id=-100123)
+        result = posting_service.reschedule_overdue_for_paused_chat(
+            telegram_chat_id=-100123
+        )
 
-        assert item.scheduled_for > now
-        assert item.scheduled_for < now + timedelta(hours=24)
+        assert result["rescheduled"] == 1
+        posting_service.queue_repo.reschedule_items.assert_called_once_with(
+            overdue_items, timedelta(hours=24)
+        )
 
     def test_reschedule_no_chat_settings(self, posting_service):
         """When _get_chat_settings returns None, passes None as chat_settings_id."""

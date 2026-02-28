@@ -1,6 +1,6 @@
 """Posting service - orchestrate the posting process."""
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Optional
 
 from src.services.base_service import BaseService
@@ -37,6 +37,109 @@ class PostingService(BaseService):
             telegram_chat_id = settings.ADMIN_TELEGRAM_CHAT_ID
         return self.settings_service.get_settings(telegram_chat_id)
 
+    def _build_force_post_result(
+        self,
+        status: str,
+        run_id=None,
+        **kwargs,
+    ) -> dict:
+        """Build standardized result dict for force_post_next.
+
+        Args:
+            status: Result status ("empty", "no_media", "success",
+                "send_failed", "error")
+            run_id: Service run ID for observability tracking
+            **kwargs: Additional fields merged into the result dict
+
+        Returns:
+            Dict with success, queue_item_id, media_item, shifted_count, error
+        """
+        defaults = {
+            "success": status == "success",
+            "queue_item_id": None,
+            "media_item": None,
+            "shifted_count": 0,
+            "error": None,
+        }
+        result = {**defaults, **kwargs}
+
+        if run_id:
+            # Create serializable summary (media_item is SQLAlchemy object)
+            media_item = result.get("media_item")
+            summary = {
+                "success": result["success"],
+                "queue_item_id": result["queue_item_id"],
+                "media_file_name": (media_item.file_name if media_item else None),
+                "shifted_count": result["shifted_count"],
+                "error": result["error"],
+            }
+            self.set_result_summary(run_id, summary)
+
+        return result
+
+    async def _execute_force_post(
+        self,
+        queue_item_id: str,
+        media_item,
+        shifted_count: int,
+        run_id,
+        force_sent_indicator: bool,
+    ) -> dict:
+        """Execute the force post after validation.
+
+        Sends the Telegram notification and updates queue status.
+
+        Args:
+            queue_item_id: ID of the queue item being force-posted
+            media_item: The media item to post
+            shifted_count: Number of items that were shifted forward
+            run_id: Service run ID for observability tracking
+            force_sent_indicator: If True, adds indicator to caption
+
+        Returns:
+            Standardized result dict
+        """
+        try:
+            success = await self.telegram_service.send_notification(
+                queue_item_id,
+                force_sent=force_sent_indicator,
+            )
+
+            if not success:
+                logger.error(
+                    f"Failed to send Telegram notification for {queue_item_id}"
+                )
+                return self._build_force_post_result(
+                    "send_failed",
+                    run_id,
+                    queue_item_id=queue_item_id,
+                    media_item=media_item,
+                    shifted_count=shifted_count,
+                    error="Failed to send Telegram notification",
+                )
+
+            self.queue_repo.update_status(queue_item_id, "processing")
+            logger.info(f"Force-posted {media_item.file_name} to Telegram")
+
+            return self._build_force_post_result(
+                "success",
+                run_id,
+                queue_item_id=queue_item_id,
+                media_item=media_item,
+                shifted_count=shifted_count,
+            )
+
+        except Exception as e:
+            logger.error(f"Error force-posting queue item {queue_item_id}: {e}")
+            return self._build_force_post_result(
+                "error",
+                run_id,
+                queue_item_id=queue_item_id,
+                media_item=media_item,
+                shifted_count=shifted_count,
+                error=str(e),
+            )
+
     async def force_post_next(
         self,
         user_id: Optional[str] = None,
@@ -59,7 +162,7 @@ class PostingService(BaseService):
         Args:
             user_id: User ID (for tracking/attribution)
             triggered_by: Source of the call ("cli", "telegram", etc.)
-            force_sent_indicator: If True, adds ⚡ indicator to caption (for /next)
+            force_sent_indicator: If True, adds indicator to caption (for /next)
 
         Returns:
             Dict with results:
@@ -81,15 +184,9 @@ class PostingService(BaseService):
 
             if not pending_items:
                 logger.info("No pending items to force-post")
-                result = {
-                    "success": False,
-                    "queue_item_id": None,
-                    "media_item": None,
-                    "shifted_count": 0,
-                    "error": "No pending items in queue",
-                }
-                self.set_result_summary(run_id, result)
-                return result
+                return self._build_force_post_result(
+                    "empty", run_id, error="No pending items in queue"
+                )
 
             # Take the first one (earliest scheduled)
             queue_item = pending_items[0]
@@ -105,72 +202,46 @@ class PostingService(BaseService):
 
             if not media_item:
                 logger.error(f"Media item not found: {queue_item.media_item_id}")
-                result = {
-                    "success": False,
-                    "queue_item_id": queue_item_id,
-                    "media_item": None,
-                    "shifted_count": 0,
-                    "error": "Media item not found",
-                }
-                self.set_result_summary(run_id, result)
-                return result
+                return self._build_force_post_result(
+                    "no_media",
+                    run_id,
+                    queue_item_id=queue_item_id,
+                    error="Media item not found",
+                )
 
-            # Step 1: Shift all subsequent items forward by one slot
+            # Shift all subsequent items forward by one slot
             shifted_count = self.queue_repo.shift_slots_forward(queue_item_id)
             if shifted_count > 0:
                 logger.info(f"Shifted {shifted_count} items forward after force-post")
 
-            # Step 2: Send to Telegram for manual posting
-            try:
-                success = await self.telegram_service.send_notification(
-                    queue_item_id,
-                    force_sent=force_sent_indicator,
-                )
+            # Send to Telegram for manual posting
+            return await self._execute_force_post(
+                queue_item_id,
+                media_item,
+                shifted_count,
+                run_id,
+                force_sent_indicator,
+            )
 
-                if success:
-                    # Update status to processing
-                    self.queue_repo.update_status(queue_item_id, "processing")
-                    logger.info(f"Force-posted {media_item.file_name} to Telegram")
+    async def _process_single_pending(self, queue_item) -> Optional[dict]:
+        """Process a single pending queue item.
 
-                    result = {
-                        "success": True,
-                        "queue_item_id": queue_item_id,
-                        "media_item": media_item,
-                        "shifted_count": shifted_count,
-                        "error": None,
-                    }
-                else:
-                    logger.error(
-                        f"Failed to send Telegram notification for {queue_item_id}"
-                    )
-                    result = {
-                        "success": False,
-                        "queue_item_id": queue_item_id,
-                        "media_item": media_item,
-                        "shifted_count": shifted_count,
-                        "error": "Failed to send Telegram notification",
-                    }
+        Looks up the media item, routes the post, and returns the outcome.
 
-            except Exception as e:
-                logger.error(f"Error force-posting queue item {queue_item_id}: {e}")
-                result = {
-                    "success": False,
-                    "queue_item_id": queue_item_id,
-                    "media_item": media_item,
-                    "shifted_count": shifted_count,
-                    "error": str(e),
-                }
+        Args:
+            queue_item: The PostingQueue item to process
 
-            # Create serializable summary (media_item is SQLAlchemy object)
-            summary = {
-                "success": result["success"],
-                "queue_item_id": result["queue_item_id"],
-                "media_file_name": media_item.file_name if media_item else None,
-                "shifted_count": result["shifted_count"],
-                "error": result["error"],
-            }
-            self.set_result_summary(run_id, summary)
-            return result
+        Returns:
+            Dict with "method" and "success" keys from _route_post,
+            or None if the media item was not found.
+        """
+        media_item = self.media_repo.get_by_id(str(queue_item.media_item_id))
+
+        if not media_item:
+            logger.error(f"Media item not found: {queue_item.media_item_id}")
+            return None
+
+        return await self._route_post(queue_item, media_item)
 
     async def process_pending_posts(
         self, user_id: Optional[str] = None, telegram_chat_id: Optional[int] = None
@@ -231,31 +302,19 @@ class PostingService(BaseService):
 
             for queue_item in pending_items:
                 try:
-                    # Get media item
-                    media_item = self.media_repo.get_by_id(
-                        str(queue_item.media_item_id)
-                    )
+                    route_result = await self._process_single_pending(queue_item)
 
-                    if not media_item:
-                        logger.error(
-                            f"Media item not found: {queue_item.media_item_id}"
-                        )
+                    if route_result is None:
+                        # Media not found — count as failed, skip processing
                         failed_count += 1
                         continue
 
-                    # Route based on settings and media type
-                    route_result = await self._route_post(queue_item, media_item)
-
-                    if route_result["method"] == "instagram_api":
-                        if route_result["success"]:
-                            automated_count += 1
-                        else:
-                            failed_count += 1
+                    if not route_result["success"]:
+                        failed_count += 1
+                    elif route_result["method"] == "instagram_api":
+                        automated_count += 1
                     else:  # telegram_manual
-                        if route_result["success"]:
-                            telegram_count += 1
-                        else:
-                            failed_count += 1
+                        telegram_count += 1
 
                     processed_count += 1
 
@@ -298,13 +357,9 @@ class PostingService(BaseService):
         if not overdue_items:
             return {"rescheduled": 0, "chat_id": telegram_chat_id}
 
-        now = datetime.utcnow()
-        for item in overdue_items:
-            while item.scheduled_for <= now:
-                item.scheduled_for = item.scheduled_for + timedelta(hours=24)
-
-        self.queue_repo.db.commit()
-        rescheduled = len(overdue_items)
+        rescheduled = self.queue_repo.reschedule_items(
+            overdue_items, timedelta(hours=24)
+        )
 
         if rescheduled > 0:
             logger.info(
