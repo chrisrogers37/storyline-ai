@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Posting service complexity reduction** — Flattened nesting in `force_post_next()` and `process_pending_posts()`, extracted helper methods (`_build_force_post_result`, `_execute_force_post`, `_process_single_pending`), moved `db.commit()` from service to new `QueueRepository.reschedule_items()` method
+
 ### Removed
 - **Dead code in PostingService** — Removed ~258 lines of unreachable code from `posting.py`: `handle_completion()`, `_post_via_instagram()`, `_cleanup_cloud_media()`, `process_next_immediate()`, and related lazy-load properties for Instagram/cloud services. All posting now routes through Telegram; Instagram API posting happens via callback handler, not `PostingService`.
 
