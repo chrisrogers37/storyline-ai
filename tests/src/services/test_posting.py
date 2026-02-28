@@ -1,7 +1,7 @@
 """Tests for PostingService."""
 
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 from contextlib import contextmanager
 from uuid import uuid4
 
@@ -55,6 +55,101 @@ class TestPostingService:
 
         assert result["success"] is False
         assert result["error"] == "No pending items in queue"
+
+
+@pytest.mark.unit
+class TestBuildForcePostResult:
+    """Tests for _build_force_post_result helper."""
+
+    def test_status_only(self, posting_service):
+        """Build result with status only — defaults filled in."""
+        result = posting_service._build_force_post_result("empty")
+
+        assert result["success"] is False
+        assert result["queue_item_id"] is None
+        assert result["media_item"] is None
+        assert result["shifted_count"] == 0
+        assert result["error"] is None
+
+    def test_success_status(self, posting_service):
+        """Build result with success status — success is True."""
+        result = posting_service._build_force_post_result("success")
+
+        assert result["success"] is True
+
+    def test_with_kwargs(self, posting_service):
+        """Build result with extra kwargs — merged into result."""
+        result = posting_service._build_force_post_result(
+            "success",
+            queue_item_id="abc-123",
+            shifted_count=3,
+        )
+
+        assert result["success"] is True
+        assert result["queue_item_id"] == "abc-123"
+        assert result["shifted_count"] == 3
+
+    def test_with_run_id_sets_summary(self, posting_service):
+        """Build result with run_id — calls set_result_summary."""
+        mock_media = Mock(file_name="test.jpg")
+        result = posting_service._build_force_post_result(
+            "success",
+            run_id="run-xyz",
+            queue_item_id="abc-123",
+            media_item=mock_media,
+            shifted_count=2,
+        )
+
+        assert result["success"] is True
+        posting_service.set_result_summary.assert_called_once()
+        summary = posting_service.set_result_summary.call_args[0][1]
+        assert summary["media_file_name"] == "test.jpg"
+        assert summary["shifted_count"] == 2
+
+    def test_without_run_id_skips_summary(self, posting_service):
+        """Build result without run_id — does not call set_result_summary."""
+        posting_service._build_force_post_result("empty")
+
+        posting_service.set_result_summary.assert_not_called()
+
+    def test_error_kwarg_overrides_default(self, posting_service):
+        """Error kwarg overrides default None."""
+        result = posting_service._build_force_post_result(
+            "error", error="Something broke"
+        )
+
+        assert result["error"] == "Something broke"
+        assert result["success"] is False
+
+
+@pytest.mark.unit
+class TestProcessSinglePending:
+    """Tests for _process_single_pending helper."""
+
+    @pytest.mark.asyncio
+    async def test_media_not_found_returns_none(self, posting_service):
+        """Returns None when media item is not found."""
+        queue_item = Mock(media_item_id=uuid4())
+        posting_service.media_repo.get_by_id.return_value = None
+
+        result = await posting_service._process_single_pending(queue_item)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_routes_post_when_media_found(self, posting_service):
+        """Delegates to _route_post when media is found."""
+        queue_item = Mock(media_item_id=uuid4())
+        media_item = Mock(file_name="test.jpg")
+        posting_service.media_repo.get_by_id.return_value = media_item
+        posting_service._route_post = AsyncMock(
+            return_value={"method": "telegram_manual", "success": True}
+        )
+
+        result = await posting_service._process_single_pending(queue_item)
+
+        assert result == {"method": "telegram_manual", "success": True}
+        posting_service._route_post.assert_called_once_with(queue_item, media_item)
 
 
 @pytest.mark.unit
