@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Google Drive token expiry error handling** — When Google Drive OAuth token expires or is revoked, `/next` now shows a "Reconnect Google Drive" button instead of a generic "Failed to send. Check logs for details." error. `GoogleDriveAuthError` propagates from `send_notification()` instead of being swallowed, with automatic detection of `google.auth.RefreshError` in the exception chain. `PostingService` catches the error in `_execute_force_post`, `_post_via_telegram`, and `process_pending_posts`, sending a rate-limited (1/hr) proactive alert to Telegram when scheduled posting fails due to auth issues.
+- **Stale Google Drive token detection** — `/status` now shows "Needs Reconnection" instead of "Connected" when the access token expired more than 7 days ago. Dashboard API returns `gdrive_needs_reconnect` flag for the same condition.
+
 ### Changed
 - **Telegram service split** — Extracted `TelegramNotificationService` (~280 lines) from `telegram_service.py` (795 -> 533 lines), isolating notification sending, caption building, keyboard construction, and header emoji logic into a dedicated module. `TelegramService` keeps thin delegation methods for backward compatibility.
 - **Repository query builder** — Added `_tenant_query()` helper to BaseRepository, refactored 34 instances across 5 repository files to eliminate repeated tenant filtering boilerplate

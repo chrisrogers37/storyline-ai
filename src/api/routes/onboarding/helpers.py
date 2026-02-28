@@ -2,6 +2,7 @@
 
 import re
 from contextlib import contextmanager
+from datetime import datetime, timedelta
 
 from fastapi import HTTPException
 
@@ -72,6 +73,7 @@ def _get_setup_state(telegram_chat_id: int) -> dict:
         # Check Google Drive connection
         gdrive_connected = False
         gdrive_email = None
+        gdrive_needs_reconnect = False
         gdrive_token = token_repo.get_token_for_chat(
             "google_drive", "oauth_access", chat_settings_id
         )
@@ -80,6 +82,12 @@ def _get_setup_state(telegram_chat_id: int) -> dict:
             # Email stored in token_metadata dict
             if gdrive_token.token_metadata:
                 gdrive_email = gdrive_token.token_metadata.get("email")
+            # Detect stale token (expired >7 days ago)
+            if (
+                gdrive_token.expires_at
+                and gdrive_token.expires_at < datetime.utcnow() - timedelta(days=7)
+            ):
+                gdrive_needs_reconnect = True
 
         # Check media folder configuration
         media_folder_configured = bool(chat_settings.media_source_root)
@@ -124,6 +132,7 @@ def _get_setup_state(telegram_chat_id: int) -> dict:
             "instagram_username": instagram_username,
             "gdrive_connected": gdrive_connected,
             "gdrive_email": gdrive_email,
+            "gdrive_needs_reconnect": gdrive_needs_reconnect,
             "media_folder_configured": media_folder_configured,
             "media_folder_id": media_folder_id,
             "media_indexed": media_indexed,

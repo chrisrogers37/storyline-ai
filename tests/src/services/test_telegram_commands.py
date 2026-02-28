@@ -706,6 +706,7 @@ class TestSetupStatusGoogleDrive:
 
         mock_token = Mock()
         mock_token.token_metadata = {"email": "user@gmail.com"}
+        mock_token.expires_at = None
 
         mock_settings_obj = Mock()
         mock_settings_obj.id = "fake-uuid"
@@ -756,6 +757,116 @@ class TestSetupStatusGoogleDrive:
         line, ok = handlers._check_gdrive_setup(-100123)
         assert "Check failed" in line
         assert ok is False
+
+    def test_gdrive_stale_token_shows_needs_reconnection(self, mock_command_handlers):
+        """Test Google Drive shows 'Needs Reconnection' for stale expired token."""
+        from datetime import timedelta
+
+        handlers = mock_command_handlers
+
+        mock_token = Mock()
+        mock_token.token_metadata = {"email": "user@gmail.com"}
+        # Expired 10 days ago (>7 day threshold)
+        mock_token.expires_at = datetime.utcnow() - timedelta(days=10)
+
+        mock_settings_obj = Mock()
+        mock_settings_obj.id = "fake-uuid"
+        handlers.service.settings_service.get_settings.return_value = mock_settings_obj
+
+        with patch(
+            "src.repositories.token_repository.TokenRepository"
+        ) as MockTokenRepo:
+            mock_repo_instance = MockTokenRepo.return_value
+            mock_repo_instance.__enter__ = Mock(return_value=mock_repo_instance)
+            mock_repo_instance.__exit__ = Mock(return_value=False)
+            mock_repo_instance.get_token_for_chat.return_value = mock_token
+
+            line, ok = handlers._check_gdrive_setup(-100123)
+
+        assert "Needs Reconnection" in line
+        assert ok is False
+
+    def test_gdrive_recently_expired_still_shows_connected(self, mock_command_handlers):
+        """Token expired 2 days ago (< 7 day threshold) still shows Connected."""
+        from datetime import timedelta
+
+        handlers = mock_command_handlers
+
+        mock_token = Mock()
+        mock_token.token_metadata = {"email": "user@gmail.com"}
+        # Expired 2 days ago (within 7 day threshold)
+        mock_token.expires_at = datetime.utcnow() - timedelta(days=2)
+
+        mock_settings_obj = Mock()
+        mock_settings_obj.id = "fake-uuid"
+        handlers.service.settings_service.get_settings.return_value = mock_settings_obj
+
+        with patch(
+            "src.repositories.token_repository.TokenRepository"
+        ) as MockTokenRepo:
+            mock_repo_instance = MockTokenRepo.return_value
+            mock_repo_instance.__enter__ = Mock(return_value=mock_repo_instance)
+            mock_repo_instance.__exit__ = Mock(return_value=False)
+            mock_repo_instance.get_token_for_chat.return_value = mock_token
+
+            line, ok = handlers._check_gdrive_setup(-100123)
+
+        assert "Connected" in line
+        assert "user@gmail.com" in line
+        assert ok is True
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestHandleNextGDriveAuthError:
+    """Tests for /next handling of Google Drive auth errors."""
+
+    async def test_next_gdrive_auth_error_shows_reconnect(self, mock_command_handlers):
+        """Test /next shows reconnect message for google_drive_auth_expired error."""
+        handlers = mock_command_handlers
+        service = handlers.service
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        service.user_repo.get_by_telegram_id.return_value = None
+        service.user_repo.create.return_value = mock_user
+
+        mock_posting_service = Mock()
+        mock_posting_service.force_post_next = AsyncMock(
+            return_value={
+                "success": False,
+                "error": "google_drive_auth_expired",
+            }
+        )
+        mock_posting_service.__enter__ = Mock(return_value=mock_posting_service)
+        mock_posting_service.__exit__ = Mock(return_value=False)
+
+        mock_update = Mock()
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
+        mock_update.effective_chat = Mock(id=-100123)
+        mock_update.message = AsyncMock()
+        mock_update.message.message_id = 1
+
+        mock_context = Mock()
+
+        with (
+            patch(
+                "src.services.core.posting.PostingService",
+                return_value=mock_posting_service,
+            ),
+            patch("src.services.core.telegram_commands.settings") as mock_settings,
+        ):
+            mock_settings.OAUTH_REDIRECT_BASE_URL = "https://app.example.com"
+            await handlers.handle_next(mock_update, mock_context)
+
+        call_args = mock_update.message.reply_text.call_args
+        message_text = call_args.args[0]
+        assert "Disconnected" in message_text
+        # Should include reconnect button
+        reply_markup = call_args.kwargs.get("reply_markup")
+        assert reply_markup is not None
 
 
 @pytest.mark.unit
