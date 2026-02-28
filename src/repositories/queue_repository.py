@@ -213,6 +213,27 @@ class QueueRepository(BaseRepository):
         self.db.commit()
         return count
 
+    def reschedule_items(self, items: List[PostingQueue], delta: timedelta) -> int:
+        """Reschedule items by adding delta to their scheduled_for time.
+
+        Applies the delta repeatedly per item until scheduled_for is in the
+        future (past ``now``).  A single pass is the common case; multiple
+        passes handle items that are several periods overdue.
+
+        Args:
+            items: List of PostingQueue items to reschedule
+            delta: Time delta to add to each item's scheduled_for
+
+        Returns:
+            Number of items rescheduled
+        """
+        now = datetime.utcnow()
+        for item in items:
+            while item.scheduled_for <= now:
+                item.scheduled_for = item.scheduled_for + delta
+        self.db.commit()
+        return len(items)
+
     def shift_slots_forward(
         self, from_item_id: str, chat_settings_id: Optional[str] = None
     ) -> int:
