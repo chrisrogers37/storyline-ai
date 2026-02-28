@@ -127,10 +127,13 @@ def mock_backfill_service():
     with (
         patch.object(InstagramBackfillService, "__init__", lambda self: None),
     ):
+        from src.services.integrations.backfill_downloader import BackfillDownloader
+
         service = InstagramBackfillService()
         service.instagram_service = MagicMock()
         service.media_repo = MagicMock()
         service.service_run_repo = MagicMock()
+        service.downloader = BackfillDownloader(service)
 
         # Set up track_execution context manager
         service.track_execution = MagicMock()
@@ -491,7 +494,7 @@ class TestBackfillCarousel:
             "username": "testuser",
         }
 
-        mock_backfill_service._fetch_carousel_children = AsyncMock(
+        mock_backfill_service.downloader.fetch_carousel_children = AsyncMock(
             return_value={
                 "data": [
                     {
@@ -507,7 +510,7 @@ class TestBackfillCarousel:
                 ]
             }
         )
-        mock_backfill_service._download_and_index = AsyncMock()
+        mock_backfill_service.downloader.download_and_index = AsyncMock()
 
         await mock_backfill_service._process_carousel(ctx, item=carousel_item)
 
@@ -526,7 +529,7 @@ class TestBackfillCarousel:
             "username": "parent_user",
         }
 
-        mock_backfill_service._fetch_carousel_children = AsyncMock(
+        mock_backfill_service.downloader.fetch_carousel_children = AsyncMock(
             return_value={
                 "data": [
                     {
@@ -537,7 +540,7 @@ class TestBackfillCarousel:
                 ]
             }
         )
-        mock_backfill_service._download_and_index = AsyncMock()
+        mock_backfill_service.downloader.download_and_index = AsyncMock()
 
         await mock_backfill_service._process_carousel(ctx, item=carousel_item)
 
@@ -552,7 +555,7 @@ class TestBackfillCarousel:
             "media_type": "CAROUSEL_ALBUM",
         }
 
-        mock_backfill_service._fetch_carousel_children = AsyncMock(
+        mock_backfill_service.downloader.fetch_carousel_children = AsyncMock(
             return_value={
                 "data": [
                     {
@@ -568,7 +571,7 @@ class TestBackfillCarousel:
                 ]
             }
         )
-        mock_backfill_service._download_and_index = AsyncMock(
+        mock_backfill_service.downloader.download_and_index = AsyncMock(
             side_effect=[None, Exception("Download error")]
         )
 
@@ -581,7 +584,7 @@ class TestBackfillCarousel:
         """API error fetching children counts as failed."""
         ctx = make_ctx()
 
-        mock_backfill_service._fetch_carousel_children = AsyncMock(
+        mock_backfill_service.downloader.fetch_carousel_children = AsyncMock(
             side_effect=InstagramAPIError("API error")
         )
 
@@ -773,7 +776,9 @@ class TestDownloadAndIndex:
     async def test_creates_record(self, mock_backfill_service, make_ctx, tmp_path):
         """media_repo.create() called with correct args."""
         ctx = make_ctx(storage_dir=tmp_path)
-        mock_backfill_service._download_media = AsyncMock(return_value=b"test_bytes")
+        mock_backfill_service.downloader.download_media = AsyncMock(
+            return_value=b"test_bytes"
+        )
         mock_media_item = MagicMock()
         mock_backfill_service.media_repo.create.return_value = mock_media_item
 
@@ -800,7 +805,9 @@ class TestDownloadAndIndex:
     async def test_filename_format(self, mock_backfill_service, make_ctx, tmp_path):
         """Filename follows YYYYMMDD_HHMMSS_{id}.{ext} format."""
         ctx = make_ctx(storage_dir=tmp_path)
-        mock_backfill_service._download_media = AsyncMock(return_value=b"bytes")
+        mock_backfill_service.downloader.download_media = AsyncMock(
+            return_value=b"bytes"
+        )
         mock_backfill_service.media_repo.create.return_value = MagicMock()
 
         await mock_backfill_service._download_and_index(
@@ -863,7 +870,7 @@ class TestHelpers:
         since = datetime(2025, 1, 1)
         assert mock_backfill_service._is_after_date(item, since) is True
 
-    @patch("src.services.integrations.instagram_backfill.settings")
+    @patch("src.services.integrations.backfill_downloader.settings")
     def test_get_storage_dir(self, mock_settings, mock_backfill_service):
         """Returns MEDIA_DIR/instagram_backfill."""
         mock_settings.MEDIA_DIR = "/home/pi/media"

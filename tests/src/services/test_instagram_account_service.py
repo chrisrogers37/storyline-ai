@@ -46,6 +46,7 @@ def service(mock_account_repo, mock_settings_repo, mock_token_repo):
         patch(
             "src.services.core.instagram_account_service.TokenRepository"
         ) as MockTokenRepo,
+        patch("src.services.core.instagram_account_service.TokenEncryption"),
     ):
         MockAccountRepo.return_value = mock_account_repo
         MockSettingsRepo.return_value = mock_settings_repo
@@ -459,6 +460,7 @@ class TestSeparationOfConcerns:
             ),
             patch("src.services.core.instagram_account_service.ChatSettingsRepository"),
             patch("src.services.core.instagram_account_service.TokenRepository"),
+            patch("src.services.core.instagram_account_service.TokenEncryption"),
         ):
             service = InstagramAccountService()
 

@@ -528,7 +528,7 @@ class TestAddAccountFlow:
         mock_http_client.get = AsyncMock(return_value=mock_response)
 
         with patch(
-            "src.services.core.telegram_accounts.httpx.AsyncClient"
+            "src.services.core.telegram_account_wizard.httpx.AsyncClient"
         ) as mock_client:
             mock_client.return_value.__aenter__ = AsyncMock(
                 return_value=mock_http_client
@@ -584,7 +584,7 @@ class TestAddAccountFlow:
         mock_http_client.get = AsyncMock(return_value=mock_response)
 
         with patch(
-            "src.services.core.telegram_accounts.httpx.AsyncClient"
+            "src.services.core.telegram_account_wizard.httpx.AsyncClient"
         ) as mock_client:
             mock_client.return_value.__aenter__ = AsyncMock(
                 return_value=mock_http_client
@@ -623,7 +623,7 @@ class TestAddAccountFlow:
         mock_http_client.get = AsyncMock(return_value=mock_response)
 
         with patch(
-            "src.services.core.telegram_accounts.httpx.AsyncClient"
+            "src.services.core.telegram_account_wizard.httpx.AsyncClient"
         ) as mock_client:
             mock_client.return_value.__aenter__ = AsyncMock(
                 return_value=mock_http_client
@@ -661,7 +661,7 @@ class TestAddAccountFlow:
         mock_http_client.get = AsyncMock(return_value=mock_response)
 
         with patch(
-            "src.services.core.telegram_accounts.httpx.AsyncClient"
+            "src.services.core.telegram_account_wizard.httpx.AsyncClient"
         ) as mock_client:
             mock_client.return_value.__aenter__ = AsyncMock(
                 return_value=mock_http_client
@@ -799,7 +799,7 @@ class TestAddAccountFlow:
         mock_http_client.get = AsyncMock(return_value=mock_response)
 
         with patch(
-            "src.services.core.telegram_accounts.httpx.AsyncClient"
+            "src.services.core.telegram_account_wizard.httpx.AsyncClient"
         ) as mock_client:
             mock_client.return_value.__aenter__ = AsyncMock(
                 return_value=mock_http_client
