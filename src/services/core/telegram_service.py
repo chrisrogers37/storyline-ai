@@ -331,7 +331,12 @@ class TelegramService(BaseService):
 
             logger.info(f"📞 Callback received: {query.data}")
 
-            await query.answer()
+            try:
+                await query.answer()
+            except Exception:
+                logger.debug(
+                    f"Could not answer callback query (may be stale): {query.data}"
+                )
 
             # Parse callback data
             # Split on FIRST colon only, so data can contain colons (e.g., sap:queue_id:account_id)

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Stale callback crash in button handlers** — Inline button clicks (Auto Post, Posted, Skip, etc.) during deploy transitions would silently fail with "Query is too old" error, preventing the actual action from executing. `_handle_callback` now catches stale `query.answer()` failures gracefully and continues processing the callback.
 - **Google Drive token expiry error handling** — When Google Drive OAuth token expires or is revoked, `/next` now shows a "Reconnect Google Drive" button instead of a generic "Failed to send. Check logs for details." error. `GoogleDriveAuthError` propagates from `send_notification()` instead of being swallowed, with automatic detection of `google.auth.RefreshError` in the exception chain. `PostingService` catches the error in `_execute_force_post`, `_post_via_telegram`, and `process_pending_posts`, sending a rate-limited (1/hr) proactive alert to Telegram when scheduled posting fails due to auth issues.
 - **Stale Google Drive token detection** — `/status` now shows "Needs Reconnection" instead of "Connected" when the access token expired more than 7 days ago. Dashboard API returns `gdrive_needs_reconnect` flag for the same condition.
 
