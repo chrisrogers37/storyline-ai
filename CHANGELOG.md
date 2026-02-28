@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Dead code in PostingService** — Removed ~258 lines of unreachable code from `posting.py`: `handle_completion()`, `_post_via_instagram()`, `_cleanup_cloud_media()`, `process_next_immediate()`, and related lazy-load properties for Instagram/cloud services. All posting now routes through Telegram; Instagram API posting happens via callback handler, not `PostingService`.
 
 ### Changed
+- **Large file splits (3 extractions)** — Reduced three files that exceeded 680 lines each by extracting focused composition classes:
+  - `TelegramAccountWizard` from `telegram_accounts.py` (720 → 409 lines) — multi-step account-adding wizard flow
+  - `BackfillDownloader` from `instagram_backfill.py` (698 → 463 lines) — media downloading, API calls, and storage
+  - `InstagramCredentialManager` from `instagram_api.py` (686 → 395 lines) — credential management, validation, and safety checks
+  - All three use composition pattern (not inheritance), preserving public API via thin delegation methods
 - **API error handling deduplicated** — Extracted `service_error_handler()` context manager in `helpers.py` to replace 9 identical `try/except ValueError → HTTPException(400)` blocks across 3 route files (settings.py, setup.py, oauth.py). Two compound-pattern instances intentionally left explicit for safety.
 - **setup.py dependencies synced** — Added 8 missing runtime dependencies to `setup.py` that were in `requirements.txt`: alembic, cloudinary, cryptography, fastapi, google-api-python-client, google-auth, google-auth-oauthlib, uvicorn
 - **Onboarding routes split into package** — Split monolithic 859-line `onboarding.py` into focused submodules: `models.py`, `helpers.py`, `setup.py`, `dashboard.py`, `settings.py`. Consolidated lazy imports to module-level. No functional changes.

@@ -162,9 +162,7 @@ class InstagramCredentialManager:
             "reason": "Account ID format is valid",
         }
 
-    async def get_account_info(
-        self, telegram_chat_id: Optional[int] = None
-    ) -> dict:
+    async def get_account_info(self, telegram_chat_id: Optional[int] = None) -> dict:
         """
         Fetch Instagram account info (username, name, etc.) from the API.
 
@@ -277,9 +275,7 @@ class InstagramCredentialManager:
                 "error": str(e),
             }
 
-    def safety_check_before_post(
-        self, telegram_chat_id: Optional[int] = None
-    ) -> dict:
+    def safety_check_before_post(self, telegram_chat_id: Optional[int] = None) -> dict:
         """
         CRITICAL SAFETY GATE: Run all safety checks before posting.
 
