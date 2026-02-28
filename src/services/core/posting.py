@@ -1,8 +1,10 @@
 """Posting service - orchestrate the posting process."""
 
+import time
 from datetime import timedelta
 from typing import Optional
 
+from src.exceptions.google_drive import GoogleDriveAuthError
 from src.services.base_service import BaseService
 from src.services.core.telegram_service import TelegramService
 from src.services.core.media_lock import MediaLockService
@@ -16,6 +18,9 @@ from src.utils.logger import logger
 
 class PostingService(BaseService):
     """Orchestrate the posting process."""
+
+    # Rate-limit auth alerts to 1 per hour (class-level shared across instances)
+    _last_gdrive_alert_time: float = 0.0
 
     def __init__(self):
         super().__init__()
@@ -127,6 +132,17 @@ class PostingService(BaseService):
                 queue_item_id=queue_item_id,
                 media_item=media_item,
                 shifted_count=shifted_count,
+            )
+
+        except GoogleDriveAuthError as e:
+            logger.error(f"Google Drive auth error force-posting {queue_item_id}: {e}")
+            return self._build_force_post_result(
+                "error",
+                run_id,
+                queue_item_id=queue_item_id,
+                media_item=media_item,
+                shifted_count=shifted_count,
+                error="google_drive_auth_expired",
             )
 
         except Exception as e:
@@ -318,6 +334,15 @@ class PostingService(BaseService):
 
                     processed_count += 1
 
+                except GoogleDriveAuthError as e:
+                    logger.error(
+                        f"Google Drive auth error processing queue — "
+                        f"stopping batch: {e}"
+                    )
+                    failed_count += 1
+                    await self._send_gdrive_auth_alert(telegram_chat_id)
+                    break  # All subsequent items will fail too
+
                 except Exception as e:
                     logger.error(f"Error processing queue item {queue_item.id}: {e}")
                     failed_count += 1
@@ -410,6 +435,17 @@ class PostingService(BaseService):
 
             return success
 
+        except GoogleDriveAuthError:
+            logger.error(
+                f"Google Drive auth error for queue item {queue_item.id} — "
+                "rolling back to pending"
+            )
+            try:
+                self.queue_repo.update_status(queue_item_id, "pending")
+            except Exception:
+                pass  # Best-effort rollback
+            raise
+
         except Exception as e:
             logger.error(f"Error sending to Telegram: {e}")
             # Release the item back to pending on exception
@@ -439,3 +475,62 @@ class PostingService(BaseService):
         # Instagram API posting happens via the "Auto Post" button callback
         success = await self._post_via_telegram(queue_item)
         return {"method": "telegram_manual", "success": success}
+
+    async def _send_gdrive_auth_alert(
+        self, telegram_chat_id: Optional[int] = None
+    ) -> None:
+        """Send a proactive Google Drive reconnect alert to Telegram.
+
+        Rate-limited to at most once per hour to avoid spamming the channel.
+        """
+        now = time.monotonic()
+        if now - PostingService._last_gdrive_alert_time < 3600:
+            logger.debug("Skipping Google Drive auth alert (rate-limited)")
+            return
+
+        PostingService._last_gdrive_alert_time = now
+
+        chat_id = telegram_chat_id or settings.ADMIN_TELEGRAM_CHAT_ID
+        if not chat_id:
+            return
+
+        try:
+            from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
+
+            bot = Bot(token=self.telegram_service.bot_token)
+
+            reconnect_url = None
+            if settings.OAUTH_REDIRECT_BASE_URL:
+                reconnect_url = (
+                    f"{settings.OAUTH_REDIRECT_BASE_URL}"
+                    f"/auth/google-drive/start?chat_id={chat_id}"
+                )
+
+            text = (
+                "⚠️ *Google Drive Disconnected*\n\n"
+                "Your Google Drive token has expired or been revoked. "
+                "Scheduled posts are paused until you reconnect."
+            )
+
+            reply_markup = None
+            if reconnect_url:
+                reply_markup = InlineKeyboardMarkup(
+                    [
+                        [
+                            InlineKeyboardButton(
+                                "🔗 Reconnect Google Drive", url=reconnect_url
+                            )
+                        ]
+                    ]
+                )
+
+            await bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                parse_mode="Markdown",
+                reply_markup=reply_markup,
+            )
+            logger.info("Sent Google Drive auth alert to Telegram")
+
+        except Exception as e:
+            logger.error(f"Failed to send Google Drive auth alert: {e}")

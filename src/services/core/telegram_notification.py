@@ -3,7 +3,26 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from src.config.settings import settings
+from src.exceptions.google_drive import GoogleDriveAuthError
 from src.utils.logger import logger
+
+
+def _is_google_auth_error(exc: Exception) -> bool:
+    """Check if an exception is a Google auth/refresh error.
+
+    Walks the ``__cause__`` chain to detect
+    ``google.auth.exceptions.RefreshError`` without requiring the
+    google-auth package as a hard import (it may not be installed in
+    all environments).
+    """
+    current = exc
+    while current is not None:
+        type_name = type(current).__qualname__
+        module = type(current).__module__ or ""
+        if "RefreshError" in type_name and "google" in module:
+            return True
+        current = getattr(current, "__cause__", None)
+    return False
 
 
 def _extract_button_labels(reply_markup) -> list:
@@ -133,7 +152,13 @@ class TelegramNotificationService:
             logger.info(f"Sent Telegram notification for {media_item.file_name}")
             return True
 
+        except GoogleDriveAuthError:
+            raise
         except Exception as e:
+            if _is_google_auth_error(e):
+                raise GoogleDriveAuthError(
+                    f"Google Drive token expired or revoked: {e}"
+                ) from e
             logger.error(f"Failed to send Telegram notification: {e}")
             return False
 

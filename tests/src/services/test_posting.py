@@ -1,10 +1,13 @@
 """Tests for PostingService."""
 
+import time
+
 import pytest
 from unittest.mock import AsyncMock, Mock, patch
 from contextlib import contextmanager
 from uuid import uuid4
 
+from src.exceptions.google_drive import GoogleDriveAuthError
 from src.services.core.posting import PostingService
 
 
@@ -230,3 +233,127 @@ class TestPostingServiceTenantSupport:
         posting_service._get_chat_settings()
 
         posting_service.settings_service.get_settings.assert_called_with(-100123)
+
+
+@pytest.mark.unit
+class TestGoogleDriveAuthErrorHandling:
+    """Tests for GoogleDriveAuthError handling across PostingService methods."""
+
+    @pytest.mark.asyncio
+    async def test_execute_force_post_returns_auth_expired_error(self, posting_service):
+        """_execute_force_post returns google_drive_auth_expired on GoogleDriveAuthError."""
+        posting_service.telegram_service.send_notification = AsyncMock(
+            side_effect=GoogleDriveAuthError("Token expired")
+        )
+
+        result = await posting_service._execute_force_post(
+            queue_item_id="q-123",
+            media_item=Mock(file_name="test.jpg"),
+            shifted_count=0,
+            run_id="run-1",
+            force_sent_indicator=True,
+        )
+
+        assert result["success"] is False
+        assert result["error"] == "google_drive_auth_expired"
+
+    @pytest.mark.asyncio
+    async def test_execute_force_post_generic_error_still_works(self, posting_service):
+        """_execute_force_post still handles generic errors correctly."""
+        posting_service.telegram_service.send_notification = AsyncMock(
+            side_effect=RuntimeError("Network failure")
+        )
+
+        result = await posting_service._execute_force_post(
+            queue_item_id="q-123",
+            media_item=Mock(file_name="test.jpg"),
+            shifted_count=0,
+            run_id="run-1",
+            force_sent_indicator=True,
+        )
+
+        assert result["success"] is False
+        assert result["error"] == "Network failure"
+
+    @pytest.mark.asyncio
+    async def test_post_via_telegram_reraises_auth_error(self, posting_service):
+        """_post_via_telegram re-raises GoogleDriveAuthError after rollback."""
+        posting_service.telegram_service.send_notification = AsyncMock(
+            side_effect=GoogleDriveAuthError("Token revoked")
+        )
+        queue_item = Mock(id=uuid4())
+
+        with pytest.raises(GoogleDriveAuthError, match="Token revoked"):
+            await posting_service._post_via_telegram(queue_item)
+
+        # Should have rolled back status to pending
+        posting_service.queue_repo.update_status.assert_any_call(
+            str(queue_item.id), "pending"
+        )
+
+    @pytest.mark.asyncio
+    async def test_process_pending_posts_sends_alert_and_breaks(self, posting_service):
+        """process_pending_posts sends alert and breaks on GoogleDriveAuthError."""
+        mock_chat_settings = Mock()
+        mock_chat_settings.is_paused = False
+        mock_chat_settings.id = uuid4()
+        posting_service.settings_service.get_settings.return_value = mock_chat_settings
+
+        queue_item = Mock(id=uuid4(), media_item_id=uuid4())
+        posting_service.queue_repo.get_pending.return_value = [queue_item]
+
+        # Mock _process_single_pending to raise auth error
+        posting_service._process_single_pending = AsyncMock(
+            side_effect=GoogleDriveAuthError("Token expired")
+        )
+        posting_service._send_gdrive_auth_alert = AsyncMock()
+
+        result = await posting_service.process_pending_posts(telegram_chat_id=-100456)
+
+        assert result["failed"] == 1
+        posting_service._send_gdrive_auth_alert.assert_called_once_with(-100456)
+
+    @pytest.mark.asyncio
+    @patch("src.services.core.posting.settings")
+    async def test_gdrive_auth_alert_rate_limited(self, mock_settings, posting_service):
+        """_send_gdrive_auth_alert is rate-limited to once per hour."""
+        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
+        mock_settings.OAUTH_REDIRECT_BASE_URL = "https://example.com"
+        posting_service.telegram_service.bot_token = "test-token"
+
+        # Set last alert time to now (simulate recent alert)
+        PostingService._last_gdrive_alert_time = time.monotonic()
+
+        with patch("telegram.Bot") as MockBot:
+            await posting_service._send_gdrive_auth_alert(-100123)
+
+        # Should NOT have sent because rate-limited
+        MockBot.assert_not_called()
+
+        # Reset for other tests
+        PostingService._last_gdrive_alert_time = 0.0
+
+    @pytest.mark.asyncio
+    @patch("src.services.core.posting.settings")
+    async def test_gdrive_auth_alert_sends_when_not_rate_limited(
+        self, mock_settings, posting_service
+    ):
+        """_send_gdrive_auth_alert sends when not recently sent."""
+        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
+        mock_settings.OAUTH_REDIRECT_BASE_URL = "https://example.com"
+        posting_service.telegram_service.bot_token = "test-token"
+
+        # Ensure not rate-limited
+        PostingService._last_gdrive_alert_time = 0.0
+
+        mock_bot_instance = AsyncMock()
+        with patch("telegram.Bot", return_value=mock_bot_instance):
+            await posting_service._send_gdrive_auth_alert(-100123)
+
+        mock_bot_instance.send_message.assert_called_once()
+        call_kwargs = mock_bot_instance.send_message.call_args.kwargs
+        assert "Disconnected" in call_kwargs["text"]
+        assert call_kwargs["reply_markup"] is not None
+
+        # Reset for other tests
+        PostingService._last_gdrive_alert_time = 0.0

@@ -182,7 +182,7 @@ class TestOnboardingInit:
     def test_init_shows_connected_gdrive(self, client):
         """When Google Drive is connected, setup_state reflects it."""
         mock_settings = _mock_settings_obj()
-        mock_token = Mock(token_metadata={"email": "user@gmail.com"})
+        mock_token = Mock(token_metadata={"email": "user@gmail.com"}, expires_at=None)
 
         with (
             _mock_validate(),
@@ -225,6 +225,59 @@ class TestOnboardingInit:
         data = response.json()
         assert data["setup_state"]["gdrive_connected"] is True
         assert data["setup_state"]["gdrive_email"] == "user@gmail.com"
+        assert data["setup_state"]["gdrive_needs_reconnect"] is False
+
+    def test_init_shows_gdrive_needs_reconnect(self, client):
+        """When Google Drive token is stale (expired >7 days), flag is set."""
+        from datetime import datetime as dt, timedelta
+
+        mock_settings = _mock_settings_obj()
+        mock_token = Mock(
+            token_metadata={"email": "user@gmail.com"},
+            expires_at=dt.utcnow() - timedelta(days=10),
+        )
+
+        with (
+            _mock_validate(),
+            patch(
+                "src.api.routes.onboarding.helpers.ChatSettingsRepository"
+            ) as MockSettingsRepo,
+            patch("src.api.routes.onboarding.helpers.TokenRepository") as MockTokenRepo,
+            patch(
+                "src.api.routes.onboarding.helpers.InstagramAccountService"
+            ) as MockIGService,
+            patch(
+                "src.api.routes.onboarding.setup.SettingsService"
+            ) as MockSettingsService,
+        ):
+            MockSettingsRepo.return_value.get_or_create.return_value = mock_settings
+            MockSettingsRepo.return_value.__enter__ = Mock(
+                return_value=MockSettingsRepo.return_value
+            )
+            MockSettingsRepo.return_value.__exit__ = Mock(return_value=False)
+            MockTokenRepo.return_value.get_token_for_chat.return_value = mock_token
+            MockTokenRepo.return_value.__enter__ = Mock(
+                return_value=MockTokenRepo.return_value
+            )
+            MockTokenRepo.return_value.__exit__ = Mock(return_value=False)
+            MockIGService.return_value.get_active_account.return_value = None
+            MockIGService.return_value.__enter__ = Mock(
+                return_value=MockIGService.return_value
+            )
+            MockIGService.return_value.__exit__ = Mock(return_value=False)
+            MockSettingsService.return_value.__enter__ = Mock(
+                return_value=MockSettingsService.return_value
+            )
+            MockSettingsService.return_value.__exit__ = Mock(return_value=False)
+
+            response = client.post(
+                "/api/onboarding/init",
+                json={"init_data": "test", "chat_id": CHAT_ID},
+            )
+
+        data = response.json()
+        assert data["setup_state"]["gdrive_connected"] is True
+        assert data["setup_state"]["gdrive_needs_reconnect"] is True
 
     def test_init_invalid_data_returns_401(self, client):
         """Invalid initData returns 401."""

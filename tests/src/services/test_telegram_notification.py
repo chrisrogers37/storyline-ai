@@ -4,9 +4,11 @@ import pytest
 from unittest.mock import Mock, AsyncMock, patch
 from uuid import uuid4
 
+from src.exceptions.google_drive import GoogleDriveAuthError
 from src.services.core.telegram_notification import (
     TelegramNotificationService,
     _extract_button_labels,
+    _is_google_auth_error,
 )
 
 
@@ -636,3 +638,158 @@ class TestSendNotification:
                 result = await notification_service.send_notification("some-id")
 
         assert result is False
+
+    async def test_google_drive_auth_error_propagates(
+        self, notification_service, mock_telegram_service
+    ):
+        """GoogleDriveAuthError from provider should propagate, not be swallowed."""
+        queue_item = Mock(media_item_id=uuid4())
+        media_item = Mock(
+            file_name="test.jpg",
+            title="Test",
+            caption=None,
+            link_url=None,
+            tags=[],
+            source_identifier="test.jpg",
+        )
+
+        mock_telegram_service.queue_repo.get_by_id.return_value = queue_item
+        mock_telegram_service.media_repo.get_by_id.return_value = media_item
+        mock_telegram_service.settings_service.get_settings.return_value = Mock(
+            enable_instagram_api=False,
+            show_verbose_notifications=True,
+        )
+        mock_telegram_service._is_verbose.return_value = True
+        mock_telegram_service.ig_account_service.get_active_account.return_value = None
+
+        mock_provider = Mock()
+        mock_provider.download_file.side_effect = GoogleDriveAuthError("Token expired")
+
+        with patch(
+            "src.services.media_sources.factory.MediaSourceFactory"
+        ) as mock_factory:
+            mock_factory.get_provider_for_media_item.return_value = mock_provider
+
+            with patch(
+                "src.services.core.telegram_notification.settings"
+            ) as mock_settings:
+                mock_settings.CAPTION_STYLE = "enhanced"
+                with pytest.raises(GoogleDriveAuthError, match="Token expired"):
+                    await notification_service.send_notification("some-id")
+
+    async def test_refresh_error_converted_to_google_drive_auth_error(
+        self, notification_service, mock_telegram_service
+    ):
+        """google.auth RefreshError in __cause__ chain should convert to GoogleDriveAuthError."""
+        queue_item = Mock(media_item_id=uuid4())
+        media_item = Mock(
+            file_name="test.jpg",
+            title="Test",
+            caption=None,
+            link_url=None,
+            tags=[],
+            source_identifier="test.jpg",
+        )
+
+        mock_telegram_service.queue_repo.get_by_id.return_value = queue_item
+        mock_telegram_service.media_repo.get_by_id.return_value = media_item
+        mock_telegram_service.settings_service.get_settings.return_value = Mock(
+            enable_instagram_api=False,
+            show_verbose_notifications=True,
+        )
+        mock_telegram_service._is_verbose.return_value = True
+        mock_telegram_service.ig_account_service.get_active_account.return_value = None
+
+        # Simulate a google.auth RefreshError wrapped in a generic exception
+        # Create a fake RefreshError-like class
+        fake_refresh_error = type(
+            "RefreshError", (Exception,), {"__module__": "google.auth.exceptions"}
+        )("token revoked")
+        wrapper = RuntimeError("Download failed")
+        wrapper.__cause__ = fake_refresh_error
+
+        mock_provider = Mock()
+        mock_provider.download_file.side_effect = wrapper
+
+        with patch(
+            "src.services.media_sources.factory.MediaSourceFactory"
+        ) as mock_factory:
+            mock_factory.get_provider_for_media_item.return_value = mock_provider
+
+            with patch(
+                "src.services.core.telegram_notification.settings"
+            ) as mock_settings:
+                mock_settings.CAPTION_STYLE = "enhanced"
+                with pytest.raises(GoogleDriveAuthError, match="expired or revoked"):
+                    await notification_service.send_notification("some-id")
+
+    async def test_non_auth_error_still_returns_false(
+        self, notification_service, mock_telegram_service
+    ):
+        """Non-auth exceptions should still be caught and return False."""
+        queue_item = Mock(media_item_id=uuid4())
+        media_item = Mock(
+            file_name="test.jpg",
+            title="Test",
+            caption=None,
+            link_url=None,
+            tags=[],
+            source_identifier="test.jpg",
+        )
+
+        mock_telegram_service.queue_repo.get_by_id.return_value = queue_item
+        mock_telegram_service.media_repo.get_by_id.return_value = media_item
+        mock_telegram_service.settings_service.get_settings.return_value = Mock(
+            enable_instagram_api=False,
+            show_verbose_notifications=True,
+        )
+        mock_telegram_service._is_verbose.return_value = True
+        mock_telegram_service.ig_account_service.get_active_account.return_value = None
+
+        mock_provider = Mock()
+        mock_provider.download_file.side_effect = ConnectionError("Network down")
+
+        with patch(
+            "src.services.media_sources.factory.MediaSourceFactory"
+        ) as mock_factory:
+            mock_factory.get_provider_for_media_item.return_value = mock_provider
+
+            with patch(
+                "src.services.core.telegram_notification.settings"
+            ) as mock_settings:
+                mock_settings.CAPTION_STYLE = "enhanced"
+                result = await notification_service.send_notification("some-id")
+
+        assert result is False
+
+
+@pytest.mark.unit
+class TestIsGoogleAuthError:
+    """Tests for _is_google_auth_error helper."""
+
+    def test_direct_refresh_error(self):
+        """Detects a direct RefreshError-like exception."""
+        FakeRefreshError = type(
+            "RefreshError", (Exception,), {"__module__": "google.auth.exceptions"}
+        )
+        assert _is_google_auth_error(FakeRefreshError("token revoked")) is True
+
+    def test_refresh_error_in_cause_chain(self):
+        """Detects RefreshError nested in __cause__ chain."""
+        FakeRefreshError = type(
+            "RefreshError", (Exception,), {"__module__": "google.auth.exceptions"}
+        )
+        wrapper = RuntimeError("outer error")
+        wrapper.__cause__ = FakeRefreshError("inner")
+        assert _is_google_auth_error(wrapper) is True
+
+    def test_unrelated_error_returns_false(self):
+        """Returns False for unrelated exceptions."""
+        assert _is_google_auth_error(ValueError("something")) is False
+
+    def test_non_google_refresh_error_returns_false(self):
+        """Returns False for RefreshError from non-google module."""
+        FakeRefreshError = type(
+            "RefreshError", (Exception,), {"__module__": "some.other.module"}
+        )
+        assert _is_google_auth_error(FakeRefreshError("nope")) is False

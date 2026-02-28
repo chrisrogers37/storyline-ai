@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-from telegram import InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from src.config.settings import settings
-from src.utils.logger import logger
 from src.services.core.telegram_utils import build_webapp_button
-from datetime import datetime
-import asyncio
+from src.utils.logger import logger
 
 if TYPE_CHECKING:
     from src.services.core.telegram_service import TelegramService
@@ -293,7 +293,11 @@ class TelegramCommandHandlers:
             return ("├── 📸 Instagram: ❓ Check failed", False)
 
     def _check_gdrive_setup(self, chat_id: int) -> tuple[str, bool]:
-        """Check Google Drive OAuth connection for setup status."""
+        """Check Google Drive OAuth connection for setup status.
+
+        Shows "Needs Reconnection" when the access token expired more
+        than 7 days ago (stale token that won't auto-refresh).
+        """
         try:
             from src.repositories.token_repository import TokenRepository
 
@@ -306,6 +310,16 @@ class TelegramCommandHandlers:
                     "google_drive", "oauth_access", str(chat_settings.id)
                 )
                 if gdrive_token:
+                    # Detect stale token (expired >7 days ago)
+                    if (
+                        gdrive_token.expires_at
+                        and gdrive_token.expires_at
+                        < datetime.utcnow() - timedelta(days=7)
+                    ):
+                        return (
+                            "├── 📁 Google Drive: ⚠️ Needs Reconnection",
+                            False,
+                        )
                     email = None
                     if gdrive_token.token_metadata:
                         email = gdrive_token.token_metadata.get("email")
@@ -396,6 +410,10 @@ class TelegramCommandHandlers:
             elif result["error"] == "Media item not found":
                 await update.message.reply_text(
                     "⚠️ *Error*\n\nMedia item not found.", parse_mode="Markdown"
+                )
+            elif result["error"] == "google_drive_auth_expired":
+                await self._send_gdrive_reconnect_message(
+                    update, update.effective_chat.id
                 )
             else:
                 await update.message.reply_text(
@@ -551,4 +569,26 @@ class TelegramCommandHandlers:
         await update.message.reply_text(
             f"ℹ️ `{command}` has been retired.\n\n{message}",
             parse_mode="Markdown",
+        )
+
+    async def _send_gdrive_reconnect_message(self, update, chat_id: int) -> None:
+        """Send a Google Drive reconnect message with an inline button."""
+        text = (
+            "⚠️ *Google Drive Disconnected*\n\n"
+            "Your Google Drive token has expired or been revoked. "
+            "Reconnect to resume posting."
+        )
+
+        reply_markup = None
+        if settings.OAUTH_REDIRECT_BASE_URL:
+            reconnect_url = (
+                f"{settings.OAUTH_REDIRECT_BASE_URL}"
+                f"/auth/google-drive/start?chat_id={chat_id}"
+            )
+            reply_markup = InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🔗 Reconnect Google Drive", url=reconnect_url)]]
+            )
+
+        await update.message.reply_text(
+            text, parse_mode="Markdown", reply_markup=reply_markup
         )
