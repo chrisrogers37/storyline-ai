@@ -255,6 +255,7 @@ class TestHistoryRepositoryIntegration:
             mock_session = Mock()
             mock_query = Mock()
             mock_query.filter.return_value = mock_query
+            mock_query.with_entities.return_value = mock_query
             mock_query.scalar.return_value = 5
             mock_session.query.return_value = mock_query
             repo._db = mock_session
@@ -276,6 +277,7 @@ class TestHistoryRepositoryIntegration:
             mock_session = Mock()
             mock_query = Mock()
             mock_query.filter.return_value = mock_query
+            mock_query.with_entities.return_value = mock_query
             mock_query.scalar.return_value = None
             mock_session.query.return_value = mock_query
             repo._db = mock_session
