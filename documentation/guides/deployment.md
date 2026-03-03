@@ -1,16 +1,14 @@
-# Phase 1 Deployment Checklist
+# Deployment Checklist
 
-This checklist covers everything you need to do **outside of code** to get Phase 1 running in production.
+This checklist covers everything you need to do **outside of code** to get Storyline AI running in production on Railway + Neon.
 
-## Prerequisites ✅
+## Prerequisites
 
-- [ ] Raspberry Pi 4 (16GB RAM) or similar Linux server
-- [ ] PostgreSQL 12+ installed
-- [ ] Python 3.10+ installed
+- [ ] GitHub account (public repository)
+- [ ] Railway account ([railway.app](https://railway.app))
+- [ ] Neon account ([console.neon.tech](https://console.neon.tech))
 - [ ] Instagram account for your business
 - [ ] Telegram account
-
-> **Note on paths**: This guide uses `/home/pi/` as the example home directory (the default Raspberry Pi OS user). Replace with your actual home directory (e.g., `/home/crog/`, `/home/ubuntu/`) throughout. The `deploy.sh` script uses `~/storyline-ai` which resolves correctly regardless of username.
 
 ---
 
@@ -24,7 +22,6 @@ This checklist covers everything you need to do **outside of code** to get Phase
   - Choose bot name (e.g., "Storyline AI Bot")
   - Choose bot username (e.g., "storyline_yourcompany_bot")
 - [ ] **Save the bot token** (looks like `123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11`)
-  - ⚠️ Keep this secret! Anyone with this token controls your bot
 
 ### Create Telegram Channel
 
@@ -54,7 +51,7 @@ This checklist covers everything you need to do **outside of code** to get Phase
 ### Test Bot
 
 - [ ] Send `/start` to your bot
-- [ ] Verify it responds (if not, code isn't running yet - that's okay)
+- [ ] Verify it responds (if not, service isn't running yet - that's okay)
 
 **Deliverables:**
 ```
@@ -65,241 +62,176 @@ ADMIN_TELEGRAM_CHAT_ID=123456789
 
 ---
 
-## 2. Database Setup (10 minutes)
+## 2. Database Setup - Neon (10 minutes)
 
-### Install PostgreSQL
+### Create Neon Project
 
-**Raspberry Pi / Debian / Ubuntu:**
-```bash
-sudo apt update
-sudo apt install postgresql postgresql-contrib
-sudo systemctl start postgresql
-sudo systemctl enable postgresql  # Start on boot
-```
-
-**macOS:**
-```bash
-brew install postgresql
-brew services start postgresql
-```
-
-### Create Database & User
-
-```bash
-# Switch to postgres user
-sudo -u postgres psql
-
-# In PostgreSQL shell:
-CREATE DATABASE storyline_ai;
-CREATE USER storyline_user WITH ENCRYPTED PASSWORD 'your_secure_password_here';
-GRANT ALL PRIVILEGES ON DATABASE storyline_ai TO storyline_user;
-\q
-```
+- [ ] Sign up at [console.neon.tech](https://console.neon.tech)
+- [ ] Create a new project (name: `storyline-ai`)
+- [ ] Note your connection string from the dashboard
 
 ### Initialize Schema
 
 ```bash
-cd /path/to/storyline-ai
-psql -U storyline_user -d storyline_ai -f scripts/setup_database.sql
+# Set your Neon connection string
+export DATABASE_URL="postgresql://user:pass@ep-xxx.neon.tech/storyline_ai?sslmode=require"
+
+# Run base schema
+psql "$DATABASE_URL" -f scripts/setup_database.sql
+
+# Run all migrations
+for f in scripts/migrations/0{01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16}_*.sql; do
+  echo "Running $f..."
+  psql "$DATABASE_URL" -f "$f"
+done
 ```
 
 ### Verify Setup
 
 ```bash
-psql -U storyline_user -d storyline_ai -c "\dt"
-# Should show: users, media_items, posting_queue, posting_history, media_locks, service_runs
+psql "$DATABASE_URL" -c "\dt"
+# Should show all tables
+```
+
+### Connection Pool Sizing
+
+Neon free tier allows 5 concurrent connections:
+```
+DB_POOL_SIZE=3
+DB_MAX_OVERFLOW=2
 ```
 
 **Deliverables:**
 ```
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=storyline_ai
-DB_USER=storyline_user
-DB_PASSWORD=your_secure_password_here
+DATABASE_URL=postgresql://user:pass@ep-xxx.neon.tech/storyline_ai?sslmode=require
 ```
 
 ---
 
-## 3. Media Files Setup (5 minutes)
+## 3. Media Setup (5 minutes)
 
-### Create Media Directory
+### Google Drive (Recommended for Cloud)
 
+Media is sourced from Google Drive when running on Railway:
+
+- [ ] Create a Google Drive folder for your media
+- [ ] Organize subfolders by category (e.g., `memes/`, `merch/`)
+- [ ] Upload your Instagram story images (JPG, JPEG, PNG, GIF)
+- [ ] Note the folder ID from the URL
+
+Google Drive OAuth will be configured during the onboarding wizard (`/start` command).
+
+### Local Development
+
+For local development, create a media directory:
 ```bash
-# On Raspberry Pi
-mkdir -p /home/pi/media/stories
-chmod 755 /home/pi/media/stories
-```
-
-### Add Test Images
-
-- [ ] Copy 10-20 Instagram story images to `/home/pi/media/stories/`
-- [ ] Supported formats: JPG, JPEG, PNG, GIF, HEIC
-- [ ] Recommended: 1080x1920 (9:16 aspect ratio)
-
-### Verify Files
-
-```bash
-ls -lh /home/pi/media/stories/
-# Should show your image files
+mkdir -p /tmp/media
 ```
 
 **Deliverable:**
 ```
-MEDIA_DIR=/home/pi/media/stories
+MEDIA_SOURCE_TYPE=google_drive
+MEDIA_DIR=/tmp/media
 ```
 
 ---
 
-## 4. Application Configuration (5 minutes)
+## 4. Railway Deployment (15 minutes)
 
-### Clone Repository
+### Create Railway Project
+
+- [ ] Go to [railway.app](https://railway.app) and create a new project
+- [ ] Connect your GitHub repository
+
+### Create Two Services
+
+Railway requires two services from the same repo:
+
+**Service 1: Worker**
+- Start command: `python -m src.main`
+- Build command: `pip install -r requirements.txt && pip install -e . && mkdir -p /tmp/media`
+
+**Service 2: Web**
+- Start command: `uvicorn src.api.app:app --host 0.0.0.0 --port ${PORT:-8000}`
+- Build command: `pip install -r requirements.txt && pip install -e . && mkdir -p /tmp/media`
+
+### Generate Domain
+
+- [ ] Generate a public domain for the Web service (needed for OAuth callbacks)
+- [ ] Note the URL (e.g., `https://your-app.up.railway.app`)
+
+### Configure Environment Variables
+
+Set these on **both** services in the Railway dashboard:
 
 ```bash
-cd /home/pi
-git clone https://github.com/yourusername/storyline-ai.git
-cd storyline-ai
-```
-
-### Create Virtual Environment
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-pip install -e .
-```
-
-### Configure Environment
-
-```bash
-cp .env.example .env
-nano .env  # or vim, or any editor
-```
-
-**Fill in your values:**
-```bash
-# Phase Control
-ENABLE_INSTAGRAM_API=false  # Phase 1 = false
-
-# Database
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=storyline_ai
-DB_USER=storyline_user
-DB_PASSWORD=your_secure_password_here
-
-# Telegram (from step 1)
+# Required
+DATABASE_URL=postgresql://user:pass@ep-xxx.neon.tech/storyline_ai?sslmode=require
 TELEGRAM_BOT_TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
 TELEGRAM_CHANNEL_ID=-1001234567890
 ADMIN_TELEGRAM_CHAT_ID=123456789
+MEDIA_DIR=/tmp/media
+ENCRYPTION_KEY=<generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())">
 
-# Posting Schedule
+# Schedule
 POSTS_PER_DAY=3
-POSTING_HOURS_START=14  # 9 AM EST = 14 UTC
-POSTING_HOURS_END=2     # 9 PM EST = 2 UTC (next day)
+POSTING_HOURS_START=14
+POSTING_HOURS_END=2
 REPOST_TTL_DAYS=30
 
-# Media
-MEDIA_DIR=/home/pi/media/stories
-
-# Backup
-BACKUP_DIR=/home/pi/backups/storyline
-
-# Operational
-DRY_RUN_MODE=false  # Set to true for testing
+# Safety (start with dry run!)
+DRY_RUN_MODE=true
 LOG_LEVEL=INFO
+
+# OAuth (Web service)
+OAUTH_REDIRECT_BASE_URL=https://your-app.up.railway.app
 ```
 
-### Validate Configuration
+### Validate Deployment
 
 ```bash
-storyline-cli check-health
-# All checks should pass ✓
+# Check worker logs
+railway logs --service worker
+
+# Check web service is responding
+curl https://your-app.up.railway.app/health
 ```
 
 ---
 
 ## 5. Initial Data Load (2 minutes)
 
-### Index Media Files
+### Connect Google Drive
+
+- [ ] Send `/start` to the Telegram bot
+- [ ] Follow the onboarding wizard to connect Google Drive
+- [ ] Select your media folder
+
+### Sync Media
 
 ```bash
-storyline-cli index-media /home/pi/media/stories
-# Should show: Added X media items
+# Via Railway shell
+railway shell --service worker -c "storyline-cli sync-media"
+railway shell --service worker -c "storyline-cli list-media"
 ```
 
 ### Create Initial Schedule
 
 ```bash
-storyline-cli create-schedule --days 7
-# Creates 7 days of scheduled posts (3 per day = 21 total)
+railway shell --service worker -c "storyline-cli create-schedule --days 7"
+# Creates 7 days of scheduled posts
 ```
 
 ### Verify Queue
 
 ```bash
-storyline-cli list-queue
+railway shell --service worker -c "storyline-cli list-queue"
 # Should show scheduled items
 ```
 
 ---
 
-## 6. System Service Setup (10 minutes)
-
-### Create Systemd Service
-
-```bash
-sudo nano /etc/systemd/system/storyline-ai.service
-```
-
-**Service file:**
-```ini
-[Unit]
-Description=Storyline AI - Instagram Story Automation
-After=network.target postgresql.service
-
-[Service]
-Type=simple
-User=pi
-Group=pi
-WorkingDirectory=/home/pi/storyline-ai
-Environment="PATH=/home/pi/storyline-ai/venv/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=/home/pi/storyline-ai/venv/bin/python -m src.main
-Restart=always
-RestartSec=10
-StandardOutput=append:/home/pi/storyline-ai/logs/service.log
-StandardError=append:/home/pi/storyline-ai/logs/service-error.log
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### Enable and Start Service
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable storyline-ai
-sudo systemctl start storyline-ai
-sudo systemctl status storyline-ai
-```
-
-### Verify Service is Running
-
-```bash
-# Check status
-sudo systemctl status storyline-ai
-
-# View logs
-tail -f logs/storyline.log
-
-# Check Telegram channel
-# You should see a test message or scheduled posts
-```
-
----
-
-## 7. Team Onboarding (5 minutes per person)
+## 6. Team Onboarding (5 minutes per person)
 
 ### Add Team Members
 
@@ -310,99 +242,71 @@ Each team member needs to:
 - [ ] Test posting workflow:
   1. Wait for notification in channel
   2. Post story to Instagram manually
-  3. Click "✅ Posted" button
+  3. Click "Posted" button
 
 ### Promote Admins (Optional)
 
 ```bash
-# Get their Telegram user ID (they send /start to @userinfobot)
-storyline-cli list-users
-# Find their ID
+# Get their Telegram user ID
+railway shell --service worker -c "storyline-cli list-users"
 
-storyline-cli promote-user <telegram_user_id> --role admin
+# Promote
+railway shell --service worker -c "storyline-cli promote-user <telegram_user_id> --role admin"
 ```
 
 ---
 
-## 8. Backup Strategy (10 minutes)
+## 7. Backup Strategy (10 minutes)
 
-### Create Backup Directory
+### Neon Built-in Backups
 
-```bash
-mkdir -p /home/pi/backups/storyline
-```
+Neon provides automatic point-in-time recovery on paid plans.
 
 ### Manual Backup
 
 ```bash
-make db-backup
-# Creates: backups/storyline_ai_20260103_120000.sql
-```
-
-### Automated Backups (Cron)
-
-```bash
-crontab -e
-```
-
-**Add daily backup at 3 AM:**
-```cron
-0 3 * * * cd /home/pi/storyline-ai && /home/pi/storyline-ai/venv/bin/python -c "from src.services.backup import BackupService; BackupService().create_backup()"
+# Dump from Neon
+pg_dump "$DATABASE_URL" -F c -f ~/backups/storyline_$(date +%Y%m%d).dump
 ```
 
 ### Test Restore
 
 ```bash
-# Test that backup can be restored
-make db-restore FILE=backups/storyline_ai_20260103_120000.sql
+# Restore to a test database
+pg_restore -d "$TEST_DATABASE_URL" ~/backups/storyline_YYYYMMDD.dump
 ```
+
+See [backup-restore.md](../operations/backup-restore.md) for full backup procedures.
 
 ---
 
-## 9. Monitoring Setup (15 minutes)
+## 8. Monitoring Setup (10 minutes)
 
-### Log Rotation
+### Railway Dashboard
 
-```bash
-sudo nano /etc/logrotate.d/storyline-ai
-```
+Railway provides built-in log streaming and service monitoring.
 
-```
-/home/pi/storyline-ai/logs/*.log {
-    daily
-    rotate 30
-    compress
-    delaycompress
-    notifempty
-    create 0640 pi pi
-    sharedscripts
-    postrotate
-        systemctl reload storyline-ai > /dev/null 2>&1 || true
-    endscript
-}
-```
+### Health Check via Telegram
 
-### Health Check Monitoring (Optional)
+Use the bot itself as a health indicator:
+- `/status` shows system health, queue state, and recent activity
 
-**Option 1: Manual checks**
-```bash
-# Add to crontab for alerts
-0 */4 * * * cd /home/pi/storyline-ai && /home/pi/storyline-ai/venv/bin/storyline-cli check-health || echo "Health check failed" | mail -s "Storyline Alert" you@email.com
-```
+### External Monitoring (Optional)
 
-**Option 2: Use uptime monitoring service**
 - [ ] Sign up for UptimeRobot (free tier)
-- [ ] Monitor Raspberry Pi IP:port
+- [ ] Monitor your Railway web service URL
 - [ ] Get email/SMS alerts if service goes down
 
+See [monitoring.md](../operations/monitoring.md) for detailed monitoring setup.
+
 ---
 
-## 10. Instagram Account Preparation (5 minutes)
+## 9. Instagram Account Preparation (5 minutes)
 
 ### Business Account Setup
 
 - [ ] Convert to Instagram Business Account (if not already)
-  1. Go to Settings → Account
+  1. Go to Settings -> Account
   2. Switch to Professional Account
   3. Choose Business category
   4. Connect Facebook Page (optional for Phase 1)
@@ -417,39 +321,33 @@ Phase 1 is **manual posting**, so prepare your workflow:
 
 ### Media Transfer Options
 
-**Option 1: Cloud sync**
-- [ ] Use Dropbox/Google Drive to sync media folder to phone
-- [ ] Download from cloud when notification arrives
+**Option 1: Telegram (simplest)**
+- Bot already sends the image in notification
+- Download from Telegram, post to Instagram
+- Click "Posted" button
 
-**Option 2: Direct transfer**
-- [ ] Use file transfer app (AirDrop, Snapdrop, etc.)
-- [ ] Transfer from Pi to phone when needed
-
-**Option 3: Telegram (simplest)**
-- [ ] Bot already sends the image in notification
-- [ ] Download from Telegram, post to Instagram
-- [ ] Click "Posted" button
+**Option 2: Cloud sync**
+- Use Google Drive to sync media folder to phone
+- Download from cloud when notification arrives
 
 ---
 
-## 11. Testing Phase (1-2 days)
+## 10. Testing Phase (1-2 days)
 
 ### Initial Testing Checklist
 
 - [ ] **Day 1 Morning:**
-  - Set `DRY_RUN_MODE=true` in `.env`
-  - Restart service: `sudo systemctl restart storyline-ai`
+  - Verify `DRY_RUN_MODE=true` in Railway env vars
   - Verify notifications arrive in Telegram
   - Test "Posted" and "Skip" buttons
-  - Check `storyline-cli list-queue` shows updated status
+  - Check queue via `storyline-cli list-queue`
 
 - [ ] **Day 1 Afternoon:**
-  - Set `DRY_RUN_MODE=false`
-  - Restart service
+  - Set `DRY_RUN_MODE=false` in Railway env vars
   - Wait for first real notification
   - Post ONE story to Instagram manually
   - Click "Posted" button
-  - Verify in `storyline-cli list-media` shows `times_posted=1`
+  - Verify posting history is recorded
 
 - [ ] **Day 2:**
   - Monitor all scheduled posts
@@ -468,7 +366,7 @@ Phase 1 is **manual posting**, so prepare your workflow:
 
 ---
 
-## 12. Production Launch (Go Live!)
+## 11. Production Launch (Go Live!)
 
 ### Final Checklist
 
@@ -477,25 +375,20 @@ Phase 1 is **manual posting**, so prepare your workflow:
 - [ ] Backup system verified
 - [ ] Monitoring alerts configured
 - [ ] Emergency contacts documented
-- [ ] Rollback plan documented
 
 ### Go Live
 
 ```bash
-# 1. Set production mode
-nano .env
-# Set: DRY_RUN_MODE=false
+# Set DRY_RUN_MODE=false in Railway dashboard
+# Railway will restart the service automatically
 
-# 2. Restart service
-sudo systemctl restart storyline-ai
-
-# 3. Monitor first day
-tail -f logs/storyline.log
+# Monitor first day
+railway logs --service worker
 ```
 
 ### First Week Monitoring
 
-- [ ] Check logs daily
+- [ ] Check logs daily via Railway dashboard
 - [ ] Verify all posts going out
 - [ ] Monitor team feedback
 - [ ] Track any issues
@@ -510,14 +403,13 @@ tail -f logs/storyline.log
 - [ ] Verify posts are being published
 
 ### Weekly
-- [ ] Add new media to `/home/pi/media/stories/`
-- [ ] Run `storyline-cli index-media /home/pi/media/stories`
-- [ ] Check `storyline-cli check-health`
-- [ ] Review posting history: `storyline-cli list-media --limit 50`
+- [ ] Add new media to Google Drive folder
+- [ ] Run media sync: `/sync` in Telegram or `storyline-cli sync-media`
+- [ ] Check health: `/status` in Telegram
 
 ### Monthly
 - [ ] Review posting schedule effectiveness
-- [ ] Check backup files exist
+- [ ] Verify database backups
 - [ ] Update media library
 - [ ] Review team permissions
 
@@ -530,11 +422,10 @@ tail -f logs/storyline.log
 
 ## Troubleshooting Quick Reference
 
-### Service Won't Start
+### Service Not Starting
 ```bash
-sudo systemctl status storyline-ai
-sudo journalctl -u storyline-ai -n 50
-# Check logs/storyline.log for errors
+railway logs --service worker | tail -50
+# Check for missing env vars or build errors
 ```
 
 ### Bot Not Responding
@@ -549,22 +440,16 @@ curl https://api.telegram.org/bot<YOUR_TOKEN>/getMe
 ### Database Connection Failed
 ```bash
 # Test connection
-psql -U storyline_user -d storyline_ai -c "SELECT version();"
-
-# Check PostgreSQL is running
-sudo systemctl status postgresql
+psql "$DATABASE_URL" -c "SELECT version();"
 ```
 
 ### No Notifications Arriving
 ```bash
 # Check queue has items
-storyline-cli list-queue
-
-# Check scheduled times are in the future
-storyline-cli list-queue | grep scheduled_time
+railway shell --service worker -c "storyline-cli list-queue"
 
 # Check service is running
-sudo systemctl status storyline-ai
+railway logs --service worker
 ```
 
 ---
@@ -572,28 +457,28 @@ sudo systemctl status storyline-ai
 ## Summary: What You Need
 
 ### External Services
-- ✅ Telegram bot (via @BotFather)
-- ✅ Telegram channel (private)
-- ✅ Instagram business account (optional for Phase 1)
+- Telegram bot (via @BotFather)
+- Telegram channel (private)
+- Instagram business account (optional for Phase 1)
 
-### Infrastructure
-- ✅ Raspberry Pi or Linux server
-- ✅ PostgreSQL database
-- ✅ Python 3.10+ environment
+### Cloud Infrastructure
+- Railway account (worker + web services)
+- Neon PostgreSQL database
+- Google Drive (media storage)
 
 ### One-Time Setup
-- ✅ Bot configuration (~15 min)
-- ✅ Database setup (~10 min)
-- ✅ Application deployment (~30 min)
-- ✅ Team onboarding (~5 min/person)
+- Bot configuration (~15 min)
+- Database setup (~10 min)
+- Railway deployment (~15 min)
+- Team onboarding (~5 min/person)
 
 ### Ongoing
-- ✅ Add media weekly
-- ✅ Monitor Telegram notifications daily
-- ✅ Manual Instagram posting when notified
+- Add media to Google Drive weekly
+- Monitor Telegram notifications daily
+- Manual Instagram posting when notified
 
 **Total setup time: ~1-2 hours**
 
 ---
 
-Ready to go? Start with **Section 1: Telegram Bot Setup** and work through the checklist! 🚀
+Ready to go? Start with **Section 1: Telegram Bot Setup** and work through the checklist!

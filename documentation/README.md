@@ -93,14 +93,13 @@ documentation/
 - Essential CLI and Telegram bot commands
 - Troubleshooting common issues
 
-### Deployment Guide (Raspberry Pi)
+### Deployment Guide (Railway + Neon)
 **[deployment.md](guides/deployment.md)**
-- 12-section deployment checklist for production
+- 11-section deployment checklist for production
 - Telegram bot setup (BotFather, channel, admin ID)
-- PostgreSQL database configuration
-- Raspberry Pi systemd service setup
-- Media indexing and schedule creation
-- Team onboarding, backups, monitoring
+- Neon PostgreSQL database configuration
+- Railway two-service deployment (worker + web)
+- Media setup (Google Drive), team onboarding, backups, monitoring
 
 ### Cloud Deployment Guide (Railway + Neon)
 **[cloud-deployment.md](guides/cloud-deployment.md)**
@@ -129,22 +128,23 @@ documentation/
 
 ### Development Environment Setup
 **[dev-environment-setup.md](guides/dev-environment-setup.md)**
-- Mac to Raspberry Pi workflow optimization
-- Shell aliases for both environments
-- Database permission setup (CREATEDB for test user)
-- `scripts/deploy.sh` usage and deployment workflow
+- Local development with cloud deployment (Railway + Neon)
+- Shell aliases for development and production
+- Database options (local PostgreSQL or Neon)
+- Railway CLI deployment workflow
 - Quick reference command card
 
 ### Deployment Options
 **[deployment-options.md](guides/deployment-options.md)**
-- Why manual deployment (public repo security)
-- `scripts/deploy.sh` workflow (test, push, SSH, pull, restart)
+- Railway auto-deploy from GitHub (public repo safe)
 - GitHub Actions CI (lint, test, security scan on cloud runners)
+- Why not self-hosted runners (public repo security)
 
-### GitHub Actions + Tailscale (Advanced)
+### GitHub Actions CI/CD
 **[github-actions-tailscale.md](guides/github-actions-tailscale.md)**
-- Automated deployment via Tailscale VPN (documented, not yet active)
-- Setup guide for Tailscale on Pi + GitHub Actions workflow
+- GitHub Actions CI pipeline (lint, test, security)
+- Railway auto-deploy CD pipeline
+- Security for public repos (cloud runners only)
 
 ---
 
@@ -152,10 +152,10 @@ documentation/
 
 ### Monitoring & Alerting
 **[operations/monitoring.md](operations/monitoring.md)**
-- systemd service health checks via SSH
+- Railway service health checks and log streaming
 - SQL queries for queue health, posting rate, token expiry
 - Alerting thresholds (stuck posts, token expiry, error rate)
-- Health check script for cron
+- Health check script
 
 ### Backup & Restore
 **[operations/backup-restore.md](operations/backup-restore.md)**
@@ -252,10 +252,11 @@ Completed and historical documents (see [archive/ARCHIVE_INDEX.md](archive/ARCHI
 ### For Deploying to Production
 1. Follow **[deployment.md](guides/deployment.md)** step-by-step
 2. Complete Telegram bot setup (Section 1)
-3. Configure database (Section 2)
-4. Deploy and test (Sections 5-11)
-5. For Instagram API: **[instagram-api-setup.md](guides/instagram-api-setup.md)**
-6. For ongoing deploys: `./scripts/deploy.sh` (see **[deployment-options.md](guides/deployment-options.md)**)
+3. Configure Neon database (Section 2)
+4. Deploy to Railway (Section 4)
+5. Test and go live (Sections 5-11)
+6. For Instagram API: **[instagram-api-setup.md](guides/instagram-api-setup.md)**
+7. For cloud-specific details: **[cloud-deployment.md](guides/cloud-deployment.md)**
 
 ### For Understanding Architecture
 1. Check **[phases/00_MASTER_ROADMAP.md](planning/phases/00_MASTER_ROADMAP.md)**
@@ -345,4 +346,4 @@ When adding new documentation:
 
 ---
 
-*Last updated: 2026-02-10*
+*Last updated: 2026-03-03*

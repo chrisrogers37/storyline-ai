@@ -1,73 +1,77 @@
 # Development Environment Setup Guide
 
-A guide for seamless development between Mac (local) and Raspberry Pi (production).
+A guide for local development with cloud deployment (Railway + Neon).
 
-## Current Pain Points
+## Current Architecture
 
-From today's deployment session, we encountered:
-
-1. **Database permissions**: `storyline_user` can't create/drop databases
-2. **Path differences**: Mac uses `~/Projects/storyline-ai`, Pi uses `~/storyline-ai`
-3. **PostgreSQL access**: Pi requires `sudo -u postgres` for admin operations
-4. **Makefile commands**: Don't work consistently across environments
-5. **Manual rsync**: Have to remember the full command each time
+- **Local development**: Mac (code editing, tests, linting)
+- **Production**: Railway (worker + web services) with Neon PostgreSQL
+- **Deployment**: Push to `main` triggers Railway auto-deploy
 
 ---
 
 ## Recommended Solutions
 
-### 1. Fix Database Permissions (One-Time Pi Setup)
-
-Grant `storyline_user` the ability to create databases, eliminating the need for `sudo -u postgres`:
+### 1. Local Development Setup
 
 ```bash
-# On the Pi, run once:
-sudo -u postgres psql -c "ALTER USER storyline_user CREATEDB;"
+# Clone and set up
+cd ~/Projects
+git clone https://github.com/chrisrogers37/storyline-ai.git
+cd storyline-ai
+
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+pip install -e .
+
+# Copy and configure environment
+cp .env.example .env
+# Edit .env with your local or Neon database credentials
 ```
 
-This allows `make create-db` and `make drop-db` to work directly.
+### 2. Database Options
 
-**Alternative**: If you prefer not to grant CREATEDB, create a wrapper script (see Section 4).
+**Option A: Local PostgreSQL (Recommended for Development)**
+
+```bash
+# macOS
+brew install postgresql
+brew services start postgresql
+
+# Create database
+createdb storyline_ai
+psql -d storyline_ai -f scripts/setup_database.sql
+
+# Run migrations
+for f in scripts/migrations/0{01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16}_*.sql; do
+  psql -d storyline_ai -f "$f"
+done
+```
+
+**Option B: Connect to Neon (Shared Dev/Staging)**
+
+```bash
+# Connect directly using DATABASE_URL
+psql "$DATABASE_URL"
+
+# Or set individual vars in .env
+DB_HOST=ep-xxx.neon.tech
+DB_PORT=5432
+DB_NAME=storyline_ai
+DB_USER=storyline_user
+DB_PASSWORD=neon_password
+DB_SSLMODE=require
+DB_POOL_SIZE=3
+DB_MAX_OVERFLOW=2
+```
 
 ---
 
-### 2. Shell Aliases for the Pi
-
-Add these to `~/.bashrc` on the Pi:
-
-```bash
-# Storyline AI shortcuts
-alias sl='cd ~/storyline-ai && source venv/bin/activate'
-alias sl-status='sudo systemctl status storyline-ai'
-alias sl-restart='sudo systemctl restart storyline-ai'
-alias sl-logs='sudo journalctl -u storyline-ai.service -f'
-alias sl-logs-recent='sudo journalctl -u storyline-ai.service -n 100'
-
-# Database shortcuts (if storyline_user has CREATEDB)
-alias sl-db-reset='cd ~/storyline-ai && make reset-db'
-
-# Database shortcuts (if using postgres superuser)
-alias sl-db-drop='sudo -u postgres dropdb --if-exists storyline_ai'
-alias sl-db-create='sudo -u postgres createdb -O storyline_user storyline_ai'
-alias sl-db-init='cat ~/storyline-ai/scripts/setup_database.sql | sudo -u postgres psql -d storyline_ai && echo "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO storyline_user; GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO storyline_user;" | sudo -u postgres psql -d storyline_ai'
-alias sl-db-reset-full='sl-db-drop && sl-db-create && sl-db-init'
-
-# Quick commands
-alias sl-index='storyline-cli index-media ~/storyline-ai/media/stories'
-alias sl-schedule='storyline-cli create-schedule --days 7'
-alias sl-queue='storyline-cli list-queue'
-alias sl-health='storyline-cli check-health'
-alias sl-categories='storyline-cli list-categories'
-```
-
-After adding, reload:
-```bash
-source ~/.bashrc
-```
-
----
-
-### 3. Shell Aliases/Functions for Mac
+### 3. Shell Aliases for Mac
 
 Add these to `~/.zshrc` (or `~/.bashrc`) on your Mac:
 
@@ -75,225 +79,157 @@ Add these to `~/.zshrc` (or `~/.bashrc`) on your Mac:
 # Storyline AI shortcuts
 alias sl='cd ~/Projects/storyline-ai && source venv/bin/activate'
 
-# Deployment to Pi
-PI_HOST="crog@raspberrypi.local"
-PI_PATH="~/storyline-ai"
+# Quick checks
+alias sl-test='cd ~/Projects/storyline-ai && source venv/bin/activate && pytest'
+alias sl-lint='cd ~/Projects/storyline-ai && source venv/bin/activate && ruff check src/ tests/ cli/'
+alias sl-format='cd ~/Projects/storyline-ai && source venv/bin/activate && ruff format src/ tests/ cli/'
+alias sl-precommit='cd ~/Projects/storyline-ai && source venv/bin/activate && ruff check src/ tests/ cli/ && ruff format --check src/ tests/ cli/ && pytest'
 
-# Sync media to Pi
-sl-sync-media() {
-    rsync -avz --progress ~/Projects/storyline-ai/media/stories/ ${PI_HOST}:${PI_PATH}/media/stories/
-}
+# Database shortcuts (local PostgreSQL)
+alias sl-db-reset='cd ~/Projects/storyline-ai && make reset-db'
 
-# Sync code to Pi (alternative to git pull)
-sl-sync-code() {
-    rsync -avz --progress --exclude 'venv' --exclude '__pycache__' --exclude '*.pyc' --exclude '.git' --exclude 'logs' --exclude '*.egg-info' ~/Projects/storyline-ai/ ${PI_HOST}:${PI_PATH}/
-}
+# Railway operations
+alias sl-logs='railway logs --service worker'
+alias sl-logs-web='railway logs --service web'
+alias sl-health='railway shell --service worker -c "storyline-cli check-health"'
+alias sl-restart='railway restart --service worker'
 
-# SSH to Pi and activate environment
-sl-ssh() {
-    ssh -t ${PI_HOST} "cd ~/storyline-ai && source venv/bin/activate && bash"
-}
+# Production database queries (via Neon)
+alias sl-db-prod='psql "$DATABASE_URL"'
+```
 
-# Quick deploy: push code, restart service
-sl-deploy() {
-    echo "Pushing to git..."
-    git push origin main
-    echo "Pulling on Pi and restarting..."
-    ssh ${PI_HOST} "cd ~/storyline-ai && git pull && sudo systemctl restart storyline-ai"
-    echo "Done! Checking logs..."
-    ssh ${PI_HOST} "sudo journalctl -u storyline-ai.service -n 20"
-}
-
-# Full reset on Pi: reset db, reindex, create schedule
-sl-reset-pi() {
-    ssh -t ${PI_HOST} "cd ~/storyline-ai && source venv/bin/activate && sl-db-reset-full && storyline-cli index-media ~/storyline-ai/media/stories && storyline-cli create-schedule --days 7"
-}
+After adding, reload:
+```bash
+source ~/.zshrc
 ```
 
 ---
 
-### 4. Improved Makefile (Cross-Platform)
+### 4. Deployment Workflow
 
-Update the Makefile to detect environment and handle permissions:
+Since Railway auto-deploys from `main`, the deployment workflow is:
 
-```makefile
-# Database configuration with environment detection
-DB_NAME ?= storyline_ai
-DB_USER ?= $(shell whoami)
-DB_HOST ?= localhost
+```bash
+# 1. Develop on a feature branch
+git checkout -b feature/my-feature
 
-# Detect if we're on Linux (Pi) or Darwin (Mac)
-UNAME := $(shell uname)
+# 2. Run pre-commit checks
+sl-precommit
 
-# Check if current user can create databases
-CAN_CREATEDB := $(shell psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='$(DB_USER)' AND rolcreatedb" 2>/dev/null || echo "0")
+# 3. Push and create PR
+git push -u origin feature/my-feature
+gh pr create
 
-ifeq ($(UNAME),Linux)
-    # Raspberry Pi - may need sudo for postgres
-    ifeq ($(CAN_CREATEDB),1)
-        DB_CMD_PREFIX :=
-    else
-        DB_CMD_PREFIX := sudo -u postgres
-    endif
-else
-    # Mac - typically user has permissions
-    DB_CMD_PREFIX :=
-endif
+# 4. After PR review and CI passes, merge to main
+gh pr merge --merge
 
-.PHONY: create-db drop-db init-db reset-db
+# 5. Railway auto-deploys from main
+# Monitor: railway logs --service worker
+```
 
-create-db:
-	@echo "Creating database: $(DB_NAME)..."
-	$(DB_CMD_PREFIX) createdb -O $(DB_USER) $(DB_NAME) 2>/dev/null || echo "Database may already exist"
-	@echo "✓ Database ready"
+### Manual Deploy (if needed)
 
-drop-db:
-	@echo "WARNING: This will permanently delete database: $(DB_NAME)"
-	@read -p "Press Ctrl+C to cancel, or Enter to continue..." _
-	@echo "Dropping database: $(DB_NAME)..."
-	$(DB_CMD_PREFIX) dropdb --if-exists $(DB_NAME)
-	@echo "✓ Database dropped"
-
-init-db:
-	@echo "Initializing schema..."
-ifeq ($(UNAME),Linux)
-	cat scripts/setup_database.sql | $(DB_CMD_PREFIX) psql -d $(DB_NAME)
-	@echo "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO storyline_user; GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO storyline_user;" | $(DB_CMD_PREFIX) psql -d $(DB_NAME)
-else
-	psql -d $(DB_NAME) -f scripts/setup_database.sql
-endif
-	@echo "✓ Schema initialized"
-
-reset-db: drop-db create-db init-db
-	@echo "✓ Database reset complete"
+```bash
+# Trigger a manual redeploy on Railway
+railway up --service worker
+railway up --service web
 ```
 
 ---
 
 ### 5. Environment File Standardization
 
-Create a `.env.pi` template that mirrors Pi settings:
+Create a `.env.dev` for local development:
 
 ```bash
-# .env.pi - Raspberry Pi production settings
+# .env.dev - Local development settings
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=storyline_ai
 DB_USER=storyline_user
-DB_PASSWORD=your_secure_password_here
+DB_PASSWORD=your_local_password
 
-TELEGRAM_BOT_TOKEN=your_token_here
-TELEGRAM_CHANNEL_ID=your_channel_id
+TELEGRAM_BOT_TOKEN=your_test_bot_token
+TELEGRAM_CHANNEL_ID=your_test_channel_id
 ADMIN_TELEGRAM_CHAT_ID=your_admin_chat_id
 
-POSTS_PER_DAY=10
+POSTS_PER_DAY=3
 POSTING_HOURS_START=14
 POSTING_HOURS_END=2
 
-LOG_LEVEL=INFO
-DRY_RUN_MODE=false
+LOG_LEVEL=DEBUG
+DRY_RUN_MODE=true
 ```
 
-Create a `.env.dev` for Mac development with test settings.
+Production environment variables are stored in the Railway dashboard (never in files).
 
 ---
 
-### 6. Deployment Script
-
-The project includes a deployment script at `scripts/deploy.sh` that handles the full workflow:
-
-```bash
-# Deploy to Pi (runs tests, pushes, pulls, installs deps, runs migrations, restarts service)
-./scripts/deploy.sh
-
-# Skip local tests (faster, use when you've already verified)
-./scripts/deploy.sh --skip-tests
-
-# Skip database migrations
-./scripts/deploy.sh --skip-migrations
-```
-
-The script:
-1. Checks for uncommitted changes (warns if present)
-2. Runs local tests (unless `--skip-tests`)
-3. Pushes to GitHub
-4. SSHs to Pi via `crogberrypi` alias
-5. Pulls latest code, installs dependencies
-6. Runs all SQL migrations idempotently
-7. Restarts the `storyline-ai` systemd service
-8. Verifies service health
-
----
-
-### 7. Quick Reference Card
-
-Print this and keep it handy:
+### 6. Quick Reference Card
 
 ```
-=== MAC COMMANDS ===
+=== LOCAL COMMANDS ===
 sl                  - cd to project, activate venv
-sl-sync-media       - rsync media to Pi
-sl-deploy           - git push, pull on Pi, restart
-sl-ssh              - SSH to Pi with venv activated
+sl-test             - run pytest
+sl-lint             - run ruff check
+sl-precommit        - full pre-commit check (lint + format + test)
 
-=== PI COMMANDS ===
-sl                  - cd to project, activate venv
-sl-status           - systemctl status
-sl-restart          - systemctl restart
-sl-logs             - follow service logs
-sl-db-reset-full    - drop, create, init database
-sl-index            - index media
-sl-schedule         - create 7-day schedule
-sl-queue            - view queue
-sl-health           - health check
+=== RAILWAY COMMANDS ===
+sl-logs             - follow worker service logs
+sl-logs-web         - follow web service logs
+sl-health           - run health check on production
+sl-restart          - restart worker service
+sl-db-prod          - connect to Neon production database
 
-=== FULL RESET WORKFLOW ===
-Mac:  git push origin main
-Pi:   sl-db-reset-full
-Pi:   sl-index
-Pi:   sl-schedule
-Pi:   sl-restart
+=== DEPLOYMENT WORKFLOW ===
+1. Create feature branch
+2. Run sl-precommit
+3. Push and create PR
+4. Merge to main (Railway auto-deploys)
+5. Monitor with sl-logs
 ```
 
 ---
 
 ## Implementation Checklist
 
-- [ ] **Pi: Grant CREATEDB to storyline_user** (optional but recommended)
+- [ ] **Mac: Install dependencies**
   ```bash
-  sudo -u postgres psql -c "ALTER USER storyline_user CREATEDB;"
+  cd ~/Projects/storyline-ai
+  python3 -m venv venv && source venv/bin/activate
+  pip install -r requirements.txt && pip install -e .
   ```
 
-- [ ] **Pi: Add aliases to ~/.bashrc**
-  - Copy aliases from Section 2
-  - Run `source ~/.bashrc`
+- [ ] **Mac: Set up local PostgreSQL** (optional, for offline dev)
+  ```bash
+  brew install postgresql && brew services start postgresql
+  createdb storyline_ai
+  ```
 
 - [ ] **Mac: Add aliases to ~/.zshrc**
-  - Copy aliases/functions from Section 3
-  - Update `PI_HOST` if your Pi has a different hostname
+  - Copy aliases from Section 3
   - Run `source ~/.zshrc`
 
-- [ ] **Mac: Verify deploy script**
-  - `scripts/deploy.sh` already exists in the repo
-  - Run `chmod +x scripts/deploy.sh` if needed
-
-- [ ] **Both: Update Makefile** (optional)
-  - Replace database targets with cross-platform version
+- [ ] **Mac: Install Railway CLI**
+  ```bash
+  brew install railway
+  railway login
+  railway link  # Link to your project
+  ```
 
 - [ ] **Test the workflow**
-  - Mac: `sl-ssh` to connect to Pi
-  - Pi: `sl-logs` to check service
-  - Mac: `sl-sync-media` to sync files
-  - Mac: `sl-deploy` for full deployment
+  - `sl` to activate environment
+  - `sl-precommit` to verify all checks pass
+  - `sl-logs` to monitor production logs
 
 ---
 
 ## Future Improvements
 
-1. **Docker**: Containerize the app for identical environments
-2. **Ansible**: Automate Pi provisioning and deployment
-3. **GitHub Actions + Tailscale**: See `documentation/guides/github-actions-tailscale.md` for VPN-based automated deployment (documented but not yet active)
+1. **Docker**: Containerize the app for identical local/cloud environments
+2. **Staging environment**: Separate Railway project for pre-production testing
+3. **Database branching**: Use Neon branching for isolated dev databases
 
 ---
 
-*Last updated: 2026-02-10*
+*Last updated: 2026-03-03*

@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 - **Dead code in PostingService** — Removed ~258 lines of unreachable code from `posting.py`: `handle_completion()`, `_post_via_instagram()`, `_cleanup_cloud_media()`, `process_next_immediate()`, and related lazy-load properties for Instagram/cloud services. All posting now routes through Telegram; Instagram API posting happens via callback handler, not `PostingService`.
+- **Raspberry Pi references** — Production now runs entirely on Railway + Neon. Removed all Pi-specific paths (`/home/pi/media`), SSH commands, systemd references, and `scripts/deploy.sh`. Updated CLAUDE.md, `.env.example`, 10 documentation files, and Claude commands to reflect cloud infrastructure.
 
 ### Changed
 - **Large file splits (3 extractions)** — Reduced three files that exceeded 680 lines each by extracting focused composition classes:

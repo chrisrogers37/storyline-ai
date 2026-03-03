@@ -3,8 +3,11 @@
 ## Quick Diagnostics
 
 ```bash
-# One-liner health check
-ssh crogberrypi "systemctl is-active storyline-ai && echo 'Service: OK' || echo 'Service: DOWN'"
+# One-liner health check via Railway shell
+railway shell --service worker -c "storyline-cli check-health"
+
+# Or check logs for recent errors
+railway logs --service worker | grep -i error | tail -20
 ```
 
 ---
@@ -13,21 +16,21 @@ ssh crogberrypi "systemctl is-active storyline-ai && echo 'Service: OK' || echo 
 
 ### 1. Service Won't Start
 
-**Symptoms**: `systemctl status` shows `failed` or `inactive`
+**Symptoms**: Railway shows `Crashed` status or repeated restarts
 
 **Diagnosis**:
 ```bash
-ssh crogberrypi "journalctl -u storyline-ai -n 100 --no-pager | tail -50"
+railway logs --service worker | tail -50
 ```
 
 **Common Causes**:
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| `ModuleNotFoundError` | Missing dependency | `pip install -r requirements.txt` |
-| `Connection refused` | Database not running | `sudo systemctl start postgresql` |
-| `Permission denied` | File permissions | Check `.env` and media folder permissions |
-| `Invalid token` | Expired/corrupt token | Re-authenticate via CLI |
+| `ModuleNotFoundError` | Missing dependency | Check `requirements.txt` and build command |
+| `Connection refused` | Database not reachable | Check `DATABASE_URL` and Neon status |
+| `Permission denied` | Environment misconfiguration | Verify env vars in Railway dashboard |
+| `Invalid token` | Expired/corrupt token | Re-authenticate via Telegram bot |
 
 ---
 
@@ -63,11 +66,8 @@ LIMIT 10;
 
 **Diagnosis**:
 ```bash
-# Check service is running
-ssh crogberrypi "systemctl status storyline-ai"
-
-# Check for Telegram errors
-ssh crogberrypi "journalctl -u storyline-ai --since '1 hour ago' | grep -i telegram"
+# Check worker service is running
+railway logs --service worker | grep -i telegram
 
 # Test bot token
 curl "https://api.telegram.org/bot<TOKEN>/getMe"
@@ -77,10 +77,10 @@ curl "https://api.telegram.org/bot<TOKEN>/getMe"
 
 | Cause | Fix |
 |-------|-----|
-| Service crashed | Restart service |
-| Bot token invalid | Check `TELEGRAM_BOT_TOKEN` in `.env` |
+| Service crashed | Restart via Railway dashboard |
+| Bot token invalid | Check `TELEGRAM_BOT_TOKEN` env var in Railway |
 | Webhook conflict | Only one instance should run |
-| Network issues | Check Pi internet connectivity |
+| Network issues | Check Railway service status |
 
 ---
 
@@ -110,7 +110,7 @@ JOIN instagram_accounts ia ON t.instagram_account_id::uuid = ia.id;
 
 **Re-authentication**:
 1. Go to Telegram bot
-2. Use /settings → Add Account
+2. Use /settings -> Add Account
 3. Complete OAuth flow
 4. Verify token is encrypted in database
 
@@ -122,25 +122,26 @@ JOIN instagram_accounts ia ON t.instagram_account_id::uuid = ia.id;
 
 **Diagnosis**:
 ```bash
-# Check media path exists
-ssh crogberrypi "ls -la /path/to/media/stories/"
+# For Google Drive media source, check sync status
+railway shell --service worker -c "storyline-cli sync-status"
 
-# Check file permissions
-ssh crogberrypi "ls -la /path/to/media/stories/*.jpg | head -5"
+# Check media source configuration
+railway shell --service worker -c "echo \$MEDIA_SOURCE_TYPE"
 ```
 
 **Common Causes**:
 
 | Cause | Fix |
 |-------|-----|
-| Wrong path in `.env` | Update `MEDIA_DIR` |
-| Permission denied | `chmod -R 755 /path/to/media` |
+| Google Drive not connected | Complete OAuth via /start onboarding |
+| Wrong folder ID | Update `MEDIA_SOURCE_ROOT` env var |
+| Sync disabled | Set `MEDIA_SYNC_ENABLED=true` |
 | Unsupported format | Only JPG, JPEG, PNG, GIF, MP4, MOV supported |
 | File too large | Max 100MB per file |
 
-**Re-index**:
+**Re-sync**:
 ```bash
-storyline-cli index-media /path/to/media/stories --force
+railway shell --service worker -c "storyline-cli sync-media"
 ```
 
 ---
@@ -151,21 +152,22 @@ storyline-cli index-media /path/to/media/stories --force
 
 **Diagnosis**:
 ```bash
-# Check PostgreSQL is running
-ssh crogberrypi "systemctl status postgresql"
+# Test connection to Neon
+psql "$DATABASE_URL" -c 'SELECT 1;'
 
-# Test connection
-ssh crogberrypi "psql -U storyline_user -d storyline_ai -c 'SELECT 1;'"
+# Check connection pool settings
+railway shell --service worker -c "echo \$DB_POOL_SIZE"
 ```
 
 **Common Causes**:
 
 | Cause | Fix |
 |-------|-----|
-| PostgreSQL stopped | `sudo systemctl start postgresql` |
-| Wrong credentials | Check `DATABASE_URL` in `.env` |
-| Database doesn't exist | Run setup script |
-| Disk full | Free up space |
+| Neon endpoint sleeping | First connection wakes it (cold start ~1-2s) |
+| Wrong credentials | Check `DATABASE_URL` in Railway env vars |
+| Connection pool exhausted | Reduce `DB_POOL_SIZE` to 3, `DB_MAX_OVERFLOW` to 2 |
+| SSL not configured | Ensure `DB_SSLMODE=require` or use full `DATABASE_URL` |
+| Neon free tier limit | Check Neon dashboard for compute hour usage |
 
 ---
 
@@ -194,11 +196,11 @@ SELECT * FROM chat_settings WHERE telegram_chat_id = YOUR_CHAT_ID;
 ### Find Errors
 
 ```bash
-# All errors in last 24 hours
-ssh crogberrypi "journalctl -u storyline-ai --since '24 hours ago' | grep -i error"
+# All errors in recent logs
+railway logs --service worker | grep -i error
 
 # Specific error patterns
-ssh crogberrypi "journalctl -u storyline-ai --since '1 hour ago' | grep -iE 'exception|traceback|failed'"
+railway logs --service worker | grep -iE 'exception|traceback|failed'
 ```
 
 ### Common Log Patterns
@@ -217,24 +219,24 @@ ssh crogberrypi "journalctl -u storyline-ai --since '1 hour ago' | grep -iE 'exc
 ### Stop All Posting Immediately
 
 ```bash
-# Stop service
-ssh crogberrypi "sudo systemctl stop storyline-ai"
+# Enable dry run via database
+psql "$DATABASE_URL" -c "UPDATE chat_settings SET dry_run_mode = true;"
 
-# Or enable dry run via database
-ssh crogberrypi "psql -U storyline_user -d storyline_ai -c \
-    \"UPDATE chat_settings SET dry_run_mode = true;\""
+# Or restart the service (stops processing temporarily)
+railway restart --service worker
 ```
 
 ### Clear Stuck Queue
 
 ```bash
 # Mark failed posts as cancelled
-ssh crogberrypi "psql -U storyline_user -d storyline_ai -c \
-    \"UPDATE posting_queue SET status = 'cancelled' WHERE status = 'pending' AND scheduled_for < NOW();\""
+psql "$DATABASE_URL" -c \
+    "UPDATE posting_queue SET status = 'cancelled' WHERE status = 'pending' AND scheduled_for < NOW();"
 ```
 
 ### Force Service Restart
 
 ```bash
-ssh crogberrypi "sudo systemctl kill storyline-ai && sudo systemctl start storyline-ai"
+# Restart via Railway
+railway restart --service worker
 ```

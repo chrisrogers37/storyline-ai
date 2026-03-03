@@ -34,18 +34,6 @@ External APIs:
   - Cloudinary (media hosting, free tier)
 ```
 
-### Raspberry Pi vs Cloud Comparison
-
-| Aspect | Raspberry Pi | Cloud (Railway + Neon) |
-|--------|-------------|----------------------|
-| Database | Local PostgreSQL | Neon (managed, SSL) |
-| Process mgmt | systemd | Railway (managed) |
-| HTTPS | Not available | Automatic (Railway) |
-| OAuth callbacks | Not possible | Built-in |
-| Multi-tenant | Single tenant | Multi-tenant ready |
-| Cost | Hardware only | ~$5-15/month |
-| Availability | Depends on network | 99.9%+ |
-
 ---
 
 ## 1. Database Setup (Neon)

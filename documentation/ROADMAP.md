@@ -33,7 +33,7 @@ Build a delightful Instagram Story automation system that:
 - ✅ Team collaboration (multi-user support)
 - ✅ CLI tools for management
 - ✅ 147 comprehensive tests
-- ✅ Raspberry Pi deployment with systemd service
+- ✅ Cloud deployment (Railway + Neon PostgreSQL)
 - ✅ Production-ready with 4 critical bug fixes
 
 **Outcome**: Fully functional Telegram-based workflow, 100% tested, deployed to production.
@@ -374,7 +374,7 @@ Build a delightful Instagram Story automation system that:
 - `/schedule`, `/reset` for queue management (originally `/clear`, renamed in v1.6.0)
 - `/stats`, `/history`, `/locks` for visibility
 **Rationale**:
-- Reduces need for SSH access to Raspberry Pi
+- Reduces need for direct database access
 - Enables team members to manage posting schedule
 - Smart overdue handling prevents post flooding after pause
 - All operations logged for audit trail
