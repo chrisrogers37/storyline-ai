@@ -41,11 +41,14 @@ async def run_scheduler_loop(
 
     while True:
         try:
-            # Reset items stuck in 'processing' from crashed handlers
-            stale_count = queue_repo.reset_stale_processing()
-            if stale_count > 0:
+            # Discard queue items abandoned in 'processing' for over 24h.
+            # Items enter 'processing' when sent to Telegram — they stay
+            # there until a user clicks a button. Items older than 24h
+            # are stale notifications that will never be acted on.
+            discarded = queue_repo.discard_abandoned_processing()
+            if discarded > 0:
                 logger.warning(
-                    f"Reset {stale_count} stale processing item(s) back to pending"
+                    f"Discarded {discarded} abandoned processing item(s) (>24h old)"
                 )
             if settings_service:
                 active_chats = settings_service.get_all_active_chats()

@@ -455,37 +455,31 @@ class TestClaimForProcessing:
 
 
 @pytest.mark.unit
-class TestResetStaleProcessing:
-    """Tests for reset_stale_processing method."""
+class TestDiscardAbandonedProcessing:
+    """Tests for discard_abandoned_processing method."""
 
-    def test_reset_stale_processing_resets_items(self, queue_repo, mock_db):
-        """Stale processing items are reset back to pending."""
-        mock_item1 = MagicMock(
-            status="processing",
-            scheduled_for=datetime(2026, 1, 1, 10, 0),
-        )
-        mock_item2 = MagicMock(
-            status="processing",
-            scheduled_for=datetime(2026, 1, 1, 12, 0),
-        )
+    def test_discards_old_processing_items(self, queue_repo, mock_db):
+        """Items in processing older than threshold are deleted."""
+        old_time = datetime.utcnow() - timedelta(hours=48)
+        mock_item1 = MagicMock(status="processing", scheduled_for=old_time)
+        mock_item2 = MagicMock(status="processing", scheduled_for=old_time)
         mock_query = mock_db.query.return_value
         mock_query.filter.return_value = mock_query
         mock_query.all.return_value = [mock_item1, mock_item2]
 
-        result = queue_repo.reset_stale_processing()
+        result = queue_repo.discard_abandoned_processing()
 
         assert result == 2
-        assert mock_item1.status == "pending"
-        assert mock_item2.status == "pending"
+        assert mock_db.delete.call_count == 2
         mock_db.commit.assert_called_once()
 
-    def test_reset_stale_processing_no_stale_items(self, queue_repo, mock_db):
-        """No stale items → returns 0, no commit."""
+    def test_no_abandoned_items(self, queue_repo, mock_db):
+        """No abandoned items → returns 0, no commit."""
         mock_query = mock_db.query.return_value
         mock_query.filter.return_value = mock_query
         mock_query.all.return_value = []
 
-        result = queue_repo.reset_stale_processing()
+        result = queue_repo.discard_abandoned_processing()
 
         assert result == 0
         mock_db.commit.assert_not_called()
