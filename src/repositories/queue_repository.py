@@ -246,22 +246,26 @@ class QueueRepository(BaseRepository):
             return True
         return False
 
-    def reset_stale_processing(self, stale_threshold_hours: int = 2) -> int:
-        """Reset items stuck in 'processing' status back to 'pending'.
+    def discard_abandoned_processing(self, abandon_threshold_hours: int = 24) -> int:
+        """Delete queue items stuck in 'processing' for too long.
 
-        Items can get stuck in 'processing' if a callback handler crashes or
-        the bot restarts mid-operation. This method resets items that have been
-        in 'processing' longer than the threshold.
+        Items in 'processing' have already been sent to Telegram and are
+        waiting for user action (Posted/Skip/Reject). If nobody acts within
+        the threshold, the notification is stale and the item is discarded.
+
+        This intentionally does NOT reset items back to 'pending' — doing so
+        would re-send the Telegram notification, creating an infinite
+        notify-reset-notify loop.
 
         Args:
-            stale_threshold_hours: Hours after which a processing item is
-                considered stale (default: 2).
+            abandon_threshold_hours: Hours after which a processing item is
+                considered abandoned and deleted (default: 24).
 
         Returns:
-            Number of items reset.
+            Number of items discarded.
         """
-        cutoff = datetime.utcnow() - timedelta(hours=stale_threshold_hours)
-        stale_items = (
+        cutoff = datetime.utcnow() - timedelta(hours=abandon_threshold_hours)
+        abandoned = (
             self.db.query(PostingQueue)
             .filter(
                 PostingQueue.status == "processing",
@@ -270,17 +274,18 @@ class QueueRepository(BaseRepository):
             .all()
         )
 
-        for item in stale_items:
-            item.status = "pending"
+        for item in abandoned:
             logger.warning(
-                f"Reset stale processing item {item.id} "
-                f"(scheduled_for={item.scheduled_for}) back to pending"
+                f"Discarding abandoned queue item {item.id} "
+                f"(scheduled_for={item.scheduled_for}, "
+                f"over {abandon_threshold_hours}h old)"
             )
+            self.db.delete(item)
 
-        if stale_items:
+        if abandoned:
             self.db.commit()
 
-        return len(stale_items)
+        return len(abandoned)
 
     def delete_all_pending(self, chat_settings_id: Optional[str] = None) -> int:
         """Delete all pending queue items. Returns count of deleted items."""

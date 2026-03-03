@@ -29,7 +29,7 @@ class TestSchedulerLoop:
             patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
             patch("src.main.QueueRepository") as mock_queue_repo_cls,
         ):
-            mock_queue_repo_cls.return_value.reset_stale_processing.return_value = 0
+            mock_queue_repo_cls.return_value.discard_abandoned_processing.return_value = 0
             mock_sleep.side_effect = StopAsyncIteration
             try:
                 await run_scheduler_loop(posting_service, settings_service)
@@ -57,7 +57,7 @@ class TestSchedulerLoop:
             patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
             patch("src.main.QueueRepository") as mock_queue_repo_cls,
         ):
-            mock_queue_repo_cls.return_value.reset_stale_processing.return_value = 0
+            mock_queue_repo_cls.return_value.discard_abandoned_processing.return_value = 0
             mock_sleep.side_effect = StopAsyncIteration
             try:
                 await run_scheduler_loop(posting_service, settings_service)
@@ -80,7 +80,7 @@ class TestSchedulerLoop:
             patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
             patch("src.main.QueueRepository") as mock_queue_repo_cls,
         ):
-            mock_queue_repo_cls.return_value.reset_stale_processing.return_value = 0
+            mock_queue_repo_cls.return_value.discard_abandoned_processing.return_value = 0
             mock_sleep.side_effect = StopAsyncIteration
             try:
                 await run_scheduler_loop(posting_service, None)
@@ -111,7 +111,7 @@ class TestSchedulerLoop:
             patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
             patch("src.main.QueueRepository") as mock_queue_repo_cls,
         ):
-            mock_queue_repo_cls.return_value.reset_stale_processing.return_value = 0
+            mock_queue_repo_cls.return_value.discard_abandoned_processing.return_value = 0
             mock_sleep.side_effect = StopAsyncIteration
             try:
                 await run_scheduler_loop(posting_service, settings_service)
