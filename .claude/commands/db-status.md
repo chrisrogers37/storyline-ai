@@ -2,12 +2,12 @@
 description: "Check database status and key metrics (safe, read-only)"
 ---
 
-Run these safe, read-only queries on the Raspberry Pi database:
+Run these safe, read-only queries on the Neon production database. The user must provide the DATABASE_URL or it should be available as an environment variable.
 
 ## 1. Queue Status
 
 ```bash
-ssh crogberrypi "psql -h localhost -U storyline_user -d storyline_ai -c \"
+psql "$DATABASE_URL" -c "
 SELECT
     status,
     COUNT(*) as count,
@@ -16,13 +16,13 @@ SELECT
 FROM posting_queue
 GROUP BY status
 ORDER BY status;
-\""
+"
 ```
 
 ## 2. Recent Posting Activity
 
 ```bash
-ssh crogberrypi "psql -h localhost -U storyline_user -d storyline_ai -c \"
+psql "$DATABASE_URL" -c "
 SELECT
     DATE(posted_at) as date,
     posting_method,
@@ -31,13 +31,13 @@ FROM posting_history
 WHERE posted_at > NOW() - INTERVAL '7 days'
 GROUP BY DATE(posted_at), posting_method
 ORDER BY date DESC;
-\""
+"
 ```
 
 ## 3. Instagram Accounts
 
 ```bash
-ssh crogberrypi "psql -h localhost -U storyline_user -d storyline_ai -c \"
+psql "$DATABASE_URL" -c "
 SELECT
     display_name,
     instagram_username,
@@ -45,13 +45,13 @@ SELECT
     created_at
 FROM instagram_accounts
 ORDER BY created_at;
-\""
+"
 ```
 
 ## 4. Media Library Stats
 
 ```bash
-ssh crogberrypi "psql -h localhost -U storyline_user -d storyline_ai -c \"
+psql "$DATABASE_URL" -c "
 SELECT
     category,
     COUNT(*) as total,
@@ -60,13 +60,13 @@ SELECT
 FROM media_items
 GROUP BY category
 ORDER BY total DESC;
-\""
+"
 ```
 
 ## 5. Token Health
 
 ```bash
-ssh crogberrypi "psql -h localhost -U storyline_user -d storyline_ai -c \"
+psql "$DATABASE_URL" -c "
 SELECT
     service_name,
     token_type,
@@ -81,7 +81,7 @@ SELECT
 FROM api_tokens t
 LEFT JOIN instagram_accounts ia ON t.instagram_account_id::uuid = ia.id
 ORDER BY t.expires_at;
-\""
+"
 ```
 
 ## Report Format

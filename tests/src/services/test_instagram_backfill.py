@@ -873,9 +873,9 @@ class TestHelpers:
     @patch("src.services.integrations.backfill_downloader.settings")
     def test_get_storage_dir(self, mock_settings, mock_backfill_service):
         """Returns MEDIA_DIR/instagram_backfill."""
-        mock_settings.MEDIA_DIR = "/home/pi/media"
+        mock_settings.MEDIA_DIR = "/tmp/media"
         result = mock_backfill_service._get_storage_dir()
-        assert result == Path("/home/pi/media/instagram_backfill")
+        assert result == Path("/tmp/media/instagram_backfill")
 
 
 # ==================== Status Tests ====================

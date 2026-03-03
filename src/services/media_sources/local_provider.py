@@ -18,7 +18,7 @@ class LocalMediaProvider(MediaSourceProvider):
     and subfolders are treated as categories.
 
     Args:
-        base_path: Root directory for media files (e.g., "/home/pi/media")
+        base_path: Root directory for media files (e.g., "/tmp/media")
         supported_extensions: Set of lowercase file extensions to include.
             Defaults to the standard set used by MediaIngestionService.
     """

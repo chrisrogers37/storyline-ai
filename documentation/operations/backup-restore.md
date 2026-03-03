@@ -3,12 +3,10 @@
 ## Overview
 
 Critical data to backup:
-1. **PostgreSQL database** - All application state
-2. **Media files** - Source images/videos
-3. **Configuration** - `.env` file with tokens
+1. **PostgreSQL database** - All application state (hosted on Neon)
+2. **Media files** - Source images/videos (hosted on Google Drive)
+3. **Configuration** - Environment variables in Railway
 4. **Tokens** - Encrypted in database, but backup separately
-
-> **Note on paths**: This guide uses `/home/pi/` as the example home directory. Replace with your actual home directory (e.g., `/home/crog/`).
 
 ---
 
@@ -17,24 +15,28 @@ Critical data to backup:
 ### Manual Backup
 
 ```bash
-# Create backup on Pi
-ssh crogberrypi "pg_dump -U storyline_user -d storyline_ai -F c -f /home/pi/backups/storyline_$(date +%Y%m%d_%H%M%S).dump"
+# Dump from Neon using DATABASE_URL
+pg_dump "$DATABASE_URL" -F c -f ~/backups/storyline_$(date +%Y%m%d_%H%M%S).dump
 
-# Copy to local machine
-scp crogberrypi:/home/pi/backups/storyline_*.dump ~/backups/
+# Or with explicit connection string
+pg_dump "postgresql://user:pass@ep-xxx.neon.tech/storyline_ai?sslmode=require" \
+    -F c -f ~/backups/storyline_$(date +%Y%m%d_%H%M%S).dump
 ```
 
 ### Automated Daily Backup
 
-Create `/home/pi/scripts/backup_db.sh`:
+Create a backup script on your local machine or a CI runner:
 
 ```bash
 #!/bin/bash
-BACKUP_DIR="/home/pi/backups"
+# backup_db.sh
+BACKUP_DIR="$HOME/backups/storyline"
 RETENTION_DAYS=30
 
-# Create backup
-pg_dump -U storyline_user -d storyline_ai -F c \
+mkdir -p "$BACKUP_DIR"
+
+# Create backup from Neon
+pg_dump "$DATABASE_URL" -F c \
     -f "$BACKUP_DIR/storyline_$(date +%Y%m%d).dump"
 
 # Remove old backups
@@ -43,11 +45,15 @@ find "$BACKUP_DIR" -name "storyline_*.dump" -mtime +$RETENTION_DAYS -delete
 echo "Backup complete: storyline_$(date +%Y%m%d).dump"
 ```
 
-Add to crontab:
+Schedule via crontab on your local machine or a GitHub Actions workflow:
 ```bash
-# Daily at 3am
-0 3 * * * /home/pi/scripts/backup_db.sh >> /home/pi/logs/backup.log 2>&1
+# Daily at 3am (local machine)
+0 3 * * * ~/scripts/backup_db.sh >> ~/logs/backup.log 2>&1
 ```
+
+### Neon Built-in Backups
+
+Neon provides automatic point-in-time recovery on paid plans. Free tier has limited retention. Check the [Neon dashboard](https://console.neon.tech) for backup status.
 
 ---
 
@@ -56,69 +62,70 @@ Add to crontab:
 ### Full Restore
 
 ```bash
-# Stop service first
-ssh crogberrypi "sudo systemctl stop storyline-ai"
-
-# Drop and recreate database
-ssh crogberrypi "psql -U postgres -c 'DROP DATABASE storyline_ai;'"
-ssh crogberrypi "psql -U postgres -c 'CREATE DATABASE storyline_ai OWNER storyline_user;'"
+# Drop and recreate database (via Neon dashboard or psql)
+psql "$DATABASE_URL" -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'
 
 # Restore from backup
-ssh crogberrypi "pg_restore -U storyline_user -d storyline_ai /home/pi/backups/storyline_YYYYMMDD.dump"
+pg_restore -d "$DATABASE_URL" ~/backups/storyline_YYYYMMDD.dump
 
-# Restart service
-ssh crogberrypi "sudo systemctl start storyline-ai"
+# Restart Railway services after restore
+railway restart --service worker
+railway restart --service web
 ```
 
 ### Partial Restore (specific tables)
 
 ```bash
 # List contents of backup
-ssh crogberrypi "pg_restore -l /home/pi/backups/storyline_YYYYMMDD.dump"
+pg_restore -l ~/backups/storyline_YYYYMMDD.dump
 
 # Restore specific table
-ssh crogberrypi "pg_restore -U storyline_user -d storyline_ai \
-    -t posting_history /home/pi/backups/storyline_YYYYMMDD.dump"
+pg_restore -d "$DATABASE_URL" \
+    -t posting_history ~/backups/storyline_YYYYMMDD.dump
 ```
 
 ---
 
 ## Media Files Backup
 
+### Google Drive (Primary Media Source)
+
+When using Google Drive as the media source, files are already stored in the cloud. Ensure the Google Drive folder is shared or backed up according to your Google Workspace settings.
+
 ### Sync to External Storage
 
 ```bash
-# Backup media to external drive
-rsync -av --progress /path/to/media/stories/ /mnt/external/storyline-media/
+# Backup media from Google Drive to local storage using rclone
+rclone sync gdrive:storyline-media/ ~/backups/storyline-media/
 
-# Or to remote server
-rsync -av --progress /path/to/media/stories/ user@backup-server:/backups/storyline-media/
+# Or download via the Google Drive web interface
 ```
 
 ### Backup Manifest
 
 Keep a manifest of media files for verification:
 
-```bash
-# Generate manifest
-find /path/to/media/stories -type f -exec md5sum {} \; > media_manifest.txt
-
-# Verify against manifest
-md5sum -c media_manifest.txt
+```sql
+-- Generate manifest from database
+SELECT file_name, file_hash, category, created_at
+FROM media_items
+WHERE is_active = true
+ORDER BY file_name;
 ```
 
 ---
 
 ## Configuration Backup
 
-### .env File
+### Railway Environment Variables
 
 ```bash
-# Backup .env (contains tokens!)
-scp crogberrypi:/home/pi/storyline-ai/.env ~/backups/storyline_env_$(date +%Y%m%d).env
+# Export Railway env vars (requires Railway CLI)
+railway variables --service worker > ~/backups/railway_worker_env_$(date +%Y%m%d).txt
+railway variables --service web > ~/backups/railway_web_env_$(date +%Y%m%d).txt
 
-# Store securely - this contains secrets!
-chmod 600 ~/backups/storyline_env_*.env
+# Store securely - these contain secrets!
+chmod 600 ~/backups/railway_*_env_*.txt
 ```
 
 ### Token Backup
@@ -127,9 +134,9 @@ Tokens are encrypted in the database. For extra safety:
 
 ```bash
 # Export tokens (encrypted values)
-ssh crogberrypi "psql -U storyline_user -d storyline_ai -c \
-    \"COPY (SELECT * FROM api_tokens) TO STDOUT WITH CSV HEADER\" \
-    > /home/pi/backups/tokens_$(date +%Y%m%d).csv"
+psql "$DATABASE_URL" -c \
+    "COPY (SELECT * FROM api_tokens) TO STDOUT WITH CSV HEADER" \
+    > ~/backups/tokens_$(date +%Y%m%d).csv
 ```
 
 ---
@@ -138,25 +145,22 @@ ssh crogberrypi "psql -U storyline_user -d storyline_ai -c \
 
 ### Complete System Recovery
 
-1. **Set up new Pi** with PostgreSQL
-2. **Restore database** from latest backup
-3. **Copy media files** to correct path
-4. **Restore .env** configuration
-5. **Install application**:
+1. **Create new Railway project** with worker + web services
+2. **Create new Neon database** (or restore from Neon backup)
+3. **Restore database** from latest `pg_dump` backup
+4. **Configure environment variables** in Railway dashboard
+5. **Deploy application**:
    ```bash
-   git clone https://github.com/chrisrogers37/storyline-ai.git
-   cd storyline-ai
-   pip install -r requirements.txt
-   pip install -e .
+   # Connect Railway to GitHub repo
+   # Railway will auto-build and deploy
    ```
-6. **Start service**:
+6. **Verify**:
    ```bash
-   sudo systemctl start storyline-ai
+   railway shell --service worker -c "storyline-cli check-health"
    ```
-7. **Verify**:
-   ```bash
-   storyline-cli check-health
-   ```
+7. **Re-connect OAuth** (if tokens expired):
+   - Instagram: Re-authorize via /settings in Telegram
+   - Google Drive: Re-authorize via /start onboarding wizard
 
 ---
 
@@ -166,6 +170,6 @@ Monthly verification checklist:
 
 - [ ] Restore backup to test database
 - [ ] Verify row counts match production
-- [ ] Check media file integrity
+- [ ] Check media file integrity (Google Drive)
 - [ ] Test token decryption works
 - [ ] Verify service starts with restored data

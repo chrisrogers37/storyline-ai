@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     SKIP_TTL_DAYS: int = 45
 
     # Media Configuration
-    MEDIA_DIR: str = "/home/pi/media"
+    MEDIA_DIR: str = "/tmp/media"
 
     # Backup Configuration
     BACKUP_DIR: str = "/backup/storyline-ai"

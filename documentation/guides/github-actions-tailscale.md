@@ -1,180 +1,170 @@
-# GitHub Actions with Tailscale VPN
+# GitHub Actions CI/CD
 
 ## Overview
 
-Use Tailscale to create a secure mesh VPN so GitHub's cloud runners can SSH to your Raspberry Pi without exposing it to the public internet.
+Storyline AI uses GitHub Actions for continuous integration and Railway for continuous deployment. Since the project is hosted on a public repository, all CI runs on GitHub's cloud runners (`ubuntu-latest`).
 
 ---
 
-## Setup Tailscale
+## CI Pipeline (Automated)
 
-### 1. Install on Raspberry Pi
-
-```bash
-ssh crogberrypi
-
-# Install Tailscale
-curl -fsSL https://tailscale.com/install.sh | sh
-
-# Start and authenticate
-sudo tailscale up
-
-# Note the Tailscale IP (usually 100.x.x.x)
-tailscale ip -4
-```
-
-### 2. Enable SSH on Tailscale
-
-```bash
-# Allow SSH through Tailscale
-sudo tailscale up --ssh
-```
-
-### 3. Create Tailscale Auth Key
-
-1. Go to: https://login.tailscale.com/admin/settings/keys
-2. Click **"Generate auth key"**
-3. Options:
-   - ✅ Reusable
-   - ✅ Ephemeral (for CI/CD runners)
-   - Expiration: 90 days (or longer)
-4. Copy the key (starts with `tskey-auth-...`)
-
----
-
-## Configure GitHub Secrets
-
-Go to: `https://github.com/chrisrogers37/storyline-ai/settings/secrets/actions`
-
-Add these secrets:
-
-| Secret | Value | Example |
-|--------|-------|---------|
-| `TAILSCALE_AUTH_KEY` | Auth key from step 3 | `tskey-auth-xxxxx` |
-| `PI_TAILSCALE_IP` | Pi's Tailscale IP | `100.64.1.2` |
-| `PI_USER` | SSH username | `pi` or your username |
-| `PI_SSH_KEY` | Private SSH key for Pi | (generate dedicated key) |
-
----
-
-## Generate Dedicated SSH Key for CI/CD
-
-```bash
-# On your Mac
-cd ~/.ssh
-ssh-keygen -t ed25519 -C "github-actions-storyline" -f github_actions_pi
-
-# Copy public key to Pi
-ssh-copy-id -i github_actions_pi.pub crogberrypi
-
-# Test it works
-ssh -i github_actions_pi pi@crogberrypi "echo 'SSH works'"
-
-# Copy private key content for GitHub secret
-cat github_actions_pi
-# Copy the entire output (including BEGIN/END lines) as PI_SSH_KEY secret
-```
-
----
-
-## Update Deployment Workflow
+GitHub Actions runs automatically on every push and pull request:
 
 ```yaml
-# .github/workflows/deploy.yml
-name: Deploy to Pi via Tailscale
+# .github/workflows/ci.yml
+name: CI
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
-  deploy:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Connect to Tailscale
-        uses: tailscale/github-action@v2
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
+          python-version: '3.10'
 
-      - name: Set up SSH
+      - name: Install dependencies
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.PI_SSH_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H ${{ secrets.PI_TAILSCALE_IP }} >> ~/.ssh/known_hosts
+          pip install -r requirements.txt
+          pip install -e .
 
-      - name: Deploy to Pi
+      - name: Lint
         run: |
-          ssh -i ~/.ssh/id_ed25519 ${{ secrets.PI_USER }}@${{ secrets.PI_TAILSCALE_IP }} << 'EOF'
-            cd ~/storyline-ai
-            git pull origin main
-            source venv/bin/activate
-            pip install -r requirements.txt
-            sudo systemctl restart storyline-ai
-            storyline-cli check-health
-          EOF
+          ruff check src/ tests/ cli/
+          ruff format --check src/ tests/ cli/
+
+      - name: Test
+        run: pytest
+
+      - name: Security scan
+        run: |
+          pip-audit
+          bandit -r src/ -c pyproject.toml
 ```
 
-**Note**: You'll need to create OAuth credentials in Tailscale for the GitHub Action. See: https://tailscale.com/kb/1215/oauth-clients
+### What CI Checks
+
+| Check | Tool | Purpose |
+|-------|------|---------|
+| Linting | `ruff check` | Code style and errors |
+| Formatting | `ruff format --check` | Consistent code formatting |
+| Tests | `pytest` | Unit and integration tests |
+| Security | `pip-audit`, `bandit` | Vulnerability scanning |
+| Changelog | Custom check | CHANGELOG.md updated in PRs |
+
+---
+
+## CD Pipeline (Railway Auto-Deploy)
+
+Railway automatically deploys when changes are pushed to `main`:
+
+1. Push to `main` triggers Railway build
+2. Railway installs dependencies (`pip install -r requirements.txt && pip install -e . && mkdir -p /tmp/media`)
+3. Railway restarts both services (worker + web)
+4. Health checks verify the deployment
+
+### Railway Services
+
+| Service | Start Command | Purpose |
+|---------|--------------|---------|
+| Worker | `python -m src.main` | Telegram bot + scheduler |
+| Web | `uvicorn src.api.app:app --host 0.0.0.0 --port ${PORT:-8000}` | OAuth callbacks + API |
+
+### Monitoring Deploys
+
+```bash
+# Check deployment status
+railway logs --service worker
+railway logs --service web
+
+# Verify health after deploy
+railway shell --service worker -c "storyline-cli check-health"
+```
+
+---
+
+## Security for Public Repos
+
+Since this is a public repository:
+
+- All CI runs on **GitHub cloud runners** (`ubuntu-latest`) -- safe for public repos
+- No self-hosted runners are used (avoids exposing infrastructure to malicious PRs)
+- All secrets are stored in **Railway environment variables** (never in code)
+- Deployment is triggered by Railway's GitHub integration (not by CI)
+
+See: [GitHub's security warning about self-hosted runners](https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/about-self-hosted-runners#self-hosted-runner-security)
+
+---
+
+## Environment Setup
+
+### GitHub Secrets (for CI only)
+
+Go to: `https://github.com/chrisrogers37/storyline-ai/settings/secrets/actions`
+
+| Secret | Purpose | Notes |
+|--------|---------|-------|
+| None required | CI uses no secrets | Tests use mocked dependencies |
+
+### Railway Secrets (for CD)
+
+All production secrets are configured in the Railway dashboard:
+- `DATABASE_URL`, `TELEGRAM_BOT_TOKEN`, `ENCRYPTION_KEY`, etc.
+- See [cloud-deployment.md](cloud-deployment.md) for full env var reference
 
 ---
 
 ## Advantages
 
-✅ **Secure** - No public exposure, encrypted VPN
-✅ **Cloud runner** - Pi doesn't run CI/CD jobs (saves resources)
-✅ **Easy setup** - Tailscale is well-documented
-✅ **Free for personal use** - Up to 100 devices
-
-## Disadvantages
-
-⚠️ **Dependency on Tailscale** - Service must be running on Pi
-⚠️ **Ephemeral IPs** - Tailscale IP can change (though rare)
-⚠️ **External service** - Relies on Tailscale infrastructure
+- **Secure** -- No infrastructure exposed to public PRs
+- **Cloud runners** -- No local resources used for CI
+- **Auto-deploy** -- Railway deploys on push to main
+- **Simple** -- No VPN, SSH keys, or tunneling required
 
 ---
 
 ## Troubleshooting
 
-### Can't SSH from GitHub Actions
+### CI Failing
 
 ```bash
-# On Pi, check Tailscale status
-sudo tailscale status
-
-# Verify SSH is enabled
-sudo tailscale up --ssh
-
-# Check firewall (shouldn't be needed with Tailscale)
-sudo ufw status
+# Run checks locally before pushing
+source venv/bin/activate
+ruff check src/ tests/ cli/
+ruff format --check src/ tests/ cli/
+pytest
 ```
 
-### Tailscale Connection Lost
+### Railway Deploy Not Triggering
+
+- Verify Railway GitHub integration is connected
+- Check Railway dashboard for build errors
+- Ensure the branch matches Railway's configured branch
+
+### Service Not Starting After Deploy
 
 ```bash
-# Restart Tailscale service
-sudo systemctl restart tailscaled
+# Check Railway logs
+railway logs --service worker
 
-# Re-authenticate if needed
-sudo tailscale up
+# Common issues:
+# - Missing env var -> Add in Railway dashboard
+# - Build failed -> Check build logs
+# - Database unreachable -> Verify DATABASE_URL
 ```
 
 ---
 
 ## Cost
 
-- **Free** for personal use (up to 3 users, 100 devices)
-- **Paid plans** if you need more devices or team features
-
----
-
-## Security Best Practices
-
-1. Use ephemeral keys for GitHub Actions runners
-2. Rotate SSH keys periodically
-3. Use dedicated SSH key (not your personal key)
-4. Enable MagicDNS for stable hostnames instead of IPs
-5. Use ACLs in Tailscale to restrict access to specific devices
+- **GitHub Actions**: Free for public repos (unlimited minutes)
+- **Railway**: ~$5-10/month (worker + web services)
+- **Neon**: Free tier (0.5 GB, 190 compute-hours)

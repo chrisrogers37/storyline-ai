@@ -2,9 +2,7 @@
 
 ## Overview
 
-Storyline AI runs on a Raspberry Pi with systemd service management. This guide covers monitoring the service health and common metrics.
-
-> **Note on paths**: This guide uses `/home/pi/` as the example home directory. Replace with your actual home directory (e.g., `/home/crog/`).
+Storyline AI runs on Railway with a Neon PostgreSQL database. This guide covers monitoring the service health and common metrics.
 
 ---
 
@@ -13,27 +11,26 @@ Storyline AI runs on a Raspberry Pi with systemd service management. This guide 
 ### Check Service Health
 
 ```bash
-# Is the service running?
-ssh crogberrypi "systemctl is-active storyline-ai"
+# Check Railway service status via dashboard
+# https://railway.app/dashboard → Select project → View service logs
 
-# Detailed status
-ssh crogberrypi "systemctl status storyline-ai"
+# Or via Railway CLI
+railway logs --service worker
+railway logs --service web
 
-# Recent logs (last 50 lines)
-ssh crogberrypi "journalctl -u storyline-ai -n 50 --no-pager"
-
-# Follow logs in real-time
-ssh crogberrypi "journalctl -u storyline-ai -f"
+# Run health check via Railway shell
+railway shell --service worker
+storyline-cli check-health
 ```
 
 ### Common Status Indicators
 
 | Status | Meaning | Action |
 |--------|---------|--------|
-| `active (running)` | Service is healthy | None |
-| `inactive (dead)` | Service stopped | Check logs, restart |
-| `failed` | Service crashed | Check logs for error |
-| `activating` | Service starting | Wait, check if it completes |
+| `Active` | Service is healthy | None |
+| `Deploying` | New deployment in progress | Wait for completion |
+| `Crashed` | Service crashed | Check logs for error |
+| `Sleeping` | Service scaled to zero | Check Railway settings |
 
 ---
 
@@ -87,11 +84,11 @@ LEFT JOIN instagram_accounts ia ON t.instagram_account_id::uuid = ia.id;
 ### 4. Error Rate
 
 ```bash
-# Errors in last hour
-ssh crogberrypi "journalctl -u storyline-ai --since '1 hour ago' | grep -c ERROR"
+# Check errors in Railway logs
+railway logs --service worker | grep -c ERROR
 
-# Error details
-ssh crogberrypi "journalctl -u storyline-ai --since '1 hour ago' | grep ERROR"
+# Or view errors directly in Railway dashboard log viewer
+# Filter by "ERROR" in the search bar
 ```
 
 ---
@@ -109,20 +106,14 @@ ssh crogberrypi "journalctl -u storyline-ai --since '1 hour ago' | grep ERROR"
 
 ## Health Check Script
 
-Create a simple health check that can be run via cron:
+Run a health check via the Railway shell or schedule via external monitoring:
 
 ```bash
 #!/bin/bash
-# /home/pi/scripts/health_check.sh
-
-# Check service
-if ! systemctl is-active --quiet storyline-ai; then
-    echo "CRITICAL: storyline-ai service is not running"
-    exit 2
-fi
+# health_check.sh - Run via Railway shell or external cron
 
 # Check for stuck posts
-STUCK=$(psql -U storyline_user -d storyline_ai -t -c \
+STUCK=$(psql "$DATABASE_URL" -t -c \
     "SELECT COUNT(*) FROM posting_queue WHERE status='pending' AND scheduled_for < NOW() - INTERVAL '1 hour'")
 
 if [ "$STUCK" -gt 5 ]; then
@@ -143,21 +134,22 @@ exit 0
 
 | Log | Location |
 |-----|----------|
-| Service logs | `journalctl -u storyline-ai` |
-| Application logs | Configured via `LOG_LEVEL` in `.env` |
-| PostgreSQL logs | `/var/log/postgresql/` |
+| Worker logs | Railway dashboard or `railway logs --service worker` |
+| Web/API logs | Railway dashboard or `railway logs --service web` |
+| Application logs | Configured via `LOG_LEVEL` env var (stdout, captured by Railway) |
+| PostgreSQL logs | Neon dashboard |
 
 ---
 
 ## Restart Procedures
 
 ```bash
-# Graceful restart
-ssh crogberrypi "sudo systemctl restart storyline-ai"
+# Restart via Railway CLI
+railway restart --service worker
 
-# Check it came back up
-ssh crogberrypi "systemctl status storyline-ai"
+# Or restart via Railway dashboard:
+# Project → Service → Settings → Restart
 
-# If stuck, force kill and restart
-ssh crogberrypi "sudo systemctl kill storyline-ai && sudo systemctl start storyline-ai"
+# Redeploy (pulls latest code and restarts)
+railway up --service worker
 ```

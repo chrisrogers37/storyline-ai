@@ -546,7 +546,7 @@ class TestMediaSyncServiceProviderCreation:
         """When source_root is empty and source_type is local, uses MEDIA_DIR."""
         mock_settings.MEDIA_SOURCE_TYPE = "local"
         mock_settings.MEDIA_SOURCE_ROOT = ""
-        mock_settings.MEDIA_DIR = "/home/pi/media"
+        mock_settings.MEDIA_DIR = "/tmp/media"
 
         mock_provider = Mock()
         mock_factory.create.return_value = mock_provider
@@ -556,7 +556,7 @@ class TestMediaSyncServiceProviderCreation:
 
         sync_service.sync()
 
-        mock_factory.create.assert_called_once_with("local", base_path="/home/pi/media")
+        mock_factory.create.assert_called_once_with("local", base_path="/tmp/media")
 
 
 # ==================== File Path Building Tests ====================

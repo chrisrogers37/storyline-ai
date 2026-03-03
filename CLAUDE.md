@@ -55,44 +55,27 @@ pytest
 
 ---
 
-## Remote Development (Raspberry Pi)
+## Cloud Deployment (Railway + Neon)
 
-The production system runs on a Raspberry Pi. SSH access is configured via alias (see `~/.ssh/config`).
+Production runs on Railway (worker + API services) with Neon PostgreSQL.
 
-### Connecting to the Pi
+### Database Access
 ```bash
-# SSH using configured alias (IP/hostname in ~/.ssh/config, not in repo)
-ssh crogberrypi
+# Connect to Neon production database (requires DATABASE_URL env var)
+psql "$DATABASE_URL"
 
-# Database access via SSH tunnel
-ssh -L 5433:localhost:5432 crogberrypi
-
-# Then connect locally through the tunnel:
-psql -h localhost -p 5433 -U storyline_user -d storyline_ai
-
-# Or run psql directly on the Pi:
-ssh crogberrypi "psql -U storyline_user -d storyline_ai -c 'SELECT 1;'"
+# Safe read-only queries
+psql "$DATABASE_URL" -c "SELECT * FROM posting_queue WHERE status = 'pending' ORDER BY scheduled_for;"
+psql "$DATABASE_URL" -c "SELECT * FROM posting_history ORDER BY posted_at DESC LIMIT 20;"
+psql "$DATABASE_URL" -c "SELECT * FROM service_runs ORDER BY started_at DESC LIMIT 20;"
 ```
 
-> **Note for contributors**: Set up your own SSH alias `crogberrypi` pointing to the Pi's IP.
+### Railway Services
+- **Worker**: `python -m src.main` (scheduler + Telegram bot)
+- **API**: `uvicorn src.api.app:app` (REST API + Mini App)
+- Env vars are per-service — must set on both worker AND API
 
-### Safe Database Queries
-```sql
--- Check queue status
-SELECT * FROM posting_queue WHERE status = 'pending' ORDER BY scheduled_for;
-
--- View recent posts
-SELECT * FROM posting_history ORDER BY posted_at DESC LIMIT 20;
-
--- Check media items
-SELECT id, file_name, category, times_posted, last_posted_at
-FROM media_items WHERE is_active = true LIMIT 50;
-
--- Service run history
-SELECT * FROM service_runs ORDER BY started_at DESC LIMIT 20;
-```
-
-### NEVER run on production Pi:
+### NEVER run on production:
 - `storyline-cli process-queue` (posts to Instagram)
 - `python -m src.main` (starts the posting scheduler)
 - Any INSERT/UPDATE/DELETE on `posting_history` without explicit approval
@@ -107,10 +90,10 @@ SELECT * FROM service_runs ORDER BY started_at DESC LIMIT 20;
 
 **Tech Stack**:
 - **Backend**: Python 3.10+, FastAPI (for API layer)
-- **Database**: PostgreSQL (with migration path from Raspberry Pi → Neon)
+- **Database**: Neon PostgreSQL (cloud)
 - **Primary UI**: Telegram Bot (team workflow)
 - **Future UI**: Next.js web frontend
-- **Deployment**: Raspberry Pi (local) → Railway/Render (cloud)
+- **Deployment**: Railway (worker + API services)
 
 ## Architecture at a Glance
 
