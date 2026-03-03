@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     POSTING_HOURS_START: int = 14  # UTC
     POSTING_HOURS_END: int = 2  # UTC (next day)
     REPOST_TTL_DAYS: int = 30
+    SKIP_TTL_DAYS: int = 45
 
     # Media Configuration
     MEDIA_DIR: str = "/home/pi/media"

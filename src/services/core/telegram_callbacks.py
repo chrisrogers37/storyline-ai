@@ -106,6 +106,12 @@ class TelegramCallbackHandlers:
             )
             self.service.lock_service.create_lock(str(queue_item.media_item_id))
             self.service.user_repo.increment_posts(str(user.id))
+        elif status == "skipped":
+            self.service.lock_service.create_lock(
+                str(queue_item.media_item_id),
+                ttl_days=settings.SKIP_TTL_DAYS,
+                lock_reason="skip",
+            )
 
         self.service.queue_repo.delete(queue_id)
         return media_item
@@ -165,8 +171,11 @@ class TelegramCallbackHandlers:
         callback_name: str,
     ):
         """Internal implementation of queue action completion (runs under lock)."""
-        queue_item = await validate_queue_item(self.service, queue_id, query)
+        # Atomic claim: prevents duplicate processing from rapid double-taps
+        queue_item = self.service.queue_repo.claim_for_processing(queue_id)
         if not queue_item:
+            # Already claimed by another handler — show contextual message
+            await validate_queue_item(self.service, queue_id, query)
             return
 
         # Execute DB operations with retry-once on SSL/connection errors
@@ -181,20 +190,34 @@ class TelegramCallbackHandlers:
             )
             self._refresh_repo_sessions()
 
-            # Re-fetch — may have been deleted by concurrent operation
-            queue_item = self.service.queue_repo.get_by_id(queue_id)
-            if not queue_item:
-                logger.info(f"Queue item {queue_id[:8]} gone after session refresh")
-                await query.edit_message_caption(
-                    caption="⚠️ This item was already processed."
+            # Check if history was already created before the error
+            existing_history = self.service.history_repo.get_by_queue_item_id(queue_id)
+            if existing_history:
+                logger.info(
+                    f"History already exists for queue {queue_id[:8]}, "
+                    f"cleaning up queue item only"
                 )
-                return
+                self.service.queue_repo.delete(queue_id)
+                media_item = self.service.media_repo.get_by_id(
+                    str(queue_item.media_item_id)
+                )
+            else:
+                # Re-fetch — may have been deleted by concurrent operation
+                queue_item = self.service.queue_repo.get_by_id(queue_id)
+                if not queue_item:
+                    logger.info(f"Queue item {queue_id[:8]} gone after session refresh")
+                    await query.edit_message_caption(
+                        caption="⚠️ This item was already processed."
+                    )
+                    return
 
-            # Retry once — if this fails, let it propagate
-            media_item = self._execute_complete_db_ops(
-                queue_id, queue_item, user, status, success
-            )
-            logger.info(f"Retry succeeded for {callback_name} on queue {queue_id[:8]}")
+                # Retry once — if this fails, let it propagate
+                media_item = self._execute_complete_db_ops(
+                    queue_id, queue_item, user, status, success
+                )
+                logger.info(
+                    f"Retry succeeded for {callback_name} on queue {queue_id[:8]}"
+                )
 
         # Update message
         await query.edit_message_caption(caption=caption)
@@ -382,20 +405,42 @@ class TelegramCallbackHandlers:
         logger.info(f"Reject cancelled by {self.service._get_display_name(user)}")
 
     async def handle_rejected(self, queue_id: str, user, query):
-        """Handle confirmed rejection - permanently blocks media."""
+        """Handle confirmed rejection - permanently blocks media.
+
+        Uses operation locks to prevent duplicate rejections from rapid clicks.
+        """
         # Signal any pending autopost to abort
         cancel_flag = self.service.get_cancel_flag(queue_id)
         cancel_flag.set()
 
-        queue_item = await validate_queue_item(self.service, queue_id, query)
-        if not queue_item:
+        lock = self.service.get_operation_lock(queue_id)
+        if lock.locked():
+            await query.answer("⏳ Already processing this item...", show_alert=False)
             return
 
-        # Immediate visual feedback: remove buttons to signal action received
-        try:
-            await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup([]))
-        except Exception:
-            logger.debug(f"Could not remove keyboard for rejected item {queue_id}")
+        async with lock:
+            try:
+                # Immediate visual feedback: remove buttons to signal action received
+                try:
+                    await query.edit_message_reply_markup(
+                        reply_markup=InlineKeyboardMarkup([])
+                    )
+                except Exception:
+                    logger.debug(
+                        f"Could not remove keyboard for rejected item {queue_id}"
+                    )
+
+                await self._do_handle_rejected(queue_id, user, query)
+            finally:
+                self.service.cleanup_operation_state(queue_id)
+
+    async def _do_handle_rejected(self, queue_id: str, user, query):
+        """Internal implementation of rejection (runs under lock)."""
+        # Atomic claim: prevents duplicate processing from rapid double-taps
+        queue_item = self.service.queue_repo.claim_for_processing(queue_id)
+        if not queue_item:
+            await validate_queue_item(self.service, queue_id, query)
+            return
 
         # Execute DB operations with retry-once on SSL/connection errors
         try:
@@ -407,16 +452,27 @@ class TelegramCallbackHandlers:
             )
             self._refresh_repo_sessions()
 
-            queue_item = self.service.queue_repo.get_by_id(queue_id)
-            if not queue_item:
-                logger.info(f"Queue item {queue_id[:8]} gone after session refresh")
-                await query.edit_message_caption(
-                    caption="⚠️ This item was already processed."
+            existing_history = self.service.history_repo.get_by_queue_item_id(queue_id)
+            if existing_history:
+                logger.info(
+                    f"History already exists for rejected queue {queue_id[:8]}, "
+                    f"cleaning up queue item only"
                 )
-                return
+                self.service.queue_repo.delete(queue_id)
+                media_item = self.service.media_repo.get_by_id(
+                    str(queue_item.media_item_id)
+                )
+            else:
+                queue_item = self.service.queue_repo.get_by_id(queue_id)
+                if not queue_item:
+                    logger.info(f"Queue item {queue_id[:8]} gone after session refresh")
+                    await query.edit_message_caption(
+                        caption="⚠️ This item was already processed."
+                    )
+                    return
 
-            media_item = self._execute_reject_db_ops(queue_id, queue_item, user)
-            logger.info(f"Retry succeeded for reject on queue {queue_id[:8]}")
+                media_item = self._execute_reject_db_ops(queue_id, queue_item, user)
+                logger.info(f"Retry succeeded for reject on queue {queue_id[:8]}")
 
         # Update message with clear feedback (respect verbose setting)
         verbose = self.service._is_verbose(query.message.chat_id)

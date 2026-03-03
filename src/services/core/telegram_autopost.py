@@ -99,8 +99,10 @@ class TelegramAutopostHandler:
 
     async def _locked_autopost(self, queue_id, user, query, cancel_flag):
         """Autopost implementation that runs under the operation lock."""
-        queue_item = await validate_queue_item(self.service, queue_id, query)
+        # Atomic claim: prevents duplicate auto-posts from rapid double-taps
+        queue_item = self.service.queue_repo.claim_for_processing(queue_id)
         if not queue_item:
+            await validate_queue_item(self.service, queue_id, query)
             return
 
         # Get media item

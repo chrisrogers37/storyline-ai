@@ -12,6 +12,7 @@ from src.services.core.posting import PostingService
 from src.services.core.telegram_service import TelegramService
 from src.services.core.media_lock import MediaLockService
 from src.services.core.media_sync import MediaSyncService
+from src.repositories.queue_repository import QueueRepository
 
 # Track session statistics
 session_start_time = None
@@ -36,8 +37,16 @@ async def run_scheduler_loop(
     global session_posts_sent
     logger.info("Starting scheduler loop...")
 
+    queue_repo = QueueRepository()
+
     while True:
         try:
+            # Reset items stuck in 'processing' from crashed handlers
+            stale_count = queue_repo.reset_stale_processing()
+            if stale_count > 0:
+                logger.warning(
+                    f"Reset {stale_count} stale processing item(s) back to pending"
+                )
             if settings_service:
                 active_chats = settings_service.get_all_active_chats()
             else:

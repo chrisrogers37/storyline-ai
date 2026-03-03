@@ -6,6 +6,7 @@ from sqlalchemy import and_
 
 from src.repositories.base_repository import BaseRepository
 from src.models.posting_queue import PostingQueue
+from src.utils.logger import logger
 
 
 class QueueRepository(BaseRepository):
@@ -23,6 +24,36 @@ class QueueRepository(BaseRepository):
             .filter(PostingQueue.id == queue_id)
             .first()
         )
+
+    def claim_for_processing(self, queue_id: str) -> Optional[PostingQueue]:
+        """Atomically claim a queue item for callback processing.
+
+        Uses SELECT ... FOR UPDATE SKIP LOCKED so that if two callbacks hit
+        the same item concurrently, the second gets None instead of a
+        duplicate.
+
+        Items arrive in 'processing' from the scheduler. Callbacks may also
+        arrive when items are still 'pending' (e.g. /next force-post).
+        We accept both states.
+
+        Returns:
+            The claimed PostingQueue item (now in 'processing'), or None if
+            already claimed or not found.
+        """
+        queue_item = (
+            self.db.query(PostingQueue)
+            .filter(
+                PostingQueue.id == queue_id,
+                PostingQueue.status.in_(["pending", "processing"]),
+            )
+            .with_for_update(skip_locked=True)
+            .first()
+        )
+        if queue_item is None:
+            return None
+        queue_item.status = "processing"
+        self.db.commit()
+        return queue_item
 
     def get_by_id_prefix(
         self, id_prefix: str, chat_settings_id: Optional[str] = None
@@ -214,6 +245,42 @@ class QueueRepository(BaseRepository):
             self.db.commit()
             return True
         return False
+
+    def reset_stale_processing(self, stale_threshold_hours: int = 2) -> int:
+        """Reset items stuck in 'processing' status back to 'pending'.
+
+        Items can get stuck in 'processing' if a callback handler crashes or
+        the bot restarts mid-operation. This method resets items that have been
+        in 'processing' longer than the threshold.
+
+        Args:
+            stale_threshold_hours: Hours after which a processing item is
+                considered stale (default: 2).
+
+        Returns:
+            Number of items reset.
+        """
+        cutoff = datetime.utcnow() - timedelta(hours=stale_threshold_hours)
+        stale_items = (
+            self.db.query(PostingQueue)
+            .filter(
+                PostingQueue.status == "processing",
+                PostingQueue.scheduled_for <= cutoff,
+            )
+            .all()
+        )
+
+        for item in stale_items:
+            item.status = "pending"
+            logger.warning(
+                f"Reset stale processing item {item.id} "
+                f"(scheduled_for={item.scheduled_for}) back to pending"
+            )
+
+        if stale_items:
+            self.db.commit()
+
+        return len(stale_items)
 
     def delete_all_pending(self, chat_settings_id: Optional[str] = None) -> int:
         """Delete all pending queue items. Returns count of deleted items."""

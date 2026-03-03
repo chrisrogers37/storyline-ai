@@ -8,9 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Double-tap duplicate posting** — Race condition where rapid button clicks (Posted, Skip, Reject, Auto Post) could process the same queue item 2-3x within seconds, creating duplicate history entries. Added atomic `claim_for_processing()` using `SELECT ... FOR UPDATE SKIP LOCKED` so only the first callback succeeds; subsequent clicks see a "already processed" message.
+- **OperationalError retry creating duplicate history** — When an SSL/connection error triggered the retry path, the retry could create a second history entry if the first attempt partially succeeded. Retry now checks `get_by_queue_item_id()` before retrying and skips if history already exists.
+- **Stale processing queue items** — Items stuck in `processing` status from crashed callback handlers (observed 3 orphaned items Feb 25-26) are now automatically reset to `pending` after 2 hours. Runs every scheduler loop iteration (once per minute).
 - **Stale callback crash in button handlers** — Inline button clicks (Auto Post, Posted, Skip, etc.) during deploy transitions would silently fail with "Query is too old" error, preventing the actual action from executing. `_handle_callback` now catches stale `query.answer()` failures gracefully and continues processing the callback.
 - **Google Drive token expiry error handling** — When Google Drive OAuth token expires or is revoked, `/next` now shows a "Reconnect Google Drive" button instead of a generic "Failed to send. Check logs for details." error. `GoogleDriveAuthError` propagates from `send_notification()` instead of being swallowed, with automatic detection of `google.auth.RefreshError` in the exception chain. `PostingService` catches the error in `_execute_force_post`, `_post_via_telegram`, and `process_pending_posts`, sending a rate-limited (1/hr) proactive alert to Telegram when scheduled posting fails due to auth issues.
 - **Stale Google Drive token detection** — `/status` now shows "Needs Reconnection" instead of "Connected" when the access token expired more than 7 days ago. Dashboard API returns `gdrive_needs_reconnect` flag for the same condition.
+
+### Added
+- **Skip cooldown lock** — Skipped items now receive a 45-day TTL lock (configurable via `SKIP_TTL_DAYS` setting), preventing them from immediately re-entering the eligible pool. Previously, skipped items cycled back repeatedly while 4,011 of 4,619 items had never been sent.
+- **Operation lock on reject handler** — `handle_rejected` now uses the same `get_operation_lock` pattern as posted/skipped handlers, preventing duplicate rejections from rapid clicks.
 
 ### Changed
 - **Telegram service split** — Extracted `TelegramNotificationService` (~280 lines) from `telegram_service.py` (795 -> 533 lines), isolating notification sending, caption building, keyboard construction, and header emoji logic into a dedicated module. `TelegramService` keeps thin delegation methods for backward compatibility.
