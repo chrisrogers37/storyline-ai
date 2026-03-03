@@ -420,3 +420,72 @@ class TestOverduePendingQuery:
         result = queue_repo.get_overdue_pending()
 
         assert result == []
+
+
+@pytest.mark.unit
+class TestClaimForProcessing:
+    """Tests for atomic claim_for_processing method."""
+
+    def test_claim_for_processing_returns_item(self, queue_repo, mock_db):
+        """claim_for_processing returns the item and sets status to processing."""
+        mock_item = MagicMock()
+        mock_item.status = "pending"
+        mock_query = mock_db.query.return_value
+        mock_query.filter.return_value = mock_query
+        mock_query.with_for_update.return_value = mock_query
+        mock_query.first.return_value = mock_item
+
+        result = queue_repo.claim_for_processing("some-id")
+
+        assert result is mock_item
+        assert mock_item.status == "processing"
+        mock_db.commit.assert_called_once()
+
+    def test_claim_for_processing_returns_none_when_missing(self, queue_repo, mock_db):
+        """claim_for_processing returns None when item doesn't exist."""
+        mock_query = mock_db.query.return_value
+        mock_query.filter.return_value = mock_query
+        mock_query.with_for_update.return_value = mock_query
+        mock_query.first.return_value = None
+
+        result = queue_repo.claim_for_processing("nonexistent")
+
+        assert result is None
+        mock_db.commit.assert_not_called()
+
+
+@pytest.mark.unit
+class TestResetStaleProcessing:
+    """Tests for reset_stale_processing method."""
+
+    def test_reset_stale_processing_resets_items(self, queue_repo, mock_db):
+        """Stale processing items are reset back to pending."""
+        mock_item1 = MagicMock(
+            status="processing",
+            scheduled_for=datetime(2026, 1, 1, 10, 0),
+        )
+        mock_item2 = MagicMock(
+            status="processing",
+            scheduled_for=datetime(2026, 1, 1, 12, 0),
+        )
+        mock_query = mock_db.query.return_value
+        mock_query.filter.return_value = mock_query
+        mock_query.all.return_value = [mock_item1, mock_item2]
+
+        result = queue_repo.reset_stale_processing()
+
+        assert result == 2
+        assert mock_item1.status == "pending"
+        assert mock_item2.status == "pending"
+        mock_db.commit.assert_called_once()
+
+    def test_reset_stale_processing_no_stale_items(self, queue_repo, mock_db):
+        """No stale items → returns 0, no commit."""
+        mock_query = mock_db.query.return_value
+        mock_query.filter.return_value = mock_query
+        mock_query.all.return_value = []
+
+        result = queue_repo.reset_stale_processing()
+
+        assert result == 0
+        mock_db.commit.assert_not_called()

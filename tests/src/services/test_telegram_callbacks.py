@@ -80,6 +80,7 @@ class TestRejectConfirmation:
         mock_queue_item = Mock()
         mock_queue_item.media_item_id = uuid4()
         service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
 
         mock_media_item = Mock()
         mock_media_item.file_name = "test_image.jpg"
@@ -137,6 +138,7 @@ class TestRejectConfirmation:
         mock_queue_item.created_at = datetime.utcnow()
         mock_queue_item.scheduled_for = datetime.utcnow()
         service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
 
         mock_media_item = Mock()
         mock_media_item.file_name = "rejected_image.jpg"
@@ -176,6 +178,7 @@ class TestRejectConfirmation:
         mock_queue_item = Mock()
         mock_queue_item.media_item_id = uuid4()
         service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
 
         mock_media_item = Mock()
         mock_media_item.file_name = "test.jpg"
@@ -407,6 +410,7 @@ class TestVerbosePostedSkipped:
         mock_queue_item.created_at = datetime.utcnow()
         mock_queue_item.scheduled_for = datetime.utcnow()
         service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
 
         mock_media = Mock()
         mock_media.file_name = "test.jpg"
@@ -445,6 +449,7 @@ class TestVerbosePostedSkipped:
         mock_queue_item.created_at = datetime.utcnow()
         mock_queue_item.scheduled_for = datetime.utcnow()
         service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
 
         mock_media = Mock()
         mock_media.file_name = "test.jpg"
@@ -483,6 +488,7 @@ class TestVerbosePostedSkipped:
         mock_queue_item.created_at = datetime.utcnow()
         mock_queue_item.scheduled_for = datetime.utcnow()
         service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
 
         mock_media = Mock()
         mock_media.file_name = "test.jpg"
@@ -521,6 +527,7 @@ class TestVerboseRejected:
         mock_queue_item.created_at = datetime.utcnow()
         mock_queue_item.scheduled_for = datetime.utcnow()
         service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
 
         mock_media = Mock()
         mock_media.file_name = "rejected.jpg"
@@ -560,6 +567,7 @@ class TestVerboseRejected:
         mock_queue_item.created_at = datetime.utcnow()
         mock_queue_item.scheduled_for = datetime.utcnow()
         service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
 
         mock_media = Mock()
         mock_media.file_name = "rejected.jpg"
@@ -605,6 +613,7 @@ class TestCompleteQueueAction:
         mock_queue_item.created_at = datetime.utcnow()
         mock_queue_item.scheduled_for = datetime.utcnow()
         service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
         service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
 
         mock_user = Mock()
@@ -630,8 +639,8 @@ class TestCompleteQueueAction:
         service.queue_repo.delete.assert_called_once_with(queue_id)
 
     @pytest.mark.asyncio
-    async def test_skipped_does_not_create_lock(self, mock_callback_handlers):
-        """Test skipped action does NOT create lock or increment counters."""
+    async def test_skipped_creates_skip_lock(self, mock_callback_handlers):
+        """Test skipped action creates a skip TTL lock but does NOT increment counters."""
         handlers = mock_callback_handlers
         service = handlers.service
         queue_id = str(uuid4())
@@ -642,6 +651,7 @@ class TestCompleteQueueAction:
         mock_queue_item.created_at = datetime.utcnow()
         mock_queue_item.scheduled_for = datetime.utcnow()
         service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
         service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
 
         mock_user = Mock()
@@ -662,15 +672,18 @@ class TestCompleteQueueAction:
         )
 
         service.media_repo.increment_times_posted.assert_not_called()
-        service.lock_service.create_lock.assert_not_called()
+        service.lock_service.create_lock.assert_called_once_with(
+            str(media_id), ttl_days=45, lock_reason="skip"
+        )
         service.user_repo.increment_posts.assert_not_called()
         service.queue_repo.delete.assert_called_once_with(queue_id)
 
     @pytest.mark.asyncio
     async def test_queue_item_not_found(self, mock_callback_handlers):
-        """Test complete_queue_action handles missing queue item."""
+        """Test complete_queue_action handles missing queue item via claim failure."""
         handlers = mock_callback_handlers
         service = handlers.service
+        service.queue_repo.claim_for_processing.return_value = None
         service.queue_repo.get_by_id.return_value = None
         service.history_repo.get_by_queue_item_id.return_value = None
 
@@ -706,6 +719,7 @@ class TestEarlyProcessingFeedback:
         mock_queue_item.created_at = datetime.utcnow()
         mock_queue_item.scheduled_for = datetime.utcnow()
         service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
         service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
 
         mock_user = Mock()
@@ -751,6 +765,7 @@ class TestEarlyProcessingFeedback:
         mock_queue_item.created_at = datetime.utcnow()
         mock_queue_item.scheduled_for = datetime.utcnow()
         service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
         service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
 
         mock_user = Mock()
@@ -791,6 +806,7 @@ class TestEarlyProcessingFeedback:
         mock_queue_item.scheduled_for = datetime.utcnow()
         mock_queue_item.chat_settings_id = uuid4()
         service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
 
         mock_media = Mock()
         mock_media.file_name = "test.jpg"
@@ -841,6 +857,7 @@ class TestRaceConditionHandling:
         mock_queue_item.created_at = datetime.utcnow()
         mock_queue_item.scheduled_for = datetime.utcnow()
         service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
 
         mock_media = Mock()
         mock_media.file_name = "test.jpg"
@@ -865,7 +882,8 @@ class TestRaceConditionHandling:
         assert service.history_repo.create.call_count == 1
 
         # Second click on the same item - lock is cleaned up so a new one is created,
-        # but queue_repo.get_by_id returns None (item was deleted)
+        # but claim_for_processing returns None (item was already claimed/deleted)
+        service.queue_repo.claim_for_processing.return_value = None
         service.queue_repo.get_by_id.return_value = None
         mock_query_2 = AsyncMock()
         mock_query_2.message = Mock(chat_id=-100123, message_id=1)
@@ -930,6 +948,7 @@ class TestRaceConditionHandling:
         mock_queue_item.created_at = datetime.utcnow()
         mock_queue_item.scheduled_for = datetime.utcnow()
         service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
         service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
 
         mock_user = Mock()
@@ -960,6 +979,7 @@ class TestRaceConditionHandling:
         mock_queue_item.created_at = datetime.utcnow()
         mock_queue_item.scheduled_for = datetime.utcnow()
         service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
         service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
 
         mock_settings = Mock()
@@ -995,6 +1015,7 @@ class TestRaceConditionHandling:
         mock_queue_item.created_at = datetime.utcnow()
         mock_queue_item.scheduled_for = datetime.utcnow()
         service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
         service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
 
         mock_user = Mock()
@@ -1034,6 +1055,7 @@ class TestRaceConditionHandling:
         mock_queue_item.created_at = datetime.utcnow()
         mock_queue_item.scheduled_for = datetime.utcnow()
         service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
 
         mock_media = Mock()
         mock_media.file_name = "test.jpg"
@@ -1078,6 +1100,7 @@ class TestSSLRetry:
         mock_queue_item.scheduled_for = datetime.utcnow()
         mock_queue_item.chat_settings_id = uuid4()
         service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
         service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
 
         mock_user = Mock()
@@ -1090,6 +1113,8 @@ class TestSSLRetry:
         # First history_repo.create raises OperationalError, second succeeds
         op_error = OperationalError("SSL closed", {}, Exception("SSL"))
         service.history_repo.create.side_effect = [op_error, Mock()]
+        # No existing history → retry should proceed
+        service.history_repo.get_by_queue_item_id.return_value = None
 
         await handlers.complete_queue_action(
             queue_id,
@@ -1115,6 +1140,7 @@ class TestSSLRetry:
         mock_queue_item.created_at = datetime.utcnow()
         mock_queue_item.scheduled_for = datetime.utcnow()
         service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
         service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
 
         mock_user = Mock()
@@ -1151,6 +1177,7 @@ class TestSSLRetry:
         mock_queue_item.scheduled_for = datetime.utcnow()
         mock_queue_item.chat_settings_id = uuid4()
         service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
         service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
 
         mock_user = Mock()
@@ -1162,6 +1189,8 @@ class TestSSLRetry:
 
         op_error = OperationalError("SSL closed", {}, Exception("SSL"))
         service.history_repo.create.side_effect = [op_error, op_error]
+        # No existing history → retry should proceed (and fail again)
+        service.history_repo.get_by_queue_item_id.return_value = None
 
         with pytest.raises(OperationalError):
             await handlers._do_complete_queue_action(
@@ -1184,8 +1213,10 @@ class TestSSLRetry:
         mock_queue_item.media_item_id = uuid4()
         mock_queue_item.created_at = datetime.utcnow()
         mock_queue_item.scheduled_for = datetime.utcnow()
-        # First get_by_id returns item, second returns None (gone after refresh)
-        service.queue_repo.get_by_id.side_effect = [mock_queue_item, None]
+        # claim_for_processing returns item (initial claim succeeds)
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
+        # get_by_id returns None on re-fetch after error
+        service.queue_repo.get_by_id.return_value = None
         service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
 
         mock_user = Mock()
@@ -1197,6 +1228,8 @@ class TestSSLRetry:
 
         op_error = OperationalError("SSL closed", {}, Exception("SSL"))
         service.history_repo.create.side_effect = op_error
+        # No existing history → retry path checks get_by_id
+        service.history_repo.get_by_queue_item_id.return_value = None
 
         await handlers._do_complete_queue_action(
             queue_id,
@@ -1224,6 +1257,7 @@ class TestSSLRetry:
         mock_queue_item.scheduled_for = datetime.utcnow()
         mock_queue_item.chat_settings_id = uuid4()
         service.queue_repo.get_by_id.return_value = mock_queue_item
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
         service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
 
         mock_settings = Mock()
@@ -1240,7 +1274,152 @@ class TestSSLRetry:
 
         op_error = OperationalError("SSL closed", {}, Exception("SSL"))
         service.history_repo.create.side_effect = [op_error, Mock()]
+        # No existing history → retry should proceed
+        service.history_repo.get_by_queue_item_id.return_value = None
 
         await handlers.handle_rejected(queue_id, mock_user, mock_query)
 
         assert service.history_repo.create.call_count == 2
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestAtomicClaim:
+    """Tests for atomic claim_for_processing guard."""
+
+    async def test_claim_failure_shows_already_processed(self, mock_callback_handlers):
+        """When claim_for_processing returns None, no history is created."""
+        handlers = mock_callback_handlers
+        service = handlers.service
+        queue_id = str(uuid4())
+
+        # claim fails (another handler already claimed it)
+        service.queue_repo.claim_for_processing.return_value = None
+        # validate_queue_item fallback: item gone, history exists
+        service.queue_repo.get_by_id.return_value = None
+        history = Mock(status="posted", posting_method="telegram_manual")
+        service.history_repo.get_by_queue_item_id.return_value = history
+
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100123, message_id=1)
+
+        await handlers.complete_queue_action(
+            queue_id,
+            Mock(),
+            mock_query,
+            status="posted",
+            success=True,
+            caption="✅ Test",
+            callback_name="posted",
+        )
+
+        # No history created (claim failed, fallback showed message)
+        service.history_repo.create.assert_not_called()
+        service.queue_repo.delete.assert_not_called()
+
+    async def test_claim_success_proceeds_normally(self, mock_callback_handlers):
+        """When claim_for_processing succeeds, full flow executes."""
+        handlers = mock_callback_handlers
+        service = handlers.service
+        queue_id = str(uuid4())
+
+        mock_queue_item = Mock()
+        mock_queue_item.media_item_id = uuid4()
+        mock_queue_item.created_at = datetime.utcnow()
+        mock_queue_item.scheduled_for = datetime.utcnow()
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
+        service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "tester"
+
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100123, message_id=1)
+
+        await handlers.complete_queue_action(
+            queue_id,
+            mock_user,
+            mock_query,
+            status="posted",
+            success=True,
+            caption="✅ Test",
+            callback_name="posted",
+        )
+
+        service.history_repo.create.assert_called_once()
+        service.queue_repo.delete.assert_called_once_with(queue_id)
+
+    async def test_rejected_uses_operation_lock(self, mock_callback_handlers):
+        """handle_rejected respects operation lock (prevents double rejection)."""
+        handlers = mock_callback_handlers
+        service = handlers.service
+        queue_id = str(uuid4())
+
+        # Pre-acquire the lock to simulate an in-progress operation
+        lock = service.get_operation_lock(queue_id)
+        await lock.acquire()
+
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100123, message_id=1)
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "rejecter"
+        mock_user.telegram_first_name = "Test"
+
+        await handlers.handle_rejected(queue_id, mock_user, mock_query)
+
+        # Should show "Already processing" feedback
+        mock_query.answer.assert_called_once_with(
+            "⏳ Already processing this item...", show_alert=False
+        )
+
+        # Should NOT create history or lock (action was blocked)
+        service.history_repo.create.assert_not_called()
+        service.lock_service.create_permanent_lock.assert_not_called()
+
+        lock.release()
+
+    async def test_retry_skips_duplicate_history(self, mock_callback_handlers):
+        """OperationalError retry checks for existing history before retrying."""
+        handlers = mock_callback_handlers
+        service = handlers.service
+        queue_id = str(uuid4())
+
+        mock_queue_item = Mock()
+        mock_queue_item.media_item_id = uuid4()
+        mock_queue_item.created_at = datetime.utcnow()
+        mock_queue_item.scheduled_for = datetime.utcnow()
+        mock_queue_item.chat_settings_id = uuid4()
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
+        service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        mock_user.telegram_username = "tester"
+
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100123, message_id=1)
+
+        # First create raises OperationalError
+        op_error = OperationalError("SSL closed", {}, Exception("SSL"))
+        service.history_repo.create.side_effect = op_error
+        # History already exists (written before the error)
+        service.history_repo.get_by_queue_item_id.return_value = Mock(status="skipped")
+
+        await handlers._do_complete_queue_action(
+            queue_id,
+            mock_user,
+            mock_query,
+            status="skipped",
+            success=False,
+            caption="⏭️ Test",
+            callback_name="skip",
+        )
+
+        # history_repo.create called only once (the failing attempt);
+        # retry was skipped because history already existed
+        assert service.history_repo.create.call_count == 1
+        # Queue item still cleaned up
+        service.queue_repo.delete.assert_called_once_with(queue_id)

@@ -28,7 +28,7 @@ class MediaLockService(BaseService):
         Args:
             media_item_id: ID of media item to lock
             ttl_days: Days to lock (default: from settings, None for permanent)
-            lock_reason: Reason for lock ('recent_post', 'manual_hold', 'seasonal', 'permanent_reject')
+            lock_reason: Reason for lock ('recent_post', 'skip', 'manual_hold', 'seasonal', 'permanent_reject')
             created_by_user_id: User who created the lock (optional)
 
         Returns:

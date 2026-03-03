@@ -25,7 +25,11 @@ class TestSchedulerLoop:
         settings_service.get_all_active_chats.return_value = [chat1, chat2]
 
         # First sleep (end of iteration 1) raises to break loop after one pass
-        with patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        with (
+            patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch("src.main.QueueRepository") as mock_queue_repo_cls,
+        ):
+            mock_queue_repo_cls.return_value.reset_stale_processing.return_value = 0
             mock_sleep.side_effect = StopAsyncIteration
             try:
                 await run_scheduler_loop(posting_service, settings_service)
@@ -49,7 +53,11 @@ class TestSchedulerLoop:
         settings_service = Mock()
         settings_service.get_all_active_chats.return_value = []
 
-        with patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        with (
+            patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch("src.main.QueueRepository") as mock_queue_repo_cls,
+        ):
+            mock_queue_repo_cls.return_value.reset_stale_processing.return_value = 0
             mock_sleep.side_effect = StopAsyncIteration
             try:
                 await run_scheduler_loop(posting_service, settings_service)
@@ -68,7 +76,11 @@ class TestSchedulerLoop:
         )
         posting_service.cleanup_transactions = Mock()
 
-        with patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        with (
+            patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch("src.main.QueueRepository") as mock_queue_repo_cls,
+        ):
+            mock_queue_repo_cls.return_value.reset_stale_processing.return_value = 0
             mock_sleep.side_effect = StopAsyncIteration
             try:
                 await run_scheduler_loop(posting_service, None)
@@ -95,7 +107,11 @@ class TestSchedulerLoop:
         settings_service = Mock()
         settings_service.get_all_active_chats.return_value = [chat1, chat2]
 
-        with patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        with (
+            patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch("src.main.QueueRepository") as mock_queue_repo_cls,
+        ):
+            mock_queue_repo_cls.return_value.reset_stale_processing.return_value = 0
             mock_sleep.side_effect = StopAsyncIteration
             try:
                 await run_scheduler_loop(posting_service, settings_service)

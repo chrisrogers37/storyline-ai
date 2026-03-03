@@ -484,7 +484,10 @@ class PostingService(BaseService):
         Rate-limited to at most once per hour to avoid spamming the channel.
         """
         now = time.monotonic()
-        if now - PostingService._last_gdrive_alert_time < 3600:
+        if (
+            PostingService._last_gdrive_alert_time > 0
+            and now - PostingService._last_gdrive_alert_time < 3600
+        ):
             logger.debug("Skipping Google Drive auth alert (rate-limited)")
             return
 
