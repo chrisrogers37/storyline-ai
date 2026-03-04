@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Landing site scaffold** — Next.js 16 marketing site in `landing/` directory with Tailwind CSS v4, shadcn/ui, Drizzle ORM (Neon), Geist fonts, and shared layout (header + footer). Includes waitlist schema definition, site config, and initial shadcn components (button, input, badge, accordion, card, separator). Matches established patterns from other projects.
+- **Landing page sections** — Complete landing page with 8 composable sections: Hero (headline + waitlist form + social proof), How It Works (3-step grid with icons), Telegram Preview (split layout with pure CSS dark-mode Telegram mockup), Features (2x3 card grid), Pricing (free beta checklist), FAQ (8-item accordion), Final CTA (footer waitlist form). Visual-only waitlist placeholder ready for Phase 03 API integration.
 - **Landing site design docs** — Phased implementation plans for landing page, waitlist system, and onboarding guide in `documentation/planning/phases/landing-site_2026-03-04/`
 - **Waitlist system** — Full-stack waitlist signup flow for the landing site
   - API route (`/api/waitlist`) with email validation, duplicate detection (unique constraint), and error handling

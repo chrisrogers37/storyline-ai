@@ -1,6 +1,7 @@
 # Phase 03 — Waitlist System
 
-**Status**: 📋 PENDING
+**Status**: 🔧 IN PROGRESS
+**Started**: 2026-03-04
 **Effort**: Small
 **Dependencies**: Phase 01 (Project Scaffold)
 
