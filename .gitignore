@@ -84,3 +84,4 @@ Thumbs.db
 landing/node_modules/
 landing/.next/
 landing/.env.local
+!landing/src/lib/
