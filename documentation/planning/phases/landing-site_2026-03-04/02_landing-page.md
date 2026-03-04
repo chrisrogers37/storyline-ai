@@ -1,6 +1,7 @@
 # Phase 02 — Landing Page
 
-**Status**: 📋 PENDING
+**Status**: 🔧 IN PROGRESS
+**Started**: 2026-03-04
 **Effort**: Medium
 **Dependencies**: Phase 01 (Project Scaffold)
 

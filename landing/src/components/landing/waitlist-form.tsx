@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, type FormEvent } from "react"
-import { Input } from "@/components/ui/input"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 
 interface WaitlistFormProps {
@@ -10,80 +10,126 @@ interface WaitlistFormProps {
   className?: string
 }
 
-export function WaitlistForm({ variant = "hero", className }: WaitlistFormProps) {
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const STORAGE_KEY = "storyline-waitlist-registered"
+
+type FormStatus = "idle" | "submitting" | "success" | "error" | "duplicate"
+
+function getInitialStatus(): FormStatus {
+  if (typeof window !== "undefined" && localStorage.getItem(STORAGE_KEY)) {
+    return "duplicate"
+  }
+  return "idle"
+}
+
+function getInitialMessage(): string {
+  if (typeof window !== "undefined" && localStorage.getItem(STORAGE_KEY)) {
+    return "You're already on the list!"
+  }
+  return ""
+}
+
+export function WaitlistForm({
+  variant = "hero",
+  className,
+}: WaitlistFormProps) {
   const [email, setEmail] = useState("")
-  const [status, setStatus] = useState<"idle" | "submitting" | "success">("idle")
-  const [error, setError] = useState("")
+  const [status, setStatus] = useState<FormStatus>(getInitialStatus)
+  const [message, setMessage] = useState(getInitialMessage)
 
-  function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setError("")
 
-    if (!email || !email.includes("@") || !email.includes(".")) {
-      setError("Please enter a valid email address.")
+    if (!email || !EMAIL_REGEX.test(email)) {
+      setStatus("error")
+      setMessage("Please enter a valid email address.")
       return
     }
 
     setStatus("submitting")
-    // Phase 03 will replace this with an actual API call
-    console.log("Waitlist signup:", email)
 
-    setTimeout(() => {
-      setStatus("success")
-    }, 1000)
+    try {
+      const res = await fetch("/api/waitlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      })
+
+      const data = await res.json()
+
+      if (data.status === "success") {
+        if (data.alreadyRegistered) {
+          setStatus("duplicate")
+          setMessage(data.message)
+        } else {
+          setStatus("success")
+          setMessage(data.message)
+        }
+        localStorage.setItem(STORAGE_KEY, "true")
+      } else {
+        setStatus("error")
+        setMessage(data.message || "Something went wrong. Please try again.")
+      }
+    } catch {
+      setStatus("error")
+      setMessage("Something went wrong. Please try again.")
+    }
   }
 
-  if (status === "success") {
+  if (status === "success" || status === "duplicate") {
     return (
       <div
-        id={variant === "hero" ? "waitlist" : undefined}
+        id="waitlist"
         className={cn("text-center", className)}
+        role="status"
         aria-live="polite"
       >
-        <p className="text-sm font-medium text-foreground">
-          You&apos;re on the list! We&apos;ll be in touch.
-        </p>
+        <p className="text-lg font-medium">{message}</p>
+        {status === "success" && (
+          <p className="text-sm text-muted-foreground mt-1">
+            We&apos;ll be in touch.
+          </p>
+        )}
       </div>
     )
   }
 
   return (
-    <div
-      id={variant === "hero" ? "waitlist" : undefined}
-      className={cn("w-full", className)}
+    <form
+      id="waitlist"
+      onSubmit={handleSubmit}
+      className={cn(
+        "flex w-full gap-2",
+        variant === "hero"
+          ? "max-w-md mx-auto flex-col sm:flex-row"
+          : "max-w-sm mx-auto flex-col sm:flex-row",
+        className
+      )}
     >
-      <form
-        onSubmit={handleSubmit}
-        className="mx-auto flex max-w-md flex-col gap-2 sm:flex-row"
-        noValidate
-      >
-        <label htmlFor={`email-${variant}`} className="sr-only">
-          Email address
-        </label>
-        <Input
-          id={`email-${variant}`}
-          type="email"
-          placeholder="you@example.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          disabled={status === "submitting"}
-          aria-invalid={error ? true : undefined}
-          className="h-10 flex-1"
-        />
-        <Button
-          type="submit"
-          size="lg"
-          disabled={status === "submitting"}
-          className="h-10 whitespace-nowrap"
-        >
-          {status === "submitting" ? "Joining..." : "Join the Waitlist"}
-        </Button>
-      </form>
-      <div aria-live="polite" className="mt-2 min-h-[1.25rem] text-center">
-        {error && (
-          <p className="text-sm text-destructive">{error}</p>
-        )}
-      </div>
-    </div>
+      <label htmlFor={`waitlist-email-${variant}`} className="sr-only">
+        Email address
+      </label>
+      <Input
+        id={`waitlist-email-${variant}`}
+        type="email"
+        placeholder="you@example.com"
+        value={email}
+        onChange={(e) => {
+          setEmail(e.target.value)
+          if (status === "error") setStatus("idle")
+        }}
+        disabled={status === "submitting"}
+        className="flex-1"
+        required
+      />
+      <Button type="submit" disabled={status === "submitting"}>
+        {status === "submitting" ? "Joining..." : "Join the Waitlist"}
+      </Button>
+      {status === "error" && (
+        <p className="text-sm text-destructive" role="alert" aria-live="assertive">
+          {message}
+        </p>
+      )}
+    </form>
   )
 }
