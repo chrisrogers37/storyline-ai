@@ -1,0 +1,135 @@
+"use client"
+
+import { useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { cn } from "@/lib/utils"
+
+interface WaitlistFormProps {
+  variant?: "hero" | "footer"
+  className?: string
+}
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const STORAGE_KEY = "storyline-waitlist-registered"
+
+type FormStatus = "idle" | "submitting" | "success" | "error" | "duplicate"
+
+function getInitialStatus(): FormStatus {
+  if (typeof window !== "undefined" && localStorage.getItem(STORAGE_KEY)) {
+    return "duplicate"
+  }
+  return "idle"
+}
+
+function getInitialMessage(): string {
+  if (typeof window !== "undefined" && localStorage.getItem(STORAGE_KEY)) {
+    return "You're already on the list!"
+  }
+  return ""
+}
+
+export function WaitlistForm({
+  variant = "hero",
+  className,
+}: WaitlistFormProps) {
+  const [email, setEmail] = useState("")
+  const [status, setStatus] = useState<FormStatus>(getInitialStatus)
+  const [message, setMessage] = useState(getInitialMessage)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+
+    if (!email || !EMAIL_REGEX.test(email)) {
+      setStatus("error")
+      setMessage("Please enter a valid email address.")
+      return
+    }
+
+    setStatus("submitting")
+
+    try {
+      const res = await fetch("/api/waitlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      })
+
+      const data = await res.json()
+
+      if (data.status === "success") {
+        if (data.alreadyRegistered) {
+          setStatus("duplicate")
+          setMessage(data.message)
+        } else {
+          setStatus("success")
+          setMessage(data.message)
+        }
+        localStorage.setItem(STORAGE_KEY, "true")
+      } else {
+        setStatus("error")
+        setMessage(data.message || "Something went wrong. Please try again.")
+      }
+    } catch {
+      setStatus("error")
+      setMessage("Something went wrong. Please try again.")
+    }
+  }
+
+  if (status === "success" || status === "duplicate") {
+    return (
+      <div
+        id="waitlist"
+        className={cn("text-center", className)}
+        role="status"
+        aria-live="polite"
+      >
+        <p className="text-lg font-medium">{message}</p>
+        {status === "success" && (
+          <p className="text-sm text-muted-foreground mt-1">
+            We&apos;ll be in touch.
+          </p>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <form
+      id="waitlist"
+      onSubmit={handleSubmit}
+      className={cn(
+        "flex w-full gap-2",
+        variant === "hero"
+          ? "max-w-md mx-auto flex-col sm:flex-row"
+          : "max-w-sm mx-auto flex-col sm:flex-row",
+        className
+      )}
+    >
+      <label htmlFor={`waitlist-email-${variant}`} className="sr-only">
+        Email address
+      </label>
+      <Input
+        id={`waitlist-email-${variant}`}
+        type="email"
+        placeholder="you@example.com"
+        value={email}
+        onChange={(e) => {
+          setEmail(e.target.value)
+          if (status === "error") setStatus("idle")
+        }}
+        disabled={status === "submitting"}
+        className="flex-1"
+        required
+      />
+      <Button type="submit" disabled={status === "submitting"}>
+        {status === "submitting" ? "Joining..." : "Join the Waitlist"}
+      </Button>
+      {status === "error" && (
+        <p className="text-sm text-destructive" role="alert" aria-live="assertive">
+          {message}
+        </p>
+      )}
+    </form>
+  )
+}
