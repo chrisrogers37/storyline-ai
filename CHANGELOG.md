@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - API route (`/api/waitlist`) with email validation, duplicate detection (unique constraint), and error handling
   - Telegram admin notification on new signups (fire-and-forget, graceful fallback when env vars missing)
   - `WaitlistForm` client component with hero/footer variants, localStorage persistence for returning visitors, loading/success/error/duplicate states, and accessible markup (sr-only labels, aria-live regions)
+- **Onboarding guide** — Unlisted `/setup` pages for accepted waitlist users covering all prerequisites
+  - 6 setup pages: overview/checklist, Instagram Business account, Meta Developer app, Google Drive OAuth, media organization, Telegram bot connection
+  - Shared setup layout with sidebar navigation (desktop) and horizontal nav (mobile), "Back to home" link, and "Need help?" contact footer
+  - 6 reusable setup components: `StepCard` (numbered steps), `Callout` (info/warning/tip variants), `Screenshot` (placeholder with caption), `Checklist` (static visual), `CopyButton` (click-to-copy), `SetupNav` (section navigation with active state)
+  - Pages are `noindex`/`nofollow` and not linked from the main landing page navigation
+  - Previous/next navigation between all guide sections
 
 ### Fixed
 - **Double-tap duplicate posting** — Race condition where rapid button clicks (Posted, Skip, Reject, Auto Post) could process the same queue item 2-3x within seconds, creating duplicate history entries. Added atomic `claim_for_processing()` using `SELECT ... FOR UPDATE SKIP LOCKED` so only the first callback succeeds; subsequent clicks see a "already processed" message.
