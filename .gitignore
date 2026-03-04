@@ -79,3 +79,8 @@ Thumbs.db
 # Claude Code local settings (contains accumulated permissions)
 .claude/settings.local.json
 .claude/worktrees/
+
+# Landing site (Next.js)
+landing/node_modules/
+landing/.next/
+landing/.env.local

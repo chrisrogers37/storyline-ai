@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Landing site scaffold** — Next.js 16 marketing site in `landing/` directory with Tailwind CSS v4, shadcn/ui, Drizzle ORM (Neon), Geist fonts, and shared layout (header + footer). Includes waitlist schema definition, site config, and initial shadcn components (button, input, badge, accordion, card, separator). Matches established patterns from other projects.
+- **Landing site design docs** — Phased implementation plans for landing page, waitlist system, and onboarding guide in `documentation/planning/phases/landing-site_2026-03-04/`
+
 ### Fixed
 - **Double-tap duplicate posting** — Race condition where rapid button clicks (Posted, Skip, Reject, Auto Post) could process the same queue item 2-3x within seconds, creating duplicate history entries. Added atomic `claim_for_processing()` using `SELECT ... FOR UPDATE SKIP LOCKED` so only the first callback succeeds; subsequent clicks see a "already processed" message.
 - **OperationalError retry creating duplicate history** — When an SSL/connection error triggered the retry path, the retry could create a second history entry if the first attempt partially succeeded. Retry now checks `get_by_queue_item_id()` before retrying and skips if history already exists.
