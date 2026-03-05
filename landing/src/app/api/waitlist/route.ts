@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import { getDb } from "@/lib/db"
 import { waitlistSignups } from "@/lib/schema"
 import { notifyAdmin } from "@/lib/telegram"
 
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-      await db.insert(waitlistSignups).values({ email })
+      await getDb().insert(waitlistSignups).values({ email })
     } catch (err: unknown) {
       // Unique constraint violation = already registered
       if (
