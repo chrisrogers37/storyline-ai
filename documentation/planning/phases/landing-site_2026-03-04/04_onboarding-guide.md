@@ -1,6 +1,9 @@
 # Phase 04 — Onboarding Guide
 
-**Status**: 📋 PENDING
+**Status**: ✅ COMPLETE
+**Started**: 2026-03-04
+**Completed**: 2026-03-04
+**PR**: #100
 **Effort**: Medium
 **Dependencies**: Phase 01 (Project Scaffold)
 
@@ -21,28 +24,22 @@ The guide must be extremely detailed because the prerequisites (Meta Developer s
 /setup/connect                → Telegram bot link + what to expect next
 ```
 
-These pages are **server-rendered static content** — no API calls, no auth, no dynamic data. Pure MDX or TSX content pages.
+These pages are **server-rendered static content** — no API calls, no auth, no dynamic data. Pure TSX content pages.
 
 ## Implementation Approach
 
-### Option A: MDX pages (recommended)
-
-Use `@next/mdx` or `next-mdx-remote` to write guide content in Markdown with embedded components (callouts, screenshots, step indicators). This is the fastest way to write long-form instructional content.
+TSX pages with reusable setup components. No MDX, no `@tailwindcss/typography` — prose sections are styled directly with Tailwind utility classes. The content is highly structured (numbered steps, callouts, copy buttons) which makes TSX components a better fit than free-form markdown. Zero new dependencies.
 
 ```
 src/app/setup/
 ├── page.tsx                    # Overview + checklist
 ├── layout.tsx                  # Shared setup layout (sidebar nav, progress)
-├── instagram/page.mdx          # Instagram Business setup
-├── meta-developer/page.mdx     # Meta Developer setup
-├── google-drive/page.mdx       # Google Drive setup
-├── media-organize/page.mdx     # Media organization
-└── connect/page.mdx            # Telegram connection
+├── instagram/page.tsx          # Instagram Business setup
+├── meta-developer/page.tsx     # Meta Developer setup
+├── google-drive/page.tsx       # Google Drive setup
+├── media-organize/page.tsx     # Media organization
+└── connect/page.tsx            # Telegram connection
 ```
-
-### Option B: TSX pages with prose sections
-
-If MDX setup is too heavy, use TSX pages with a `<Prose>` wrapper component for long-form text styling. Tailwind Typography plugin (`@tailwindcss/typography`) handles the formatting.
 
 ### Shared Layout
 
@@ -59,8 +56,8 @@ If MDX setup is too heavy, use TSX pages with a `<Prose>` wrapper component for 
 src/components/setup/
 ├── step-card.tsx              # Numbered step with title + description
 ├── callout.tsx                # Info, warning, tip callout boxes
-├── screenshot.tsx             # Image with border, caption, zoom capability
-├── checklist.tsx              # Interactive checkbox list (client-side only, no persistence)
+├── screenshot.tsx             # Image placeholder with border and caption (no zoom for v1)
+├── checklist.tsx              # Static visual checklist (server-rendered, no interactivity)
 ├── copy-button.tsx            # Click-to-copy for URLs, IDs, etc.
 └── setup-nav.tsx              # Side/top navigation between guide sections
 ```
@@ -346,8 +343,8 @@ Start with Instagram → [Set Up Instagram](/setup/instagram)
 - **Tone**: Friendly, patient, thorough. Assume the user has never used a developer console before. Over-explain rather than under-explain.
 - **Screenshots**: Use placeholder boxes with captions during development. Real screenshots added before sharing with users.
 - **Code/values to copy**: Use the `<CopyButton>` component for anything the user needs to paste (URLs, IDs, etc.)
-- **Checklist persistence**: The overview checklist can use localStorage to persist checks across visits. Nice-to-have, not required for v1.
-- **Print-friendly**: Consider adding `@media print` styles — some users will want to print the Meta section.
+- **Checklist**: Static visual checklist — no localStorage, no interactivity. Users track progress themselves.
+- **Print-friendly**: Deferred — no `@media print` styles for v1.
 
 ## Acceptance Criteria
 
