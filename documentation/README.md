@@ -69,6 +69,13 @@ documentation/
 **[phases/07_dashboard_ui.md](planning/phases/07_dashboard_ui.md)** - PENDING
 - Next.js web dashboard, analytics visualizations, media-product management
 
+### Feed & Queue Features (Research)
+
+**[feed-queue-features/00_OVERVIEW.md](planning/feed-queue-features/00_OVERVIEW.md)** - RESEARCH (3 workstreams)
+- **[01: Live Story Visibility](planning/feed-queue-features/01_live_story_visibility.md)** — Fetch & display live stories in `/status` (Ready)
+- **[02: Feed Reset](planning/feed-queue-features/02_feed_reset.md)** — Clear live stories from Instagram (Blocked — no DELETE API)
+- **[03: Queue Enhancements](planning/feed-queue-features/03_queue_enhancements.md)** — Queue preview, health indicators, quick refill (Ready)
+
 ### Other Planning Documents
 
 **[01B_telegram_mini_app_secure_input.md](planning/01B_telegram_mini_app_secure_input.md)** - PENDING (Future)
