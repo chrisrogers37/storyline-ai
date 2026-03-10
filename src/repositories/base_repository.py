@@ -39,8 +39,8 @@ class BaseRepository:
             )
             try:
                 self._db.close()
-            except Exception:
-                pass
+            except Exception as close_err:
+                logger.warning(f"Failed to close broken session: {close_err}")
             self._db_generator = get_db()
             self._db = next(self._db_generator)
         return self._db
@@ -74,18 +74,22 @@ class BaseRepository:
         """
         try:
             self._db.commit()
-        except Exception:
+        except Exception as commit_err:
             # If commit fails on a read-only transaction, rollback
+            logger.debug(f"Read transaction commit failed, rolling back: {commit_err}")
             try:
                 self._db.rollback()
-            except Exception:
+            except Exception as rollback_err:
                 # Both commit and rollback failed — connection is dead.
                 # Replace the session entirely.
-                logger.warning("Session unrecoverable, creating fresh session")
+                logger.warning(
+                    f"Session unrecoverable (commit: {commit_err}, "
+                    f"rollback: {rollback_err}), creating fresh session"
+                )
                 try:
                     self._db.close()
-                except Exception:
-                    pass
+                except Exception as close_err:
+                    logger.warning(f"Failed to close dead session: {close_err}")
                 self._db_generator = get_db()
                 self._db = next(self._db_generator)
 

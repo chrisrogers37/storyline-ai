@@ -71,6 +71,18 @@ class TelegramCallbackHandlers:
                 await self._do_complete_queue_action(
                     queue_id, user, query, status, success, caption, callback_name
                 )
+            except Exception as e:
+                logger.error(
+                    f"Failed to complete {callback_name} for queue {queue_id[:8]}: "
+                    f"{type(e).__name__}: {e}",
+                    exc_info=True,
+                )
+                try:
+                    await query.edit_message_caption(
+                        caption="❌ Error processing action. Please try again or use /next."
+                    )
+                except Exception:
+                    pass  # Message may already be gone
             finally:
                 self.service.cleanup_operation_state(queue_id)
 
@@ -431,6 +443,17 @@ class TelegramCallbackHandlers:
                     )
 
                 await self._do_handle_rejected(queue_id, user, query)
+            except Exception as e:
+                logger.error(
+                    f"Failed to reject queue {queue_id[:8]}: {type(e).__name__}: {e}",
+                    exc_info=True,
+                )
+                try:
+                    await query.edit_message_caption(
+                        caption="❌ Error rejecting item. Please try again."
+                    )
+                except Exception:
+                    pass  # Message may already be gone
             finally:
                 self.service.cleanup_operation_state(queue_id)
 
@@ -519,6 +542,23 @@ class TelegramCallbackHandlers:
 
     async def handle_resume_callback(self, action: str, user, query):
         """Handle resume callback buttons (reschedule/clear/force)."""
+        try:
+            await self._do_resume_callback(action, user, query)
+        except Exception as e:
+            logger.error(
+                f"Failed to handle resume:{action}: {type(e).__name__}: {e}",
+                exc_info=True,
+            )
+            try:
+                await query.edit_message_text(
+                    "❌ Error during resume. Please try /settings.",
+                    parse_mode="Markdown",
+                )
+            except Exception:
+                pass
+
+    async def _do_resume_callback(self, action: str, user, query):
+        """Internal implementation of resume callback."""
         now = datetime.utcnow()
         all_pending = self.service.queue_repo.get_all(status="pending")
         overdue = [p for p in all_pending if p.scheduled_for < now]
@@ -592,35 +632,48 @@ class TelegramCallbackHandlers:
 
         Legacy: kept for backward compat with old /reset confirmation messages.
         """
-        if action == "confirm":
-            # Reset queue - clear all pending posts
-            all_pending = self.service.queue_repo.get_all(status="pending")
-            cleared = 0
-            for item in all_pending:
-                self.service.queue_repo.delete(str(item.id))
-                cleared += 1
+        try:
+            if action == "confirm":
+                # Reset queue - clear all pending posts
+                all_pending = self.service.queue_repo.get_all(status="pending")
+                cleared = 0
+                for item in all_pending:
+                    self.service.queue_repo.delete(str(item.id))
+                    cleared += 1
 
-            await query.edit_message_text(
-                f"✅ *Queue Cleared*\n\n"
-                f"🗑️ Removed {cleared} pending posts.\n"
-                f"Media items remain in library.",
-                parse_mode="Markdown",
-            )
-            logger.info(
-                f"Queue cleared by {self.service._get_display_name(user)}: "
-                f"{cleared} posts removed"
-            )
+                await query.edit_message_text(
+                    f"✅ *Queue Cleared*\n\n"
+                    f"🗑️ Removed {cleared} pending posts.\n"
+                    f"Media items remain in library.",
+                    parse_mode="Markdown",
+                )
+                logger.info(
+                    f"Queue cleared by {self.service._get_display_name(user)}: "
+                    f"{cleared} posts removed"
+                )
 
-        elif action == "cancel":
-            await query.edit_message_text(
-                "❌ *Cancelled*\n\nQueue was not cleared.", parse_mode="Markdown"
-            )
+            elif action == "cancel":
+                await query.edit_message_text(
+                    "❌ *Cancelled*\n\nQueue was not cleared.", parse_mode="Markdown"
+                )
 
-        # Log interaction
-        self.service.interaction_service.log_callback(
-            user_id=str(user.id),
-            callback_name=f"clear:{action}",
-            context={"action": action},
-            telegram_chat_id=query.message.chat_id,
-            telegram_message_id=query.message.message_id,
-        )
+            # Log interaction
+            self.service.interaction_service.log_callback(
+                user_id=str(user.id),
+                callback_name=f"clear:{action}",
+                context={"action": action},
+                telegram_chat_id=query.message.chat_id,
+                telegram_message_id=query.message.message_id,
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to handle reset:{action}: {type(e).__name__}: {e}",
+                exc_info=True,
+            )
+            try:
+                await query.edit_message_text(
+                    "❌ Error clearing queue. Please try again.",
+                    parse_mode="Markdown",
+                )
+            except Exception:
+                pass

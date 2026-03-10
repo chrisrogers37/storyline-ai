@@ -47,8 +47,11 @@ class BaseService(ABC):
                     attr.end_read_transaction()
                 elif isinstance(attr, BaseService) and attr is not self:
                     attr.cleanup_transactions()
-            except Exception:
-                pass  # Suppress errors during cleanup
+            except Exception as e:
+                logger.warning(
+                    f"[{self.service_name}] Transaction cleanup failed for "
+                    f"{attr_name}: {type(e).__name__}: {e}"
+                )
 
     def close(self):
         """
@@ -62,8 +65,11 @@ class BaseService(ABC):
                 attr = getattr(self, attr_name, None)
                 if isinstance(attr, BaseRepository):
                     attr.close()
-            except Exception:
-                pass  # Suppress errors during cleanup
+            except Exception as e:
+                logger.warning(
+                    f"[{self.service_name}] Error closing repo {attr_name}: "
+                    f"{type(e).__name__}: {e}"
+                )
 
     def __enter__(self):
         """Context manager entry."""
@@ -157,8 +163,11 @@ class BaseService(ABC):
                     stack_trace=stack_trace,
                     duration_ms=duration_ms,
                 )
-            except Exception:
-                pass  # Don't let logging failures block recovery
+            except Exception as log_err:
+                logger.warning(
+                    f"[{self.service_name}.{method_name}] "
+                    f"Failed to record service run failure: {log_err}"
+                )
 
             logger.error(
                 f"[{self.service_name}.{method_name}] Failed after {duration_ms}ms: {error_message}",

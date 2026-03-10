@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Silent error swallowing across service layers** — Replaced ~15 bare `except Exception: pass` blocks in BaseService, BaseRepository, TelegramService, and main.py's transaction cleanup loop with proper `logger.warning()` calls that include exception type and message. Previously, DB connection failures, session recovery errors, and transaction cleanup issues were completely invisible in logs.
+- **Missing user feedback on callback failures** — When Telegram callback handlers (Posted, Skip, Reject, Resume, Reset) failed after removing the action buttons, users were left with no buttons and no error message. Added try/except wrappers around `complete_queue_action`, `handle_rejected`, `handle_resume_callback`, and `handle_reset_callback` that show an error message to the user when operations fail.
+- **Unhandled exceptions in callback dispatcher** — Top-level `_handle_callback` in TelegramService had no catch-all error handler, so unhandled exceptions in callback processing were only logged by the application error handler with no user feedback. Added an `except Exception` block that logs the error and shows a "Something went wrong" alert to the user.
+- **Settings toggle errors shown as generic failure** — `handle_settings_toggle` only caught `ValueError`, so database errors during toggle would propagate unhandled. Added catch-all that shows a user-friendly "Failed to update setting" alert.
+- **Debug-level logs hiding real issues** — Upgraded several important error paths from `logger.debug` to `logger.warning`: session recovery in BaseRepository, sync status check failures in commands, and interaction repo cleanup failures. These were previously invisible unless running at debug log level.
+
 ### Added
 - **Landing site scaffold** — Next.js 16 marketing site in `landing/` directory with Tailwind CSS v4, shadcn/ui, Drizzle ORM (Neon), Geist fonts, and shared layout (header + footer). Includes waitlist schema definition, site config, and initial shadcn components (button, input, badge, accordion, card, separator). Matches established patterns from other projects.
 - **Landing page sections** — Complete landing page with 8 composable sections: Hero (headline + waitlist form + social proof), How It Works (3-step grid with icons), Telegram Preview (split layout with pure CSS dark-mode Telegram mockup), Features (2x3 card grid), Pricing (free beta checklist), FAQ (8-item accordion), Final CTA (footer waitlist form). Visual-only waitlist placeholder ready for Phase 03 API integration.

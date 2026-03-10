@@ -192,6 +192,12 @@ class TelegramSettingsHandlers:
 
         except ValueError as e:
             await query.answer(f"Error: {e}", show_alert=True)
+        except Exception as e:
+            logger.error(f"Failed to toggle {setting_name}: {e}", exc_info=True)
+            await query.answer(
+                "⚠️ Failed to update setting. Please try again.",
+                show_alert=True,
+            )
 
     async def refresh_settings_message(self, query, show_answer: bool = True):
         """Refresh the settings message with current values."""
@@ -215,8 +221,11 @@ class TelegramSettingsHandlers:
         try:
             await query.message.delete()
         except Exception as e:
-            logger.warning(f"Could not delete settings message: {e}")
-            await query.answer("Could not close menu")
+            logger.debug(f"Could not delete settings message: {e}")
+            try:
+                await query.answer("Could not close menu")
+            except Exception:
+                pass
 
     async def handle_settings_edit_start(self, setting_name: str, user, query, context):
         """Start editing a numeric setting (posts_per_day or hours)."""

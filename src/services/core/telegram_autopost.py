@@ -88,9 +88,9 @@ class TelegramAutopostHandler:
                     await query.edit_message_reply_markup(
                         reply_markup=InlineKeyboardMarkup([])
                     )
-                except Exception:
+                except Exception as e:
                     logger.debug(
-                        f"Could not remove keyboard for autopost item {queue_id}"
+                        f"Could not remove keyboard for autopost item {queue_id}: {e}"
                     )
 
                 await self._locked_autopost(queue_id, user, query, cancel_flag)
@@ -210,7 +210,8 @@ class TelegramAutopostHandler:
                 telegram_chat_id=ctx.chat_id
             )
             return f"@{account_info.get('username', 'Unknown')}"
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Could not fetch account display info: {e}")
             return "Unknown account"
 
     async def _upload_to_cloudinary(self, ctx: AutopostContext) -> bool:

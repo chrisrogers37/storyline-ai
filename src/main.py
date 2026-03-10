@@ -149,8 +149,11 @@ async def transaction_cleanup_loop(services: list):
         for service in services:
             try:
                 service.cleanup_transactions()
-            except Exception:
-                pass  # Suppress cleanup errors
+            except Exception as e:
+                logger.warning(
+                    f"Transaction cleanup failed for {type(service).__name__}: "
+                    f"{type(e).__name__}: {e}"
+                )
 
 
 async def media_sync_loop(

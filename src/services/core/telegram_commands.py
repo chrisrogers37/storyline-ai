@@ -242,7 +242,7 @@ class TelegramCommandHandlers:
                 f"\n   └─ {last_sync.get('started_at', 'N/A')[:16]}"
             )
         except Exception as e:
-            logger.debug(f"Sync status check failed: {e}")
+            logger.warning(f"Sync status check failed: {type(e).__name__}: {e}")
             return "🔄 Media Sync: ❓ Check failed"
 
     # ==================== Setup Status Helpers ====================
@@ -543,8 +543,8 @@ class TelegramCommandHandlers:
         try:
             await response.delete()
             await update.message.delete()  # Also delete the user's /cleanup command
-        except Exception:
-            pass  # Ignore errors if already deleted
+        except Exception as e:
+            logger.debug(f"Could not auto-delete cleanup messages: {e}")
 
     async def handle_removed_command(self, update, context):
         """Handle removed commands with a helpful redirect message."""
