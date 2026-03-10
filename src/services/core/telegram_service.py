@@ -92,8 +92,11 @@ class TelegramService(BaseService):
         super().cleanup_transactions()
         try:
             self.interaction_service.interaction_repo.end_read_transaction()
-        except Exception:
-            pass  # Suppress errors during cleanup (matches base class pattern)
+        except Exception as e:
+            logger.warning(
+                f"[TelegramService] Interaction repo cleanup failed: "
+                f"{type(e).__name__}: {e}"
+            )
 
     @property
     def is_paused(self) -> bool:
@@ -326,9 +329,8 @@ class TelegramService(BaseService):
         1. Dictionary lookup for standard (data, user, query) handlers
         2. Special-case method for handlers with non-standard signatures or sub-routing
         """
+        query = update.callback_query
         try:
-            query = update.callback_query
-
             logger.info(f"📞 Callback received: {query.data}")
 
             try:
@@ -363,6 +365,20 @@ class TelegramService(BaseService):
                 return
 
             logger.warning(f"Unknown callback action: {action}")
+
+        except Exception as e:
+            logger.error(
+                f"Unhandled error in callback '{query.data}': {type(e).__name__}: {e}",
+                exc_info=True,
+            )
+            # Try to give the user some feedback
+            try:
+                await query.answer(
+                    "⚠️ Something went wrong. Please try again.",
+                    show_alert=True,
+                )
+            except Exception:
+                pass  # query.answer may have already been called
 
         finally:
             # Clean up open transactions to prevent "idle in transaction"
