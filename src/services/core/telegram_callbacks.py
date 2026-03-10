@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
+from contextlib import contextmanager
+
 from sqlalchemy.exc import OperationalError
 
 from src.config.settings import settings
@@ -87,38 +89,58 @@ class TelegramCallbackHandlers:
             finally:
                 self.service.cleanup_operation_state(queue_id)
 
-    def _get_shared_repos(self):
-        """Get all repos involved in queue action DB operations."""
-        return [
-            self.service.history_repo,
-            self.service.media_repo,
-            self.service.queue_repo,
-            self.service.user_repo,
-            self.service.lock_service.lock_repo,
-        ]
-
-    def _share_session(self, repos):
-        """Share one DB session across repos and return originals for restore.
+    @contextmanager
+    def _shared_session(self):
+        """Share one DB session across all repos for multi-step operations.
 
         Reduces connection pool usage from 5 connections to 1 during
         multi-step queue operations. Also ensures consistent failure mode:
         if the connection dies mid-operation, all subsequent steps fail
         immediately on the same dead session rather than unpredictably
         succeeding/failing on different connections.
+
+        On exception, rolls back the shared session to clear uncommitted state.
+        Original sessions are always restored in the finally block.
         """
+        repos = [
+            self.service.history_repo,
+            self.service.media_repo,
+            self.service.queue_repo,
+            self.service.user_repo,
+            self.service.lock_service.lock_repo,
+        ]
         primary_session = self.service.history_repo.db
         originals = {}
         for repo in repos:
             originals[id(repo)] = repo._db
             repo.use_session(primary_session)
-        return originals
+        try:
+            yield
+        except Exception:
+            self.service.history_repo.rollback()
+            raise
+        finally:
+            for repo in repos:
+                if id(repo) in originals:
+                    repo.use_session(originals[id(repo)])
 
-    def _restore_sessions(self, repos, originals):
-        """Restore original sessions after shared-session operation."""
-        for repo in repos:
-            original = originals.get(id(repo))
-            if original is not None:
-                repo._db = original
+    def _create_history_params(self, queue_id, queue_item, user, status, success):
+        """Build HistoryCreateParams for a queue action."""
+        return HistoryCreateParams(
+            media_item_id=str(queue_item.media_item_id),
+            queue_item_id=queue_id,
+            queue_created_at=queue_item.created_at,
+            queue_deleted_at=datetime.utcnow(),
+            scheduled_for=queue_item.scheduled_for,
+            posted_at=datetime.utcnow(),
+            status=status,
+            success=success,
+            posted_by_user_id=str(user.id),
+            posted_by_telegram_username=user.telegram_username,
+            chat_settings_id=str(queue_item.chat_settings_id)
+            if queue_item.chat_settings_id
+            else None,
+        )
 
     def _execute_complete_db_ops(self, queue_id, queue_item, user, status, success):
         """Execute core DB operations for completing a queue action.
@@ -129,29 +151,13 @@ class TelegramCallbackHandlers:
         Separated to enable retry on OperationalError.
         Returns the media_item.
         """
-        repos = self._get_shared_repos()
-        originals = self._share_session(repos)
-        try:
+        with self._shared_session():
             media_item = self.service.media_repo.get_by_id(
                 str(queue_item.media_item_id)
             )
 
             self.service.history_repo.create(
-                HistoryCreateParams(
-                    media_item_id=str(queue_item.media_item_id),
-                    queue_item_id=queue_id,
-                    queue_created_at=queue_item.created_at,
-                    queue_deleted_at=datetime.utcnow(),
-                    scheduled_for=queue_item.scheduled_for,
-                    posted_at=datetime.utcnow(),
-                    status=status,
-                    success=success,
-                    posted_by_user_id=str(user.id),
-                    posted_by_telegram_username=user.telegram_username,
-                    chat_settings_id=str(queue_item.chat_settings_id)
-                    if queue_item.chat_settings_id
-                    else None,
-                )
+                self._create_history_params(queue_id, queue_item, user, status, success)
             )
 
             if status == "posted":
@@ -169,17 +175,6 @@ class TelegramCallbackHandlers:
 
             self.service.queue_repo.delete(queue_id)
             return media_item
-        except Exception:
-            # Rollback the shared session to clear any uncommitted state
-            try:
-                self.service.history_repo._db.rollback()
-            except Exception as rb_err:
-                logger.warning(
-                    f"Rollback failed during shared-session cleanup: {rb_err}"
-                )
-            raise
-        finally:
-            self._restore_sessions(repos, originals)
 
     def _execute_reject_db_ops(self, queue_id, queue_item, user):
         """Execute core DB operations for rejecting a queue item.
@@ -190,28 +185,14 @@ class TelegramCallbackHandlers:
         Separated to enable retry on OperationalError.
         Returns the media_item.
         """
-        repos = self._get_shared_repos()
-        originals = self._share_session(repos)
-        try:
+        with self._shared_session():
             media_item = self.service.media_repo.get_by_id(
                 str(queue_item.media_item_id)
             )
 
             self.service.history_repo.create(
-                HistoryCreateParams(
-                    media_item_id=str(queue_item.media_item_id),
-                    queue_item_id=queue_id,
-                    queue_created_at=queue_item.created_at,
-                    queue_deleted_at=datetime.utcnow(),
-                    scheduled_for=queue_item.scheduled_for,
-                    posted_at=datetime.utcnow(),
-                    status="rejected",
-                    success=False,
-                    posted_by_user_id=str(user.id),
-                    posted_by_telegram_username=user.telegram_username,
-                    chat_settings_id=str(queue_item.chat_settings_id)
-                    if queue_item.chat_settings_id
-                    else None,
+                self._create_history_params(
+                    queue_id, queue_item, user, "rejected", False
                 )
             )
 
@@ -221,16 +202,6 @@ class TelegramCallbackHandlers:
 
             self.service.queue_repo.delete(queue_id)
             return media_item
-        except Exception:
-            try:
-                self.service.history_repo._db.rollback()
-            except Exception as rb_err:
-                logger.warning(
-                    f"Rollback failed during shared-session cleanup: {rb_err}"
-                )
-            raise
-        finally:
-            self._restore_sessions(repos, originals)
 
     def _refresh_repo_sessions(self):
         """Force session refresh on all repos used by callback DB operations."""
@@ -289,8 +260,9 @@ class TelegramCallbackHandlers:
                 queue_item = self.service.queue_repo.get_by_id(queue_id)
                 if not queue_item:
                     logger.info(f"Queue item {queue_id[:8]} gone after session refresh")
-                    await query.edit_message_caption(
-                        caption="⚠️ This item was already processed."
+                    await telegram_edit_with_retry(
+                        query.edit_message_caption,
+                        caption="⚠️ This item was already processed.",
                     )
                     return
 
@@ -565,8 +537,9 @@ class TelegramCallbackHandlers:
                 queue_item = self.service.queue_repo.get_by_id(queue_id)
                 if not queue_item:
                     logger.info(f"Queue item {queue_id[:8]} gone after session refresh")
-                    await query.edit_message_caption(
-                        caption="⚠️ This item was already processed."
+                    await telegram_edit_with_retry(
+                        query.edit_message_caption,
+                        caption="⚠️ This item was already processed.",
                     )
                     return
 
