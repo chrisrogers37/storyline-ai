@@ -2,10 +2,12 @@
 
 from typing import Optional
 
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from src.config.database import get_db
 from src.utils.logger import logger
+from src.utils.resilience import db_circuit_breaker
 
 
 class BaseRepository:
@@ -14,6 +16,10 @@ class BaseRepository:
 
     Handles database session lifecycle to prevent connection pool exhaustion.
     Sessions are created on demand and must be closed when done.
+
+    Integrates with a circuit breaker so that when the database is
+    unreachable, subsequent operations fail fast instead of hanging
+    for 30 seconds on the pool timeout.
 
     IMPORTANT: Always call commit() after write operations and
     end_read_transaction() after read-only operations to prevent
@@ -26,7 +32,19 @@ class BaseRepository:
 
     @property
     def db(self) -> Session:
-        """Get the database session, ensuring it's in a clean state."""
+        """Get the database session, ensuring it's in a clean state.
+
+        Checks the circuit breaker before returning the session. If the
+        circuit is open (DB has been failing), raises OperationalError
+        immediately instead of waiting for a pool timeout.
+        """
+        if not db_circuit_breaker.allow_request():
+            raise OperationalError(
+                "Database circuit breaker is open — failing fast",
+                params=None,
+                orig=None,
+            )
+
         # Rollback any failed transaction to reset session state
         try:
             if not self._db.is_active:
@@ -37,6 +55,7 @@ class BaseRepository:
             logger.warning(
                 f"Session recovery rollback failed, creating new session: {e}"
             )
+            db_circuit_breaker.record_failure()
             try:
                 self._db.close()
             except Exception as close_err:
@@ -49,8 +68,10 @@ class BaseRepository:
         """Commit the current transaction."""
         try:
             self._db.commit()
+            db_circuit_breaker.record_success()
         except Exception as e:
             logger.warning(f"Error during commit: {e}")
+            db_circuit_breaker.record_failure()
             self._db.rollback()
             raise
 
@@ -136,6 +157,19 @@ class BaseRepository:
         """Context manager exit - ensures session is closed."""
         self.close()
         return False  # Don't suppress exceptions
+
+    def use_session(self, session: Session):
+        """Temporarily use a shared session for coordinated multi-repo transactions.
+
+        This allows multiple repositories to operate on the same database
+        session so their writes can be committed or rolled back atomically.
+
+        The caller is responsible for committing or rolling back the shared session.
+
+        Args:
+            session: An existing SQLAlchemy Session to use instead of this repo's own.
+        """
+        self._db = session
 
     def _apply_tenant_filter(
         self, query, model_class, chat_settings_id: Optional[str] = None

@@ -143,9 +143,18 @@ async def transaction_cleanup_loop(services: list):
 
     This prevents "idle in transaction" connections from piling up,
     which can cause the bot to freeze when handling callbacks.
+
+    Also logs connection pool utilization every cycle so that pool
+    exhaustion is visible in logs before it causes freezes.
     """
+    from src.utils.resilience import log_pool_status
+
     while True:
         await asyncio.sleep(30)  # Run every 30 seconds
+
+        # Log pool status for monitoring
+        log_pool_status()
+
         for service in services:
             try:
                 service.cleanup_transactions()

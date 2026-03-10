@@ -21,6 +21,7 @@ from src.services.core.telegram_utils import (
     validate_queue_item,
 )
 from src.utils.logger import logger
+from src.utils.resilience import telegram_edit_with_retry
 from datetime import datetime
 
 if TYPE_CHECKING:
@@ -315,7 +316,8 @@ class TelegramAutopostHandler:
                 f"📸 Account: {account_display}\n"
                 f"Tested by: {self.service._get_display_name(ctx.user)}"
             )
-        await ctx.query.edit_message_caption(
+        await telegram_edit_with_retry(
+            ctx.query.edit_message_caption,
             caption=caption,
             reply_markup=InlineKeyboardMarkup(keyboard),
         )
@@ -429,7 +431,9 @@ class TelegramAutopostHandler:
                 f"{self.service._get_display_name(ctx.user)}"
             )
 
-        await ctx.query.edit_message_caption(caption=caption, parse_mode="Markdown")
+        await telegram_edit_with_retry(
+            ctx.query.edit_message_caption, caption=caption, parse_mode="Markdown"
+        )
 
         self.service.interaction_service.log_callback(
             user_id=str(ctx.user.id),
@@ -479,7 +483,8 @@ class TelegramAutopostHandler:
             ctx.queue_id, enable_instagram_api=settings.ENABLE_INSTAGRAM_API
         )
 
-        await ctx.query.edit_message_caption(
+        await telegram_edit_with_retry(
+            ctx.query.edit_message_caption,
             caption=caption,
             reply_markup=reply_markup,
             parse_mode="Markdown",
