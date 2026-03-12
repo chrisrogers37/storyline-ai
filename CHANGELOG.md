@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `force_post_next()` now accepts `telegram_chat_id` and scopes queue queries to tenant
   - Regenerate schedule action uses `delete_all_pending()` with tenant scoping
   - Migration 018: Backfills `chat_settings_id` on existing orphaned queue items
+- **Backlogged queue items immediately discarded** — `discard_abandoned_processing()` was deleting items within 1 minute of being sent to Telegram because it checked `scheduled_for` (the original schedule date, often days old) instead of when the item actually entered processing. Now `_post_via_telegram()` and `_execute_force_post()` stamp `scheduled_for` to `now()` when transitioning to processing, giving users the full 24h window to act on notifications.
 
 ### Added
 - **Database circuit breaker** — Fail-fast mechanism in BaseRepository that opens after 5 consecutive DB failures, rejecting requests immediately with `OperationalError` instead of hanging 30 seconds on pool timeout. Auto-recovers after 30 seconds via half-open probe. Prevents cascading hangs when Neon DB is unreachable.

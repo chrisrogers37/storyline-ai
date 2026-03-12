@@ -1,7 +1,7 @@
 """Posting service - orchestrate the posting process."""
 
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Optional
 
 from src.exceptions.google_drive import GoogleDriveAuthError
@@ -124,6 +124,9 @@ class PostingService(BaseService):
                 )
 
             self.queue_repo.update_status(queue_item_id, "processing")
+            # Stamp scheduled_for to now so discard_abandoned_processing()
+            # won't immediately delete backlogged items.
+            self.queue_repo.update_scheduled_time(queue_item_id, datetime.utcnow())
             logger.info(f"Force-posted {media_item.file_name} to Telegram")
 
             return self._build_force_post_result(
@@ -431,6 +434,12 @@ class PostingService(BaseService):
             # The next scheduler cycle will skip this item because it's
             # no longer "pending".
             self.queue_repo.update_status(queue_item_id, "processing")
+
+            # Stamp scheduled_for to now so discard_abandoned_processing()
+            # measures freshness from when the notification was sent, not
+            # from the original schedule date (which may be days old for
+            # backlogged items).
+            self.queue_repo.update_scheduled_time(queue_item_id, datetime.utcnow())
 
             # Send notification to Telegram (even in dry run mode)
             success = await self.telegram_service.send_notification(queue_item_id)

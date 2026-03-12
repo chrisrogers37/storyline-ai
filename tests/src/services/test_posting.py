@@ -276,6 +276,44 @@ class TestGoogleDriveAuthErrorHandling:
         assert result["error"] == "Network failure"
 
     @pytest.mark.asyncio
+    async def test_post_via_telegram_stamps_scheduled_for(self, posting_service):
+        """_post_via_telegram updates scheduled_for to now when entering processing.
+
+        This prevents discard_abandoned_processing() from immediately deleting
+        backlogged items whose original scheduled_for is days old.
+        """
+        posting_service.telegram_service.send_notification = AsyncMock(
+            return_value=True
+        )
+        queue_item = Mock(id=uuid4())
+
+        result = await posting_service._post_via_telegram(queue_item)
+
+        assert result is True
+        posting_service.queue_repo.update_scheduled_time.assert_called_once()
+        # Verify the queue_id matches
+        call_args = posting_service.queue_repo.update_scheduled_time.call_args
+        assert call_args[0][0] == str(queue_item.id)
+
+    @pytest.mark.asyncio
+    async def test_execute_force_post_stamps_scheduled_for(self, posting_service):
+        """_execute_force_post updates scheduled_for to now on success."""
+        posting_service.telegram_service.send_notification = AsyncMock(
+            return_value=True
+        )
+
+        result = await posting_service._execute_force_post(
+            queue_item_id="q-123",
+            media_item=Mock(file_name="test.jpg"),
+            shifted_count=0,
+            run_id="run-1",
+            force_sent_indicator=True,
+        )
+
+        assert result["success"] is True
+        posting_service.queue_repo.update_scheduled_time.assert_called_once()
+
+    @pytest.mark.asyncio
     async def test_post_via_telegram_reraises_auth_error(self, posting_service):
         """_post_via_telegram re-raises GoogleDriveAuthError after rollback."""
         posting_service.telegram_service.send_notification = AsyncMock(
