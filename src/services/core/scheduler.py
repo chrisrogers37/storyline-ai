@@ -27,6 +27,23 @@ class SchedulerService(BaseService):
         self.category_mix_repo = CategoryMixRepository()
         self.settings_service = SettingsService()
 
+    def _resolve_chat_settings_id(
+        self, telegram_chat_id: Optional[int] = None
+    ) -> Optional[str]:
+        """Derive chat_settings_id from telegram_chat_id.
+
+        Args:
+            telegram_chat_id: Telegram chat ID. Falls back to
+                ADMIN_TELEGRAM_CHAT_ID if not specified.
+
+        Returns:
+            chat_settings_id as string, or None if lookup fails.
+        """
+        if telegram_chat_id is None:
+            telegram_chat_id = settings.ADMIN_TELEGRAM_CHAT_ID
+        chat_settings = self.settings_service.get_settings(telegram_chat_id)
+        return str(chat_settings.id) if chat_settings else None
+
     def create_schedule(
         self,
         days: int = 7,
@@ -44,6 +61,8 @@ class SchedulerService(BaseService):
         Args:
             days: Number of days to schedule
             user_id: User who triggered scheduling
+            telegram_chat_id: Chat to create schedule for (used for
+                tenant scoping and per-chat schedule settings).
 
         Returns:
             Dict with results: {scheduled: 21, skipped: 5, category_breakdown: {...}}
@@ -58,6 +77,8 @@ class SchedulerService(BaseService):
             skipped_count = 0
             error_message = None
             category_breakdown = {}
+
+            chat_settings_id = self._resolve_chat_settings_id(telegram_chat_id)
 
             try:
                 # Generate time slots
@@ -79,7 +100,9 @@ class SchedulerService(BaseService):
                     )
 
                 scheduled_count, skipped_count, category_breakdown = (
-                    self._fill_schedule_slots(time_slots, slot_categories)
+                    self._fill_schedule_slots(
+                        time_slots, slot_categories, chat_settings_id=chat_settings_id
+                    )
                 )
 
             except Exception as e:
@@ -130,9 +153,13 @@ class SchedulerService(BaseService):
             error_message = None
             category_breakdown = {}
 
+            chat_settings_id = self._resolve_chat_settings_id(telegram_chat_id)
+
             try:
-                # Find the last scheduled time in the queue
-                all_pending = self.queue_repo.get_all(status="pending")
+                # Find the last scheduled time in the queue (tenant-scoped)
+                all_pending = self.queue_repo.get_all(
+                    status="pending", chat_settings_id=chat_settings_id
+                )
 
                 if all_pending:
                     # Find the latest scheduled_for time
@@ -163,7 +190,9 @@ class SchedulerService(BaseService):
                     )
 
                 scheduled_count, skipped_count, category_breakdown = (
-                    self._fill_schedule_slots(time_slots, slot_categories)
+                    self._fill_schedule_slots(
+                        time_slots, slot_categories, chat_settings_id=chat_settings_id
+                    )
                 )
 
             except Exception as e:
@@ -189,6 +218,7 @@ class SchedulerService(BaseService):
         self,
         time_slots: list[datetime],
         slot_categories: List[Optional[str]],
+        chat_settings_id: Optional[str] = None,
     ) -> tuple[int, int, dict]:
         """
         Fill time slots with media items and add to queue.
@@ -196,6 +226,7 @@ class SchedulerService(BaseService):
         Args:
             time_slots: List of scheduled times to fill
             slot_categories: Category assignment per slot (empty list = no category filtering)
+            chat_settings_id: Tenant ID to assign to created queue items
 
         Returns:
             Tuple of (scheduled_count, skipped_count, category_breakdown)
@@ -215,7 +246,9 @@ class SchedulerService(BaseService):
                 continue
 
             self.queue_repo.create(
-                media_item_id=str(media_item.id), scheduled_for=scheduled_time
+                media_item_id=str(media_item.id),
+                scheduled_for=scheduled_time,
+                chat_settings_id=chat_settings_id,
             )
 
             item_category = media_item.category or "uncategorized"
