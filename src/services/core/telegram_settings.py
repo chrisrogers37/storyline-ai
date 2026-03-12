@@ -430,7 +430,11 @@ class TelegramSettingsHandlers:
                 ]
             ]
 
-            pending_count = self.service.queue_repo.count_pending()
+            chat_settings = self.service.settings_service.get_settings(chat_id)
+            chat_settings_id = str(chat_settings.id) if chat_settings else None
+            pending_count = self.service.queue_repo.count_pending(
+                chat_settings_id=chat_settings_id
+            )
 
             await query.edit_message_text(
                 f"⚠️ *Regenerate Schedule?*\n\n"
@@ -449,7 +453,11 @@ class TelegramSettingsHandlers:
 
             with SchedulerService() as scheduler:
                 try:
-                    result = scheduler.extend_schedule(days=7, user_id=str(user.id))
+                    result = scheduler.extend_schedule(
+                        days=7,
+                        user_id=str(user.id),
+                        telegram_chat_id=chat_id,
+                    )
 
                     # Log interaction
                     self.service.interaction_service.log_callback(
@@ -492,17 +500,21 @@ class TelegramSettingsHandlers:
 
             await query.answer("Regenerating schedule...")
 
-            # Clear queue
-            all_pending = self.service.queue_repo.get_all(status="pending")
-            cleared = 0
-            for item in all_pending:
-                self.service.queue_repo.delete(str(item.id))
-                cleared += 1
+            # Clear queue (tenant-scoped)
+            chat_settings = self.service.settings_service.get_settings(chat_id)
+            chat_settings_id = str(chat_settings.id) if chat_settings else None
+            cleared = self.service.queue_repo.delete_all_pending(
+                chat_settings_id=chat_settings_id
+            )
 
             # Create new schedule
             with SchedulerService() as scheduler:
                 try:
-                    result = scheduler.create_schedule(days=7, user_id=str(user.id))
+                    result = scheduler.create_schedule(
+                        days=7,
+                        user_id=str(user.id),
+                        telegram_chat_id=chat_id,
+                    )
 
                     # Log interaction
                     self.service.interaction_service.log_callback(

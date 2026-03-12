@@ -412,6 +412,87 @@ class TestSchedulerTenantSupport:
 
         service.settings_service.get_settings.assert_called_with(-200456)
 
+    @patch("src.services.core.scheduler.settings")
+    def test_create_schedule_passes_chat_settings_id_to_queue_create(
+        self, mock_settings, scheduler_service_mocked
+    ):
+        """create_schedule passes chat_settings_id to queue_repo.create()."""
+        service = scheduler_service_mocked
+        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
+
+        mock_chat_settings = Mock()
+        mock_chat_settings.id = uuid4()
+        mock_chat_settings.posts_per_day = 2
+        mock_chat_settings.posting_hours_start = 9
+        mock_chat_settings.posting_hours_end = 17
+        service.settings_service.get_settings.return_value = mock_chat_settings
+        service.category_mix_repo.get_current_mix_as_dict.return_value = {}
+
+        mock_media = Mock()
+        mock_media.id = uuid4()
+        mock_media.file_name = "test.jpg"
+        mock_media.category = None
+        service._select_media = Mock(return_value=mock_media)
+
+        service.create_schedule(days=2, telegram_chat_id=-200456)
+
+        # Every queue_repo.create call must include the chat_settings_id
+        for call in service.queue_repo.create.call_args_list:
+            assert call.kwargs["chat_settings_id"] == str(mock_chat_settings.id)
+
+    @patch("src.services.core.scheduler.settings")
+    def test_extend_schedule_passes_chat_settings_id_to_queue_create(
+        self, mock_settings, scheduler_service_mocked
+    ):
+        """extend_schedule passes chat_settings_id to queue_repo.create()."""
+        service = scheduler_service_mocked
+        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
+
+        mock_chat_settings = Mock()
+        mock_chat_settings.id = uuid4()
+        mock_chat_settings.posts_per_day = 2
+        mock_chat_settings.posting_hours_start = 9
+        mock_chat_settings.posting_hours_end = 17
+        service.settings_service.get_settings.return_value = mock_chat_settings
+        service.category_mix_repo.get_current_mix_as_dict.return_value = {}
+        service.queue_repo.get_all.return_value = []
+
+        mock_media = Mock()
+        mock_media.id = uuid4()
+        mock_media.file_name = "test.jpg"
+        mock_media.category = None
+        service._select_media = Mock(return_value=mock_media)
+
+        service.extend_schedule(days=2, telegram_chat_id=-200456)
+
+        # Every queue_repo.create call must include the chat_settings_id
+        for call in service.queue_repo.create.call_args_list:
+            assert call.kwargs["chat_settings_id"] == str(mock_chat_settings.id)
+
+    @patch("src.services.core.scheduler.settings")
+    def test_extend_schedule_scopes_get_all_to_tenant(
+        self, mock_settings, scheduler_service_mocked
+    ):
+        """extend_schedule passes chat_settings_id when fetching existing items."""
+        service = scheduler_service_mocked
+        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
+
+        mock_chat_settings = Mock()
+        mock_chat_settings.id = uuid4()
+        mock_chat_settings.posts_per_day = 2
+        mock_chat_settings.posting_hours_start = 9
+        mock_chat_settings.posting_hours_end = 17
+        service.settings_service.get_settings.return_value = mock_chat_settings
+        service.category_mix_repo.get_current_mix_as_dict.return_value = {}
+        service.queue_repo.get_all.return_value = []
+        service._select_media = Mock(return_value=None)
+
+        service.extend_schedule(days=2, telegram_chat_id=-200456)
+
+        service.queue_repo.get_all.assert_called_once_with(
+            status="pending", chat_settings_id=str(mock_chat_settings.id)
+        )
+
 
 @pytest.mark.unit
 class TestSchedulerMediaPool:

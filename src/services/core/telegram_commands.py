@@ -400,6 +400,7 @@ class TelegramCommandHandlers:
                 user_id=str(user.id),
                 triggered_by="telegram",
                 force_sent_indicator=True,  # Shows ⚡ in caption
+                telegram_chat_id=update.effective_chat.id,
             )
 
         if not result["success"]:

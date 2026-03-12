@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Scheduler tenant scoping** — Queue items created by `create_schedule()` and `extend_schedule()` were missing `chat_settings_id`, making them invisible to the tenant-scoped processing loop (`process_pending_posts`), dashboard API, and Mini App. The scheduler ran every minute but found 0 items because `WHERE chat_settings_id = '<uuid>'` never matches NULL. Now all scheduler paths thread `chat_settings_id` from `telegram_chat_id` through to `queue_repo.create()`.
+  - `_fill_schedule_slots()` now accepts and passes `chat_settings_id`
+  - `create_schedule()` / `extend_schedule()` derive `chat_settings_id` via `_resolve_chat_settings_id()`
+  - Telegram settings handlers now pass `telegram_chat_id` to scheduler methods
+  - `force_post_next()` now accepts `telegram_chat_id` and scopes queue queries to tenant
+  - Regenerate schedule action uses `delete_all_pending()` with tenant scoping
+  - Migration 018: Backfills `chat_settings_id` on existing orphaned queue items
+
 ### Added
 - **Database circuit breaker** — Fail-fast mechanism in BaseRepository that opens after 5 consecutive DB failures, rejecting requests immediately with `OperationalError` instead of hanging 30 seconds on pool timeout. Auto-recovers after 30 seconds via half-open probe. Prevents cascading hangs when Neon DB is unreachable.
 - **Connection pool monitoring** — Logs SQLAlchemy pool utilization every 30 seconds at appropriate severity (warning at ≥90%, info at ≥70%, debug otherwise). Enables early detection of pool exhaustion before it causes freezes.

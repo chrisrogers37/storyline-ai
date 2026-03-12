@@ -161,6 +161,7 @@ class PostingService(BaseService):
         user_id: Optional[str] = None,
         triggered_by: str = "cli",
         force_sent_indicator: bool = False,
+        telegram_chat_id: Optional[int] = None,
     ) -> dict:
         """
         Force-post the next scheduled item immediately.
@@ -179,6 +180,7 @@ class PostingService(BaseService):
             user_id: User ID (for tracking/attribution)
             triggered_by: Source of the call ("cli", "telegram", etc.)
             force_sent_indicator: If True, adds indicator to caption (for /next)
+            telegram_chat_id: Chat to scope queue lookup to.
 
         Returns:
             Dict with results:
@@ -195,8 +197,17 @@ class PostingService(BaseService):
             user_id=user_id,
             triggered_by=triggered_by,
         ) as run_id:
-            # Get all pending items (earliest first)
-            pending_items = self.queue_repo.get_all(status="pending")
+            # Resolve tenant scope
+            chat_settings_id = None
+            if telegram_chat_id:
+                chat_settings = self._get_chat_settings(telegram_chat_id)
+                if chat_settings:
+                    chat_settings_id = str(chat_settings.id)
+
+            # Get all pending items (earliest first), scoped to tenant
+            pending_items = self.queue_repo.get_all(
+                status="pending", chat_settings_id=chat_settings_id
+            )
 
             if not pending_items:
                 logger.info("No pending items to force-post")
@@ -226,7 +237,9 @@ class PostingService(BaseService):
                 )
 
             # Shift all subsequent items forward by one slot
-            shifted_count = self.queue_repo.shift_slots_forward(queue_item_id)
+            shifted_count = self.queue_repo.shift_slots_forward(
+                queue_item_id, chat_settings_id=chat_settings_id
+            )
             if shifted_count > 0:
                 logger.info(f"Shifted {shifted_count} items forward after force-post")
 
