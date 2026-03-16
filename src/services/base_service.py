@@ -59,15 +59,21 @@ class BaseService(ABC):
 
         Called automatically when using the service as a context manager,
         or can be called manually to release database connections.
+
+        Recursively closes nested BaseService instances (which hold their
+        own repositories) to prevent connection pool exhaustion.  This
+        mirrors the recursive pattern used in cleanup_transactions().
         """
         for attr_name in dir(self):
             try:
                 attr = getattr(self, attr_name, None)
-                if isinstance(attr, BaseRepository):
+                if isinstance(attr, BaseService) and attr is not self:
+                    attr.close()
+                elif isinstance(attr, BaseRepository):
                     attr.close()
             except Exception as e:
                 logger.warning(
-                    f"[{self.service_name}] Error closing repo {attr_name}: "
+                    f"[{self.service_name}] Error closing {attr_name}: "
                     f"{type(e).__name__}: {e}"
                 )
 

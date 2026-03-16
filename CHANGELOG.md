@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **QueuePool overflow on concurrent autopost + /next** — `BaseService.close()` only closed direct `BaseRepository` attributes but did not recurse into nested `BaseService` instances, leaking their database connections. When autopost (which creates `InstagramAPIService` with 6+ nested services/repos) ran concurrently with `/next` (which creates `PostingService` with nested `TelegramService`), the pool of 20 connections was exhausted. `close()` now mirrors the recursive pattern already used by `cleanup_transactions()`, traversing nested services before closing repositories. Also added `TelegramService.close()` override to close `InteractionService`'s repo (which isn't a `BaseService` and was invisible to the traversal).
 - **Scheduler tenant scoping** — Queue items created by `create_schedule()` and `extend_schedule()` were missing `chat_settings_id`, making them invisible to the tenant-scoped processing loop (`process_pending_posts`), dashboard API, and Mini App. The scheduler ran every minute but found 0 items because `WHERE chat_settings_id = '<uuid>'` never matches NULL. Now all scheduler paths thread `chat_settings_id` from `telegram_chat_id` through to `queue_repo.create()`.
   - `_fill_schedule_slots()` now accepts and passes `chat_settings_id`
   - `create_schedule()` / `extend_schedule()` derive `chat_settings_id` via `_resolve_chat_settings_id()`

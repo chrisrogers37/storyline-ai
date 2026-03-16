@@ -98,6 +98,21 @@ class TelegramService(BaseService):
                 f"{type(e).__name__}: {e}"
             )
 
+    def close(self):
+        """Override to also close InteractionService's repository session.
+
+        InteractionService is not a BaseService, so the base close()
+        traversal won't find it. We explicitly close its repo here.
+        """
+        super().close()
+        try:
+            self.interaction_service.interaction_repo.close()
+        except Exception as e:
+            logger.warning(
+                f"[TelegramService] Interaction repo close failed: "
+                f"{type(e).__name__}: {e}"
+            )
+
     @property
     def is_paused(self) -> bool:
         """Check if bot posting is paused (from database)."""

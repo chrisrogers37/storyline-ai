@@ -1,10 +1,11 @@
 """Tests for BaseService."""
 
 import pytest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from uuid import uuid4
 
 from src.services.base_service import BaseService
+from src.repositories.base_repository import BaseRepository
 
 
 class MockServiceForTesting(BaseService):
@@ -125,3 +126,69 @@ class TestBaseService:
         # BaseService uses module-level logger from src.utils.logger
         # Service is identified by service_name attribute
         assert mock_service.service_name == "TestService"
+
+
+@pytest.mark.unit
+class TestBaseServiceClose:
+    """Test suite for BaseService.close() recursive behavior."""
+
+    def test_close_closes_direct_repositories(self):
+        """Test that close() closes repositories directly on the service."""
+        with patch("src.services.base_service.ServiceRunRepository") as mock_repo_cls:
+            mock_repo_cls.return_value = Mock()
+            service = MockServiceForTesting()
+
+            # Add a mock repository attribute
+            mock_direct_repo = Mock(spec=BaseRepository)
+            service.some_repo = mock_direct_repo
+
+            service.close()
+
+            mock_direct_repo.close.assert_called()
+
+    def test_close_recursively_closes_nested_services(self):
+        """Test that close() closes nested BaseService instances and their repos."""
+        with patch("src.services.base_service.ServiceRunRepository") as mock_repo_cls:
+            mock_repo_cls.return_value = Mock()
+
+            outer = MockServiceForTesting()
+            inner = MockServiceForTesting()
+
+            # Give the inner service a mock repo to track
+            inner_repo = Mock(spec=BaseRepository)
+            inner.some_repo = inner_repo
+
+            # Nest inner inside outer
+            outer.nested_service = inner
+
+            outer.close()
+
+            # The inner service's repo should have been closed
+            inner_repo.close.assert_called()
+
+    def test_close_does_not_recurse_into_self(self):
+        """Test that close() skips self-references to prevent infinite recursion."""
+        with patch("src.services.base_service.ServiceRunRepository") as mock_repo_cls:
+            mock_repo_cls.return_value = Mock()
+
+            service = MockServiceForTesting()
+            # Create a self-referencing attribute (should not cause infinite loop)
+            service.self_ref = service
+
+            # Should complete without RecursionError
+            service.close()
+
+    def test_context_manager_triggers_recursive_close(self):
+        """Test that using a service as context manager triggers recursive close."""
+        with patch("src.services.base_service.ServiceRunRepository") as mock_repo_cls:
+            mock_repo_cls.return_value = Mock()
+
+            inner = MockServiceForTesting()
+            inner_repo = Mock(spec=BaseRepository)
+            inner.some_repo = inner_repo
+
+            with MockServiceForTesting() as outer:
+                outer.nested_service = inner
+
+            # After exiting context manager, inner repos should be closed
+            inner_repo.close.assert_called()
