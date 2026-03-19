@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -250,136 +250,12 @@ class TelegramCommandHandlers:
     def _get_setup_status(self, chat_id: int) -> str:
         """Build setup completion section for /status output.
 
-        Each _check_* method returns (display_line, is_configured).
-        Check failures count as "missing" to nudge users toward /start.
+        Delegates to SetupStateService for data gathering and formatting.
         """
-        lines = ["*Setup Status:*"]
-        checks = [
-            self._check_instagram_setup(chat_id),
-            self._check_gdrive_setup(chat_id),
-            self._check_media_setup(chat_id),
-            self._check_schedule_setup(chat_id),
-            self._check_delivery_setup(chat_id),
-        ]
+        from src.services.core.setup_state_service import SetupStateService
 
-        missing = 0
-        for line_text, is_configured in checks:
-            lines.append(line_text)
-            if not is_configured:
-                missing += 1
-
-        if missing > 0:
-            lines.append("\n_Use /start to configure missing items._")
-
-        return "\n".join(lines)
-
-    def _check_instagram_setup(self, chat_id: int) -> tuple[str, bool]:
-        """Check Instagram account connection for setup status."""
-        try:
-            active_account = self.service.ig_account_service.get_active_account(chat_id)
-            if active_account and active_account.instagram_username:
-                return (
-                    f"├── 📸 Instagram: ✅ Connected (@{active_account.instagram_username})",
-                    True,
-                )
-            elif active_account:
-                return (
-                    f"├── 📸 Instagram: ✅ Connected ({active_account.display_name})",
-                    True,
-                )
-            return ("├── 📸 Instagram: ⚠️ Not connected", False)
-        except Exception as e:
-            logger.debug(f"Instagram setup check failed: {e}")
-            return ("├── 📸 Instagram: ❓ Check failed", False)
-
-    def _check_gdrive_setup(self, chat_id: int) -> tuple[str, bool]:
-        """Check Google Drive OAuth connection for setup status.
-
-        Shows "Needs Reconnection" when the access token expired more
-        than 7 days ago (stale token that won't auto-refresh).
-        """
-        try:
-            from src.repositories.token_repository import TokenRepository
-
-            chat_settings = self.service.settings_service.get_settings(chat_id)
-            if not chat_settings:
-                return ("├── 📁 Google Drive: ⚠️ Not connected", False)
-
-            with TokenRepository() as token_repo:
-                gdrive_token = token_repo.get_token_for_chat(
-                    "google_drive", "oauth_access", str(chat_settings.id)
-                )
-                if gdrive_token:
-                    # Detect stale token (expired >7 days ago)
-                    if (
-                        gdrive_token.expires_at
-                        and gdrive_token.expires_at
-                        < datetime.utcnow() - timedelta(days=7)
-                    ):
-                        return (
-                            "├── 📁 Google Drive: ⚠️ Needs Reconnection",
-                            False,
-                        )
-                    email = None
-                    if gdrive_token.token_metadata:
-                        email = gdrive_token.token_metadata.get("email")
-                    if email:
-                        return (
-                            f"├── 📁 Google Drive: ✅ Connected ({email})",
-                            True,
-                        )
-                    return ("├── 📁 Google Drive: ✅ Connected", True)
-                return ("├── 📁 Google Drive: ⚠️ Not connected", False)
-        except Exception as e:
-            logger.debug(f"Google Drive setup check failed: {e}")
-            return ("├── 📁 Google Drive: ❓ Check failed", False)
-
-    def _check_media_setup(self, chat_id: int) -> tuple[str, bool]:
-        """Check media folder configuration and library size."""
-        try:
-            media_count = len(self.service.media_repo.get_all(is_active=True))
-            if media_count > 0:
-                return (f"├── 📂 Media Library: ✅ {media_count} files", True)
-
-            # No media indexed — check if source is configured (per-chat)
-            chat_settings = self.service.settings_service.get_settings(chat_id)
-            if chat_settings and chat_settings.media_source_root:
-                return (
-                    "├── 📂 Media Library: ⚠️ Configured (0 files — run /sync)",
-                    False,
-                )
-            return ("├── 📂 Media Library: ⚠️ Not configured", False)
-        except Exception as e:
-            logger.debug(f"Media setup check failed: {e}")
-            return ("├── 📂 Media Library: ❓ Check failed", False)
-
-    def _check_schedule_setup(self, chat_id: int) -> tuple[str, bool]:
-        """Check schedule configuration for setup status."""
-        try:
-            chat_settings = self.service.settings_service.get_settings(chat_id)
-            ppd = chat_settings.posts_per_day
-            start = chat_settings.posting_hours_start
-            end = chat_settings.posting_hours_end
-            return (
-                f"├── 📅 Schedule: ✅ {ppd}/day, {start:02d}:00-{end:02d}:00 UTC",
-                True,
-            )
-        except Exception as e:
-            logger.debug(f"Schedule setup check failed: {e}")
-            return ("├── 📅 Schedule: ❓ Check failed", False)
-
-    def _check_delivery_setup(self, chat_id: int) -> tuple[str, bool]:
-        """Check delivery mode (dry run / paused) for setup status."""
-        try:
-            chat_settings = self.service.settings_service.get_settings(chat_id)
-            if chat_settings.is_paused:
-                return ("└── 📦 Delivery: ⏸️ PAUSED", True)
-            if chat_settings.dry_run_mode:
-                return ("└── 📦 Delivery: 🧪 Dry Run (not posting)", True)
-            return ("└── 📦 Delivery: ✅ Live", True)
-        except Exception as e:
-            logger.debug(f"Delivery setup check failed: {e}")
-            return ("└── 📦 Delivery: ❓ Check failed", False)
+        with SetupStateService() as setup_service:
+            return setup_service.format_setup_status(chat_id)
 
     async def handle_next(self, update, context):
         """

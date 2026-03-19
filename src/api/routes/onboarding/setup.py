@@ -2,7 +2,6 @@
 
 from fastapi import APIRouter, HTTPException
 
-from src.repositories.chat_settings_repository import ChatSettingsRepository
 from src.services.core.media_sync import MediaSyncService
 from src.services.core.oauth_service import OAuthService
 from src.services.core.scheduler import SchedulerService
@@ -135,10 +134,10 @@ async def onboarding_start_indexing(request: StartIndexingRequest):
     """
     _validate_request(request.init_data, request.chat_id)
 
-    with ChatSettingsRepository() as settings_repo:
-        chat_settings = settings_repo.get_or_create(request.chat_id)
-        source_type = chat_settings.media_source_type
-        source_root = chat_settings.media_source_root
+    with SettingsService() as settings_service:
+        source_type, source_root = settings_service.get_media_source_config(
+            request.chat_id
+        )
 
     if not source_root:
         raise HTTPException(

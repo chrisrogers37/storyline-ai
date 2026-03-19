@@ -23,7 +23,8 @@ class TestOAuthStartEndpoint:
             mock_svc.generate_authorization_url.return_value = (
                 "https://www.facebook.com/dialog/oauth?client_id=123"
             )
-            mock_svc.close = Mock()
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
 
             response = client.get(
                 "/auth/instagram/start?chat_id=-1001234567890",
@@ -45,7 +46,8 @@ class TestOAuthStartEndpoint:
             mock_svc.generate_authorization_url.side_effect = ValueError(
                 "FACEBOOK_APP_ID not configured"
             )
-            mock_svc.close = Mock()
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
 
             response = client.get("/auth/instagram/start?chat_id=-1001234567890")
 
@@ -59,25 +61,27 @@ class TestOAuthStartEndpoint:
             mock_svc.generate_authorization_url.return_value = (
                 "https://www.facebook.com/dialog/oauth"
             )
-            mock_svc.close = Mock()
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
 
             client.get(
                 "/auth/instagram/start?chat_id=-100123",
                 follow_redirects=False,
             )
 
-        mock_svc.close.assert_called_once()
+        mock_svc.__exit__.assert_called_once()
 
     def test_start_calls_close_on_error(self, client):
         """Service is closed even when error occurs."""
         with patch("src.api.routes.oauth.OAuthService") as MockService:
             mock_svc = MockService.return_value
             mock_svc.generate_authorization_url.side_effect = ValueError("bad config")
-            mock_svc.close = Mock()
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
 
             client.get("/auth/instagram/start?chat_id=-100123")
 
-        mock_svc.close.assert_called_once()
+        mock_svc.__exit__.assert_called_once()
 
 
 class TestOAuthCallbackEndpoint:
@@ -96,7 +100,8 @@ class TestOAuthCallbackEndpoint:
                 }
             )
             mock_svc.notify_telegram = AsyncMock()
-            mock_svc.close = Mock()
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
 
             response = client.get(
                 "/auth/instagram/callback?code=AUTH_CODE&state=VALID_STATE"
@@ -112,7 +117,8 @@ class TestOAuthCallbackEndpoint:
             mock_svc = MockService.return_value
             mock_svc.validate_state_token.return_value = -1001234567890
             mock_svc.notify_telegram = AsyncMock()
-            mock_svc.close = Mock()
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
 
             response = client.get(
                 "/auth/instagram/callback?"
@@ -129,7 +135,8 @@ class TestOAuthCallbackEndpoint:
             mock_svc = MockService.return_value
             mock_svc.validate_state_token.return_value = -100123
             mock_svc.notify_telegram = AsyncMock()
-            mock_svc.close = Mock()
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
 
             client.get("/auth/instagram/callback?error=access_denied&state=VALID_STATE")
 
@@ -142,7 +149,8 @@ class TestOAuthCallbackEndpoint:
         with patch("src.api.routes.oauth.OAuthService") as MockService:
             mock_svc = MockService.return_value
             mock_svc.validate_state_token.side_effect = ValueError("expired")
-            mock_svc.close = Mock()
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
 
             response = client.get(
                 "/auth/instagram/callback?code=AUTH_CODE&state=EXPIRED_STATE"
@@ -157,7 +165,8 @@ class TestOAuthCallbackEndpoint:
             mock_svc = MockService.return_value
             # No error param, no code param — should hit the missing code check
             # But state is still validated first
-            mock_svc.close = Mock()
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
 
             response = client.get("/auth/instagram/callback?state=VALID_STATE")
 
@@ -171,7 +180,8 @@ class TestOAuthCallbackEndpoint:
             mock_svc.exchange_and_store = AsyncMock(
                 side_effect=ValueError("Code exchange failed")
             )
-            mock_svc.close = Mock()
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
 
             response = client.get(
                 "/auth/instagram/callback?code=BAD_CODE&state=VALID_STATE"
@@ -193,7 +203,8 @@ class TestOAuthCallbackEndpoint:
                 }
             )
             mock_svc.notify_telegram = AsyncMock()
-            mock_svc.close = Mock()
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
 
             client.get("/auth/instagram/callback?code=GOOD_CODE&state=VALID_STATE")
 
@@ -207,11 +218,12 @@ class TestOAuthCallbackEndpoint:
         with patch("src.api.routes.oauth.OAuthService") as MockService:
             mock_svc = MockService.return_value
             mock_svc.validate_state_token.side_effect = ValueError("bad")
-            mock_svc.close = Mock()
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
 
             client.get("/auth/instagram/callback?code=CODE&state=STATE")
 
-        mock_svc.close.assert_called_once()
+        mock_svc.__exit__.assert_called_once()
 
 
 # ==================== Google Drive OAuth Routes ====================
@@ -227,7 +239,8 @@ class TestGDriveOAuthStartEndpoint:
             mock_svc.generate_authorization_url.return_value = (
                 "https://accounts.google.com/o/oauth2/v2/auth?client_id=123"
             )
-            mock_svc.close = Mock()
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
 
             response = client.get(
                 "/auth/google-drive/start?chat_id=-1001234567890",
@@ -249,7 +262,8 @@ class TestGDriveOAuthStartEndpoint:
             mock_svc.generate_authorization_url.side_effect = ValueError(
                 "GOOGLE_CLIENT_ID not configured"
             )
-            mock_svc.close = Mock()
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
 
             response = client.get("/auth/google-drive/start?chat_id=-100123")
 
@@ -263,25 +277,27 @@ class TestGDriveOAuthStartEndpoint:
             mock_svc.generate_authorization_url.return_value = (
                 "https://accounts.google.com/o/oauth2/v2/auth"
             )
-            mock_svc.close = Mock()
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
 
             client.get(
                 "/auth/google-drive/start?chat_id=-100123",
                 follow_redirects=False,
             )
 
-        mock_svc.close.assert_called_once()
+        mock_svc.__exit__.assert_called_once()
 
     def test_start_calls_close_on_error(self, client):
         """Service is closed even when error occurs."""
         with patch("src.api.routes.oauth.GoogleDriveOAuthService") as MockService:
             mock_svc = MockService.return_value
             mock_svc.generate_authorization_url.side_effect = ValueError("bad")
-            mock_svc.close = Mock()
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
 
             client.get("/auth/google-drive/start?chat_id=-100123")
 
-        mock_svc.close.assert_called_once()
+        mock_svc.__exit__.assert_called_once()
 
 
 class TestGDriveOAuthCallbackEndpoint:
@@ -296,7 +312,8 @@ class TestGDriveOAuthCallbackEndpoint:
                 return_value={"email": "user@gmail.com", "expires_in_hours": 1}
             )
             mock_svc.notify_telegram = AsyncMock()
-            mock_svc.close = Mock()
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
 
             response = client.get(
                 "/auth/google-drive/callback?code=AUTH_CODE&state=VALID_STATE"
@@ -312,7 +329,8 @@ class TestGDriveOAuthCallbackEndpoint:
             mock_svc = MockService.return_value
             mock_svc.validate_state_token.return_value = -100123
             mock_svc.notify_telegram = AsyncMock()
-            mock_svc.close = Mock()
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
 
             response = client.get(
                 "/auth/google-drive/callback?error=access_denied&state=VALID_STATE"
@@ -327,7 +345,8 @@ class TestGDriveOAuthCallbackEndpoint:
             mock_svc = MockService.return_value
             mock_svc.validate_state_token.return_value = -100123
             mock_svc.notify_telegram = AsyncMock()
-            mock_svc.close = Mock()
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
 
             client.get(
                 "/auth/google-drive/callback?error=access_denied&state=VALID_STATE"
@@ -342,7 +361,8 @@ class TestGDriveOAuthCallbackEndpoint:
         with patch("src.api.routes.oauth.GoogleDriveOAuthService") as MockService:
             mock_svc = MockService.return_value
             mock_svc.validate_state_token.side_effect = ValueError("expired")
-            mock_svc.close = Mock()
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
 
             response = client.get(
                 "/auth/google-drive/callback?code=AUTH_CODE&state=EXPIRED"
@@ -355,7 +375,8 @@ class TestGDriveOAuthCallbackEndpoint:
         """Missing authorization code returns 400."""
         with patch("src.api.routes.oauth.GoogleDriveOAuthService") as MockService:
             mock_svc = MockService.return_value
-            mock_svc.close = Mock()
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
 
             response = client.get("/auth/google-drive/callback?state=VALID_STATE")
 
@@ -369,7 +390,8 @@ class TestGDriveOAuthCallbackEndpoint:
             mock_svc.exchange_and_store = AsyncMock(
                 side_effect=ValueError("Exchange failed")
             )
-            mock_svc.close = Mock()
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
 
             response = client.get(
                 "/auth/google-drive/callback?code=BAD&state=VALID_STATE"
@@ -387,7 +409,8 @@ class TestGDriveOAuthCallbackEndpoint:
                 return_value={"email": "user@gmail.com", "expires_in_hours": 1}
             )
             mock_svc.notify_telegram = AsyncMock()
-            mock_svc.close = Mock()
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
 
             client.get("/auth/google-drive/callback?code=GOOD&state=VALID_STATE")
 
@@ -401,11 +424,12 @@ class TestGDriveOAuthCallbackEndpoint:
         with patch("src.api.routes.oauth.GoogleDriveOAuthService") as MockService:
             mock_svc = MockService.return_value
             mock_svc.validate_state_token.side_effect = ValueError("bad")
-            mock_svc.close = Mock()
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
 
             client.get("/auth/google-drive/callback?code=CODE&state=STATE")
 
-        mock_svc.close.assert_called_once()
+        mock_svc.__exit__.assert_called_once()
 
 
 # =============================================================================
@@ -430,7 +454,8 @@ class TestOAuthHtmlEscaping:
                 }
             )
             mock_svc.notify_telegram = AsyncMock()
-            mock_svc.close = Mock()
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
 
             response = client.get(
                 "/auth/instagram/callback?code=AUTH_CODE&state=VALID_STATE"
@@ -454,7 +479,8 @@ class TestOAuthHtmlEscaping:
                 }
             )
             mock_svc.notify_telegram = AsyncMock()
-            mock_svc.close = Mock()
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
 
             response = client.get(
                 "/auth/google-drive/callback?code=AUTH_CODE&state=VALID_STATE"

@@ -6,6 +6,7 @@ import mimetypes
 
 from src.services.base_service import BaseService
 from src.repositories.media_repository import MediaRepository
+from src.repositories.category_mix_repository import CategoryMixRepository
 from src.utils.file_hash import calculate_file_hash
 from src.utils.image_processing import ImageProcessor
 from src.utils.logger import logger
@@ -19,6 +20,7 @@ class MediaIngestionService(BaseService):
     def __init__(self):
         super().__init__()
         self.media_repo = MediaRepository()
+        self.category_mix_repo = CategoryMixRepository()
         self.image_processor = ImageProcessor()
 
     def scan_directory(
@@ -197,3 +199,54 @@ class MediaIngestionService(BaseService):
             self.set_result_summary(run_id, {"duplicates_found": len(duplicates)})
 
             return duplicates
+
+    # ------------------------------------------------------------------
+    # Media listing (CLI / API layer support)
+    # ------------------------------------------------------------------
+
+    def list_media(
+        self,
+        is_active: Optional[bool] = None,
+        category: Optional[str] = None,
+        limit: Optional[int] = None,
+        chat_settings_id: Optional[str] = None,
+    ) -> list:
+        """Return media items with optional filters."""
+        return self.media_repo.get_all(
+            is_active=is_active,
+            category=category,
+            limit=limit,
+            chat_settings_id=chat_settings_id,
+        )
+
+    def get_categories(self) -> list[str]:
+        """Return all distinct category names in the library."""
+        return self.media_repo.get_categories()
+
+    # ------------------------------------------------------------------
+    # Category mix operations (wrapping CategoryMixRepository)
+    # ------------------------------------------------------------------
+
+    def get_current_mix(self) -> list:
+        """Return the currently active category mix records."""
+        return self.category_mix_repo.get_current_mix()
+
+    def get_current_mix_as_dict(self) -> dict:
+        """Return current mix as ``{category: ratio}`` dict."""
+        return self.category_mix_repo.get_current_mix_as_dict()
+
+    def has_current_mix(self) -> bool:
+        """Check whether a category mix has been configured."""
+        return self.category_mix_repo.has_current_mix()
+
+    def get_categories_without_ratio(self, categories: list[str]) -> list[str]:
+        """Return categories that don't have a ratio set."""
+        return self.category_mix_repo.get_categories_without_ratio(categories)
+
+    def set_category_mix(self, ratios: dict) -> None:
+        """Save a new category mix (deactivates the previous one)."""
+        self.category_mix_repo.set_mix(ratios)
+
+    def get_mix_history(self, category: Optional[str] = None) -> list:
+        """Return category mix change history."""
+        return self.category_mix_repo.get_history(category=category)

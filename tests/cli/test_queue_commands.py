@@ -1,7 +1,7 @@
 """Tests for queue CLI commands."""
 
 import pytest
-from unittest.mock import Mock, patch, AsyncMock
+from unittest.mock import Mock, MagicMock, patch, AsyncMock
 from click.testing import CliRunner
 
 from cli.commands.queue import create_schedule, list_queue, process_queue
@@ -65,26 +65,23 @@ class TestCreateScheduleCommand:
 class TestListQueueCommand:
     """Tests for the list-queue CLI command."""
 
-    @patch("src.repositories.media_repository.MediaRepository")
-    @patch("cli.commands.queue.QueueRepository")
-    def test_list_queue_shows_items(self, mock_queue_class, mock_media_class):
+    @patch("cli.commands.queue.DashboardService")
+    def test_list_queue_shows_items(self, mock_service_class):
         """Test list-queue displays pending items in a table."""
         from datetime import datetime
 
-        mock_queue_repo = mock_queue_class.return_value
-        mock_media_repo = mock_media_class.return_value
+        mock_service = MagicMock()
+        mock_service_class.return_value.__enter__ = Mock(return_value=mock_service)
+        mock_service_class.return_value.__exit__ = Mock(return_value=False)
 
-        mock_queue_item = Mock()
-        mock_queue_item.media_item_id = "media-uuid-1"
-        mock_queue_item.scheduled_for = datetime(2026, 2, 15, 10, 0)
-        mock_queue_item.status = "pending"
-
-        mock_queue_repo.get_all.return_value = [mock_queue_item]
-
-        mock_media = Mock()
-        mock_media.file_name = "queue_list.jpg"
-        mock_media.category = "memes"
-        mock_media_repo.get_by_id.return_value = mock_media
+        mock_service.get_pending_queue_items.return_value = [
+            {
+                "scheduled_for": datetime(2026, 2, 15, 10, 0),
+                "file_name": "queue_list.jpg",
+                "category": "memes",
+                "status": "pending",
+            }
+        ]
 
         runner = CliRunner()
         result = runner.invoke(list_queue, [])
@@ -93,14 +90,15 @@ class TestListQueueCommand:
         assert "queue_list.jpg" in result.output
         assert "memes" in result.output
         assert "pending" in result.output
-        mock_queue_repo.get_all.assert_called_once_with(status="pending")
 
-    @patch("src.repositories.media_repository.MediaRepository")
-    @patch("cli.commands.queue.QueueRepository")
-    def test_list_queue_empty(self, mock_queue_class, mock_media_class):
+    @patch("cli.commands.queue.DashboardService")
+    def test_list_queue_empty(self, mock_service_class):
         """Test list-queue shows message when queue is empty."""
-        mock_queue_repo = mock_queue_class.return_value
-        mock_queue_repo.get_all.return_value = []
+        mock_service = MagicMock()
+        mock_service_class.return_value.__enter__ = Mock(return_value=mock_service)
+        mock_service_class.return_value.__exit__ = Mock(return_value=False)
+
+        mock_service.get_pending_queue_items.return_value = []
 
         runner = CliRunner()
         result = runner.invoke(list_queue, [])

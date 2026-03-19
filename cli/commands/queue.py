@@ -7,7 +7,7 @@ from rich.table import Table
 
 from src.services.core.scheduler import SchedulerService
 from src.services.core.posting import PostingService
-from src.repositories.queue_repository import QueueRepository
+from src.services.core.dashboard_service import DashboardService
 
 console = Console()
 
@@ -108,11 +108,8 @@ def process_queue(force):
 @click.command(name="list-queue")
 def list_queue():
     """List pending queue items."""
-    from src.repositories.media_repository import MediaRepository
-
-    queue_repo = QueueRepository()
-    media_repo = MediaRepository()
-    items = queue_repo.get_all(status="pending")
+    with DashboardService() as service:
+        items = service.get_pending_queue_items()
 
     if not items:
         console.print("[yellow]Queue is empty[/yellow]")
@@ -125,16 +122,13 @@ def list_queue():
     table.add_column("Status")
 
     for item in items:
-        # Get media item details
-        media = media_repo.get_by_id(str(item.media_item_id))
-        file_name = media.file_name[:30] if media else "Unknown"
-        category = media.category if media else "-"
+        file_name = item["file_name"][:30] if item["file_name"] else "Unknown"
 
         table.add_row(
-            item.scheduled_for.strftime("%Y-%m-%d %H:%M"),
+            item["scheduled_for"].strftime("%Y-%m-%d %H:%M"),
             file_name,
-            category or "-",
-            item.status,
+            item["category"] or "-",
+            item["status"],
         )
 
     console.print(table)
@@ -150,29 +144,29 @@ def reset_queue(yes):
 
     Use --yes to skip the confirmation prompt.
     """
-    queue_repo = QueueRepository()
-    items = queue_repo.get_all(status="pending")
+    with SchedulerService() as scheduler:
+        count = scheduler.count_pending()
 
-    if not items:
-        console.print("[yellow]Queue is already empty[/yellow]")
-        return
-
-    count = len(items)
-
-    if not yes:
-        console.print(
-            f"[bold yellow]Warning:[/bold yellow] This will remove {count} pending queue items."
-        )
-        console.print(
-            "Media items will remain in the library and can be scheduled again."
-        )
-        if not click.confirm("Do you want to continue?"):
-            console.print("[dim]Cancelled[/dim]")
+        if count == 0:
+            console.print("[yellow]Queue is already empty[/yellow]")
             return
 
-    try:
-        deleted = queue_repo.delete_all_pending()
-        console.print(f"[bold green]✓ Cleared {deleted} items from queue[/bold green]")
-    except Exception as e:
-        console.print(f"[bold red]✗ Error:[/bold red] {str(e)}")
-        raise click.Abort()
+        if not yes:
+            console.print(
+                f"[bold yellow]Warning:[/bold yellow] This will remove {count} pending queue items."
+            )
+            console.print(
+                "Media items will remain in the library and can be scheduled again."
+            )
+            if not click.confirm("Do you want to continue?"):
+                console.print("[dim]Cancelled[/dim]")
+                return
+
+        try:
+            deleted = scheduler.clear_pending_queue()
+            console.print(
+                f"[bold green]✓ Cleared {deleted} items from queue[/bold green]"
+            )
+        except Exception as e:
+            console.print(f"[bold red]✗ Error:[/bold red] {str(e)}")
+            raise click.Abort()

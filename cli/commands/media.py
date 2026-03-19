@@ -8,8 +8,6 @@ from pathlib import Path
 from decimal import Decimal, InvalidOperation
 
 from src.services.core.media_ingestion import MediaIngestionService
-from src.repositories.media_repository import MediaRepository
-from src.repositories.category_mix_repository import CategoryMixRepository
 
 console = Console()
 
@@ -89,9 +87,9 @@ def prompt_for_category_ratios(
                 raise click.Abort()
 
 
-def display_current_mix(mix_repo: CategoryMixRepository, media_repo: MediaRepository):
+def display_current_mix(service: MediaIngestionService):
     """Display the current category mix with media counts."""
-    current_mix = mix_repo.get_current_mix()
+    current_mix = service.get_current_mix()
 
     if not current_mix:
         console.print("[yellow]No category mix configured yet[/yellow]")
@@ -103,7 +101,7 @@ def display_current_mix(mix_repo: CategoryMixRepository, media_repo: MediaReposi
     table.add_column("Media Count", justify="right", style="dim")
 
     for mix in current_mix:
-        count = len(media_repo.get_all(category=mix.category))
+        count = len(service.list_media(category=mix.category))
         table.add_row(
             mix.category,
             f"{float(mix.ratio) * 100:.0f}%",
@@ -134,67 +132,64 @@ def index(directory, recursive, extract_category):
     if extract_category:
         console.print("[dim]Category extraction enabled (from subfolder names)[/dim]")
 
-    service = MediaIngestionService()
-    media_repo = MediaRepository()
-    mix_repo = CategoryMixRepository()
-
-    try:
-        result = service.scan_directory(
-            directory, recursive=recursive, extract_category=extract_category
-        )
-
-        console.print("\n[bold green]✓ Indexing complete![/bold green]")
-        console.print(f"  Indexed: {result['indexed']}")
-        console.print(f"  Skipped: {result['skipped']}")
-        console.print(f"  Errors: {result['errors']}")
-
-        discovered_categories = result.get("categories", [])
-        if discovered_categories:
-            console.print(f"  Categories: {', '.join(discovered_categories)}")
-
-        # Get all categories in the database (might include previously indexed ones)
-        all_categories = media_repo.get_categories()
-
-        if not all_categories:
-            console.print("\n[yellow]No categories found in media library[/yellow]")
-            return
-
-        # Check if mix already exists
-        has_mix = mix_repo.has_current_mix()
-        current_ratios = mix_repo.get_current_mix_as_dict() if has_mix else {}
-
-        # Check for new categories without ratios
-        new_categories = mix_repo.get_categories_without_ratio(all_categories)
-
-        if has_mix and not new_categories:
-            # Existing mix covers all categories
-            console.print("\n[bold]Current category mix:[/bold]")
-            display_current_mix(mix_repo, media_repo)
-
-            if Confirm.ask("\nKeep current ratios?", default=True):
-                console.print("[green]✓ Keeping existing ratios[/green]")
-                return
-            # Fall through to redefine
-
-        elif new_categories:
-            console.print(
-                f"\n[yellow]New categories detected: {', '.join(new_categories)}[/yellow]"
+    with MediaIngestionService() as service:
+        try:
+            result = service.scan_directory(
+                directory, recursive=recursive, extract_category=extract_category
             )
-            if has_mix:
-                console.print("[dim]Current ratios will need to be updated[/dim]")
 
-        # Prompt for ratios
-        ratios = prompt_for_category_ratios(all_categories, current_ratios)
+            console.print("\n[bold green]✓ Indexing complete![/bold green]")
+            console.print(f"  Indexed: {result['indexed']}")
+            console.print(f"  Skipped: {result['skipped']}")
+            console.print(f"  Errors: {result['errors']}")
 
-        # Save the new mix
-        mix_repo.set_mix(ratios)
+            discovered_categories = result.get("categories", [])
+            if discovered_categories:
+                console.print(f"  Categories: {', '.join(discovered_categories)}")
 
-        console.print("\n[bold green]✓ Category mix saved![/bold green]")
-        display_current_mix(mix_repo, media_repo)
+            # Get all categories in the database (might include previously indexed ones)
+            all_categories = service.get_categories()
 
-    except Exception as e:
-        console.print(f"[bold red]✗ Error:[/bold red] {str(e)}")
-        raise click.Abort()
+            if not all_categories:
+                console.print("\n[yellow]No categories found in media library[/yellow]")
+                return
+
+            # Check if mix already exists
+            has_mix = service.has_current_mix()
+            current_ratios = service.get_current_mix_as_dict() if has_mix else {}
+
+            # Check for new categories without ratios
+            new_categories = service.get_categories_without_ratio(all_categories)
+
+            if has_mix and not new_categories:
+                # Existing mix covers all categories
+                console.print("\n[bold]Current category mix:[/bold]")
+                display_current_mix(service)
+
+                if Confirm.ask("\nKeep current ratios?", default=True):
+                    console.print("[green]✓ Keeping existing ratios[/green]")
+                    return
+                # Fall through to redefine
+
+            elif new_categories:
+                console.print(
+                    f"\n[yellow]New categories detected: {', '.join(new_categories)}[/yellow]"
+                )
+                if has_mix:
+                    console.print("[dim]Current ratios will need to be updated[/dim]")
+
+            # Prompt for ratios
+            ratios = prompt_for_category_ratios(all_categories, current_ratios)
+
+            # Save the new mix
+            service.set_category_mix(ratios)
+
+            console.print("\n[bold green]✓ Category mix saved![/bold green]")
+            display_current_mix(service)
+
+        except Exception as e:
+            console.print(f"[bold red]✗ Error:[/bold red] {str(e)}")
+            raise click.Abort()
 
 
 @click.command(name="update-category-mix")
@@ -204,33 +199,33 @@ def update_category_mix():
     Opens a workflow to redefine what percentage of posts
     should come from each category.
     """
-    media_repo = MediaRepository()
-    mix_repo = CategoryMixRepository()
+    with MediaIngestionService() as service:
+        categories = service.get_categories()
 
-    categories = media_repo.get_categories()
-
-    if not categories:
-        console.print("[yellow]No categories found. Run index-media first.[/yellow]")
-        return
-
-    console.print("[bold blue]Update Category Mix[/bold blue]")
-    console.print(f"Categories in library: {', '.join(sorted(categories))}\n")
-
-    # Show current mix
-    has_mix = display_current_mix(mix_repo, media_repo)
-
-    if has_mix:
-        if not Confirm.ask("\nRedefine ratios?", default=True):
+        if not categories:
+            console.print(
+                "[yellow]No categories found. Run index-media first.[/yellow]"
+            )
             return
 
-    current_ratios = mix_repo.get_current_mix_as_dict()
-    ratios = prompt_for_category_ratios(categories, current_ratios)
+        console.print("[bold blue]Update Category Mix[/bold blue]")
+        console.print(f"Categories in library: {', '.join(sorted(categories))}\n")
 
-    # Save
-    mix_repo.set_mix(ratios)
+        # Show current mix
+        has_mix = display_current_mix(service)
 
-    console.print("\n[bold green]✓ Category mix updated![/bold green]")
-    display_current_mix(mix_repo, media_repo)
+        if has_mix:
+            if not Confirm.ask("\nRedefine ratios?", default=True):
+                return
+
+        current_ratios = service.get_current_mix_as_dict()
+        ratios = prompt_for_category_ratios(categories, current_ratios)
+
+        # Save
+        service.set_category_mix(ratios)
+
+        console.print("\n[bold green]✓ Category mix updated![/bold green]")
+        display_current_mix(service)
 
 
 @click.command(name="list-media")
@@ -239,12 +234,12 @@ def update_category_mix():
 @click.option("--category", "-c", help="Filter by category (e.g., 'memes' or 'merch')")
 def list_media(limit, active_only, category):
     """List indexed media items."""
-    repo = MediaRepository()
-    items = repo.get_all(
-        is_active=True if active_only else None,
-        category=category,
-        limit=limit,
-    )
+    with MediaIngestionService() as service:
+        items = service.list_media(
+            is_active=True if active_only else None,
+            category=category,
+            limit=limit,
+        )
 
     if not items:
         msg = "[yellow]No media items found"
@@ -282,43 +277,40 @@ def list_media(limit, active_only, category):
 @click.command(name="list-categories")
 def list_categories():
     """List all media categories with their posting ratios."""
-    media_repo = MediaRepository()
-    mix_repo = CategoryMixRepository()
+    with MediaIngestionService() as service:
+        categories = service.get_categories()
 
-    categories = media_repo.get_categories()
+        if not categories:
+            console.print("[yellow]No categories found[/yellow]")
+            return
 
-    if not categories:
-        console.print("[yellow]No categories found[/yellow]")
-        return
+        current_mix = service.get_current_mix_as_dict()
 
-    current_mix = mix_repo.get_current_mix_as_dict()
+        table = Table(title="Media Categories")
+        table.add_column("Category", style="cyan")
+        table.add_column("Media Count", justify="right")
+        table.add_column("Post Ratio", justify="right", style="magenta")
 
-    table = Table(title="Media Categories")
-    table.add_column("Category", style="cyan")
-    table.add_column("Media Count", justify="right")
-    table.add_column("Post Ratio", justify="right", style="magenta")
+        for cat in sorted(categories):
+            count = len(service.list_media(category=cat))
+            ratio = current_mix.get(cat)
+            ratio_str = f"{float(ratio) * 100:.0f}%" if ratio else "[dim]not set[/dim]"
+            table.add_row(cat, str(count), ratio_str)
 
-    for cat in sorted(categories):
-        count = len(media_repo.get_all(category=cat))
-        ratio = current_mix.get(cat)
-        ratio_str = f"{float(ratio) * 100:.0f}%" if ratio else "[dim]not set[/dim]"
-        table.add_row(cat, str(count), ratio_str)
+        console.print(table)
 
-    console.print(table)
-
-    if not current_mix:
-        console.print(
-            "\n[yellow]Tip: Run 'update-category-mix' to set posting ratios[/yellow]"
-        )
+        if not current_mix:
+            console.print(
+                "\n[yellow]Tip: Run 'update-category-mix' to set posting ratios[/yellow]"
+            )
 
 
 @click.command(name="category-mix-history")
 @click.option("--category", "-c", help="Filter by specific category")
 def category_mix_history(category):
     """Show history of category mix changes (Type 2 SCD)."""
-    mix_repo = CategoryMixRepository()
-
-    history = mix_repo.get_history(category=category)
+    with MediaIngestionService() as service:
+        history = service.get_mix_history(category=category)
 
     if not history:
         console.print("[yellow]No category mix history found[/yellow]")

@@ -1,7 +1,7 @@
 """Tests for media CLI commands."""
 
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, MagicMock, patch
 from click.testing import CliRunner
 
 from cli.commands.media import index, list_media, validate
@@ -11,37 +11,31 @@ from cli.commands.media import index, list_media, validate
 class TestIndexMediaCommand:
     """Tests for the index-media CLI command."""
 
-    @patch("cli.commands.media.CategoryMixRepository")
-    @patch("cli.commands.media.MediaRepository")
     @patch("cli.commands.media.MediaIngestionService")
-    def test_index_media_success(
-        self, mock_service_class, mock_media_repo_class, mock_mix_repo_class
-    ):
+    def test_index_media_success(self, mock_service_class):
         """Test index-media indexes files from a directory."""
         import tempfile
 
-        mock_service = mock_service_class.return_value
+        mock_service = MagicMock()
+        mock_service_class.return_value.__enter__ = Mock(return_value=mock_service)
+        mock_service_class.return_value.__exit__ = Mock(return_value=False)
+
         mock_service.scan_directory.return_value = {
             "indexed": 3,
             "skipped": 1,
             "errors": 0,
             "categories": ["memes"],
         }
-
-        mock_media_repo = mock_media_repo_class.return_value
-        mock_media_repo.get_categories.return_value = ["memes"]
-
-        mock_mix_repo = mock_mix_repo_class.return_value
-        mock_mix_repo.has_current_mix.return_value = True
-        mock_mix_repo.get_current_mix_as_dict.return_value = {"memes": 1.0}
-        mock_mix_repo.get_categories_without_ratio.return_value = []
+        mock_service.get_categories.return_value = ["memes"]
+        mock_service.has_current_mix.return_value = True
+        mock_service.get_current_mix_as_dict.return_value = {"memes": 1.0}
+        mock_service.get_categories_without_ratio.return_value = []
 
         mock_mix_entry = Mock()
         mock_mix_entry.category = "memes"
         mock_mix_entry.ratio = 1.0
-        mock_mix_repo.get_current_mix.return_value = [mock_mix_entry]
-
-        mock_media_repo.get_all.return_value = [Mock(), Mock(), Mock()]
+        mock_service.get_current_mix.return_value = [mock_mix_entry]
+        mock_service.list_media.return_value = [Mock(), Mock(), Mock()]
 
         with tempfile.TemporaryDirectory() as temp_dir:
             runner = CliRunner()
@@ -60,16 +54,15 @@ class TestIndexMediaCommand:
         assert result.exit_code == 2
         assert "does not exist" in result.output.lower() or "Error" in result.output
 
-    @patch("cli.commands.media.CategoryMixRepository")
-    @patch("cli.commands.media.MediaRepository")
     @patch("cli.commands.media.MediaIngestionService")
-    def test_index_media_service_error(
-        self, mock_service_class, mock_media_repo_class, mock_mix_repo_class
-    ):
+    def test_index_media_service_error(self, mock_service_class):
         """Test index-media handles service errors gracefully."""
         import tempfile
 
-        mock_service = mock_service_class.return_value
+        mock_service = MagicMock()
+        mock_service_class.return_value.__enter__ = Mock(return_value=mock_service)
+        mock_service_class.return_value.__exit__ = Mock(return_value=False)
+
         mock_service.scan_directory.side_effect = RuntimeError("Disk full")
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -84,12 +77,14 @@ class TestIndexMediaCommand:
 class TestListMediaCommand:
     """Tests for the list-media CLI command."""
 
-    @patch("cli.commands.media.MediaRepository")
-    def test_list_media_shows_items(self, mock_repo_class):
+    @patch("cli.commands.media.MediaIngestionService")
+    def test_list_media_shows_items(self, mock_service_class):
         """Test list-media displays media items in a table."""
         from datetime import datetime
 
-        mock_repo = mock_repo_class.return_value
+        mock_service = MagicMock()
+        mock_service_class.return_value.__enter__ = Mock(return_value=mock_service)
+        mock_service_class.return_value.__exit__ = Mock(return_value=False)
 
         mock_item = Mock()
         mock_item.file_name = "list1.jpg"
@@ -98,7 +93,7 @@ class TestListMediaCommand:
         mock_item.last_posted_at = datetime(2026, 2, 10)
         mock_item.is_active = True
 
-        mock_repo.get_all.return_value = [mock_item]
+        mock_service.list_media.return_value = [mock_item]
 
         runner = CliRunner()
         result = runner.invoke(list_media, ["--limit", "10"])
@@ -106,15 +101,17 @@ class TestListMediaCommand:
         assert result.exit_code == 0
         assert "list1.jpg" in result.output
         assert "memes" in result.output
-        mock_repo.get_all.assert_called_once_with(
+        mock_service.list_media.assert_called_once_with(
             is_active=None, category=None, limit=10
         )
 
-    @patch("cli.commands.media.MediaRepository")
-    def test_list_media_empty(self, mock_repo_class):
+    @patch("cli.commands.media.MediaIngestionService")
+    def test_list_media_empty(self, mock_service_class):
         """Test list-media with no media shows empty message."""
-        mock_repo = mock_repo_class.return_value
-        mock_repo.get_all.return_value = []
+        mock_service = MagicMock()
+        mock_service_class.return_value.__enter__ = Mock(return_value=mock_service)
+        mock_service_class.return_value.__exit__ = Mock(return_value=False)
+        mock_service.list_media.return_value = []
 
         runner = CliRunner()
         result = runner.invoke(list_media, [])
@@ -122,10 +119,12 @@ class TestListMediaCommand:
         assert result.exit_code == 0
         assert "No media items found" in result.output
 
-    @patch("cli.commands.media.MediaRepository")
-    def test_list_media_with_category_filter(self, mock_repo_class):
+    @patch("cli.commands.media.MediaIngestionService")
+    def test_list_media_with_category_filter(self, mock_service_class):
         """Test list-media filters by category."""
-        mock_repo = mock_repo_class.return_value
+        mock_service = MagicMock()
+        mock_service_class.return_value.__enter__ = Mock(return_value=mock_service)
+        mock_service_class.return_value.__exit__ = Mock(return_value=False)
 
         mock_item = Mock()
         mock_item.file_name = "merch_item.jpg"
@@ -134,28 +133,30 @@ class TestListMediaCommand:
         mock_item.last_posted_at = None
         mock_item.is_active = True
 
-        mock_repo.get_all.return_value = [mock_item]
+        mock_service.list_media.return_value = [mock_item]
 
         runner = CliRunner()
         result = runner.invoke(list_media, ["--category", "merch"])
 
         assert result.exit_code == 0
         assert "merch" in result.output
-        mock_repo.get_all.assert_called_once_with(
+        mock_service.list_media.assert_called_once_with(
             is_active=None, category="merch", limit=20
         )
 
-    @patch("cli.commands.media.MediaRepository")
-    def test_list_media_active_only(self, mock_repo_class):
+    @patch("cli.commands.media.MediaIngestionService")
+    def test_list_media_active_only(self, mock_service_class):
         """Test list-media with --active-only flag."""
-        mock_repo = mock_repo_class.return_value
-        mock_repo.get_all.return_value = []
+        mock_service = MagicMock()
+        mock_service_class.return_value.__enter__ = Mock(return_value=mock_service)
+        mock_service_class.return_value.__exit__ = Mock(return_value=False)
+        mock_service.list_media.return_value = []
 
         runner = CliRunner()
         result = runner.invoke(list_media, ["--active-only"])
 
         assert result.exit_code == 0
-        mock_repo.get_all.assert_called_once_with(
+        mock_service.list_media.assert_called_once_with(
             is_active=True, category=None, limit=20
         )
 
