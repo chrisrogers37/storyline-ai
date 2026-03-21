@@ -1,11 +1,14 @@
-"""Tests for SchedulerService."""
+"""Tests for SchedulerService (JIT model)."""
 
 import pytest
+from datetime import datetime
 from decimal import Decimal
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import AsyncMock, Mock, patch
 from uuid import uuid4
 
+from src.exceptions.google_drive import GoogleDriveAuthError
 from src.services.core.scheduler import SchedulerService
+from tests.src.services.conftest import mock_track_execution
 
 
 @pytest.fixture
@@ -18,143 +21,537 @@ def scheduler_service_mocked():
         service.lock_repo = Mock()
         service.category_mix_repo = Mock()
         service.settings_service = Mock()
+        service.telegram_service = AsyncMock()
         service.service_run_repo = Mock()
         service.service_name = "SchedulerService"
         service.SCHEDULE_JITTER_MINUTES = 30
-        # Mock track_execution as MagicMock with context manager support
-        service.track_execution = MagicMock()
-        service.track_execution.return_value.__enter__ = Mock(return_value="run-123")
-        service.track_execution.return_value.__exit__ = Mock(return_value=False)
+        service.track_execution = mock_track_execution
         service.set_result_summary = Mock()
         return service
 
 
+def _make_chat_settings(
+    *,
+    posts_per_day=3,
+    posting_hours_start=9,
+    posting_hours_end=21,
+    last_post_sent_at=None,
+    is_paused=False,
+    telegram_chat_id=-100123,
+    settings_id=None,
+):
+    """Helper to build a mock chat_settings object."""
+    cs = Mock()
+    cs.posts_per_day = posts_per_day
+    cs.posting_hours_start = posting_hours_start
+    cs.posting_hours_end = posting_hours_end
+    cs.last_post_sent_at = last_post_sent_at
+    cs.is_paused = is_paused
+    cs.telegram_chat_id = telegram_chat_id
+    cs.id = settings_id or uuid4()
+    return cs
+
+
+# ------------------------------------------------------------------
+# is_slot_due
+# ------------------------------------------------------------------
+
+
 @pytest.mark.unit
-class TestSchedulerService:
-    """Test suite for SchedulerService."""
+class TestIsSlotDue:
+    """Tests for SchedulerService.is_slot_due()."""
 
-    @patch("src.services.core.scheduler.settings")
-    def test_create_schedule_creates_queue_items(
-        self, mock_settings, scheduler_service_mocked
-    ):
-        """Test that create_schedule creates queue items."""
+    def test_in_window_and_first_post_ever(self, scheduler_service_mocked):
+        """Slot is due when last_post_sent_at is None (first post)."""
         service = scheduler_service_mocked
-        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
-
-        mock_chat_settings = Mock()
-        mock_chat_settings.posts_per_day = 2
-        mock_chat_settings.posting_hours_start = 9
-        mock_chat_settings.posting_hours_end = 17
-        service.settings_service.get_settings.return_value = mock_chat_settings
-
         service.category_mix_repo.get_current_mix_as_dict.return_value = {}
 
-        mock_media = Mock()
-        mock_media.id = uuid4()
-        mock_media.file_name = "schedule1.jpg"
-        mock_media.category = "memes"
-        service._select_media = Mock(return_value=mock_media)
-
-        # Use days=2 to ensure tomorrow's slots are always in the future
-        result = service.create_schedule(days=2)
-
-        assert result["scheduled"] >= 1
-        assert service.queue_repo.create.call_count >= 1
-
-    def test_select_next_media_prioritizes_never_posted(self, scheduler_service_mocked):
-        """Test that never-posted media is prioritized."""
-        service = scheduler_service_mocked
-
-        mock_media = Mock()
-        mock_media.times_posted = 0
-        service.media_repo.get_next_eligible_for_posting.return_value = mock_media
-
-        result = service._select_media()
-
-        assert result is not None
-        assert result.times_posted == 0
-        service.media_repo.get_next_eligible_for_posting.assert_called()
-
-    def test_select_next_media_excludes_locked(self, scheduler_service_mocked):
-        """Test that locked media is excluded from selection."""
-        service = scheduler_service_mocked
-
-        mock_media = Mock(category="memes", file_name="unlocked.jpg")
-        service.media_repo.get_next_eligible_for_posting.return_value = mock_media
-
-        result = service._select_media()
-
-        assert result is not None
-        service.media_repo.get_next_eligible_for_posting.assert_called_once_with(
-            category=None
+        cs = _make_chat_settings(
+            posting_hours_start=9,
+            posting_hours_end=21,
+            posts_per_day=3,
+            last_post_sent_at=None,
         )
 
-    def test_select_next_media_excludes_queued(self, scheduler_service_mocked):
-        """Test that queued media is excluded from selection."""
+        with patch("src.services.core.scheduler.datetime") as mock_dt:
+            mock_dt.utcnow.return_value = datetime(2026, 3, 21, 12, 0)
+            result = service.is_slot_due(cs)
+
+        # Should be due (None = no category preference)
+        assert result is None
+
+    def test_outside_posting_window_returns_false(self, scheduler_service_mocked):
+        """Returns False when current time is outside posting window."""
         service = scheduler_service_mocked
-
-        mock_media = Mock(category="memes", file_name="available.jpg")
-        service.media_repo.get_next_eligible_for_posting.return_value = mock_media
-
-        result = service._select_media()
-
-        assert result is not None
-        service.media_repo.get_next_eligible_for_posting.assert_called_once_with(
-            category=None
+        cs = _make_chat_settings(
+            posting_hours_start=9,
+            posting_hours_end=17,
         )
 
-    @patch("src.services.core.scheduler.settings")
-    def test_generate_time_slots(self, mock_settings, scheduler_service_mocked):
-        """Test generating time slots for scheduling."""
+        with patch("src.services.core.scheduler.datetime") as mock_dt:
+            mock_dt.utcnow.return_value = datetime(2026, 3, 21, 20, 0)
+            result = service.is_slot_due(cs)
+
+        assert result is False
+
+    def test_too_soon_since_last_post(self, scheduler_service_mocked):
+        """Returns False when last post was too recent."""
         service = scheduler_service_mocked
-        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
+        # Window 9-21 = 12 hours, 3 posts/day => interval = 4 hours
+        cs = _make_chat_settings(
+            posting_hours_start=9,
+            posting_hours_end=21,
+            posts_per_day=3,
+            last_post_sent_at=datetime(2026, 3, 21, 11, 0),
+        )
 
-        mock_chat_settings = Mock()
-        mock_chat_settings.posts_per_day = 3
-        mock_chat_settings.posting_hours_start = 9
-        mock_chat_settings.posting_hours_end = 21
-        service.settings_service.get_settings.return_value = mock_chat_settings
+        with patch("src.services.core.scheduler.datetime") as mock_dt:
+            # Only 1 hour since last post, interval is 4 hours
+            mock_dt.utcnow.return_value = datetime(2026, 3, 21, 12, 0)
+            result = service.is_slot_due(cs)
 
-        time_slots = service._generate_time_slots(days=2)
+        assert result is False
 
-        # Should generate up to 6 slots (2 days * 3 posts), minus any in the past
-        assert len(time_slots) <= 6
-
-        # Slots should be in chronological order
-        for i in range(len(time_slots) - 1):
-            assert time_slots[i] < time_slots[i + 1]
-
-    @patch("src.services.core.scheduler.settings")
-    def test_create_schedule_respects_posting_hours(
-        self, mock_settings, scheduler_service_mocked
-    ):
-        """Test that schedule respects posting hours configuration."""
+    def test_due_after_sufficient_interval(self, scheduler_service_mocked):
+        """Returns category (or None) when enough time has elapsed."""
         service = scheduler_service_mocked
-        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
-
-        mock_chat_settings = Mock()
-        mock_chat_settings.posts_per_day = 2
-        mock_chat_settings.posting_hours_start = 9
-        mock_chat_settings.posting_hours_end = 17
-        service.settings_service.get_settings.return_value = mock_chat_settings
-
         service.category_mix_repo.get_current_mix_as_dict.return_value = {}
 
-        mock_media = Mock()
-        mock_media.id = uuid4()
-        mock_media.file_name = "hours.jpg"
-        mock_media.category = None
-        service._select_media = Mock(return_value=mock_media)
+        # Window 9-21 = 12 hours, 3 posts/day => interval = 4 hours
+        cs = _make_chat_settings(
+            posting_hours_start=9,
+            posting_hours_end=21,
+            posts_per_day=3,
+            last_post_sent_at=datetime(2026, 3, 21, 8, 0),
+        )
 
-        # Use days=2 to ensure tomorrow's slots are always in the future
-        service.create_schedule(days=2)
+        with patch("src.services.core.scheduler.datetime") as mock_dt:
+            # 5 hours since last post, interval is 4 hours -> due
+            mock_dt.utcnow.return_value = datetime(2026, 3, 21, 13, 0)
+            result = service.is_slot_due(cs)
 
-        assert service.queue_repo.create.call_count >= 1
+        # No category ratios -> None (due, no preference)
+        assert result is None
 
-        # Verify times are within posting hours (with jitter tolerance)
-        for call in service.queue_repo.create.call_args_list:
-            scheduled_time = call.kwargs["scheduled_for"]
-            assert 0 <= scheduled_time.hour <= 23
+    def test_midnight_rollover_window(self, scheduler_service_mocked):
+        """Slot is due when posting window crosses midnight (e.g. 22-2)."""
+        service = scheduler_service_mocked
+        service.category_mix_repo.get_current_mix_as_dict.return_value = {}
+
+        cs = _make_chat_settings(
+            posting_hours_start=22,
+            posting_hours_end=2,
+            posts_per_day=2,
+            last_post_sent_at=None,
+        )
+
+        with patch("src.services.core.scheduler.datetime") as mock_dt:
+            mock_dt.utcnow.return_value = datetime(2026, 3, 21, 23, 0)
+            result = service.is_slot_due(cs)
+
+        assert result is not False
+
+    def test_single_post_per_day(self, scheduler_service_mocked):
+        """Single post per day with 12-hour window => interval = 12 hours."""
+        service = scheduler_service_mocked
+        service.category_mix_repo.get_current_mix_as_dict.return_value = {}
+
+        cs = _make_chat_settings(
+            posting_hours_start=9,
+            posting_hours_end=21,
+            posts_per_day=1,
+            last_post_sent_at=datetime(2026, 3, 21, 9, 0),
+        )
+
+        with patch("src.services.core.scheduler.datetime") as mock_dt:
+            # Only 2 hours since last post, interval is 12 hours
+            mock_dt.utcnow.return_value = datetime(2026, 3, 21, 11, 0)
+            result = service.is_slot_due(cs)
+
+        assert result is False
+
+    def test_returns_category_when_ratios_configured(self, scheduler_service_mocked):
+        """Returns a category string when category ratios are configured."""
+        service = scheduler_service_mocked
+        service.category_mix_repo.get_current_mix_as_dict.return_value = {
+            "memes": Decimal("0.7"),
+            "merch": Decimal("0.3"),
+        }
+
+        cs = _make_chat_settings(
+            posting_hours_start=9,
+            posting_hours_end=21,
+            posts_per_day=3,
+            last_post_sent_at=None,
+        )
+
+        with patch("src.services.core.scheduler.datetime") as mock_dt:
+            mock_dt.utcnow.return_value = datetime(2026, 3, 21, 12, 0)
+            result = service.is_slot_due(cs)
+
+        assert isinstance(result, str)
+        assert result in ("memes", "merch")
+
+
+# ------------------------------------------------------------------
+# process_slot
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestProcessSlot:
+    """Tests for SchedulerService.process_slot()."""
+
+    @pytest.mark.asyncio
+    async def test_paused_returns_paused(self, scheduler_service_mocked):
+        """Returns paused result when chat is paused."""
+        service = scheduler_service_mocked
+        cs = _make_chat_settings(is_paused=True)
+        service.settings_service.get_settings.return_value = cs
+
+        result = await service.process_slot(telegram_chat_id=-100123)
+
+        assert result["posted"] is False
+        assert result["reason"] == "paused"
+
+    @pytest.mark.asyncio
+    async def test_not_due_returns_not_due(self, scheduler_service_mocked):
+        """Returns not_due when is_slot_due returns False."""
+        service = scheduler_service_mocked
+        cs = _make_chat_settings(is_paused=False)
+        service.settings_service.get_settings.return_value = cs
+        service.is_slot_due = Mock(return_value=False)
+
+        result = await service.process_slot(telegram_chat_id=-100123)
+
+        assert result["posted"] is False
+        assert result["reason"] == "not_due"
+
+    @pytest.mark.asyncio
+    async def test_posts_successfully(self, scheduler_service_mocked):
+        """Delegates to _select_and_send when slot is due."""
+        service = scheduler_service_mocked
+        cs = _make_chat_settings(is_paused=False)
+        service.settings_service.get_settings.return_value = cs
+        service.is_slot_due = Mock(return_value=None)
+
+        expected_result = {
+            "posted": True,
+            "queue_item_id": "q-1",
+            "media_file": "test.jpg",
+        }
+        service._select_and_send = AsyncMock(return_value=expected_result)
+
+        result = await service.process_slot(telegram_chat_id=-100123)
+
+        assert result["posted"] is True
+        service._select_and_send.assert_called_once()
+        call_kwargs = service._select_and_send.call_args.kwargs
+        assert call_kwargs["category"] is None
+        assert call_kwargs["triggered_by"] == "scheduler"
+
+    @pytest.mark.asyncio
+    async def test_passes_category_from_is_slot_due(self, scheduler_service_mocked):
+        """Passes category string from is_slot_due to _select_and_send."""
+        service = scheduler_service_mocked
+        cs = _make_chat_settings(is_paused=False)
+        service.settings_service.get_settings.return_value = cs
+        service.is_slot_due = Mock(return_value="memes")
+        service._select_and_send = AsyncMock(return_value={"posted": True})
+
+        await service.process_slot(telegram_chat_id=-100123)
+
+        call_kwargs = service._select_and_send.call_args.kwargs
+        assert call_kwargs["category"] == "memes"
+
+    @pytest.mark.asyncio
+    async def test_no_eligible_media(self, scheduler_service_mocked):
+        """Returns no_eligible_media when _select_media returns None."""
+        service = scheduler_service_mocked
+        cs = _make_chat_settings(is_paused=False)
+        service.settings_service.get_settings.return_value = cs
+        service.is_slot_due = Mock(return_value=None)
+
+        # Let _select_and_send flow through to real implementation
+        service.media_repo.get_next_eligible_for_posting.return_value = None
+
+        result = await service.process_slot(telegram_chat_id=-100123)
+
+        assert result["posted"] is False
+        assert result["reason"] == "no_eligible_media"
+
+
+# ------------------------------------------------------------------
+# force_send_next
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestForceSendNext:
+    """Tests for SchedulerService.force_send_next()."""
+
+    @pytest.mark.asyncio
+    async def test_success(self, scheduler_service_mocked):
+        """Sends immediately regardless of is_slot_due."""
+        service = scheduler_service_mocked
+        cs = _make_chat_settings()
+        service.settings_service.get_settings.return_value = cs
+
+        mock_media = Mock(id=uuid4(), file_name="force.jpg", category="memes")
+        service.media_repo.get_next_eligible_for_posting.return_value = mock_media
+
+        mock_queue_item = Mock(id=uuid4())
+        service.queue_repo.create.return_value = mock_queue_item
+        service.telegram_service.send_notification = AsyncMock(return_value=True)
+
+        result = await service.force_send_next(
+            telegram_chat_id=-100123, user_id="user-1"
+        )
+
+        assert result["posted"] is True
+        assert result["media_file"] == "force.jpg"
+        service.settings_service.update_last_post_sent_at.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_no_media_available(self, scheduler_service_mocked):
+        """Returns error when no eligible media exists."""
+        service = scheduler_service_mocked
+        cs = _make_chat_settings()
+        service.settings_service.get_settings.return_value = cs
+        service.media_repo.get_next_eligible_for_posting.return_value = None
+
+        result = await service.force_send_next(telegram_chat_id=-100123)
+
+        assert result["posted"] is False
+        assert result["error"] == "No eligible media available"
+
+    @pytest.mark.asyncio
+    async def test_force_sent_indicator_passed_through(self, scheduler_service_mocked):
+        """force_sent_indicator is threaded to _send_to_telegram."""
+        service = scheduler_service_mocked
+        cs = _make_chat_settings()
+        service.settings_service.get_settings.return_value = cs
+
+        mock_media = Mock(id=uuid4(), file_name="f.jpg", category=None)
+        service.media_repo.get_next_eligible_for_posting.return_value = mock_media
+
+        mock_queue_item = Mock(id=uuid4())
+        service.queue_repo.create.return_value = mock_queue_item
+        service.telegram_service.send_notification = AsyncMock(return_value=True)
+
+        await service.force_send_next(
+            telegram_chat_id=-100123, force_sent_indicator=True
+        )
+
+        service.telegram_service.send_notification.assert_called_once_with(
+            str(mock_queue_item.id), force_sent=True
+        )
+
+
+# ------------------------------------------------------------------
+# _send_to_telegram
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestSendToTelegram:
+    """Tests for SchedulerService._send_to_telegram()."""
+
+    @pytest.mark.asyncio
+    async def test_success(self, scheduler_service_mocked):
+        """Marks item as processing, sends, returns True."""
+        service = scheduler_service_mocked
+        queue_item = Mock(id=uuid4())
+        service.telegram_service.send_notification = AsyncMock(return_value=True)
+
+        result = await service._send_to_telegram(queue_item)
+
+        assert result is True
+        service.queue_repo.update_status.assert_called_once_with(
+            str(queue_item.id), "processing"
+        )
+
+    @pytest.mark.asyncio
+    async def test_failure_rolls_back_to_pending(self, scheduler_service_mocked):
+        """Rolls back to pending when send_notification returns False."""
+        service = scheduler_service_mocked
+        queue_item = Mock(id=uuid4())
+        service.telegram_service.send_notification = AsyncMock(return_value=False)
+
+        result = await service._send_to_telegram(queue_item)
+
+        assert result is False
+        # First call: processing, second call: rollback to pending
+        calls = service.queue_repo.update_status.call_args_list
+        assert calls[0][0] == (str(queue_item.id), "processing")
+        assert calls[1][0] == (str(queue_item.id), "pending")
+
+    @pytest.mark.asyncio
+    async def test_google_drive_auth_error_reraises(self, scheduler_service_mocked):
+        """GoogleDriveAuthError rolls back and re-raises."""
+        service = scheduler_service_mocked
+        queue_item = Mock(id=uuid4())
+        service.telegram_service.send_notification = AsyncMock(
+            side_effect=GoogleDriveAuthError("Token expired")
+        )
+
+        with pytest.raises(GoogleDriveAuthError, match="Token expired"):
+            await service._send_to_telegram(queue_item)
+
+        # Should have rolled back to pending
+        service.queue_repo.update_status.assert_any_call(str(queue_item.id), "pending")
+
+    @pytest.mark.asyncio
+    async def test_generic_exception_returns_false(self, scheduler_service_mocked):
+        """Generic exceptions are caught, rolled back, returns False."""
+        service = scheduler_service_mocked
+        queue_item = Mock(id=uuid4())
+        service.telegram_service.send_notification = AsyncMock(
+            side_effect=RuntimeError("Network error")
+        )
+
+        result = await service._send_to_telegram(queue_item)
+
+        assert result is False
+        service.queue_repo.update_status.assert_any_call(str(queue_item.id), "pending")
+
+    @pytest.mark.asyncio
+    async def test_rollback_failure_suppressed(self, scheduler_service_mocked):
+        """If rollback itself fails, the original exception still propagates."""
+        service = scheduler_service_mocked
+        queue_item = Mock(id=uuid4())
+        service.telegram_service.send_notification = AsyncMock(
+            side_effect=GoogleDriveAuthError("Auth fail")
+        )
+        # Make the rollback raise too
+        service.queue_repo.update_status.side_effect = [
+            None,  # processing
+            Exception("DB down"),  # rollback fails
+        ]
+
+        with pytest.raises(GoogleDriveAuthError, match="Auth fail"):
+            await service._send_to_telegram(queue_item)
+
+
+# ------------------------------------------------------------------
+# Posting window helpers
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestPostingWindowHelpers:
+    """Tests for _in_posting_window and _posting_window_hours."""
+
+    def test_in_window_normal_hours(self):
+        """Time within normal posting window returns True."""
+        cs = _make_chat_settings(posting_hours_start=9, posting_hours_end=21)
+        now = datetime(2026, 3, 21, 12, 0)
+
+        assert SchedulerService._in_posting_window(now, cs) is True
+
+    def test_outside_window_normal_hours(self):
+        """Time outside normal posting window returns False."""
+        cs = _make_chat_settings(posting_hours_start=9, posting_hours_end=17)
+        now = datetime(2026, 3, 21, 20, 0)
+
+        assert SchedulerService._in_posting_window(now, cs) is False
+
+    def test_at_start_boundary(self):
+        """Time exactly at window start is inside."""
+        cs = _make_chat_settings(posting_hours_start=9, posting_hours_end=17)
+        now = datetime(2026, 3, 21, 9, 0)
+
+        assert SchedulerService._in_posting_window(now, cs) is True
+
+    def test_at_end_boundary(self):
+        """Time exactly at window end is outside (half-open interval)."""
+        cs = _make_chat_settings(posting_hours_start=9, posting_hours_end=17)
+        now = datetime(2026, 3, 21, 17, 0)
+
+        assert SchedulerService._in_posting_window(now, cs) is False
+
+    def test_midnight_crossing_before_midnight(self):
+        """Window 22-2: time at 23 is inside."""
+        cs = _make_chat_settings(posting_hours_start=22, posting_hours_end=2)
+        now = datetime(2026, 3, 21, 23, 0)
+
+        assert SchedulerService._in_posting_window(now, cs) is True
+
+    def test_midnight_crossing_after_midnight(self):
+        """Window 22-2: time at 1 is inside."""
+        cs = _make_chat_settings(posting_hours_start=22, posting_hours_end=2)
+        now = datetime(2026, 3, 22, 1, 0)
+
+        assert SchedulerService._in_posting_window(now, cs) is True
+
+    def test_midnight_crossing_outside(self):
+        """Window 22-2: time at 15 is outside."""
+        cs = _make_chat_settings(posting_hours_start=22, posting_hours_end=2)
+        now = datetime(2026, 3, 21, 15, 0)
+
+        assert SchedulerService._in_posting_window(now, cs) is False
+
+    def test_posting_window_hours_normal(self):
+        """Normal window: 21 - 9 = 12 hours."""
+        cs = _make_chat_settings(posting_hours_start=9, posting_hours_end=21)
+
+        assert SchedulerService._posting_window_hours(cs) == 12.0
+
+    def test_posting_window_hours_midnight_crossing(self):
+        """Midnight crossing: (24 - 22) + 2 = 4 hours."""
+        cs = _make_chat_settings(posting_hours_start=22, posting_hours_end=2)
+
+        assert SchedulerService._posting_window_hours(cs) == 4.0
+
+    def test_posting_window_hours_full_day(self):
+        """Full day window: 24 - 0 = 24 hours."""
+        cs = _make_chat_settings(posting_hours_start=0, posting_hours_end=24)
+
+        assert SchedulerService._posting_window_hours(cs) == 24.0
+
+
+# ------------------------------------------------------------------
+# _pick_category_for_slot
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestPickCategoryForSlot:
+    """Tests for SchedulerService._pick_category_for_slot()."""
+
+    def test_returns_none_when_no_ratios(self, scheduler_service_mocked):
+        """Returns None when no category mix is configured."""
+        service = scheduler_service_mocked
+        service.category_mix_repo.get_current_mix_as_dict.return_value = {}
+
+        assert service._pick_category_for_slot() is None
+
+    def test_returns_category_with_ratios(self, scheduler_service_mocked):
+        """Returns a valid category when ratios are configured."""
+        service = scheduler_service_mocked
+        service.category_mix_repo.get_current_mix_as_dict.return_value = {
+            "memes": Decimal("0.7"),
+            "merch": Decimal("0.3"),
+        }
+
+        result = service._pick_category_for_slot()
+
+        assert result in ("memes", "merch")
+
+    def test_single_category_always_returned(self, scheduler_service_mocked):
+        """Single category at 100% is always returned."""
+        service = scheduler_service_mocked
+        service.category_mix_repo.get_current_mix_as_dict.return_value = {
+            "memes": Decimal("1.0"),
+        }
+
+        for _ in range(10):
+            assert service._pick_category_for_slot() == "memes"
+
+
+# ------------------------------------------------------------------
+# Category allocation (unchanged methods - kept from original tests)
+# ------------------------------------------------------------------
 
 
 @pytest.mark.unit
@@ -164,26 +561,19 @@ class TestSchedulerCategoryAllocation:
     @pytest.fixture
     def scheduler_service(self):
         """Create SchedulerService with mocked dependencies."""
-        with patch("src.services.core.scheduler.MediaRepository"):
-            with patch("src.services.core.scheduler.QueueRepository"):
-                with patch("src.services.core.scheduler.LockRepository"):
-                    with patch("src.services.core.scheduler.CategoryMixRepository"):
-                        with patch("src.services.base_service.ServiceRunRepository"):
-                            service = SchedulerService()
-                            service.media_repo = Mock()
-                            service.queue_repo = Mock()
-                            service.lock_repo = Mock()
-                            service.category_mix_repo = Mock()
-                            # Mock track_execution
-                            service.track_execution = MagicMock()
-                            service.track_execution.return_value.__enter__ = Mock(
-                                return_value="run-123"
-                            )
-                            service.track_execution.return_value.__exit__ = Mock(
-                                return_value=False
-                            )
-                            service.set_result_summary = Mock()
-                            return service
+        with patch.object(SchedulerService, "__init__", lambda self: None):
+            service = SchedulerService()
+            service.media_repo = Mock()
+            service.queue_repo = Mock()
+            service.lock_repo = Mock()
+            service.category_mix_repo = Mock()
+            service.settings_service = Mock()
+            service.service_run_repo = Mock()
+            service.service_name = "SchedulerService"
+            service.SCHEDULE_JITTER_MINUTES = 30
+            service.track_execution = mock_track_execution
+            service.set_result_summary = Mock()
+            return service
 
     def test_allocate_slots_with_ratios(self, scheduler_service):
         """Test that slots are allocated according to category ratios."""
@@ -194,14 +584,11 @@ class TestSchedulerCategoryAllocation:
 
         allocation = scheduler_service._allocate_slots_to_categories(10)
 
-        # Should have 10 slots total
         assert len(allocation) == 10
 
-        # Count per category
         memes_count = allocation.count("memes")
         merch_count = allocation.count("merch")
 
-        # 70% of 10 = 7 memes, 30% of 10 = 3 merch
         assert memes_count == 7
         assert merch_count == 3
 
@@ -212,7 +599,6 @@ class TestSchedulerCategoryAllocation:
             "merch": Decimal("0.3"),
         }
 
-        # 21 slots: 70% = 14.7 -> 15, 30% = 6.3 -> 6
         allocation = scheduler_service._allocate_slots_to_categories(21)
 
         assert len(allocation) == 21
@@ -220,9 +606,7 @@ class TestSchedulerCategoryAllocation:
         memes_count = allocation.count("memes")
         merch_count = allocation.count("merch")
 
-        # Should sum to 21
         assert memes_count + merch_count == 21
-        # Roughly 70/30 split
         assert memes_count >= 14 and memes_count <= 15
         assert merch_count >= 6 and merch_count <= 7
 
@@ -261,9 +645,9 @@ class TestSchedulerCategoryAllocation:
         merch = allocation.count("merch")
         misc = allocation.count("misc")
 
-        assert memes == 5  # 50%
-        assert merch == 3  # 30%
-        assert misc == 2  # 20%
+        assert memes == 5
+        assert merch == 3
+        assert misc == 2
 
     def test_summarize_allocation(self, scheduler_service):
         """Test allocation summary string."""
@@ -288,18 +672,14 @@ class TestSchedulerCategoryAllocation:
         """Test fallback to any category when target is exhausted."""
         mock_media = Mock(category="merch", file_name="fallback.jpg")
 
-        # First call (with category) returns None, second call (without) returns media
         scheduler_service._select_media_from_pool = Mock(side_effect=[None, mock_media])
 
         result = scheduler_service._select_media(category="memes")
 
-        # Should have been called twice
         assert scheduler_service._select_media_from_pool.call_count == 2
-        # First with category, then without
         calls = scheduler_service._select_media_from_pool.call_args_list
         assert calls[0][1]["category"] == "memes"
         assert calls[1][1]["category"] is None
-        # Should return fallback media
         assert result == mock_media
 
     def test_select_media_no_fallback_when_no_category(self, scheduler_service):
@@ -308,190 +688,13 @@ class TestSchedulerCategoryAllocation:
 
         result = scheduler_service._select_media(category=None)
 
-        # Should only be called once (no fallback)
         scheduler_service._select_media_from_pool.assert_called_once_with(category=None)
         assert result is None
 
 
-@pytest.mark.unit
-class TestSchedulerTenantSupport:
-    """Tests for per-tenant scheduler parameter threading."""
-
-    @patch("src.services.core.scheduler.settings")
-    def test_create_schedule_passes_telegram_chat_id(
-        self, mock_settings, scheduler_service_mocked
-    ):
-        """create_schedule threads telegram_chat_id to _generate_time_slots."""
-        service = scheduler_service_mocked
-        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
-
-        mock_chat_settings = Mock()
-        mock_chat_settings.posts_per_day = 2
-        mock_chat_settings.posting_hours_start = 9
-        mock_chat_settings.posting_hours_end = 17
-        service.settings_service.get_settings.return_value = mock_chat_settings
-        service.category_mix_repo.get_current_mix_as_dict.return_value = {}
-
-        mock_media = Mock()
-        mock_media.id = uuid4()
-        mock_media.file_name = "test.jpg"
-        mock_media.category = None
-        service._select_media = Mock(return_value=mock_media)
-
-        service.create_schedule(days=2, telegram_chat_id=-200456)
-
-        # Should use the provided chat ID, not the admin default
-        service.settings_service.get_settings.assert_called_with(-200456)
-
-    @patch("src.services.core.scheduler.settings")
-    def test_create_schedule_falls_back_to_admin_when_no_chat_id(
-        self, mock_settings, scheduler_service_mocked
-    ):
-        """create_schedule without telegram_chat_id falls back to ADMIN_TELEGRAM_CHAT_ID."""
-        service = scheduler_service_mocked
-        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
-
-        mock_chat_settings = Mock()
-        mock_chat_settings.posts_per_day = 2
-        mock_chat_settings.posting_hours_start = 9
-        mock_chat_settings.posting_hours_end = 17
-        service.settings_service.get_settings.return_value = mock_chat_settings
-        service.category_mix_repo.get_current_mix_as_dict.return_value = {}
-
-        mock_media = Mock()
-        mock_media.id = uuid4()
-        mock_media.file_name = "test.jpg"
-        mock_media.category = None
-        service._select_media = Mock(return_value=mock_media)
-
-        service.create_schedule(days=2)
-
-        service.settings_service.get_settings.assert_called_with(-100123)
-
-    @patch("src.services.core.scheduler.settings")
-    def test_extend_schedule_passes_telegram_chat_id(
-        self, mock_settings, scheduler_service_mocked
-    ):
-        """extend_schedule threads telegram_chat_id to _generate_time_slots_from_date."""
-        service = scheduler_service_mocked
-        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
-
-        mock_chat_settings = Mock()
-        mock_chat_settings.posts_per_day = 2
-        mock_chat_settings.posting_hours_start = 9
-        mock_chat_settings.posting_hours_end = 17
-        service.settings_service.get_settings.return_value = mock_chat_settings
-        service.category_mix_repo.get_current_mix_as_dict.return_value = {}
-        service.queue_repo.get_all.return_value = []
-
-        mock_media = Mock()
-        mock_media.id = uuid4()
-        mock_media.file_name = "test.jpg"
-        mock_media.category = None
-        service._select_media = Mock(return_value=mock_media)
-
-        service.extend_schedule(days=2, telegram_chat_id=-200456)
-
-        service.settings_service.get_settings.assert_called_with(-200456)
-
-    @patch("src.services.core.scheduler.settings")
-    def test_generate_time_slots_uses_chat_specific_settings(
-        self, mock_settings, scheduler_service_mocked
-    ):
-        """_generate_time_slots uses the provided chat's schedule settings."""
-        service = scheduler_service_mocked
-        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
-
-        mock_chat_settings = Mock()
-        mock_chat_settings.posts_per_day = 5
-        mock_chat_settings.posting_hours_start = 10
-        mock_chat_settings.posting_hours_end = 20
-        service.settings_service.get_settings.return_value = mock_chat_settings
-
-        service._generate_time_slots(days=2, telegram_chat_id=-200456)
-
-        service.settings_service.get_settings.assert_called_with(-200456)
-
-    @patch("src.services.core.scheduler.settings")
-    def test_create_schedule_passes_chat_settings_id_to_queue_create(
-        self, mock_settings, scheduler_service_mocked
-    ):
-        """create_schedule passes chat_settings_id to queue_repo.create()."""
-        service = scheduler_service_mocked
-        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
-
-        mock_chat_settings = Mock()
-        mock_chat_settings.id = uuid4()
-        mock_chat_settings.posts_per_day = 2
-        mock_chat_settings.posting_hours_start = 9
-        mock_chat_settings.posting_hours_end = 17
-        service.settings_service.get_settings.return_value = mock_chat_settings
-        service.category_mix_repo.get_current_mix_as_dict.return_value = {}
-
-        mock_media = Mock()
-        mock_media.id = uuid4()
-        mock_media.file_name = "test.jpg"
-        mock_media.category = None
-        service._select_media = Mock(return_value=mock_media)
-
-        service.create_schedule(days=2, telegram_chat_id=-200456)
-
-        # Every queue_repo.create call must include the chat_settings_id
-        for call in service.queue_repo.create.call_args_list:
-            assert call.kwargs["chat_settings_id"] == str(mock_chat_settings.id)
-
-    @patch("src.services.core.scheduler.settings")
-    def test_extend_schedule_passes_chat_settings_id_to_queue_create(
-        self, mock_settings, scheduler_service_mocked
-    ):
-        """extend_schedule passes chat_settings_id to queue_repo.create()."""
-        service = scheduler_service_mocked
-        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
-
-        mock_chat_settings = Mock()
-        mock_chat_settings.id = uuid4()
-        mock_chat_settings.posts_per_day = 2
-        mock_chat_settings.posting_hours_start = 9
-        mock_chat_settings.posting_hours_end = 17
-        service.settings_service.get_settings.return_value = mock_chat_settings
-        service.category_mix_repo.get_current_mix_as_dict.return_value = {}
-        service.queue_repo.get_all.return_value = []
-
-        mock_media = Mock()
-        mock_media.id = uuid4()
-        mock_media.file_name = "test.jpg"
-        mock_media.category = None
-        service._select_media = Mock(return_value=mock_media)
-
-        service.extend_schedule(days=2, telegram_chat_id=-200456)
-
-        # Every queue_repo.create call must include the chat_settings_id
-        for call in service.queue_repo.create.call_args_list:
-            assert call.kwargs["chat_settings_id"] == str(mock_chat_settings.id)
-
-    @patch("src.services.core.scheduler.settings")
-    def test_extend_schedule_scopes_get_all_to_tenant(
-        self, mock_settings, scheduler_service_mocked
-    ):
-        """extend_schedule passes chat_settings_id when fetching existing items."""
-        service = scheduler_service_mocked
-        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
-
-        mock_chat_settings = Mock()
-        mock_chat_settings.id = uuid4()
-        mock_chat_settings.posts_per_day = 2
-        mock_chat_settings.posting_hours_start = 9
-        mock_chat_settings.posting_hours_end = 17
-        service.settings_service.get_settings.return_value = mock_chat_settings
-        service.category_mix_repo.get_current_mix_as_dict.return_value = {}
-        service.queue_repo.get_all.return_value = []
-        service._select_media = Mock(return_value=None)
-
-        service.extend_schedule(days=2, telegram_chat_id=-200456)
-
-        service.queue_repo.get_all.assert_called_once_with(
-            status="pending", chat_settings_id=str(mock_chat_settings.id)
-        )
+# ------------------------------------------------------------------
+# Media pool (unchanged methods - kept from original tests)
+# ------------------------------------------------------------------
 
 
 @pytest.mark.unit

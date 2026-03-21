@@ -26,7 +26,7 @@ from cli.commands.media import (
     update_category_mix,
     validate,
 )
-from cli.commands.queue import reset_queue, create_schedule, list_queue, process_queue
+from cli.commands.queue import reset_queue, list_queue, queue_preview
 from cli.commands.sync import sync_media, sync_status
 from cli.commands.users import list_users, promote_user
 from src import __version__
@@ -48,10 +48,9 @@ cli.add_command(list_categories)
 cli.add_command(update_category_mix)
 cli.add_command(category_mix_history)
 cli.add_command(validate)
-cli.add_command(create_schedule)
-cli.add_command(process_queue)
 cli.add_command(list_queue)
 cli.add_command(reset_queue)
+cli.add_command(queue_preview)
 cli.add_command(list_users)
 cli.add_command(promote_user)
 cli.add_command(check_health)

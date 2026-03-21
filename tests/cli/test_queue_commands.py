@@ -1,64 +1,10 @@
 """Tests for queue CLI commands."""
 
 import pytest
-from unittest.mock import Mock, MagicMock, patch, AsyncMock
+from unittest.mock import Mock, MagicMock, patch
 from click.testing import CliRunner
 
-from cli.commands.queue import create_schedule, list_queue, process_queue
-
-
-@pytest.mark.unit
-class TestCreateScheduleCommand:
-    """Tests for the create-schedule CLI command."""
-
-    @patch("cli.commands.queue.SchedulerService")
-    def test_create_schedule_success(self, mock_service_class):
-        """Test create-schedule successfully creates a schedule."""
-        mock_service = mock_service_class.return_value
-        mock_service.create_schedule.return_value = {
-            "scheduled": 6,
-            "skipped": 0,
-            "total_slots": 6,
-            "category_breakdown": {"memes": 4, "merch": 2},
-        }
-
-        runner = CliRunner()
-        result = runner.invoke(create_schedule, ["--days", "1"])
-
-        assert result.exit_code == 0
-        assert "Schedule created" in result.output
-        assert "Scheduled: 6" in result.output
-        mock_service.create_schedule.assert_called_once_with(days=1)
-
-    @patch("cli.commands.queue.SchedulerService")
-    def test_create_schedule_no_media(self, mock_service_class):
-        """Test create-schedule when service raises exception due to no media."""
-        mock_service = mock_service_class.return_value
-        mock_service.create_schedule.side_effect = ValueError(
-            "No eligible media items available"
-        )
-
-        runner = CliRunner()
-        result = runner.invoke(create_schedule, ["--days", "1"])
-
-        assert result.exit_code != 0
-        assert "No eligible media" in result.output or "Error" in result.output
-
-    @patch("cli.commands.queue.SchedulerService")
-    def test_create_schedule_default_days(self, mock_service_class):
-        """Test create-schedule uses default of 7 days."""
-        mock_service = mock_service_class.return_value
-        mock_service.create_schedule.return_value = {
-            "scheduled": 21,
-            "skipped": 0,
-            "total_slots": 21,
-        }
-
-        runner = CliRunner()
-        result = runner.invoke(create_schedule, [])
-
-        assert result.exit_code == 0
-        mock_service.create_schedule.assert_called_once_with(days=7)
+from cli.commands.queue import list_queue, reset_queue, queue_preview
 
 
 @pytest.mark.unit
@@ -67,7 +13,7 @@ class TestListQueueCommand:
 
     @patch("cli.commands.queue.DashboardService")
     def test_list_queue_shows_items(self, mock_service_class):
-        """Test list-queue displays pending items in a table."""
+        """Test list-queue displays in-flight items in a table."""
         from datetime import datetime
 
         mock_service = MagicMock()
@@ -79,7 +25,7 @@ class TestListQueueCommand:
                 "scheduled_for": datetime(2026, 2, 15, 10, 0),
                 "file_name": "queue_list.jpg",
                 "category": "memes",
-                "status": "pending",
+                "status": "processing",
             }
         ]
 
@@ -89,7 +35,6 @@ class TestListQueueCommand:
         assert result.exit_code == 0
         assert "queue_list.jpg" in result.output
         assert "memes" in result.output
-        assert "pending" in result.output
 
     @patch("cli.commands.queue.DashboardService")
     def test_list_queue_empty(self, mock_service_class):
@@ -108,49 +53,71 @@ class TestListQueueCommand:
 
 
 @pytest.mark.unit
-class TestProcessQueueCommand:
-    """Tests for the process-queue CLI command."""
+class TestResetQueueCommand:
+    """Tests for the reset-queue CLI command."""
 
-    @patch("cli.commands.queue.PostingService")
-    def test_process_queue_success(self, mock_service_class):
-        """Test process-queue processes pending items."""
-        mock_service = mock_service_class.return_value
-        mock_service.process_pending_posts = AsyncMock(
-            return_value={
-                "processed": 3,
-                "telegram": 3,
-                "failed": 0,
-            }
-        )
+    @patch("cli.commands.queue.SchedulerService")
+    def test_reset_queue_empty(self, mock_service_class):
+        """Test reset-queue when queue is already empty."""
+        mock_service = MagicMock()
+        mock_service_class.return_value.__enter__ = Mock(return_value=mock_service)
+        mock_service_class.return_value.__exit__ = Mock(return_value=False)
+        mock_service.count_pending.return_value = 0
 
         runner = CliRunner()
-        result = runner.invoke(process_queue, [])
+        result = runner.invoke(reset_queue, [])
 
         assert result.exit_code == 0
-        assert "Processing complete" in result.output
-        assert "Processed: 3" in result.output
+        assert "already empty" in result.output
 
-    @patch("cli.commands.queue.PostingService")
-    def test_process_queue_force(self, mock_service_class):
-        """Test process-queue --force posts next item immediately."""
-        mock_service = mock_service_class.return_value
-
-        mock_media = Mock()
-        mock_media.file_name = "force_post.jpg"
-
-        mock_service.force_post_next = AsyncMock(
-            return_value={
-                "success": True,
-                "media_item": mock_media,
-                "queue_item_id": "queue-uuid-1",
-                "shifted_count": 2,
-            }
-        )
+    @patch("cli.commands.queue.SchedulerService")
+    def test_reset_queue_with_yes_flag(self, mock_service_class):
+        """Test reset-queue --yes skips confirmation."""
+        mock_service = MagicMock()
+        mock_service_class.return_value.__enter__ = Mock(return_value=mock_service)
+        mock_service_class.return_value.__exit__ = Mock(return_value=False)
+        mock_service.count_pending.return_value = 3
+        mock_service.clear_pending_queue.return_value = 3
 
         runner = CliRunner()
-        result = runner.invoke(process_queue, ["--force"])
+        result = runner.invoke(reset_queue, ["--yes"])
 
         assert result.exit_code == 0
-        assert "Force-posted successfully" in result.output
-        assert "force_post.jpg" in result.output
-        assert "Shifted 2 items forward" in result.output
+        assert "Cleared 3 items" in result.output
+
+
+@pytest.mark.unit
+class TestQueuePreviewCommand:
+    """Tests for the queue-preview CLI command."""
+
+    @patch("cli.commands.queue.SchedulerService")
+    def test_queue_preview_shows_items(self, mock_service_class):
+        """Test queue-preview displays upcoming selections."""
+        mock_service = MagicMock()
+        mock_service_class.return_value.__enter__ = Mock(return_value=mock_service)
+        mock_service_class.return_value.__exit__ = Mock(return_value=False)
+        mock_service.get_queue_preview.return_value = [
+            {"media_id": "id-1", "file_name": "preview1.jpg", "category": "memes"},
+            {"media_id": "id-2", "file_name": "preview2.jpg", "category": "merch"},
+        ]
+
+        runner = CliRunner()
+        result = runner.invoke(queue_preview, [])
+
+        assert result.exit_code == 0
+        assert "preview1.jpg" in result.output
+        assert "preview2.jpg" in result.output
+
+    @patch("cli.commands.queue.SchedulerService")
+    def test_queue_preview_empty(self, mock_service_class):
+        """Test queue-preview when no eligible media."""
+        mock_service = MagicMock()
+        mock_service_class.return_value.__enter__ = Mock(return_value=mock_service)
+        mock_service_class.return_value.__exit__ = Mock(return_value=False)
+        mock_service.get_queue_preview.return_value = []
+
+        runner = CliRunner()
+        result = runner.invoke(queue_preview, [])
+
+        assert result.exit_code == 0
+        assert "No eligible media" in result.output

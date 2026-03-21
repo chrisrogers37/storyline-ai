@@ -36,18 +36,17 @@ class TestNextCommand:
         mock_media = Mock()
         mock_media.file_name = "next_post.jpg"
 
-        # Mock PostingService
-        mock_posting_service = Mock()
-        mock_posting_service.force_post_next = AsyncMock(
+        # Mock SchedulerService
+        mock_scheduler = Mock()
+        mock_scheduler.force_send_next = AsyncMock(
             return_value={
-                "success": True,
+                "posted": True,
                 "queue_item_id": str(queue_item_id),
                 "media_item": mock_media,
-                "shifted_count": 5,
             }
         )
-        mock_posting_service.__enter__ = Mock(return_value=mock_posting_service)
-        mock_posting_service.__exit__ = Mock(return_value=False)
+        mock_scheduler.__enter__ = Mock(return_value=mock_scheduler)
+        mock_scheduler.__exit__ = Mock(return_value=False)
 
         mock_update = Mock()
         mock_update.effective_user = Mock(
@@ -60,19 +59,26 @@ class TestNextCommand:
         mock_context = Mock()
 
         with patch(
-            "src.services.core.posting.PostingService",
-            return_value=mock_posting_service,
+            "src.services.core.scheduler.SchedulerService",
+            return_value=mock_scheduler,
         ):
             await handlers.handle_next(mock_update, mock_context)
 
-        # Should call force_post_next on PostingService
-        mock_posting_service.force_post_next.assert_called_once()
+        # Should call force_send_next on SchedulerService
+        mock_scheduler.force_send_next.assert_called_once_with(
+            telegram_chat_id=-100123,
+            user_id=str(mock_user.id),
+            force_sent_indicator=True,
+        )
+
+        # Should inject telegram_service
+        assert mock_scheduler.telegram_service is service
 
         # Should NOT send any extra messages on success (no clutter)
         mock_update.message.reply_text.assert_not_called()
 
-    async def test_next_empty_queue(self, mock_command_handlers):
-        """Test /next shows error when queue is empty."""
+    async def test_next_no_eligible_media(self, mock_command_handlers):
+        """Test /next shows error when no eligible media."""
         handlers = mock_command_handlers
         service = handlers.service
 
@@ -81,16 +87,16 @@ class TestNextCommand:
         service.user_repo.get_by_telegram_id.return_value = None
         service.user_repo.create.return_value = mock_user
 
-        # Mock PostingService to return empty queue error
-        mock_posting_service = Mock()
-        mock_posting_service.force_post_next = AsyncMock(
+        # Mock SchedulerService to return no eligible media
+        mock_scheduler = Mock()
+        mock_scheduler.force_send_next = AsyncMock(
             return_value={
-                "success": False,
-                "error": "No pending items in queue",
+                "posted": False,
+                "reason": "no_eligible_media",
             }
         )
-        mock_posting_service.__enter__ = Mock(return_value=mock_posting_service)
-        mock_posting_service.__exit__ = Mock(return_value=False)
+        mock_scheduler.__enter__ = Mock(return_value=mock_scheduler)
+        mock_scheduler.__exit__ = Mock(return_value=False)
 
         mock_update = Mock()
         mock_update.effective_user = Mock(
@@ -103,19 +109,19 @@ class TestNextCommand:
         mock_context = Mock()
 
         with patch(
-            "src.services.core.posting.PostingService",
-            return_value=mock_posting_service,
+            "src.services.core.scheduler.SchedulerService",
+            return_value=mock_scheduler,
         ):
             await handlers.handle_next(mock_update, mock_context)
 
-        # Should show empty queue message
+        # Should show no eligible media message
         call_args = mock_update.message.reply_text.call_args
         message_text = call_args.args[0]
-        assert "Queue Empty" in message_text
-        assert "No posts to send" in message_text
+        assert "No Eligible Media" in message_text
+        assert "No media available to send" in message_text
 
-    async def test_next_media_not_found(self, mock_command_handlers):
-        """Test /next handles missing media gracefully."""
+    async def test_next_generic_failure(self, mock_command_handlers):
+        """Test /next handles generic failure gracefully."""
         handlers = mock_command_handlers
         service = handlers.service
 
@@ -124,15 +130,15 @@ class TestNextCommand:
         service.user_repo.get_by_telegram_id.return_value = None
         service.user_repo.create.return_value = mock_user
 
-        mock_posting_service = Mock()
-        mock_posting_service.force_post_next = AsyncMock(
+        mock_scheduler = Mock()
+        mock_scheduler.force_send_next = AsyncMock(
             return_value={
-                "success": False,
-                "error": "Media item not found",
+                "posted": False,
+                "error": "Some unexpected error",
             }
         )
-        mock_posting_service.__enter__ = Mock(return_value=mock_posting_service)
-        mock_posting_service.__exit__ = Mock(return_value=False)
+        mock_scheduler.__enter__ = Mock(return_value=mock_scheduler)
+        mock_scheduler.__exit__ = Mock(return_value=False)
 
         mock_update = Mock()
         mock_update.effective_user = Mock(
@@ -145,15 +151,14 @@ class TestNextCommand:
         mock_context = Mock()
 
         with patch(
-            "src.services.core.posting.PostingService",
-            return_value=mock_posting_service,
+            "src.services.core.scheduler.SchedulerService",
+            return_value=mock_scheduler,
         ):
             await handlers.handle_next(mock_update, mock_context)
 
         call_args = mock_update.message.reply_text.call_args
         message_text = call_args.args[0]
-        assert "Error" in message_text
-        assert "Media item not found" in message_text
+        assert "Failed to send" in message_text
 
     async def test_next_notification_failure(self, mock_command_handlers):
         """Test /next handles notification failure gracefully."""
@@ -165,15 +170,15 @@ class TestNextCommand:
         service.user_repo.get_by_telegram_id.return_value = None
         service.user_repo.create.return_value = mock_user
 
-        mock_posting_service = Mock()
-        mock_posting_service.force_post_next = AsyncMock(
+        mock_scheduler = Mock()
+        mock_scheduler.force_send_next = AsyncMock(
             return_value={
-                "success": False,
+                "posted": False,
                 "error": "Failed to send notification",
             }
         )
-        mock_posting_service.__enter__ = Mock(return_value=mock_posting_service)
-        mock_posting_service.__exit__ = Mock(return_value=False)
+        mock_scheduler.__enter__ = Mock(return_value=mock_scheduler)
+        mock_scheduler.__exit__ = Mock(return_value=False)
 
         mock_update = Mock()
         mock_update.effective_user = Mock(
@@ -186,8 +191,8 @@ class TestNextCommand:
         mock_context = Mock()
 
         with patch(
-            "src.services.core.posting.PostingService",
-            return_value=mock_posting_service,
+            "src.services.core.scheduler.SchedulerService",
+            return_value=mock_scheduler,
         ):
             await handlers.handle_next(mock_update, mock_context)
 
@@ -211,17 +216,16 @@ class TestNextCommand:
         mock_media.id = uuid4()
         mock_media.file_name = "logged_post.jpg"
 
-        mock_posting_service = Mock()
-        mock_posting_service.force_post_next = AsyncMock(
+        mock_scheduler = Mock()
+        mock_scheduler.force_send_next = AsyncMock(
             return_value={
-                "success": True,
+                "posted": True,
                 "queue_item_id": str(queue_item_id),
                 "media_item": mock_media,
-                "shifted_count": 0,
             }
         )
-        mock_posting_service.__enter__ = Mock(return_value=mock_posting_service)
-        mock_posting_service.__exit__ = Mock(return_value=False)
+        mock_scheduler.__enter__ = Mock(return_value=mock_scheduler)
+        mock_scheduler.__exit__ = Mock(return_value=False)
 
         mock_update = Mock()
         mock_update.effective_user = Mock(
@@ -234,8 +238,8 @@ class TestNextCommand:
         mock_context = Mock()
 
         with patch(
-            "src.services.core.posting.PostingService",
-            return_value=mock_posting_service,
+            "src.services.core.scheduler.SchedulerService",
+            return_value=mock_scheduler,
         ):
             await handlers.handle_next(mock_update, mock_context)
 
@@ -719,7 +723,7 @@ class TestHandleNextGDriveAuthError:
     """Tests for /next handling of Google Drive auth errors."""
 
     async def test_next_gdrive_auth_error_shows_reconnect(self, mock_command_handlers):
-        """Test /next shows reconnect message for google_drive_auth_expired error."""
+        """Test /next shows reconnect message for google_drive error."""
         handlers = mock_command_handlers
         service = handlers.service
 
@@ -728,15 +732,15 @@ class TestHandleNextGDriveAuthError:
         service.user_repo.get_by_telegram_id.return_value = None
         service.user_repo.create.return_value = mock_user
 
-        mock_posting_service = Mock()
-        mock_posting_service.force_post_next = AsyncMock(
+        mock_scheduler = Mock()
+        mock_scheduler.force_send_next = AsyncMock(
             return_value={
-                "success": False,
+                "posted": False,
                 "error": "google_drive_auth_expired",
             }
         )
-        mock_posting_service.__enter__ = Mock(return_value=mock_posting_service)
-        mock_posting_service.__exit__ = Mock(return_value=False)
+        mock_scheduler.__enter__ = Mock(return_value=mock_scheduler)
+        mock_scheduler.__exit__ = Mock(return_value=False)
 
         mock_update = Mock()
         mock_update.effective_user = Mock(
@@ -750,8 +754,8 @@ class TestHandleNextGDriveAuthError:
 
         with (
             patch(
-                "src.services.core.posting.PostingService",
-                return_value=mock_posting_service,
+                "src.services.core.scheduler.SchedulerService",
+                return_value=mock_scheduler,
             ),
             patch("src.services.core.telegram_commands.settings") as mock_settings,
         ):

@@ -13,7 +13,6 @@ from .helpers import _validate_request, service_error_handler
 from .models import (
     InitRequest,
     RemoveAccountRequest,
-    ScheduleActionRequest,
     SwitchAccountRequest,
     ToggleSettingRequest,
     UpdateSettingRequest,
@@ -160,67 +159,17 @@ async def onboarding_sync_media(request: InitRequest):
     }
 
 
-@router.post("/extend-schedule")
-async def onboarding_extend_schedule(request: ScheduleActionRequest):
-    """Extend the posting schedule by N days."""
+@router.post("/queue-preview")
+async def onboarding_queue_preview(request: InitRequest):
+    """Preview the next N media items that would be selected.
+
+    Computes JIT selections without persisting — shows what the
+    scheduler would pick next.
+    """
     _validate_request(request.init_data, request.chat_id)
 
     with SchedulerService() as scheduler:
-        try:
-            result = scheduler.extend_schedule(
-                days=request.days,
-                telegram_chat_id=request.chat_id,
-            )
-            return {
-                "scheduled": result.get("scheduled", 0),
-                "skipped": result.get("skipped", 0),
-                "total_slots": result.get("total_slots", 0),
-                "extended_from": result.get("extended_from"),
-            }
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
-        except OperationalError as e:
-            logger.error(f"Extend schedule DB error: {e}")
-            raise HTTPException(
-                status_code=503,
-                detail="Database temporarily unavailable. Please try again.",
-            )
-        except Exception as e:
-            logger.error(f"Failed to extend schedule: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/regenerate-schedule")
-async def onboarding_regenerate_schedule(request: ScheduleActionRequest):
-    """Clear all pending queue items and create a fresh schedule."""
-    _validate_request(request.init_data, request.chat_id)
-
-    with SchedulerService() as scheduler:
-        deleted = scheduler.clear_pending_queue(request.chat_id)
-        logger.info(
-            f"Regenerate schedule: cleared {deleted} pending items "
-            f"for chat {request.chat_id}"
+        previews = scheduler.get_queue_preview(
+            telegram_chat_id=request.chat_id, count=5
         )
-
-        try:
-            result = scheduler.create_schedule(
-                days=request.days,
-                telegram_chat_id=request.chat_id,
-            )
-            return {
-                "scheduled": result.get("scheduled", 0),
-                "skipped": result.get("skipped", 0),
-                "total_slots": result.get("total_slots", 0),
-                "cleared": deleted,
-            }
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
-        except OperationalError as e:
-            logger.error(f"Regenerate schedule DB error: {e}")
-            raise HTTPException(
-                status_code=503,
-                detail="Database temporarily unavailable. Please try again.",
-            )
-        except Exception as e:
-            logger.error(f"Failed to regenerate schedule: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+        return {"items": previews}

@@ -259,36 +259,35 @@ class TelegramCommandHandlers:
 
     async def handle_next(self, update, context):
         """
-        Handle /next command - force send next scheduled post immediately.
+        Handle /next command - JIT select and send next post immediately.
 
-        Uses the shared force_post_next() method which:
-        1. Gets the earliest pending item
-        2. Shifts all subsequent items forward by one slot
+        Uses SchedulerService.force_send_next() which:
+        1. Selects the next eligible media item (JIT)
+        2. Creates an in-flight queue item
         3. Sends to Telegram with ⚡ indicator
+        4. Updates last_post_sent_at to prevent immediate follow-up
         """
         user = self.service._get_or_create_user(update.effective_user)
 
-        # Use shared force_post_next() method (lazy import to avoid circular import)
-        from src.services.core.posting import PostingService
+        from src.services.core.scheduler import SchedulerService
 
-        with PostingService() as posting_service:
-            result = await posting_service.force_post_next(
-                user_id=str(user.id),
-                triggered_by="telegram",
-                force_sent_indicator=True,  # Shows ⚡ in caption
+        with SchedulerService() as scheduler:
+            # Inject the current telegram_service for sending
+            scheduler.telegram_service = self.service
+            result = await scheduler.force_send_next(
                 telegram_chat_id=update.effective_chat.id,
+                user_id=str(user.id),
+                force_sent_indicator=True,  # Shows ⚡ in caption
             )
 
-        if not result["success"]:
-            if result["error"] == "No pending items in queue":
+        if not result.get("posted"):
+            error = result.get("error", "")
+            if result.get("reason") == "no_eligible_media":
                 await update.message.reply_text(
-                    "📭 *Queue Empty*\n\nNo posts to send.", parse_mode="Markdown"
+                    "📭 *No Eligible Media*\n\nNo media available to send.",
+                    parse_mode="Markdown",
                 )
-            elif result["error"] == "Media item not found":
-                await update.message.reply_text(
-                    "⚠️ *Error*\n\nMedia item not found.", parse_mode="Markdown"
-                )
-            elif result["error"] == "google_drive_auth_expired":
+            elif "google_drive" in str(error).lower():
                 await self._send_gdrive_reconnect_message(
                     update, update.effective_chat.id
                 )
@@ -300,27 +299,24 @@ class TelegramCommandHandlers:
             return
 
         # Success - log interaction
-        media_item = result["media_item"]
-        shifted_count = result["shifted_count"]
+        media_item = result.get("media_item")
 
         self.service.interaction_service.log_command(
             user_id=str(user.id),
             command="/next",
             context={
-                "queue_item_id": result["queue_item_id"],
+                "queue_item_id": result.get("queue_item_id"),
                 "media_id": str(media_item.id) if media_item else None,
                 "media_filename": media_item.file_name if media_item else None,
                 "success": True,
-                "shifted_count": shifted_count,
             },
             telegram_chat_id=update.effective_chat.id,
             telegram_message_id=update.message.message_id,
         )
 
-        shift_msg = f" (shifted {shifted_count} items)" if shifted_count > 0 else ""
         logger.info(
             f"Force-sent next post by {self.service._get_display_name(user)}: "
-            f"{media_item.file_name}{shift_msg}"
+            f"{media_item.file_name if media_item else '?'}"
         )
 
     async def handle_help(self, update, context):

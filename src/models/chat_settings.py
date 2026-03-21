@@ -46,6 +46,11 @@ class ChatSettings(Base):
     posting_hours_start = Column(Integer, default=14)
     posting_hours_end = Column(Integer, default=2)
 
+    # JIT scheduler: when the last post was sent to Telegram for this tenant.
+    # Used by is_slot_due() to determine when the next slot should fire.
+    # NULL = no post sent yet (treat as "slot is due immediately").
+    last_post_sent_at = Column(DateTime, nullable=True)
+
     # Notification settings
     show_verbose_notifications = Column(Boolean, default=True)
 

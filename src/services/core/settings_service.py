@@ -1,5 +1,6 @@
 """Settings service - runtime configuration management."""
 
+from datetime import datetime
 from typing import Optional, Any, Dict, List
 
 from src.services.base_service import BaseService
@@ -241,6 +242,17 @@ class SettingsService(BaseService):
         return self.settings_repo.update(
             telegram_chat_id, onboarding_step=None, onboarding_completed=True
         )
+
+    def update_last_post_sent_at(
+        self, telegram_chat_id: int, sent_at: datetime
+    ) -> "ChatSettings":
+        """Record when the last post was sent for JIT scheduler interval tracking.
+
+        Args:
+            telegram_chat_id: Chat to update
+            sent_at: Timestamp of the post that was just sent
+        """
+        return self.settings_repo.update(telegram_chat_id, last_post_sent_at=sent_at)
 
     def get_all_active_chats(self) -> List[ChatSettings]:
         """Get all eligible active chat settings.
