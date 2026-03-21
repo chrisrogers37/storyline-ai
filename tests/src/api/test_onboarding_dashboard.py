@@ -5,25 +5,8 @@ from unittest.mock import Mock, patch
 from uuid import uuid4
 
 import pytest
-from fastapi.testclient import TestClient
 
-from src.api.app import app
-
-
-@pytest.fixture
-def client():
-    return TestClient(app)
-
-
-VALID_USER = {"user_id": 12345, "first_name": "Chris"}
-CHAT_ID = -1001234567890
-
-
-def _mock_validate(return_value=None):
-    return patch(
-        "src.api.routes.onboarding.helpers.validate_init_data",
-        return_value=return_value or VALID_USER,
-    )
+from tests.src.api.conftest import CHAT_ID, mock_validate, service_ctx
 
 
 def _mock_settings_obj(**overrides):
@@ -47,14 +30,6 @@ def _mock_settings_obj(**overrides):
     return Mock(**defaults)
 
 
-def _service_ctx(mock_cls):
-    """Set up __enter__/__exit__ on mock_cls.return_value for context manager use."""
-    mock_svc = mock_cls.return_value
-    mock_svc.__enter__ = Mock(return_value=mock_svc)
-    mock_svc.__exit__ = Mock(return_value=False)
-    return mock_svc
-
-
 # =============================================================================
 # GET /api/onboarding/queue-detail
 # =============================================================================
@@ -67,12 +42,12 @@ class TestQueueDetail:
     def test_queue_detail_returns_items(self, client):
         """Queue detail returns items with media info and day summary."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.dashboard.DashboardService"
             ) as MockDashboard,
         ):
-            mock_svc = _service_ctx(MockDashboard)
+            mock_svc = service_ctx(MockDashboard)
             mock_svc.get_queue_detail.return_value = {
                 "items": [
                     {
@@ -132,12 +107,12 @@ class TestQueueDetail:
     def test_queue_detail_empty(self, client):
         """Queue detail with no pending items."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.dashboard.DashboardService"
             ) as MockDashboard,
         ):
-            mock_svc = _service_ctx(MockDashboard)
+            mock_svc = service_ctx(MockDashboard)
             mock_svc.get_queue_detail.return_value = {
                 "items": [],
                 "total_pending": 0,
@@ -190,12 +165,12 @@ class TestHistoryDetail:
     def test_history_detail_returns_items(self, client):
         """History detail returns items with media info and status."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.dashboard.DashboardService"
             ) as MockDashboard,
         ):
-            mock_svc = _service_ctx(MockDashboard)
+            mock_svc = service_ctx(MockDashboard)
             mock_svc.get_history_detail.return_value = {
                 "items": [
                     {
@@ -233,12 +208,12 @@ class TestHistoryDetail:
     def test_history_detail_empty(self, client):
         """History detail with no posts."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.dashboard.DashboardService"
             ) as MockDashboard,
         ):
-            mock_svc = _service_ctx(MockDashboard)
+            mock_svc = service_ctx(MockDashboard)
             mock_svc.get_history_detail.return_value = {"items": []}
 
             response = client.get(
@@ -262,12 +237,12 @@ class TestMediaStats:
     def test_media_stats_returns_categories(self, client):
         """Media stats returns category breakdown sorted by count."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.dashboard.DashboardService"
             ) as MockDashboard,
         ):
-            mock_svc = _service_ctx(MockDashboard)
+            mock_svc = service_ctx(MockDashboard)
             mock_svc.get_media_stats.return_value = {
                 "total_active": 6,
                 "categories": [
@@ -299,12 +274,12 @@ class TestMediaStats:
     def test_media_stats_empty(self, client):
         """Media stats with no active media."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.dashboard.DashboardService"
             ) as MockDashboard,
         ):
-            mock_svc = _service_ctx(MockDashboard)
+            mock_svc = service_ctx(MockDashboard)
             mock_svc.get_media_stats.return_value = {
                 "total_active": 0,
                 "categories": [],
@@ -333,10 +308,10 @@ class TestToggleSetting:
     def test_toggle_setting_paused(self, client):
         """Toggle is_paused returns new value."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch("src.api.routes.onboarding.settings.SettingsService") as MockService,
         ):
-            mock_svc = _service_ctx(MockService)
+            mock_svc = service_ctx(MockService)
             mock_svc.toggle_setting.return_value = True
 
             response = client.post(
@@ -356,10 +331,10 @@ class TestToggleSetting:
     def test_toggle_setting_dry_run(self, client):
         """Toggle dry_run_mode returns new value."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch("src.api.routes.onboarding.settings.SettingsService") as MockService,
         ):
-            mock_svc = _service_ctx(MockService)
+            mock_svc = service_ctx(MockService)
             mock_svc.toggle_setting.return_value = False
 
             response = client.post(
@@ -379,10 +354,10 @@ class TestToggleSetting:
     def test_toggle_setting_instagram_api(self, client):
         """Toggle enable_instagram_api returns new value."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch("src.api.routes.onboarding.settings.SettingsService") as MockService,
         ):
-            mock_svc = _service_ctx(MockService)
+            mock_svc = service_ctx(MockService)
             mock_svc.toggle_setting.return_value = True
 
             response = client.post(
@@ -400,10 +375,10 @@ class TestToggleSetting:
     def test_toggle_setting_verbose(self, client):
         """Toggle show_verbose_notifications returns new value."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch("src.api.routes.onboarding.settings.SettingsService") as MockService,
         ):
-            mock_svc = _service_ctx(MockService)
+            mock_svc = service_ctx(MockService)
             mock_svc.toggle_setting.return_value = False
 
             response = client.post(
@@ -421,10 +396,10 @@ class TestToggleSetting:
     def test_toggle_setting_media_sync(self, client):
         """Toggle media_sync_enabled returns new value."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch("src.api.routes.onboarding.settings.SettingsService") as MockService,
         ):
-            mock_svc = _service_ctx(MockService)
+            mock_svc = service_ctx(MockService)
             mock_svc.toggle_setting.return_value = True
 
             response = client.post(
@@ -441,7 +416,7 @@ class TestToggleSetting:
 
     def test_toggle_setting_disallowed(self, client):
         """Cannot toggle settings not in the allowed list."""
-        with _mock_validate():
+        with mock_validate():
             response = client.post(
                 "/api/onboarding/toggle-setting",
                 json={
@@ -490,10 +465,10 @@ class TestUpdateSetting:
     def test_update_posts_per_day(self, client):
         """Update posts_per_day returns new value."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch("src.api.routes.onboarding.settings.SettingsService") as MockService,
         ):
-            mock_svc = _service_ctx(MockService)
+            mock_svc = service_ctx(MockService)
 
             response = client.post(
                 "/api/onboarding/update-setting",
@@ -514,10 +489,10 @@ class TestUpdateSetting:
     def test_update_posting_hours_start(self, client):
         """Update posting_hours_start returns new value."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch("src.api.routes.onboarding.settings.SettingsService") as MockService,
         ):
-            _service_ctx(MockService)
+            service_ctx(MockService)
 
             response = client.post(
                 "/api/onboarding/update-setting",
@@ -535,10 +510,10 @@ class TestUpdateSetting:
     def test_update_posting_hours_end(self, client):
         """Update posting_hours_end returns new value."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch("src.api.routes.onboarding.settings.SettingsService") as MockService,
         ):
-            _service_ctx(MockService)
+            service_ctx(MockService)
 
             response = client.post(
                 "/api/onboarding/update-setting",
@@ -555,7 +530,7 @@ class TestUpdateSetting:
 
     def test_update_setting_disallowed(self, client):
         """Cannot update settings not in the allowed list."""
-        with _mock_validate():
+        with mock_validate():
             response = client.post(
                 "/api/onboarding/update-setting",
                 json={
@@ -571,7 +546,7 @@ class TestUpdateSetting:
 
     def test_update_setting_validation_error(self, client):
         """Update rejects invalid values via Pydantic validation."""
-        with _mock_validate():
+        with mock_validate():
             response = client.post(
                 "/api/onboarding/update-setting",
                 json={
@@ -621,12 +596,12 @@ class TestExtendSchedule:
     def test_extend_schedule(self, client):
         """Extend schedule calls scheduler and returns result."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.settings.SchedulerService"
             ) as MockScheduler,
         ):
-            mock_svc = _service_ctx(MockScheduler)
+            mock_svc = service_ctx(MockScheduler)
             mock_svc.extend_schedule.return_value = {
                 "scheduled": 21,
                 "skipped": 0,
@@ -652,12 +627,12 @@ class TestExtendSchedule:
     def test_extend_schedule_default_days(self, client):
         """Extend schedule defaults to 7 days."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.settings.SchedulerService"
             ) as MockScheduler,
         ):
-            mock_svc = _service_ctx(MockScheduler)
+            mock_svc = service_ctx(MockScheduler)
             mock_svc.extend_schedule.return_value = {
                 "scheduled": 21,
                 "skipped": 0,
@@ -687,12 +662,12 @@ class TestRegenerateSchedule:
     def test_regenerate_schedule(self, client):
         """Regenerate clears pending items and creates new schedule."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.settings.SchedulerService"
             ) as MockScheduler,
         ):
-            mock_svc = _service_ctx(MockScheduler)
+            mock_svc = service_ctx(MockScheduler)
             mock_svc.clear_pending_queue.return_value = 42
             mock_svc.create_schedule.return_value = {
                 "scheduled": 21,
@@ -786,12 +761,12 @@ class TestEnhancedSetupState:
         }
 
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.helpers.SetupStateService"
             ) as MockSetupState,
         ):
-            mock_svc = _service_ctx(MockSetupState)
+            mock_svc = service_ctx(MockSetupState)
             mock_svc.get_setup_state.return_value = setup_state
 
             response = client.post(
@@ -834,12 +809,12 @@ class TestEnhancedSetupState:
         }
 
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.helpers.SetupStateService"
             ) as MockSetupState,
         ):
-            mock_svc = _service_ctx(MockSetupState)
+            mock_svc = service_ctx(MockSetupState)
             mock_svc.get_setup_state.return_value = setup_state
 
             response = client.post(
@@ -884,12 +859,12 @@ class TestEnhancedSetupState:
         }
 
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.helpers.SetupStateService"
             ) as MockSetupState,
         ):
-            mock_svc = _service_ctx(MockSetupState)
+            mock_svc = service_ctx(MockSetupState)
             mock_svc.get_setup_state.return_value = setup_state
 
             response = client.post(
@@ -956,12 +931,12 @@ class TestSystemStatus:
     def test_system_status_healthy(self, client):
         """System status returns health checks when all healthy."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.dashboard.HealthCheckService"
             ) as MockHealthService,
         ):
-            mock_svc = _service_ctx(MockHealthService)
+            mock_svc = service_ctx(MockHealthService)
             mock_svc.check_all.return_value = _mock_health_checks()
 
             response = client.get(
@@ -985,12 +960,12 @@ class TestSystemStatus:
         )
 
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.dashboard.HealthCheckService"
             ) as MockHealthService,
         ):
-            mock_svc = _service_ctx(MockHealthService)
+            mock_svc = service_ctx(MockHealthService)
             mock_svc.check_all.return_value = health_data
 
             response = client.get(
@@ -1044,7 +1019,7 @@ class TestSyncMedia:
         mock_result.total_processed = 108
 
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.settings.SettingsService"
             ) as MockSettingsService,
@@ -1052,12 +1027,12 @@ class TestSyncMedia:
                 "src.api.routes.onboarding.settings.MediaSyncService"
             ) as MockSyncService,
         ):
-            mock_settings_svc = _service_ctx(MockSettingsService)
+            mock_settings_svc = service_ctx(MockSettingsService)
             mock_settings_svc.get_media_source_config.return_value = (
                 "google_drive",
                 "folder123",
             )
-            mock_sync_svc = _service_ctx(MockSyncService)
+            mock_sync_svc = service_ctx(MockSyncService)
             mock_sync_svc.sync.return_value = mock_result
 
             response = client.post(
@@ -1083,12 +1058,12 @@ class TestSyncMedia:
     def test_sync_media_no_folder_configured(self, client):
         """Sync media returns 400 when no media folder is configured."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.settings.SettingsService"
             ) as MockSettingsService,
         ):
-            mock_settings_svc = _service_ctx(MockSettingsService)
+            mock_settings_svc = service_ctx(MockSettingsService)
             mock_settings_svc.get_media_source_config.return_value = (None, None)
 
             response = client.post(
@@ -1102,7 +1077,7 @@ class TestSyncMedia:
     def test_sync_media_service_error(self, client):
         """Sync media returns 500 when sync service fails."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.settings.SettingsService"
             ) as MockSettingsService,
@@ -1110,12 +1085,12 @@ class TestSyncMedia:
                 "src.api.routes.onboarding.settings.MediaSyncService"
             ) as MockSyncService,
         ):
-            mock_settings_svc = _service_ctx(MockSettingsService)
+            mock_settings_svc = service_ctx(MockSettingsService)
             mock_settings_svc.get_media_source_config.return_value = (
                 "google_drive",
                 "folder123",
             )
-            mock_sync_svc = _service_ctx(MockSyncService)
+            mock_sync_svc = service_ctx(MockSyncService)
             mock_sync_svc.sync.side_effect = RuntimeError("Drive error")
 
             response = client.post(
@@ -1175,7 +1150,7 @@ class TestAccounts:
         )
 
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.dashboard.InstagramAccountService"
             ) as MockIGService,
@@ -1183,9 +1158,9 @@ class TestAccounts:
                 "src.api.routes.onboarding.dashboard.SettingsService"
             ) as MockSettingsService,
         ):
-            mock_ig_svc = _service_ctx(MockIGService)
+            mock_ig_svc = service_ctx(MockIGService)
             mock_ig_svc.list_accounts.return_value = [acct_1, acct_2]
-            mock_settings_svc = _service_ctx(MockSettingsService)
+            mock_settings_svc = service_ctx(MockSettingsService)
             mock_settings_svc.get_settings.return_value = mock_settings
 
             response = client.get(
@@ -1207,7 +1182,7 @@ class TestAccounts:
         mock_settings = _mock_settings_obj(active_instagram_account_id=None)
 
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.dashboard.InstagramAccountService"
             ) as MockIGService,
@@ -1215,9 +1190,9 @@ class TestAccounts:
                 "src.api.routes.onboarding.dashboard.SettingsService"
             ) as MockSettingsService,
         ):
-            mock_ig_svc = _service_ctx(MockIGService)
+            mock_ig_svc = service_ctx(MockIGService)
             mock_ig_svc.list_accounts.return_value = []
-            mock_settings_svc = _service_ctx(MockSettingsService)
+            mock_settings_svc = service_ctx(MockSettingsService)
             mock_settings_svc.get_settings.return_value = mock_settings
 
             response = client.get(
@@ -1264,12 +1239,12 @@ class TestSwitchAccount:
         acct = _mock_account("Side Project", "sideproject")
 
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.settings.InstagramAccountService"
             ) as MockIGService,
         ):
-            mock_svc = _service_ctx(MockIGService)
+            mock_svc = service_ctx(MockIGService)
             mock_svc.switch_account.return_value = acct
 
             response = client.post(
@@ -1293,12 +1268,12 @@ class TestSwitchAccount:
     def test_switch_account_not_found(self, client):
         """Switch account returns 400 for unknown account."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.settings.InstagramAccountService"
             ) as MockIGService,
         ):
-            mock_svc = _service_ctx(MockIGService)
+            mock_svc = service_ctx(MockIGService)
             mock_svc.switch_account.side_effect = ValueError("Account not found")
 
             response = client.post(
@@ -1351,12 +1326,12 @@ class TestRemoveAccount:
         acct = _mock_account("Old Account", "oldaccount")
 
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.settings.InstagramAccountService"
             ) as MockIGService,
         ):
-            mock_svc = _service_ctx(MockIGService)
+            mock_svc = service_ctx(MockIGService)
             mock_svc.deactivate_account.return_value = acct
 
             response = client.post(
@@ -1379,12 +1354,12 @@ class TestRemoveAccount:
     def test_remove_account_not_found(self, client):
         """Remove account returns 400 for unknown account."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.settings.InstagramAccountService"
             ) as MockIGService,
         ):
-            mock_svc = _service_ctx(MockIGService)
+            mock_svc = service_ctx(MockIGService)
             mock_svc.deactivate_account.side_effect = ValueError("Account not found")
 
             response = client.post(

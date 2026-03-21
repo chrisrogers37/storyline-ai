@@ -2,17 +2,12 @@
 
 import json
 import uuid
-from contextlib import contextmanager
 
 import pytest
 from unittest.mock import AsyncMock, Mock, patch
 
 from src.services.integrations.google_drive_oauth import GoogleDriveOAuthService
-
-
-@contextmanager
-def mock_track_execution(*args, **kwargs):
-    yield str(uuid.uuid4())
+from tests.src.services.conftest import mock_track_execution
 
 
 # ==================== State Token Tests ====================

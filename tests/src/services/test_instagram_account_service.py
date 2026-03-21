@@ -2,17 +2,11 @@
 
 import pytest
 from unittest.mock import Mock, patch
-from contextlib import contextmanager
 from datetime import datetime
 import uuid
 
 from src.services.core.instagram_account_service import InstagramAccountService
-
-
-@contextmanager
-def mock_track_execution(*args, **kwargs):
-    """Mock track_execution context manager that yields a fake run_id."""
-    yield str(uuid.uuid4())
+from tests.src.services.conftest import mock_track_execution
 
 
 @pytest.fixture
