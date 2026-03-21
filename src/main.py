@@ -13,11 +13,17 @@ from src.services.core.telegram_service import TelegramService
 from src.services.core.media_lock import MediaLockService
 from src.services.core.media_sync import MediaSyncService
 from src.repositories.queue_repository import QueueRepository
+from src.repositories.service_run_repository import ServiceRunRepository
 
 # Track session statistics
 session_start_time = None
 session_posts_sent = 0
 shutdown_in_progress = False
+
+# Retention policy: delete service_runs older than 7 days
+SERVICE_RUNS_RETENTION_DAYS = 7
+# Run retention once per hour (60 ticks at 1-minute intervals)
+RETENTION_INTERVAL_TICKS = 60
 
 
 async def run_scheduler_loop(
@@ -29,6 +35,8 @@ async def run_scheduler_loop(
     Iterates over all active (non-paused) tenants and processes each
     tenant's pending posts independently.
 
+    Also runs hourly retention cleanup on the service_runs table.
+
     Args:
         posting_service: PostingService instance
         settings_service: SettingsService instance for tenant discovery.
@@ -38,6 +46,8 @@ async def run_scheduler_loop(
     logger.info("Starting scheduler loop...")
 
     queue_repo = QueueRepository()
+    service_run_repo = ServiceRunRepository()
+    retention_tick_counter = 0
 
     while True:
         try:
@@ -110,6 +120,24 @@ async def run_scheduler_loop(
             logger.error(f"Error in scheduler loop: {e}", exc_info=True)
         finally:
             posting_service.cleanup_transactions()
+
+        # Hourly retention: purge old service_runs to prevent table bloat
+        retention_tick_counter += 1
+        if retention_tick_counter >= RETENTION_INTERVAL_TICKS:
+            retention_tick_counter = 0
+            try:
+                deleted = service_run_repo.delete_older_than(
+                    SERVICE_RUNS_RETENTION_DAYS
+                )
+                if deleted > 0:
+                    logger.info(
+                        f"Retention: deleted {deleted} service_runs older than "
+                        f"{SERVICE_RUNS_RETENTION_DAYS} days"
+                    )
+            except Exception as e:
+                logger.warning(f"Service runs retention cleanup failed: {e}")
+            finally:
+                service_run_repo.end_read_transaction()
 
         # Wait 1 minute before next check
         await asyncio.sleep(60)
