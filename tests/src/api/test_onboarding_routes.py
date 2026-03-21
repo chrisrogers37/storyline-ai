@@ -3,33 +3,7 @@
 import pytest
 from unittest.mock import Mock, patch
 
-from fastapi.testclient import TestClient
-
-from src.api.app import app
-
-
-@pytest.fixture
-def client():
-    return TestClient(app)
-
-
-VALID_USER = {"user_id": 12345, "first_name": "Chris"}
-CHAT_ID = -1001234567890
-
-
-def _mock_validate(return_value=None):
-    """Patch validate_init_data to skip HMAC validation in tests."""
-    return patch(
-        "src.api.routes.onboarding.helpers.validate_init_data",
-        return_value=return_value or VALID_USER,
-    )
-
-
-def _ctx(mock_class):
-    """Configure context manager support on a mock service class."""
-    mock_class.return_value.__enter__ = Mock(return_value=mock_class.return_value)
-    mock_class.return_value.__exit__ = Mock(return_value=False)
-    return mock_class.return_value
+from tests.src.api.conftest import CHAT_ID, mock_validate, service_ctx
 
 
 def _default_setup_state(**overrides):
@@ -89,13 +63,13 @@ class TestOnboardingInit:
     def test_init_returns_setup_state(self, client):
         """Valid initData returns chat_id, user, and setup_state."""
         with (
-            _mock_validate(),
+            mock_validate(),
             _mock_setup_state(),
             patch(
                 "src.api.routes.onboarding.setup.SettingsService"
             ) as MockSettingsService,
         ):
-            _ctx(MockSettingsService)
+            service_ctx(MockSettingsService)
             response = client.post(
                 "/api/onboarding/init",
                 json={"init_data": "test", "chat_id": CHAT_ID},
@@ -112,7 +86,7 @@ class TestOnboardingInit:
     def test_init_shows_connected_instagram(self, client):
         """When Instagram is connected, setup_state reflects it."""
         with (
-            _mock_validate(),
+            mock_validate(),
             _mock_setup_state(
                 instagram_connected=True,
                 instagram_username="storyline_ai",
@@ -121,7 +95,7 @@ class TestOnboardingInit:
                 "src.api.routes.onboarding.setup.SettingsService"
             ) as MockSettingsService,
         ):
-            _ctx(MockSettingsService)
+            service_ctx(MockSettingsService)
             response = client.post(
                 "/api/onboarding/init",
                 json={"init_data": "test", "chat_id": CHAT_ID},
@@ -134,7 +108,7 @@ class TestOnboardingInit:
     def test_init_shows_connected_gdrive(self, client):
         """When Google Drive is connected, setup_state reflects it."""
         with (
-            _mock_validate(),
+            mock_validate(),
             _mock_setup_state(
                 gdrive_connected=True,
                 gdrive_email="user@gmail.com",
@@ -144,7 +118,7 @@ class TestOnboardingInit:
                 "src.api.routes.onboarding.setup.SettingsService"
             ) as MockSettingsService,
         ):
-            _ctx(MockSettingsService)
+            service_ctx(MockSettingsService)
             response = client.post(
                 "/api/onboarding/init",
                 json={"init_data": "test", "chat_id": CHAT_ID},
@@ -158,7 +132,7 @@ class TestOnboardingInit:
     def test_init_shows_gdrive_needs_reconnect(self, client):
         """When Google Drive token is stale (expired >7 days), flag is set."""
         with (
-            _mock_validate(),
+            mock_validate(),
             _mock_setup_state(
                 gdrive_connected=True,
                 gdrive_needs_reconnect=True,
@@ -167,7 +141,7 @@ class TestOnboardingInit:
                 "src.api.routes.onboarding.setup.SettingsService"
             ) as MockSettingsService,
         ):
-            _ctx(MockSettingsService)
+            service_ctx(MockSettingsService)
             response = client.post(
                 "/api/onboarding/init",
                 json={"init_data": "test", "chat_id": CHAT_ID},
@@ -194,7 +168,7 @@ class TestOnboardingInit:
     def test_init_includes_media_folder_fields(self, client):
         """Init response contains media_folder_configured, media_indexed, media_count."""
         with (
-            _mock_validate(),
+            mock_validate(),
             _mock_setup_state(
                 media_folder_configured=True,
                 media_folder_id="abc123",
@@ -206,7 +180,7 @@ class TestOnboardingInit:
                 "src.api.routes.onboarding.setup.SettingsService"
             ) as MockSettingsService,
         ):
-            _ctx(MockSettingsService)
+            service_ctx(MockSettingsService)
             response = client.post(
                 "/api/onboarding/init",
                 json={"init_data": "test", "chat_id": CHAT_ID},
@@ -222,13 +196,13 @@ class TestOnboardingInit:
     def test_init_sets_welcome_step_on_first_access(self, client):
         """Init sets onboarding_step='welcome' when not yet started."""
         with (
-            _mock_validate(),
+            mock_validate(),
             _mock_setup_state(onboarding_completed=False, onboarding_step=None),
             patch(
                 "src.api.routes.onboarding.setup.SettingsService"
             ) as MockSettingsService,
         ):
-            svc = _ctx(MockSettingsService)
+            svc = service_ctx(MockSettingsService)
             response = client.post(
                 "/api/onboarding/init",
                 json={"init_data": "test", "chat_id": CHAT_ID},
@@ -242,7 +216,7 @@ class TestOnboardingInit:
     def test_init_returns_dashboard_fields(self, client):
         """Init response includes queue_count, last_post_at, is_paused, dry_run_mode."""
         with (
-            _mock_validate(),
+            mock_validate(),
             _mock_setup_state(
                 onboarding_completed=True,
                 is_paused=False,
@@ -254,7 +228,7 @@ class TestOnboardingInit:
                 "src.api.routes.onboarding.setup.SettingsService"
             ) as MockSettingsService,
         ):
-            _ctx(MockSettingsService)
+            service_ctx(MockSettingsService)
             response = client.post(
                 "/api/onboarding/init",
                 json={"init_data": "test", "chat_id": CHAT_ID},
@@ -270,7 +244,7 @@ class TestOnboardingInit:
     def test_init_dashboard_fields_default_on_error(self, client):
         """Queue/history errors don't break the init response (handled in service)."""
         with (
-            _mock_validate(),
+            mock_validate(),
             _mock_setup_state(
                 onboarding_completed=True,
                 is_paused=False,
@@ -282,7 +256,7 @@ class TestOnboardingInit:
                 "src.api.routes.onboarding.setup.SettingsService"
             ) as MockSettingsService,
         ):
-            _ctx(MockSettingsService)
+            service_ctx(MockSettingsService)
             response = client.post(
                 "/api/onboarding/init",
                 json={"init_data": "test", "chat_id": CHAT_ID},
@@ -306,10 +280,10 @@ class TestOnboardingOAuthUrl:
     def test_instagram_returns_auth_url(self, client):
         """Instagram provider returns OAuth authorization URL."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch("src.api.routes.onboarding.setup.OAuthService") as MockOAuth,
         ):
-            svc = _ctx(MockOAuth)
+            svc = service_ctx(MockOAuth)
             svc.generate_authorization_url.return_value = (
                 "https://facebook.com/dialog/oauth?client_id=123"
             )
@@ -323,12 +297,12 @@ class TestOnboardingOAuthUrl:
     def test_gdrive_returns_auth_url(self, client):
         """Google Drive provider returns OAuth authorization URL."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.setup.GoogleDriveOAuthService"
             ) as MockGDrive,
         ):
-            svc = _ctx(MockGDrive)
+            svc = service_ctx(MockGDrive)
             svc.generate_authorization_url.return_value = (
                 "https://accounts.google.com/o/oauth2/auth?client_id=123"
             )
@@ -342,7 +316,7 @@ class TestOnboardingOAuthUrl:
 
     def test_unknown_provider_returns_400(self, client):
         """Unknown provider returns 400."""
-        with _mock_validate():
+        with mock_validate():
             response = client.get(
                 f"/api/onboarding/oauth-url/twitter?init_data=test&chat_id={CHAT_ID}"
             )
@@ -381,15 +355,15 @@ class TestOnboardingMediaFolder:
         ]
 
         with (
-            _mock_validate(),
+            mock_validate(),
             patch("src.api.routes.onboarding.setup.GoogleDriveService") as MockGDrive,
             patch("src.api.routes.onboarding.setup.SettingsService") as MockSettings,
         ):
-            gdrive_svc = _ctx(MockGDrive)
+            gdrive_svc = service_ctx(MockGDrive)
             mock_provider = Mock()
             mock_provider.list_files.return_value = mock_files
             gdrive_svc.get_provider_for_chat.return_value = mock_provider
-            settings_svc = _ctx(MockSettings)
+            settings_svc = service_ctx(MockSettings)
 
             response = client.post(
                 "/api/onboarding/media-folder",
@@ -419,7 +393,7 @@ class TestOnboardingMediaFolder:
 
     def test_invalid_folder_url_returns_400(self, client):
         """Non-Drive URL returns 400."""
-        with _mock_validate():
+        with mock_validate():
             response = client.post(
                 "/api/onboarding/media-folder",
                 json={
@@ -435,10 +409,10 @@ class TestOnboardingMediaFolder:
     def test_inaccessible_folder_returns_400(self, client):
         """Folder that can't be accessed returns 400."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch("src.api.routes.onboarding.setup.GoogleDriveService") as MockGDrive,
         ):
-            svc = _ctx(MockGDrive)
+            svc = service_ctx(MockGDrive)
             svc.get_provider_for_chat.side_effect = Exception("No credentials")
 
             response = client.post(
@@ -470,18 +444,18 @@ class TestOnboardingStartIndexing:
         )
 
         with (
-            _mock_validate(),
+            mock_validate(),
             patch("src.api.routes.onboarding.setup.SettingsService") as MockSettings,
             patch("src.api.routes.onboarding.setup.MediaSyncService") as MockSync,
         ):
             # First SettingsService context: get_media_source_config
-            settings_svc = _ctx(MockSettings)
+            settings_svc = service_ctx(MockSettings)
             settings_svc.get_media_source_config.return_value = (
                 "google_drive",
                 "abc123",
             )
             # Second SettingsService context reuses same mock
-            sync_svc = _ctx(MockSync)
+            sync_svc = service_ctx(MockSync)
             sync_svc.sync.return_value = mock_sync_result
 
             response = client.post(
@@ -499,10 +473,10 @@ class TestOnboardingStartIndexing:
     def test_indexing_without_folder_returns_400(self, client):
         """Start indexing without a configured folder returns 400."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch("src.api.routes.onboarding.setup.SettingsService") as MockSettings,
         ):
-            svc = _ctx(MockSettings)
+            svc = service_ctx(MockSettings)
             svc.get_media_source_config.return_value = ("local", None)
 
             response = client.post(
@@ -516,13 +490,13 @@ class TestOnboardingStartIndexing:
     def test_indexing_sync_error_returns_500(self, client):
         """MediaSyncService failure returns 500 with user-friendly message."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch("src.api.routes.onboarding.setup.SettingsService") as MockSettings,
             patch("src.api.routes.onboarding.setup.MediaSyncService") as MockSync,
         ):
-            svc = _ctx(MockSettings)
+            svc = service_ctx(MockSettings)
             svc.get_media_source_config.return_value = ("google_drive", "abc123")
-            sync_svc = _ctx(MockSync)
+            sync_svc = service_ctx(MockSync)
             sync_svc.sync.side_effect = Exception("Connection timeout")
 
             response = client.post(
@@ -536,13 +510,13 @@ class TestOnboardingStartIndexing:
     def test_indexing_value_error_returns_400(self, client):
         """MediaSyncService ValueError (e.g., unconfigured provider) returns 400."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch("src.api.routes.onboarding.setup.SettingsService") as MockSettings,
             patch("src.api.routes.onboarding.setup.MediaSyncService") as MockSync,
         ):
-            svc = _ctx(MockSettings)
+            svc = service_ctx(MockSettings)
             svc.get_media_source_config.return_value = ("google_drive", "abc123")
-            sync_svc = _ctx(MockSync)
+            sync_svc = service_ctx(MockSync)
             sync_svc.sync.side_effect = ValueError("Provider not configured")
 
             response = client.post(
@@ -565,10 +539,10 @@ class TestOnboardingSchedule:
     def test_schedule_saves_config(self, client):
         """Valid schedule config saves to settings."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch("src.api.routes.onboarding.setup.SettingsService") as MockSettings,
         ):
-            svc = _ctx(MockSettings)
+            svc = service_ctx(MockSettings)
 
             response = client.post(
                 "/api/onboarding/schedule",
@@ -592,10 +566,10 @@ class TestOnboardingSchedule:
     def test_schedule_service_validation_error_returns_400(self, client):
         """Service-level validation error returns 400."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch("src.api.routes.onboarding.setup.SettingsService") as MockSettings,
         ):
-            svc = _ctx(MockSettings)
+            svc = service_ctx(MockSettings)
             svc.update_setting.side_effect = ValueError("Invalid setting value")
 
             response = client.post(
@@ -624,13 +598,13 @@ class TestOnboardingComplete:
     def test_complete_marks_onboarding_done(self, client):
         """Complete endpoint marks onboarding as finished."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.setup.SettingsService"
             ) as MockSettingsService,
             _mock_setup_state(),
         ):
-            svc = _ctx(MockSettingsService)
+            svc = service_ctx(MockSettingsService)
             response = client.post(
                 "/api/onboarding/complete",
                 json={
@@ -649,15 +623,15 @@ class TestOnboardingComplete:
     def test_complete_creates_schedule(self, client):
         """Complete with create_schedule=true calls SchedulerService."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.setup.SettingsService"
             ) as MockSettingsService,
             _mock_setup_state(),
             patch("src.api.routes.onboarding.setup.SchedulerService") as MockScheduler,
         ):
-            _ctx(MockSettingsService)
-            sched_svc = _ctx(MockScheduler)
+            service_ctx(MockSettingsService)
+            sched_svc = service_ctx(MockScheduler)
             sched_svc.create_schedule.return_value = {
                 "scheduled": 21,
                 "total_slots": 21,
@@ -685,15 +659,15 @@ class TestOnboardingComplete:
     def test_complete_handles_schedule_error(self, client):
         """Schedule creation error doesn't fail the whole request."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.setup.SettingsService"
             ) as MockSettingsService,
             _mock_setup_state(),
             patch("src.api.routes.onboarding.setup.SchedulerService") as MockScheduler,
         ):
-            _ctx(MockSettingsService)
-            sched_svc = _ctx(MockScheduler)
+            service_ctx(MockSettingsService)
+            sched_svc = service_ctx(MockScheduler)
             sched_svc.create_schedule.side_effect = Exception("No media items")
 
             response = client.post(
@@ -714,13 +688,13 @@ class TestOnboardingComplete:
     def test_complete_enables_instagram_when_connected(self, client):
         """When Instagram is connected, complete enables enable_instagram_api."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.setup.SettingsService"
             ) as MockSettingsService,
             _mock_setup_state(instagram_connected=True),
         ):
-            svc = _ctx(MockSettingsService)
+            svc = service_ctx(MockSettingsService)
             response = client.post(
                 "/api/onboarding/complete",
                 json={
@@ -738,7 +712,7 @@ class TestOnboardingComplete:
     def test_complete_does_not_disable_dry_run(self, client):
         """Complete NEVER changes dry_run_mode."""
         with (
-            _mock_validate(),
+            mock_validate(),
             patch(
                 "src.api.routes.onboarding.setup.SettingsService"
             ) as MockSettingsService,
@@ -747,7 +721,7 @@ class TestOnboardingComplete:
                 media_folder_configured=True,
             ),
         ):
-            svc = _ctx(MockSettingsService)
+            svc = service_ctx(MockSettingsService)
             client.post(
                 "/api/onboarding/complete",
                 json={
@@ -778,7 +752,7 @@ class TestOnboardingChatIdVerification:
             "first_name": "Chris",
             "chat_id": 999,
         }
-        with _mock_validate(return_value=user_with_chat):
+        with mock_validate(return_value=user_with_chat):
             response = client.post(
                 "/api/onboarding/init",
                 json={"init_data": "test", "chat_id": CHAT_ID},
@@ -795,13 +769,13 @@ class TestOnboardingChatIdVerification:
             "chat_id": CHAT_ID,
         }
         with (
-            _mock_validate(return_value=user_with_chat),
+            mock_validate(return_value=user_with_chat),
             _mock_setup_state(),
             patch(
                 "src.api.routes.onboarding.setup.SettingsService"
             ) as MockSettingsService,
         ):
-            _ctx(MockSettingsService)
+            service_ctx(MockSettingsService)
             response = client.post(
                 "/api/onboarding/init",
                 json={"init_data": "test", "chat_id": CHAT_ID},
@@ -812,13 +786,13 @@ class TestOnboardingChatIdVerification:
     def test_no_chat_id_in_initdata_allows_any(self, client):
         """If initData has no chat_id (DM context), request proceeds."""
         with (
-            _mock_validate(),
+            mock_validate(),
             _mock_setup_state(),
             patch(
                 "src.api.routes.onboarding.setup.SettingsService"
             ) as MockSettingsService,
         ):
-            _ctx(MockSettingsService)
+            service_ctx(MockSettingsService)
             response = client.post(
                 "/api/onboarding/init",
                 json={"init_data": "test", "chat_id": CHAT_ID},
@@ -838,7 +812,7 @@ class TestOnboardingInputValidation:
 
     def test_posts_per_day_zero_rejected(self, client):
         """posts_per_day=0 is rejected by Pydantic validation."""
-        with _mock_validate():
+        with mock_validate():
             response = client.post(
                 "/api/onboarding/schedule",
                 json={
@@ -854,7 +828,7 @@ class TestOnboardingInputValidation:
 
     def test_posts_per_day_negative_rejected(self, client):
         """Negative posts_per_day is rejected."""
-        with _mock_validate():
+        with mock_validate():
             response = client.post(
                 "/api/onboarding/schedule",
                 json={
@@ -870,7 +844,7 @@ class TestOnboardingInputValidation:
 
     def test_posting_hours_out_of_range_rejected(self, client):
         """posting_hours_start=25 is rejected."""
-        with _mock_validate():
+        with mock_validate():
             response = client.post(
                 "/api/onboarding/schedule",
                 json={
@@ -886,7 +860,7 @@ class TestOnboardingInputValidation:
 
     def test_schedule_days_over_max_rejected(self, client):
         """schedule_days=100 is rejected on complete endpoint."""
-        with _mock_validate():
+        with mock_validate():
             response = client.post(
                 "/api/onboarding/complete",
                 json={

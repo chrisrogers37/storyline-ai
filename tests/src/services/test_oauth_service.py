@@ -1,18 +1,12 @@
 """Unit tests for OAuthService."""
 
 import json
-import uuid
-from contextlib import contextmanager
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
 from src.services.core.oauth_service import OAuthService
-
-
-@contextmanager
-def mock_track_execution(*args, **kwargs):
-    yield str(uuid.uuid4())
+from tests.src.services.conftest import mock_track_execution
 
 
 class TestStateTokenGeneration:

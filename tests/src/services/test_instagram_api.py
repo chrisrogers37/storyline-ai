@@ -2,7 +2,6 @@
 
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
-from contextlib import contextmanager
 from datetime import datetime
 
 import httpx
@@ -12,12 +11,7 @@ from src.exceptions import (
     RateLimitError,
     TokenExpiredError,
 )
-
-
-@contextmanager
-def mock_track_execution(*args, **kwargs):
-    """Mock context manager for track_execution."""
-    yield "mock_run_id"
+from tests.src.services.conftest import mock_track_execution
 
 
 @pytest.mark.unit

@@ -5,64 +5,14 @@ from unittest.mock import Mock, patch, AsyncMock
 from datetime import datetime
 from uuid import uuid4
 
-from src.services.core.telegram_service import TelegramService
 from src.services.core.telegram_commands import TelegramCommandHandlers
 
 
 @pytest.fixture
-def mock_command_handlers():
-    """Create TelegramCommandHandlers with mocked TelegramService dependencies."""
-    with (
-        patch("src.services.core.telegram_service.settings") as mock_settings,
-        patch(
-            "src.services.core.telegram_service.UserRepository"
-        ) as mock_user_repo_class,
-        patch(
-            "src.services.core.telegram_service.QueueRepository"
-        ) as mock_queue_repo_class,
-        patch(
-            "src.services.core.telegram_service.MediaRepository"
-        ) as mock_media_repo_class,
-        patch(
-            "src.services.core.telegram_service.HistoryRepository"
-        ) as mock_history_repo_class,
-        patch(
-            "src.services.core.telegram_service.LockRepository"
-        ) as mock_lock_repo_class,
-        patch(
-            "src.services.core.telegram_service.MediaLockService"
-        ) as mock_lock_service_class,
-        patch(
-            "src.services.core.telegram_service.InteractionService"
-        ) as mock_interaction_service_class,
-        patch(
-            "src.services.core.telegram_service.SettingsService"
-        ) as mock_settings_service_class,
-        patch(
-            "src.services.core.telegram_service.InstagramAccountService"
-        ) as mock_ig_account_service_class,
-    ):
-        mock_settings.TELEGRAM_BOT_TOKEN = "123456:ABC-DEF1234ghIkl"
-        mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
-        mock_settings.CAPTION_STYLE = "enhanced"
-        mock_settings.SEND_LIFECYCLE_NOTIFICATIONS = False
-
-        service = TelegramService()
-
-        # Make repos accessible for test assertions
-        service.user_repo = mock_user_repo_class.return_value
-        service.queue_repo = mock_queue_repo_class.return_value
-        service.media_repo = mock_media_repo_class.return_value
-        service.history_repo = mock_history_repo_class.return_value
-        service.lock_repo = mock_lock_repo_class.return_value
-        service.lock_service = mock_lock_service_class.return_value
-        service.interaction_service = mock_interaction_service_class.return_value
-        service.settings_service = mock_settings_service_class.return_value
-        service.ig_account_service = mock_ig_account_service_class.return_value
-
-        handlers = TelegramCommandHandlers(service)
-
-        yield handlers
+def mock_command_handlers(mock_telegram_service):
+    """Create TelegramCommandHandlers from shared mock_telegram_service."""
+    handlers = TelegramCommandHandlers(mock_telegram_service)
+    yield handlers
 
 
 @pytest.mark.unit

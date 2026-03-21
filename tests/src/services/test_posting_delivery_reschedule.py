@@ -3,16 +3,10 @@
 import pytest
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch, MagicMock
-from contextlib import contextmanager
 from uuid import uuid4
 
 from src.services.core.posting import PostingService
-
-
-@contextmanager
-def mock_track_execution(*args, **kwargs):
-    """Mock context manager for track_execution."""
-    yield "mock_run_id"
+from tests.src.services.conftest import mock_track_execution
 
 
 @pytest.fixture

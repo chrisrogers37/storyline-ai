@@ -1,16 +1,6 @@
 """Unit tests for OAuth API routes (Instagram and Google Drive)."""
 
-import pytest
 from unittest.mock import AsyncMock, Mock, patch
-
-from fastapi.testclient import TestClient
-
-from src.api.app import app
-
-
-@pytest.fixture
-def client():
-    return TestClient(app)
 
 
 class TestOAuthStartEndpoint:
