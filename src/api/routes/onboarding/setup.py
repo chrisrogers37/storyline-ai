@@ -1,6 +1,7 @@
 """Setup wizard endpoints for onboarding Mini App."""
 
 from fastapi import APIRouter, HTTPException
+from sqlalchemy.exc import OperationalError
 
 from src.services.core.media_sync import MediaSyncService
 from src.services.core.oauth_service import OAuthService
@@ -155,6 +156,12 @@ async def onboarding_start_indexing(request: StartIndexingRequest):
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
+        except OperationalError as e:
+            logger.error(f"Media indexing DB error: {e}")
+            raise HTTPException(
+                status_code=503,
+                detail="Database temporarily unavailable. Please try again.",
+            )
         except Exception as e:
             logger.error(f"Media indexing failed during onboarding: {e}")
             raise HTTPException(

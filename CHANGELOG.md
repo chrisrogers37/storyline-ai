@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Extract callback error handling wrapper** — Deduplicated the lock/keyboard-removal/error-display/cleanup pattern that was repeated in `complete_queue_action()` and `handle_rejected()` into a shared `_safe_locked_callback()` method
+- **Replace silent message edit patterns** — Error fallback message edits in `handle_resume_callback()` and `handle_reset_callback()` now use `telegram_edit_with_retry` instead of bare `try/except: pass`
+- **Narrow exception handling in API routes** — Added `OperationalError` → 503 and `ValueError` → 400 catches before the generic `Exception` → 500 in scheduler and sync endpoints (`extend-schedule`, `regenerate-schedule`, `sync-media`, `start-indexing`)
 - **Fix layer boundary violations** — API and CLI layers no longer import repositories directly, enforcing the strict separation of concerns defined in CLAUDE.md (CLI/API → Services → Repositories → Models)
   - **API layer**: Removed all 14 direct repository imports across 4 onboarding route files (`helpers.py`, `dashboard.py`, `settings.py`, `setup.py`)
   - **CLI layer**: Removed repository imports from `queue.py`, `users.py`, and `media.py` — all now call services

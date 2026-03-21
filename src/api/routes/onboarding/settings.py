@@ -1,6 +1,7 @@
 """Settings and schedule action endpoints for onboarding Mini App."""
 
 from fastapi import APIRouter, HTTPException
+from sqlalchemy.exc import OperationalError
 
 from src.services.core.instagram_account_service import InstagramAccountService
 from src.services.core.media_sync import MediaSyncService
@@ -136,6 +137,12 @@ async def onboarding_sync_media(request: InitRequest):
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
+        except OperationalError as e:
+            logger.error(f"Media sync DB error: {e}")
+            raise HTTPException(
+                status_code=503,
+                detail="Database temporarily unavailable. Please try again.",
+            )
         except Exception as e:
             logger.error(f"Media sync from dashboard failed: {e}")
             raise HTTPException(
@@ -170,6 +177,14 @@ async def onboarding_extend_schedule(request: ScheduleActionRequest):
                 "total_slots": result.get("total_slots", 0),
                 "extended_from": result.get("extended_from"),
             }
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except OperationalError as e:
+            logger.error(f"Extend schedule DB error: {e}")
+            raise HTTPException(
+                status_code=503,
+                detail="Database temporarily unavailable. Please try again.",
+            )
         except Exception as e:
             logger.error(f"Failed to extend schedule: {e}")
             raise HTTPException(status_code=500, detail=str(e))
@@ -198,6 +213,14 @@ async def onboarding_regenerate_schedule(request: ScheduleActionRequest):
                 "total_slots": result.get("total_slots", 0),
                 "cleared": deleted,
             }
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except OperationalError as e:
+            logger.error(f"Regenerate schedule DB error: {e}")
+            raise HTTPException(
+                status_code=503,
+                detail="Database temporarily unavailable. Please try again.",
+            )
         except Exception as e:
             logger.error(f"Failed to regenerate schedule: {e}")
             raise HTTPException(status_code=500, detail=str(e))
