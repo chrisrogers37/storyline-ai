@@ -35,6 +35,61 @@ class TelegramCallbackHandlers:
     def __init__(self, service: TelegramService):
         self.service = service
 
+    async def _safe_locked_callback(
+        self,
+        queue_id: str,
+        query,
+        callback_name: str,
+        error_msg: str,
+        coro,
+    ):
+        """Run a callback under an operation lock with keyboard removal and error handling.
+
+        Shared wrapper for ``complete_queue_action`` and ``handle_rejected``,
+        which both follow the same pattern: acquire lock, remove keyboard,
+        run the real work, show error on failure, and clean up.
+
+        Args:
+            queue_id: Queue item ID (used for lock key and cleanup).
+            query: Telegram callback query (for UI feedback).
+            callback_name: Human-readable name for logging.
+            error_msg: Caption to show if the callback raises.
+            coro: Awaitable that does the actual work.
+        """
+        lock = self.service.get_operation_lock(queue_id)
+        if lock.locked():
+            coro.close()  # Prevent "coroutine was never awaited" warning
+            await query.answer("⏳ Already processing this item...", show_alert=False)
+            return
+
+        async with lock:
+            try:
+                # Immediate visual feedback: remove buttons to signal action received.
+                # Best-effort — message may already be updated by a concurrent handler.
+                try:
+                    await query.edit_message_reply_markup(
+                        reply_markup=InlineKeyboardMarkup([])
+                    )
+                except Exception:
+                    logger.debug(
+                        f"Could not remove keyboard for queue item {queue_id} "
+                        f"(message may have been already updated)"
+                    )
+
+                await coro
+            except Exception as e:
+                logger.error(
+                    f"Failed to complete {callback_name} for queue {queue_id[:8]}: "
+                    f"{type(e).__name__}: {e}",
+                    exc_info=True,
+                )
+                await telegram_edit_with_retry(
+                    query.edit_message_caption,
+                    caption=error_msg,
+                )
+            finally:
+                self.service.cleanup_operation_state(queue_id)
+
     async def complete_queue_action(
         self,
         queue_id: str,
@@ -53,41 +108,15 @@ class TelegramCallbackHandlers:
 
         Uses operation locks to prevent duplicate actions from rapid button clicks.
         """
-        lock = self.service.get_operation_lock(queue_id)
-        if lock.locked():
-            await query.answer("⏳ Already processing this item...", show_alert=False)
-            return
-
-        async with lock:
-            try:
-                # Immediate visual feedback: remove buttons to signal action received
-                try:
-                    await query.edit_message_reply_markup(
-                        reply_markup=InlineKeyboardMarkup([])
-                    )
-                except Exception:
-                    logger.debug(
-                        f"Could not remove keyboard for queue item {queue_id} "
-                        f"(message may have been already updated)"
-                    )
-
-                await self._do_complete_queue_action(
-                    queue_id, user, query, status, success, caption, callback_name
-                )
-            except Exception as e:
-                logger.error(
-                    f"Failed to complete {callback_name} for queue {queue_id[:8]}: "
-                    f"{type(e).__name__}: {e}",
-                    exc_info=True,
-                )
-                try:
-                    await query.edit_message_caption(
-                        caption="❌ Error processing action. Please try again or use /next."
-                    )
-                except Exception:
-                    pass  # Message may already be gone
-            finally:
-                self.service.cleanup_operation_state(queue_id)
+        await self._safe_locked_callback(
+            queue_id,
+            query,
+            callback_name,
+            "❌ Error processing action. Please try again or use /next.",
+            self._do_complete_queue_action(
+                queue_id, user, query, status, success, caption, callback_name
+            ),
+        )
 
     @contextmanager
     def _shared_session(self):
@@ -473,37 +502,13 @@ class TelegramCallbackHandlers:
         cancel_flag = self.service.get_cancel_flag(queue_id)
         cancel_flag.set()
 
-        lock = self.service.get_operation_lock(queue_id)
-        if lock.locked():
-            await query.answer("⏳ Already processing this item...", show_alert=False)
-            return
-
-        async with lock:
-            try:
-                # Immediate visual feedback: remove buttons to signal action received
-                try:
-                    await query.edit_message_reply_markup(
-                        reply_markup=InlineKeyboardMarkup([])
-                    )
-                except Exception:
-                    logger.debug(
-                        f"Could not remove keyboard for rejected item {queue_id}"
-                    )
-
-                await self._do_handle_rejected(queue_id, user, query)
-            except Exception as e:
-                logger.error(
-                    f"Failed to reject queue {queue_id[:8]}: {type(e).__name__}: {e}",
-                    exc_info=True,
-                )
-                try:
-                    await query.edit_message_caption(
-                        caption="❌ Error rejecting item. Please try again."
-                    )
-                except Exception:
-                    pass  # Message may already be gone
-            finally:
-                self.service.cleanup_operation_state(queue_id)
+        await self._safe_locked_callback(
+            queue_id,
+            query,
+            "reject",
+            "❌ Error rejecting item. Please try again.",
+            self._do_handle_rejected(queue_id, user, query),
+        )
 
     async def _do_handle_rejected(self, queue_id: str, user, query):
         """Internal implementation of rejection (runs under lock)."""
@@ -600,13 +605,11 @@ class TelegramCallbackHandlers:
                 f"Failed to handle resume:{action}: {type(e).__name__}: {e}",
                 exc_info=True,
             )
-            try:
-                await query.edit_message_text(
-                    "❌ Error during resume. Please try /settings.",
-                    parse_mode="Markdown",
-                )
-            except Exception:
-                pass
+            await telegram_edit_with_retry(
+                query.edit_message_text,
+                "❌ Error during resume. Please try /settings.",
+                parse_mode="Markdown",
+            )
 
     async def _do_resume_callback(self, action: str, user, query):
         """Internal implementation of resume callback."""
@@ -727,10 +730,8 @@ class TelegramCallbackHandlers:
                 f"Failed to handle reset:{action}: {type(e).__name__}: {e}",
                 exc_info=True,
             )
-            try:
-                await query.edit_message_text(
-                    "❌ Error clearing queue. Please try again.",
-                    parse_mode="Markdown",
-                )
-            except Exception:
-                pass
+            await telegram_edit_with_retry(
+                query.edit_message_text,
+                "❌ Error clearing queue. Please try again.",
+                parse_mode="Markdown",
+            )
