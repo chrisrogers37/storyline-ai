@@ -2,8 +2,6 @@
 
 from fastapi import APIRouter, HTTPException
 
-from src.repositories.chat_settings_repository import ChatSettingsRepository
-from src.repositories.queue_repository import QueueRepository
 from src.services.core.instagram_account_service import InstagramAccountService
 from src.services.core.media_sync import MediaSyncService
 from src.services.core.scheduler import SchedulerService
@@ -117,10 +115,10 @@ async def onboarding_sync_media(request: InitRequest):
     """
     _validate_request(request.init_data, request.chat_id)
 
-    with ChatSettingsRepository() as settings_repo:
-        chat_settings = settings_repo.get_or_create(request.chat_id)
-        source_type = chat_settings.media_source_type
-        source_root = chat_settings.media_source_root
+    with SettingsService() as settings_service:
+        source_type, source_root = settings_service.get_media_source_config(
+            request.chat_id
+        )
 
     if not source_root:
         raise HTTPException(
@@ -182,20 +180,13 @@ async def onboarding_regenerate_schedule(request: ScheduleActionRequest):
     """Clear all pending queue items and create a fresh schedule."""
     _validate_request(request.init_data, request.chat_id)
 
-    with (
-        ChatSettingsRepository() as settings_repo,
-        QueueRepository() as queue_repo,
-    ):
-        chat_settings = settings_repo.get_or_create(request.chat_id)
-        chat_settings_id = str(chat_settings.id)
-
-        deleted = queue_repo.delete_all_pending(chat_settings_id=chat_settings_id)
+    with SchedulerService() as scheduler:
+        deleted = scheduler.clear_pending_queue(request.chat_id)
         logger.info(
             f"Regenerate schedule: cleared {deleted} pending items "
             f"for chat {request.chat_id}"
         )
 
-    with SchedulerService() as scheduler:
         try:
             result = scheduler.create_schedule(
                 days=request.days,

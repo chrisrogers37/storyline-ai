@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Fix layer boundary violations** — API and CLI layers no longer import repositories directly, enforcing the strict separation of concerns defined in CLAUDE.md (CLI/API → Services → Repositories → Models)
+  - **API layer**: Removed all 14 direct repository imports across 4 onboarding route files (`helpers.py`, `dashboard.py`, `settings.py`, `setup.py`)
+  - **CLI layer**: Removed repository imports from `queue.py`, `users.py`, and `media.py` — all now call services
+  - **OAuth routes**: Switched from manual `try/finally/close()` to `with` context managers for consistent resource cleanup
+- **Consolidate duplicated setup-state logic** — Extracted `SetupStateService` to replace ~130 lines of identical setup-checking logic that was duplicated between `TelegramCommandHandlers._get_setup_status()` (5 methods) and `helpers._get_setup_state()` (1 function). Both consumers now call the same service.
+- **Centralize token staleness check** — Extracted `is_token_stale()` utility in `setup_state_service.py` replacing 3 identical `expires_at < utcnow() - timedelta(days=7)` checks
+
+### Added
+- **SetupStateService** (`src/services/core/setup_state_service.py`) — Unified setup-state checking for both Telegram bot and API, with `get_setup_state()` (returns dict) and `format_setup_status()` (returns Telegram-formatted text)
+- **DashboardService** (`src/services/core/dashboard_service.py`) — Read-only aggregation service for Mini App dashboard endpoints (queue detail, history detail, media stats, pending queue items)
+- **UserService** (`src/services/core/user_service.py`) — User management service for CLI layer (list users, promote user)
+- **SchedulerService.clear_pending_queue()** / **count_pending()** — Service-layer methods replacing direct `QueueRepository` calls from API and CLI
+- **MediaIngestionService** — Added category mix operations (`get_current_mix()`, `set_category_mix()`, `get_mix_history()`, etc.) and media listing methods, replacing direct `CategoryMixRepository`/`MediaRepository` calls from CLI
+
 ### Fixed
 - **QueuePool overflow on concurrent autopost + /next** — `BaseService.close()` only closed direct `BaseRepository` attributes but did not recurse into nested `BaseService` instances, leaking their database connections. When autopost (which creates `InstagramAPIService` with 6+ nested services/repos) ran concurrently with `/next` (which creates `PostingService` with nested `TelegramService`), the pool of 20 connections was exhausted. `close()` now mirrors the recursive pattern already used by `cleanup_transactions()`, traversing nested services before closing repositories. Also added `TelegramService.close()` override to close `InteractionService`'s repo (which isn't a `BaseService` and was invisible to the traversal).
 - **Scheduler tenant scoping** — Queue items created by `create_schedule()` and `extend_schedule()` were missing `chat_settings_id`, making them invisible to the tenant-scoped processing loop (`process_pending_posts`), dashboard API, and Mini App. The scheduler ran every minute but found 0 items because `WHERE chat_settings_id = '<uuid>'` never matches NULL. Now all scheduler paths thread `chat_settings_id` from `telegram_chat_id` through to `queue_repo.create()`.

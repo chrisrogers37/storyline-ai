@@ -475,6 +475,23 @@ class SchedulerService(BaseService):
         """
         return self.media_repo.get_next_eligible_for_posting(category=category)
 
+    def clear_pending_queue(self, telegram_chat_id: Optional[int] = None) -> int:
+        """Delete all pending queue items for a chat.
+
+        Args:
+            telegram_chat_id: Chat to clear (falls back to admin chat)
+
+        Returns:
+            Number of deleted items
+        """
+        chat_settings_id = self._resolve_chat_settings_id(telegram_chat_id)
+        return self.queue_repo.delete_all_pending(chat_settings_id=chat_settings_id)
+
+    def count_pending(self, telegram_chat_id: Optional[int] = None) -> int:
+        """Count pending queue items for a chat."""
+        chat_settings_id = self._resolve_chat_settings_id(telegram_chat_id)
+        return self.queue_repo.count_pending(chat_settings_id=chat_settings_id)
+
     def check_availability(self, media_id: str) -> bool:
         """
         Check if media item is available for scheduling.

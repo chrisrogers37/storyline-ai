@@ -555,12 +555,27 @@ class TestStatusCommand:
                 "src.services.core.media_sync.MediaSyncService",
                 side_effect=Exception("not configured"),
             ),
-            patch("src.repositories.token_repository.TokenRepository") as MockTokenRepo,
+            patch(
+                "src.services.core.setup_state_service.SetupStateService.__init__",
+                lambda self: None,
+            ),
+            patch(
+                "src.services.core.setup_state_service.SetupStateService.format_setup_status",
+                return_value=(
+                    "*Setup Status:*\n"
+                    "├── 📸 Instagram: ⚠️ Not connected\n"
+                    "├── 📁 Google Drive: ⚠️ Not connected\n"
+                    "├── 📂 Media Library: ⚠️ Not configured\n"
+                    "├── 📅 Schedule: ✅ 3/day, 14:00-02:00 UTC\n"
+                    "└── 📦 Delivery: ✅ Live"
+                ),
+            ),
+            patch(
+                "src.services.core.setup_state_service.SetupStateService.close",
+            ),
         ):
             mock_settings.DRY_RUN_MODE = False
             mock_settings.ENABLE_INSTAGRAM_API = False
-            MockTokenRepo.return_value.get_token_for_chat.return_value = None
-            MockTokenRepo.return_value.close = Mock()
             await handlers.handle_status(mock_update, mock_context)
 
         call_args = mock_update.message.reply_text.call_args
@@ -581,239 +596,171 @@ class TestStatusCommand:
 
 @pytest.mark.unit
 class TestSetupStatus:
-    """Tests for the setup completion section in /status."""
+    """Tests for SetupStateService static formatters (formerly on TelegramCommandHandlers)."""
 
-    def test_instagram_connected(self, mock_command_handlers):
+    def test_instagram_connected(self):
         """Test Instagram shows connected when active account exists."""
-        handlers = mock_command_handlers
-        mock_account = Mock()
-        mock_account.instagram_username = "testshop"
-        mock_account.display_name = "Test Shop"
-        handlers.service.ig_account_service.get_active_account.return_value = (
-            mock_account
-        )
+        from src.services.core.setup_state_service import SetupStateService
 
-        line, ok = handlers._check_instagram_setup(-100123)
+        state = {"instagram_connected": True, "instagram_username": "testshop"}
+        line, ok = SetupStateService._fmt_instagram(state)
         assert "Connected" in line
         assert "@testshop" in line
         assert ok is True
 
-    def test_instagram_not_connected(self, mock_command_handlers):
+    def test_instagram_not_connected(self):
         """Test Instagram shows not connected when no active account."""
-        handlers = mock_command_handlers
-        handlers.service.ig_account_service.get_active_account.return_value = None
+        from src.services.core.setup_state_service import SetupStateService
 
-        line, ok = handlers._check_instagram_setup(-100123)
+        state = {"instagram_connected": False, "instagram_username": None}
+        line, ok = SetupStateService._fmt_instagram(state)
         assert "Not connected" in line
         assert ok is False
 
-    def test_instagram_check_failure(self, mock_command_handlers):
-        """Test Instagram check handles exceptions gracefully."""
-        handlers = mock_command_handlers
-        handlers.service.ig_account_service.get_active_account.side_effect = Exception(
-            "DB error"
-        )
+    def test_instagram_connected_no_username(self):
+        """Test Instagram shows connected even without a username."""
+        from src.services.core.setup_state_service import SetupStateService
 
-        line, ok = handlers._check_instagram_setup(-100123)
-        assert "Check failed" in line
-        assert ok is False
+        state = {"instagram_connected": True, "instagram_username": None}
+        line, ok = SetupStateService._fmt_instagram(state)
+        assert "Connected" in line
+        assert ok is True
 
-    def test_media_library_with_files(self, mock_command_handlers):
+    def test_media_library_with_files(self):
         """Test media library shows file count when media is indexed."""
-        handlers = mock_command_handlers
-        handlers.service.media_repo.get_all.return_value = [Mock()] * 847
+        from src.services.core.setup_state_service import SetupStateService
 
-        line, ok = handlers._check_media_setup(-100123)
+        state = {"media_count": 847, "media_folder_configured": True}
+        line, ok = SetupStateService._fmt_media(state)
         assert "847 files" in line
         assert ok is True
 
-    def test_media_library_no_files_source_configured(self, mock_command_handlers):
+    def test_media_library_no_files_source_configured(self):
         """Test media library when source configured but no files synced."""
-        handlers = mock_command_handlers
-        handlers.service.media_repo.get_all.return_value = []
-        handlers.service.settings_service.get_settings.return_value = Mock(
-            media_source_root="some_folder_id"
-        )
+        from src.services.core.setup_state_service import SetupStateService
 
-        line, ok = handlers._check_media_setup(-100123)
+        state = {"media_count": 0, "media_folder_configured": True}
+        line, ok = SetupStateService._fmt_media(state)
         assert "Configured" in line
         assert "0 files" in line
         assert ok is False
 
-    def test_media_library_not_configured(self, mock_command_handlers):
+    def test_media_library_not_configured(self):
         """Test media library when nothing is configured."""
-        handlers = mock_command_handlers
-        handlers.service.media_repo.get_all.return_value = []
-        handlers.service.settings_service.get_settings.return_value = Mock(
-            media_source_root=None
-        )
+        from src.services.core.setup_state_service import SetupStateService
 
-        line, ok = handlers._check_media_setup(-100123)
+        state = {"media_count": 0, "media_folder_configured": False}
+        line, ok = SetupStateService._fmt_media(state)
         assert "Not configured" in line
         assert ok is False
 
-    def test_schedule_configured(self, mock_command_handlers):
+    def test_schedule_configured(self):
         """Test schedule shows configuration."""
-        handlers = mock_command_handlers
-        mock_settings = Mock(
-            posts_per_day=3, posting_hours_start=14, posting_hours_end=2
-        )
-        handlers.service.settings_service.get_settings.return_value = mock_settings
+        from src.services.core.setup_state_service import SetupStateService
 
-        line, ok = handlers._check_schedule_setup(-100123)
+        state = {
+            "posts_per_day": 3,
+            "posting_hours_start": 14,
+            "posting_hours_end": 2,
+        }
+        line, ok = SetupStateService._fmt_schedule(state)
         assert "3/day" in line
         assert "14:00-02:00 UTC" in line
         assert ok is True
 
-    def test_delivery_live(self, mock_command_handlers):
+    def test_delivery_live(self):
         """Test delivery shows live when not paused and not dry run."""
-        handlers = mock_command_handlers
-        mock_settings = Mock(is_paused=False, dry_run_mode=False)
-        handlers.service.settings_service.get_settings.return_value = mock_settings
+        from src.services.core.setup_state_service import SetupStateService
 
-        line, ok = handlers._check_delivery_setup(-100123)
+        state = {"is_paused": False, "dry_run_mode": False}
+        line, ok = SetupStateService._fmt_delivery(state)
         assert "Live" in line
         assert ok is True
 
-    def test_delivery_dry_run(self, mock_command_handlers):
+    def test_delivery_dry_run(self):
         """Test delivery shows dry run when enabled."""
-        handlers = mock_command_handlers
-        mock_settings = Mock(is_paused=False, dry_run_mode=True)
-        handlers.service.settings_service.get_settings.return_value = mock_settings
+        from src.services.core.setup_state_service import SetupStateService
 
-        line, ok = handlers._check_delivery_setup(-100123)
+        state = {"is_paused": False, "dry_run_mode": True}
+        line, ok = SetupStateService._fmt_delivery(state)
         assert "Dry Run" in line
         assert ok is True
 
-    def test_delivery_paused(self, mock_command_handlers):
+    def test_delivery_paused(self):
         """Test delivery shows paused state."""
-        handlers = mock_command_handlers
-        mock_settings = Mock(is_paused=True, dry_run_mode=False)
-        handlers.service.settings_service.get_settings.return_value = mock_settings
+        from src.services.core.setup_state_service import SetupStateService
 
-        line, ok = handlers._check_delivery_setup(-100123)
+        state = {"is_paused": True, "dry_run_mode": False}
+        line, ok = SetupStateService._fmt_delivery(state)
         assert "PAUSED" in line
         assert ok is True
 
 
 @pytest.mark.unit
 class TestSetupStatusGoogleDrive:
-    """Tests for Google Drive check in setup status."""
+    """Tests for Google Drive formatter and token staleness (formerly on TelegramCommandHandlers)."""
 
-    def test_gdrive_connected_with_email(self, mock_command_handlers):
+    def test_gdrive_connected_with_email(self):
         """Test Google Drive shows connected with email."""
-        handlers = mock_command_handlers
+        from src.services.core.setup_state_service import SetupStateService
 
-        mock_token = Mock()
-        mock_token.token_metadata = {"email": "user@gmail.com"}
-        mock_token.expires_at = None
-
-        mock_settings_obj = Mock()
-        mock_settings_obj.id = "fake-uuid"
-        handlers.service.settings_service.get_settings.return_value = mock_settings_obj
-
-        with patch(
-            "src.repositories.token_repository.TokenRepository"
-        ) as MockTokenRepo:
-            mock_repo_instance = MockTokenRepo.return_value
-            mock_repo_instance.__enter__ = Mock(return_value=mock_repo_instance)
-            mock_repo_instance.__exit__ = Mock(return_value=False)
-            mock_repo_instance.get_token_for_chat.return_value = mock_token
-
-            line, ok = handlers._check_gdrive_setup(-100123)
-
+        state = {
+            "gdrive_connected": True,
+            "gdrive_email": "user@gmail.com",
+            "gdrive_needs_reconnect": False,
+        }
+        line, ok = SetupStateService._fmt_gdrive(state)
         assert "Connected" in line
         assert "user@gmail.com" in line
         assert ok is True
 
-    def test_gdrive_not_connected(self, mock_command_handlers):
+    def test_gdrive_not_connected(self):
         """Test Google Drive shows not connected when no token."""
-        handlers = mock_command_handlers
+        from src.services.core.setup_state_service import SetupStateService
 
-        mock_settings_obj = Mock()
-        mock_settings_obj.id = "fake-uuid"
-        handlers.service.settings_service.get_settings.return_value = mock_settings_obj
-
-        with patch(
-            "src.repositories.token_repository.TokenRepository"
-        ) as MockTokenRepo:
-            mock_repo_instance = MockTokenRepo.return_value
-            mock_repo_instance.__enter__ = Mock(return_value=mock_repo_instance)
-            mock_repo_instance.__exit__ = Mock(return_value=False)
-            mock_repo_instance.get_token_for_chat.return_value = None
-
-            line, ok = handlers._check_gdrive_setup(-100123)
-
+        state = {
+            "gdrive_connected": False,
+            "gdrive_email": None,
+            "gdrive_needs_reconnect": False,
+        }
+        line, ok = SetupStateService._fmt_gdrive(state)
         assert "Not connected" in line
         assert ok is False
 
-    def test_gdrive_check_failure(self, mock_command_handlers):
-        """Test Google Drive check handles exceptions gracefully."""
-        handlers = mock_command_handlers
-        handlers.service.settings_service.get_settings.side_effect = Exception(
-            "DB error"
-        )
+    def test_gdrive_needs_reconnection(self):
+        """Test Google Drive shows 'Needs Reconnection' when token is stale."""
+        from src.services.core.setup_state_service import SetupStateService
 
-        line, ok = handlers._check_gdrive_setup(-100123)
-        assert "Check failed" in line
-        assert ok is False
-
-    def test_gdrive_stale_token_shows_needs_reconnection(self, mock_command_handlers):
-        """Test Google Drive shows 'Needs Reconnection' for stale expired token."""
-        from datetime import timedelta
-
-        handlers = mock_command_handlers
-
-        mock_token = Mock()
-        mock_token.token_metadata = {"email": "user@gmail.com"}
-        # Expired 10 days ago (>7 day threshold)
-        mock_token.expires_at = datetime.utcnow() - timedelta(days=10)
-
-        mock_settings_obj = Mock()
-        mock_settings_obj.id = "fake-uuid"
-        handlers.service.settings_service.get_settings.return_value = mock_settings_obj
-
-        with patch(
-            "src.repositories.token_repository.TokenRepository"
-        ) as MockTokenRepo:
-            mock_repo_instance = MockTokenRepo.return_value
-            mock_repo_instance.__enter__ = Mock(return_value=mock_repo_instance)
-            mock_repo_instance.__exit__ = Mock(return_value=False)
-            mock_repo_instance.get_token_for_chat.return_value = mock_token
-
-            line, ok = handlers._check_gdrive_setup(-100123)
-
+        state = {
+            "gdrive_connected": True,
+            "gdrive_email": "user@gmail.com",
+            "gdrive_needs_reconnect": True,
+        }
+        line, ok = SetupStateService._fmt_gdrive(state)
         assert "Needs Reconnection" in line
         assert ok is False
 
-    def test_gdrive_recently_expired_still_shows_connected(self, mock_command_handlers):
-        """Token expired 2 days ago (< 7 day threshold) still shows Connected."""
+    def test_gdrive_stale_token_detection(self):
+        """Test is_token_stale returns True for token expired >7 days ago."""
         from datetime import timedelta
 
-        handlers = mock_command_handlers
+        from src.services.core.setup_state_service import is_token_stale
 
         mock_token = Mock()
-        mock_token.token_metadata = {"email": "user@gmail.com"}
+        # Expired 10 days ago (>7 day threshold)
+        mock_token.expires_at = datetime.utcnow() - timedelta(days=10)
+        assert is_token_stale(mock_token) is True
+
+    def test_gdrive_recently_expired_not_stale(self):
+        """Token expired 2 days ago (< 7 day threshold) is not considered stale."""
+        from datetime import timedelta
+
+        from src.services.core.setup_state_service import is_token_stale
+
+        mock_token = Mock()
         # Expired 2 days ago (within 7 day threshold)
         mock_token.expires_at = datetime.utcnow() - timedelta(days=2)
-
-        mock_settings_obj = Mock()
-        mock_settings_obj.id = "fake-uuid"
-        handlers.service.settings_service.get_settings.return_value = mock_settings_obj
-
-        with patch(
-            "src.repositories.token_repository.TokenRepository"
-        ) as MockTokenRepo:
-            mock_repo_instance = MockTokenRepo.return_value
-            mock_repo_instance.__enter__ = Mock(return_value=mock_repo_instance)
-            mock_repo_instance.__exit__ = Mock(return_value=False)
-            mock_repo_instance.get_token_for_chat.return_value = mock_token
-
-            line, ok = handlers._check_gdrive_setup(-100123)
-
-        assert "Connected" in line
-        assert "user@gmail.com" in line
-        assert ok is True
+        assert is_token_stale(mock_token) is False
 
 
 @pytest.mark.unit
@@ -915,19 +862,35 @@ class TestStatusIncludesSetup:
         )
         service.settings_service.get_settings.return_value = mock_chat_settings
 
+        setup_status_text = (
+            "*Setup Status:*\n"
+            "├── 📸 Instagram: ⚠️ Not connected\n"
+            "├── 📁 Google Drive: ⚠️ Not connected\n"
+            "├── 📂 Media Library: ⚠️ Not configured\n"
+            "├── 📅 Schedule: ✅ 3/day, 14:00-02:00 UTC\n"
+            "└── 📦 Delivery: ✅ Live"
+        )
+
         with (
             patch("src.services.core.telegram_commands.settings") as mock_settings,
             patch(
                 "src.services.core.media_sync.MediaSyncService",
                 side_effect=Exception("not configured"),
             ),
-            patch("src.repositories.token_repository.TokenRepository") as MockTokenRepo,
+            patch(
+                "src.services.core.setup_state_service.SetupStateService.__init__",
+                lambda self: None,
+            ),
+            patch(
+                "src.services.core.setup_state_service.SetupStateService.format_setup_status",
+                return_value=setup_status_text,
+            ),
+            patch(
+                "src.services.core.setup_state_service.SetupStateService.close",
+            ),
         ):
             mock_settings.DRY_RUN_MODE = False
             mock_settings.ENABLE_INSTAGRAM_API = False
-
-            MockTokenRepo.return_value.get_token_for_chat.return_value = None
-            MockTokenRepo.return_value.close = Mock()
 
             await handlers.handle_status(mock_update, mock_context)
 
@@ -995,13 +958,21 @@ class TestStatusDashboardButton:
                 "src.services.core.media_sync.MediaSyncService",
                 side_effect=Exception("n/a"),
             ),
-            patch("src.repositories.token_repository.TokenRepository") as MockTokenRepo,
+            patch(
+                "src.services.core.setup_state_service.SetupStateService.__init__",
+                lambda self: None,
+            ),
+            patch(
+                "src.services.core.setup_state_service.SetupStateService.format_setup_status",
+                return_value="*Setup Status:*\n├── 📸 Instagram: ⚠️ Not connected",
+            ),
+            patch(
+                "src.services.core.setup_state_service.SetupStateService.close",
+            ),
         ):
             mock_settings.DRY_RUN_MODE = False
             mock_settings.ENABLE_INSTAGRAM_API = False
             mock_settings.OAUTH_REDIRECT_BASE_URL = "https://example.com"
-            MockTokenRepo.return_value.get_token_for_chat.return_value = None
-            MockTokenRepo.return_value.close = Mock()
 
             await handlers.handle_status(mock_update, Mock())
 
@@ -1055,13 +1026,21 @@ class TestStatusDashboardButton:
                 "src.services.core.media_sync.MediaSyncService",
                 side_effect=Exception("n/a"),
             ),
-            patch("src.repositories.token_repository.TokenRepository") as MockTokenRepo,
+            patch(
+                "src.services.core.setup_state_service.SetupStateService.__init__",
+                lambda self: None,
+            ),
+            patch(
+                "src.services.core.setup_state_service.SetupStateService.format_setup_status",
+                return_value="*Setup Status:*\n├── 📸 Instagram: ⚠️ Not connected",
+            ),
+            patch(
+                "src.services.core.setup_state_service.SetupStateService.close",
+            ),
         ):
             mock_settings.DRY_RUN_MODE = False
             mock_settings.ENABLE_INSTAGRAM_API = False
             mock_settings.OAUTH_REDIRECT_BASE_URL = None
-            MockTokenRepo.return_value.get_token_for_chat.return_value = None
-            MockTokenRepo.return_value.close = Mock()
 
             await handlers.handle_status(mock_update, Mock())
 
@@ -1109,12 +1088,20 @@ class TestStatusLibraryBreakdown:
                 "src.services.core.media_sync.MediaSyncService",
                 side_effect=Exception("n/a"),
             ),
-            patch("src.repositories.token_repository.TokenRepository") as MockTokenRepo,
+            patch(
+                "src.services.core.setup_state_service.SetupStateService.__init__",
+                lambda self: None,
+            ),
+            patch(
+                "src.services.core.setup_state_service.SetupStateService.format_setup_status",
+                return_value="*Setup Status:*\n└── 📦 Delivery: ✅ Live",
+            ),
+            patch(
+                "src.services.core.setup_state_service.SetupStateService.close",
+            ),
         ):
             mock_settings.DRY_RUN_MODE = False
             mock_settings.ENABLE_INSTAGRAM_API = False
-            MockTokenRepo.return_value.get_token_for_chat.return_value = None
-            MockTokenRepo.return_value.close = Mock()
 
             await handlers.handle_status(mock_update, Mock())
 

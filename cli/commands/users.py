@@ -4,7 +4,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from src.repositories.user_repository import UserRepository
+from src.services.core.user_service import UserService
 
 console = Console()
 
@@ -12,8 +12,8 @@ console = Console()
 @click.command(name="list-users")
 def list_users():
     """List all users."""
-    repo = UserRepository()
-    users = repo.get_all()
+    with UserService() as service:
+        users = service.list_users()
 
     if not users:
         console.print("[yellow]No users found[/yellow]")
@@ -43,14 +43,12 @@ def list_users():
 @click.option("--role", type=click.Choice(["admin", "member"]), default="admin")
 def promote_user(telegram_user_id, role):
     """Promote user to admin or demote to member."""
-    repo = UserRepository()
-    user = repo.get_by_telegram_id(telegram_user_id)
-
-    if not user:
-        console.print(f"[bold red]✗ User not found: {telegram_user_id}[/bold red]")
-        raise click.Abort()
-
-    repo.update_role(str(user.id), role)
+    with UserService() as service:
+        try:
+            user = service.promote_user(telegram_user_id, role)
+        except ValueError as e:
+            console.print(f"[bold red]✗ {e}[/bold red]")
+            raise click.Abort()
 
     username = (
         f"@{user.telegram_username}"
