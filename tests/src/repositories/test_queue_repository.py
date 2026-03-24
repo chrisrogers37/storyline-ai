@@ -93,35 +93,6 @@ class TestQueueRepository:
         assert result is None
         mock_db.commit.assert_not_called()
 
-    def test_schedule_retry(self, queue_repo, mock_db):
-        """Test scheduling a retry for failed queue item."""
-        mock_item = MagicMock()
-        mock_item.retry_count = 0
-        mock_item.max_retries = 3
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_item
-
-        queue_repo.schedule_retry(
-            "some-id", error_message="Test error", retry_delay_minutes=10
-        )
-
-        assert mock_item.retry_count == 1
-        assert mock_item.status == "retrying"
-        assert mock_item.last_error == "Test error"
-        assert mock_item.next_retry_at is not None
-        mock_db.commit.assert_called_once()
-
-    def test_schedule_retry_max_retries_exceeded(self, queue_repo, mock_db):
-        """Test that exceeding max retries marks item as failed."""
-        mock_item = MagicMock()
-        mock_item.retry_count = 2
-        mock_item.max_retries = 3
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_item
-
-        queue_repo.schedule_retry("some-id", error_message="Final failure")
-
-        assert mock_item.retry_count == 3
-        assert mock_item.status == "failed"
-
     def test_delete_queue_item(self, queue_repo, mock_db):
         """Test deleting a queue item."""
         mock_item = MagicMock()

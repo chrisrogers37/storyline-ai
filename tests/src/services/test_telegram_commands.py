@@ -254,26 +254,29 @@ class TestNextCommand:
 
 
 @pytest.mark.unit
-class TestGetNextPostDisplay:
-    """Tests for _get_next_post_display helper."""
+class TestGetCadenceDisplay:
+    """Tests for _get_cadence_display helper."""
 
-    def test_with_pending_items(self, mock_command_handlers):
-        """Test returns formatted time when items are pending."""
+    def test_returns_cadence_string(self, mock_command_handlers):
+        """Test returns formatted cadence when settings are available."""
         handlers = mock_command_handlers
-        mock_item = Mock()
-        mock_item.scheduled_for = datetime(2026, 3, 15, 14, 30)
-        handlers.service.queue_repo.get_pending.return_value = [mock_item]
+        mock_settings = Mock(
+            posts_per_day=3, posting_hours_start=14, posting_hours_end=2
+        )
+        handlers.service.settings_service.get_settings.return_value = mock_settings
 
-        result = handlers._get_next_post_display()
-        assert result == "14:30 UTC"
+        result = handlers._get_cadence_display(-100123)
+        assert result == "3/day, 14:00-02:00 UTC"
 
-    def test_empty_queue(self, mock_command_handlers):
-        """Test returns 'None scheduled' when queue is empty."""
+    def test_returns_unknown_on_error(self, mock_command_handlers):
+        """Test returns 'Unknown' when settings service fails."""
         handlers = mock_command_handlers
-        handlers.service.queue_repo.get_pending.return_value = []
+        handlers.service.settings_service.get_settings.side_effect = Exception(
+            "DB error"
+        )
 
-        result = handlers._get_next_post_display()
-        assert result == "None scheduled"
+        result = handlers._get_cadence_display(-100123)
+        assert result == "Unknown"
 
 
 @pytest.mark.unit
@@ -539,7 +542,7 @@ class TestStatusCommand:
         assert "Queue: 5 pending" in message_text
         assert "Total: 3 active" in message_text
         assert "Locked: 1" in message_text
-        assert "None scheduled" in message_text
+        assert "Cadence:" in message_text
 
         # Should log interaction
         service.interaction_service.log_command.assert_called_once()

@@ -30,8 +30,6 @@ class ScheduleRequest(BaseModel):
 class CompleteRequest(BaseModel):
     init_data: str
     chat_id: int
-    create_schedule: bool = False
-    schedule_days: int = Field(default=7, ge=1, le=30)
 
 
 class ToggleSettingRequest(BaseModel):
@@ -57,9 +55,3 @@ class RemoveAccountRequest(BaseModel):
     init_data: str
     chat_id: int
     account_id: str
-
-
-class ScheduleActionRequest(BaseModel):
-    init_data: str
-    chat_id: int
-    days: int = Field(default=7, ge=1, le=30)

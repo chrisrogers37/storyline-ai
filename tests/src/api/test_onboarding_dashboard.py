@@ -1,6 +1,5 @@
 """Tests for onboarding dashboard detail API endpoints."""
 
-from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 from uuid import uuid4
 
@@ -54,25 +53,24 @@ class TestQueueDetail:
                         "scheduled_for": "2026-02-22T14:00:00",
                         "media_name": "meme_01.jpg",
                         "category": "memes",
+                        "status": "pending",
                     },
                     {
                         "scheduled_for": "2026-02-22T18:00:00",
                         "media_name": "merch_01.jpg",
                         "category": "merch",
+                        "status": "pending",
                     },
                     {
                         "scheduled_for": "2026-02-23T10:00:00",
                         "media_name": "meme_02.jpg",
                         "category": "memes",
+                        "status": "processing",
                     },
                 ],
-                "total_pending": 3,
-                "schedule_end": "2026-02-23T10:00:00",
-                "days_remaining": 1,
-                "day_summary": [
-                    {"date": "2026-02-22", "count": 2},
-                    {"date": "2026-02-23", "count": 1},
-                ],
+                "total_in_flight": 3,
+                "posts_today": 5,
+                "last_post_at": "2026-02-22T14:00:00",
             }
 
             response = client.get(
@@ -86,21 +84,13 @@ class TestQueueDetail:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["total_pending"] == 3
+        assert data["total_in_flight"] == 3
         assert len(data["items"]) == 3
         assert data["items"][0]["media_name"] == "meme_01.jpg"
         assert data["items"][0]["category"] == "memes"
         assert data["items"][1]["media_name"] == "merch_01.jpg"
-
-        # Day summary
-        assert len(data["day_summary"]) == 2
-        assert data["day_summary"][0]["date"] == "2026-02-22"
-        assert data["day_summary"][0]["count"] == 2
-        assert data["day_summary"][1]["date"] == "2026-02-23"
-        assert data["day_summary"][1]["count"] == 1
-
-        assert data["schedule_end"] is not None
-        assert data["days_remaining"] is not None
+        assert data["posts_today"] == 5
+        assert data["last_post_at"] == "2026-02-22T14:00:00"
 
         mock_svc.get_queue_detail.assert_called_once_with(CHAT_ID, limit=10)
 
@@ -115,10 +105,9 @@ class TestQueueDetail:
             mock_svc = service_ctx(MockDashboard)
             mock_svc.get_queue_detail.return_value = {
                 "items": [],
-                "total_pending": 0,
-                "schedule_end": None,
-                "days_remaining": None,
-                "day_summary": [],
+                "total_in_flight": 0,
+                "posts_today": 0,
+                "last_post_at": None,
             }
 
             response = client.get(
@@ -128,10 +117,9 @@ class TestQueueDetail:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["total_pending"] == 0
+        assert data["total_in_flight"] == 0
         assert data["items"] == []
-        assert data["day_summary"] == []
-        assert data["schedule_end"] is None
+        assert data["last_post_at"] is None
 
     def test_queue_detail_unauthorized(self, client):
         """Queue detail rejects invalid auth."""
@@ -585,7 +573,7 @@ class TestUpdateSetting:
 
 
 # =============================================================================
-# Enhanced _get_setup_state (next_post_at, schedule_end_date)
+# Enhanced _get_setup_state (in_flight_count, posting_active)
 # =============================================================================
 
 
@@ -594,10 +582,7 @@ class TestEnhancedSetupState:
     """Test that _get_setup_state includes schedule timing fields."""
 
     def test_setup_state_includes_schedule_dates(self, client):
-        """Init response includes next_post_at and schedule_end_date."""
-        now = datetime(2026, 2, 22, 14, 0, 0, tzinfo=timezone.utc)
-        later = datetime(2026, 2, 28, 18, 0, 0, tzinfo=timezone.utc)
-
+        """Init response includes in_flight_count and posting_active."""
         setup_state = {
             "instagram_connected": False,
             "instagram_username": None,
@@ -618,10 +603,9 @@ class TestEnhancedSetupState:
             "enable_instagram_api": True,
             "show_verbose_notifications": False,
             "media_sync_enabled": True,
-            "queue_count": 2,
+            "in_flight_count": 2,
             "last_post_at": None,
-            "next_post_at": now.isoformat(),
-            "schedule_end_date": later.isoformat(),
+            "posting_active": True,
         }
 
         with (
@@ -640,9 +624,8 @@ class TestEnhancedSetupState:
 
         assert response.status_code == 200
         state = response.json()["setup_state"]
-        assert state["next_post_at"] == now.isoformat()
-        assert state["schedule_end_date"] == later.isoformat()
-        assert state["queue_count"] == 2
+        assert state["in_flight_count"] == 2
+        assert state["posting_active"] is True
 
     def test_setup_state_includes_all_settings(self, client):
         """Init response includes all boolean settings for Quick Controls."""
@@ -666,10 +649,9 @@ class TestEnhancedSetupState:
             "enable_instagram_api": True,
             "show_verbose_notifications": False,
             "media_sync_enabled": True,
-            "queue_count": 0,
+            "in_flight_count": 0,
             "last_post_at": None,
-            "next_post_at": None,
-            "schedule_end_date": None,
+            "posting_active": False,
         }
 
         with (
@@ -695,7 +677,7 @@ class TestEnhancedSetupState:
         assert state["dry_run_mode"] is True
 
     def test_setup_state_empty_queue_no_dates(self, client):
-        """Init response with empty queue has null schedule dates."""
+        """Init response with empty queue has zero in-flight and inactive posting."""
         setup_state = {
             "instagram_connected": False,
             "instagram_username": None,
@@ -716,10 +698,9 @@ class TestEnhancedSetupState:
             "enable_instagram_api": True,
             "show_verbose_notifications": False,
             "media_sync_enabled": True,
-            "queue_count": 0,
+            "in_flight_count": 0,
             "last_post_at": None,
-            "next_post_at": None,
-            "schedule_end_date": None,
+            "posting_active": False,
         }
 
         with (
@@ -738,9 +719,8 @@ class TestEnhancedSetupState:
 
         assert response.status_code == 200
         state = response.json()["setup_state"]
-        assert state["next_post_at"] is None
-        assert state["schedule_end_date"] is None
-        assert state["queue_count"] == 0
+        assert state["in_flight_count"] == 0
+        assert state["posting_active"] is False
 
 
 # =============================================================================

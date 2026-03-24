@@ -72,10 +72,9 @@ class SetupStateService(BaseService):
             "show_verbose_notifications": chat_settings.show_verbose_notifications,
             "media_sync_enabled": chat_settings.media_sync_enabled,
             # Activity
-            "queue_count": activity["queue_count"],
+            "in_flight_count": activity["in_flight_count"],
             "last_post_at": activity["last_post_at"],
-            "next_post_at": activity["next_post_at"],
-            "schedule_end_date": activity["schedule_end_date"],
+            "posting_active": activity["posting_active"],
         }
 
     def format_setup_status(self, telegram_chat_id: int) -> str:
@@ -166,30 +165,31 @@ class SetupStateService(BaseService):
         }
 
     def _check_activity(self, chat_settings_id: str) -> dict:
-        queue_count = 0
+        in_flight_count = 0
         last_post_at = None
-        next_post_at = None
-        schedule_end_date = None
+        posting_active = False
         try:
             pending_items = self.queue_repo.get_all(
                 status="pending", chat_settings_id=chat_settings_id
             )
-            queue_count = len(pending_items)
-            if pending_items:
-                next_post_at = pending_items[0].scheduled_for.isoformat()
-                schedule_end_date = pending_items[-1].scheduled_for.isoformat()
+            processing_items = self.queue_repo.get_all(
+                status="processing", chat_settings_id=chat_settings_id
+            )
+            in_flight_count = len(pending_items) + len(processing_items)
             recent_posts = self.history_repo.get_recent_posts(
                 hours=720, chat_settings_id=chat_settings_id
             )
             if recent_posts:
                 last_post_at = recent_posts[0].posted_at.isoformat()
+                # Consider posting active if last post was within 48 hours
+                age = datetime.utcnow() - recent_posts[0].posted_at
+                posting_active = age < timedelta(hours=48)
         except Exception:
             logger.debug("Failed to fetch queue/history for setup state")
         return {
-            "queue_count": queue_count,
+            "in_flight_count": in_flight_count,
             "last_post_at": last_post_at,
-            "next_post_at": next_post_at,
-            "schedule_end_date": schedule_end_date,
+            "posting_active": posting_active,
         }
 
     # ------------------------------------------------------------------

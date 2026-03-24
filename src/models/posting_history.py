@@ -34,7 +34,7 @@ class PostingHistory(Base):
     )  # When item was removed from queue
     scheduled_for = Column(
         DateTime, nullable=False, index=True
-    )  # Original scheduled time
+    )  # When the queue item was created (JIT: same as sent time)
 
     # Media metadata snapshot (at posting time)
     # Alternative to Type 2 SCD for media_items

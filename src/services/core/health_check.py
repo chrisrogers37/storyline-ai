@@ -13,8 +13,8 @@ from src.utils.logger import logger
 class HealthCheckService(BaseService):
     """System health monitoring."""
 
-    QUEUE_BACKLOG_THRESHOLD = 50
-    MAX_PENDING_AGE_HOURS = 24
+    QUEUE_BACKLOG_THRESHOLD = 10  # JIT queue is 0-5 items; 10+ indicates a problem
+    MAX_PENDING_AGE_HOURS = 4  # JIT items should be acted on within hours, not days
     RECENT_POSTS_WINDOW_HOURS = 48
 
     def __init__(self):

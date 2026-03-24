@@ -228,18 +228,4 @@ async def onboarding_complete(request: CompleteRequest):
 
         settings_service.complete_onboarding(request.chat_id)
 
-    result = {"onboarding_completed": True, "schedule_created": False}
-
-    # JIT scheduler: no need to pre-create schedule — slots fire
-    # automatically when is_slot_due() returns True.  The create_schedule
-    # flag is kept for backwards compatibility but is now a no-op.
-    if request.create_schedule:
-        result["schedule_created"] = True
-        result["schedule_summary"] = {
-            "scheduled": 0,
-            "total_slots": 0,
-            "days": request.schedule_days,
-            "note": "JIT scheduler active — posts are selected on-demand",
-        }
-
-    return result
+    return {"onboarding_completed": True}

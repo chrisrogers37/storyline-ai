@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — JIT Scheduler Display Cleanup
+- **Frontend: Remove schedule extend/regenerate buttons** — Schedule card is now a read-only cadence summary (`3/day, 2pm-2am UTC`) with an Edit button instead of broken "+ 7 Days" and "Regenerate" buttons that called deleted endpoints
+- **Frontend: Remove "Create 7-day schedule" toggle** — Summary step shows "Posts will start automatically" instead of a no-op checkbox
+- **Frontend: Replace misleading queue displays** — Queue badge shows "N awaiting review" instead of "N pending"; detail shows "Last post: Xh ago" instead of "Next: in Xm"
+- **Frontend: Replace schedule_end_date display** — Removed "Ends Mar 28" from schedule card (no schedule end in JIT mode)
+- **Setup state: JIT-appropriate fields** — `next_post_at`/`schedule_end_date` replaced with `posting_active` bool; `queue_count` renamed to `in_flight_count` (pending + processing)
+- **Dashboard service: In-flight semantics** — `get_queue_detail()` returns `total_in_flight`, `posts_today`, `last_post_at` instead of `total_pending`, `schedule_end`, `days_remaining`, `day_summary`
+- **Health check thresholds** — Queue backlog threshold lowered from 50→10 (JIT queue is 0-5 items); max pending age lowered from 24h→4h
+- **Telegram /status cadence display** — Shows "Cadence: 3/day, 14:00-02:00 UTC" instead of "Next: None scheduled" (which falsely implied the system was broken)
+- **Onboarding complete endpoint** — Returns `{"onboarding_completed": true}` instead of fake schedule summary with zeros
+
+### Removed — JIT Scheduler Display Cleanup
+- **`ScheduleActionRequest` model** — Orphaned Pydantic model (no endpoint used it)
+- **`CompleteRequest.create_schedule`/`schedule_days` fields** — No-op fields removed from onboarding complete
+- **`QueueRepository.schedule_retry()`** — Never-called method removed
+- **`extendSchedule`/`confirmRegenerate`/`regenerateSchedule` JS methods** — Frontend methods that called deleted API endpoints
+- **`_renderDaySummary` JS method** — No longer needed (no day-by-day schedule to display)
+- **`_get_next_post_display()` Telegram helper** — Replaced by `_get_cadence_display()`
+
+### Fixed — JIT Scheduler Display Cleanup
+- **Health check false alarms** — Queue health no longer alerts on empty queue (normal in JIT mode) or items pending <24h
+- **`posting_history.scheduled_for` comment** — Updated from "Original scheduled time" to "When the queue item was created (JIT: same as sent time)"
+- **`posting_queue` retry columns comment** — Documented as unused (columns retained to avoid migration)
+
 ### Changed — JIT Scheduler Redesign
 - **Replace pre-assign scheduling with just-in-time selection** — Instead of populating the queue days in advance, the scheduler now checks `is_slot_due()` every 60 seconds and selects media at the moment a slot fires. The `posting_queue` narrows to an in-flight tracker for items awaiting team action.
   - `SchedulerService.process_slot()` — Main entry point: checks timing, selects media, sends to Telegram
