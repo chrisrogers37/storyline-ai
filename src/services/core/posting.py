@@ -281,6 +281,10 @@ class PostingService(BaseService):
         """
         Process all pending posts ready to be posted.
 
+        Checks pause state and pending items BEFORE creating a service_run
+        record, so no-op calls (nothing due, paused) don't bloat the
+        service_runs table.
+
         Args:
             user_id: User who triggered processing (for observability)
             telegram_chat_id: Chat to process posts for. When provided,
@@ -290,45 +294,46 @@ class PostingService(BaseService):
         Returns:
             Dict with results: {processed: 5, telegram: 5, automated: 0, failed: 0, paused: bool}
         """
+        # Check pause state BEFORE creating a service_run row
+        chat_settings = None
+        if telegram_chat_id:
+            chat_settings = self._get_chat_settings(telegram_chat_id)
+            is_paused = chat_settings.is_paused
+        else:
+            is_paused = self.telegram_service.is_paused
+
+        if is_paused:
+            return {
+                "processed": 0,
+                "telegram": 0,
+                "automated": 0,
+                "failed": 0,
+                "paused": True,
+            }
+
+        # Resolve tenant scope
+        chat_settings_id = None
+        if telegram_chat_id:
+            chat_settings_id = str(chat_settings.id) if chat_settings else None
+
+        # Check for pending items BEFORE creating a service_run row
+        pending_items = self.queue_repo.get_pending(
+            limit=1, chat_settings_id=chat_settings_id
+        )
+
+        if not pending_items:
+            return {"processed": 0, "telegram": 0, "automated": 0, "failed": 0}
+
+        # Only create a service_run when there's actual work to do
         with self.track_execution(
             method_name="process_pending_posts",
             user_id=user_id,
             triggered_by="scheduler" if not user_id else "cli",
         ) as run_id:
-            # Check if posting is paused for this chat
-            if telegram_chat_id:
-                chat_settings = self._get_chat_settings(telegram_chat_id)
-                is_paused = chat_settings.is_paused
-            else:
-                is_paused = self.telegram_service.is_paused
-
-            if is_paused:
-                logger.info("Posting is paused - skipping scheduled posts")
-                result = {
-                    "processed": 0,
-                    "telegram": 0,
-                    "automated": 0,
-                    "failed": 0,
-                    "paused": True,
-                }
-                self.set_result_summary(run_id, result)
-                return result
-
             processed_count = 0
             telegram_count = 0
             automated_count = 0
             failed_count = 0
-
-            # Resolve chat_settings_id for tenant-scoped queue queries
-            # (chat_settings was already fetched in the pause check above)
-            chat_settings_id = None
-            if telegram_chat_id:
-                chat_settings_id = str(chat_settings.id) if chat_settings else None
-
-            # Get next pending post (1 per cycle to space out deliveries)
-            pending_items = self.queue_repo.get_pending(
-                limit=1, chat_settings_id=chat_settings_id
-            )
 
             logger.info(f"Processing {len(pending_items)} pending posts")
 

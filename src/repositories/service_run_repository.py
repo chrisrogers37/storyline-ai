@@ -97,6 +97,24 @@ class ServiceRunRepository(BaseRepository):
 
         return query.order_by(ServiceRun.started_at.desc()).limit(limit).all()
 
+    def delete_older_than(self, days: int) -> int:
+        """Delete service runs older than the given number of days.
+
+        Used for retention policy to prevent unbounded table growth.
+
+        Args:
+            days: Delete runs with started_at older than this many days ago.
+
+        Returns:
+            Number of rows deleted.
+        """
+        cutoff = datetime.utcnow() - timedelta(days=days)
+        count = (
+            self.db.query(ServiceRun).filter(ServiceRun.started_at < cutoff).delete()
+        )
+        self.db.commit()
+        return count
+
     # NOTE: Unused in production as of 2026-02-10.
     # Planned for Phase 3 monitoring dashboard and alerting system.
     def get_failed_runs(
