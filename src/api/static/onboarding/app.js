@@ -304,15 +304,11 @@ const App = {
      * Finish onboarding and close the Mini App.
      */
     async finishSetup() {
-        const createSchedule = document.getElementById('create-schedule-toggle').checked;
-
         this._showLoading(true);
         try {
             await this._api('/api/onboarding/complete', {
                 init_data: this.initData,
                 chat_id: this.chatId,
-                create_schedule: createSchedule,
-                schedule_days: 7,
             });
 
             // Close the Mini App
@@ -399,7 +395,7 @@ const App = {
             s.instagram_connected,
             s.gdrive_connected,
             s.media_indexed,
-            s.queue_count > 0,
+            s.posting_active,
             !s.is_paused,
         ];
         const configuredCount = setupItems.filter(Boolean).length;
@@ -424,26 +420,22 @@ const App = {
 
         let scheduleDetail = postsPerDay + '/day, ' +
             this._formatHour(start) + '-' + this._formatHour(end) + ' UTC';
-        if (s.schedule_end_date) {
-            const endDate = new Date(s.schedule_end_date);
-            scheduleDetail += ' \u00B7 Ends ' + this._formatShortDate(endDate);
-        }
         this._setHomeDetail('schedule', scheduleDetail);
 
-        // Queue status card
-        const queueCount = s.queue_count || 0;
-        if (queueCount > 0) {
-            this._setHomeBadge('queue', 'connected', queueCount + ' pending');
+        // Queue status card (in-flight items awaiting team action)
+        const inFlightCount = s.in_flight_count || 0;
+        if (inFlightCount > 0) {
+            this._setHomeBadge('queue', 'connected', inFlightCount + ' awaiting review');
         } else {
             this._setHomeBadge('queue', 'neutral', 'Empty');
         }
 
         let queueDetail = '';
-        if (s.next_post_at) {
-            const nextDate = new Date(s.next_post_at);
-            queueDetail = 'Next: ' + this._formatRelativeTime(nextDate);
+        if (s.last_post_at) {
+            const lastDate = new Date(s.last_post_at);
+            queueDetail = 'Last post: ' + this._formatRelativeTime(lastDate);
         } else {
-            queueDetail = 'No posts scheduled';
+            queueDetail = 'No posts yet';
         }
         this._setHomeDetail('queue', queueDetail);
 
@@ -503,7 +495,6 @@ const App = {
         const loaders = {
             instagram: () => this._loadAccounts(),
             status: () => this._loadSystemStatus(),
-            schedule: () => this._loadQueueDetail('schedule'),
             queue: () => this._loadQueueDetail('queue'),
             history: () => this._loadHistoryDetail(),
             media: () => this._loadMediaStats(),
@@ -514,11 +505,10 @@ const App = {
     },
 
     /**
-     * Fetch queue detail and render into schedule or queue card.
+     * Fetch queue detail and render into queue card.
      */
     async _loadQueueDetail(target) {
-        const loadingId = target + '-loading';
-        const loadingEl = document.getElementById(loadingId);
+        const loadingEl = document.getElementById('queue-loading');
         if (loadingEl) loadingEl.classList.remove('hidden');
 
         try {
@@ -528,19 +518,9 @@ const App = {
                 limit: 10,
             });
             const data = await this._apiGet('/api/onboarding/queue-detail?' + params.toString());
-
-            if (target === 'schedule' || target === 'queue') {
-                // Both cards share the same data source
-                this._renderDaySummary(data.day_summary, data.days_remaining);
-                this._renderQueueItems(data.items);
-                // Mark both as loaded
-                this._cardDataLoaded['schedule'] = true;
-                this._cardDataLoaded['queue'] = true;
-            }
+            this._renderQueueItems(data.items);
         } catch (err) {
-            const container = target === 'schedule'
-                ? document.getElementById('schedule-day-summary')
-                : document.getElementById('queue-items-list');
+            const container = document.getElementById('queue-items-list');
             if (container) {
                 container.innerHTML = '<div class="card-body-empty">Failed to load data</div>';
             }
@@ -659,11 +639,11 @@ const App = {
                 detail: s.media_count ? s.media_count + ' files' : 'Not indexed',
             },
             {
-                name: 'Schedule',
-                ok: s.queue_count > 0,
-                detail: s.queue_count > 0
-                    ? s.queue_count + ' queued, ' + (s.posts_per_day || 3) + '/day'
-                    : 'No posts scheduled',
+                name: 'Posting',
+                ok: s.posting_active,
+                detail: s.posting_active
+                    ? (s.posts_per_day || 3) + '/day active'
+                    : 'No recent posts',
             },
             {
                 name: 'Delivery',
@@ -1028,69 +1008,6 @@ const App = {
     },
 
     /**
-     * Extend the schedule by N days.
-     */
-    async extendSchedule(days) {
-        this._showLoading(true);
-        try {
-            await this._api('/api/onboarding/extend-schedule', {
-                init_data: this.initData,
-                chat_id: this.chatId,
-                days: days,
-            });
-
-            // Refresh state without collapsing cards
-            await this._refreshHome({ keepExpanded: true });
-        } catch (err) {
-            // Show error inline
-        } finally {
-            this._showLoading(false);
-        }
-    },
-
-    /**
-     * Show the regenerate confirmation dialog.
-     */
-    confirmRegenerate() {
-        const actions = document.getElementById('schedule-actions');
-        const confirm = document.getElementById('regenerate-confirm');
-        if (actions) actions.classList.add('hidden');
-        if (confirm) confirm.classList.remove('hidden');
-    },
-
-    /**
-     * Cancel the regenerate confirmation.
-     */
-    cancelRegenerate() {
-        const actions = document.getElementById('schedule-actions');
-        const confirm = document.getElementById('regenerate-confirm');
-        if (actions) actions.classList.remove('hidden');
-        if (confirm) confirm.classList.add('hidden');
-    },
-
-    /**
-     * Regenerate the schedule (clear + rebuild).
-     */
-    async regenerateSchedule() {
-        this.cancelRegenerate();
-        this._showLoading(true);
-        try {
-            await this._api('/api/onboarding/regenerate-schedule', {
-                init_data: this.initData,
-                chat_id: this.chatId,
-                days: 7,
-            });
-
-            // Refresh state without collapsing cards
-            await this._refreshHome({ keepExpanded: true });
-        } catch (err) {
-            // Show error inline
-        } finally {
-            this._showLoading(false);
-        }
-    },
-
-    /**
      * Re-fetch setup state to refresh dashboard numbers.
      * @param {Object} opts - Options passed to _populateHome
      * @param {boolean} opts.keepExpanded - If true, don't collapse cards
@@ -1119,28 +1036,6 @@ const App = {
     },
 
     // ==================== Render Helpers ====================
-
-    _renderDaySummary(daySummary, daysRemaining) {
-        const container = document.getElementById('schedule-day-summary');
-        if (!container) return;
-
-        if (!daySummary || daySummary.length === 0) {
-            container.innerHTML = '<div class="card-body-empty">No scheduled days</div>';
-            return;
-        }
-
-        let html = '';
-        for (const day of daySummary) {
-            const date = new Date(day.date + 'T00:00:00');
-            const label = this._formatShortDate(date);
-            html += '<div class="day-summary-row">' +
-                '<span class="day-summary-date">' + this._escapeHtml(label) + '</span>' +
-                '<span class="day-summary-count">' + day.count + ' posts</span>' +
-                '</div>';
-        }
-
-        container.innerHTML = html;
-    },
 
     _renderQueueItems(items) {
         const container = document.getElementById('queue-items-list');

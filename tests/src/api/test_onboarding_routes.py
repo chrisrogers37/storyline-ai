@@ -28,10 +28,9 @@ def _default_setup_state(**overrides):
         "enable_instagram_api": False,
         "show_verbose_notifications": False,
         "media_sync_enabled": False,
-        "queue_count": 0,
+        "in_flight_count": 0,
         "last_post_at": None,
-        "next_post_at": None,
-        "schedule_end_date": None,
+        "posting_active": False,
     }
     state.update(overrides)
     return state
@@ -610,14 +609,12 @@ class TestOnboardingComplete:
                 json={
                     "init_data": "test",
                     "chat_id": CHAT_ID,
-                    "create_schedule": False,
                 },
             )
 
         assert response.status_code == 200
         data = response.json()
         assert data["onboarding_completed"] is True
-        assert data["schedule_created"] is False
         svc.complete_onboarding.assert_called_once_with(CHAT_ID)
 
     def test_complete_enables_instagram_when_connected(self, client):
@@ -635,7 +632,6 @@ class TestOnboardingComplete:
                 json={
                     "init_data": "test",
                     "chat_id": CHAT_ID,
-                    "create_schedule": False,
                 },
             )
 
@@ -662,7 +658,6 @@ class TestOnboardingComplete:
                 json={
                     "init_data": "test",
                     "chat_id": CHAT_ID,
-                    "create_schedule": False,
                 },
             )
 
@@ -788,21 +783,6 @@ class TestOnboardingInputValidation:
                     "posts_per_day": 3,
                     "posting_hours_start": 25,
                     "posting_hours_end": 21,
-                },
-            )
-
-        assert response.status_code == 422
-
-    def test_schedule_days_over_max_rejected(self, client):
-        """schedule_days=100 is rejected on complete endpoint."""
-        with mock_validate():
-            response = client.post(
-                "/api/onboarding/complete",
-                json={
-                    "init_data": "test",
-                    "chat_id": CHAT_ID,
-                    "create_schedule": True,
-                    "schedule_days": 100,
                 },
             )
 

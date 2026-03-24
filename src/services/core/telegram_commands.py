@@ -112,7 +112,7 @@ class TelegramCommandHandlers:
         posted_multiple = len([m for m in all_media if m.times_posted > 1])
         locked_count = len(self.service.lock_repo.get_permanent_locks())
 
-        next_post_str = self._get_next_post_display()
+        cadence_str = self._get_cadence_display(chat_id)
         last_posted = self._get_last_posted_display(recent_posts)
 
         dry_run_status = "🧪 ON" if settings.DRY_RUN_MODE else "🚀 OFF"
@@ -142,7 +142,7 @@ class TelegramCommandHandlers:
             f"1️⃣ Posted once: {posted_once}\n"
             f"🔁 Posted 2+: {posted_multiple}\n\n"
             f"*Activity:*\n"
-            f"⏰ Next: {next_post_str}\n"
+            f"🔄 Cadence: {cadence_str}\n"
             f"📤 Last: {last_posted}\n"
             f"📈 24h: {len(recent_posts)} posts"
         )
@@ -181,12 +181,16 @@ class TelegramCommandHandlers:
 
     # ==================== Status Helpers ====================
 
-    def _get_next_post_display(self) -> str:
-        """Get formatted display for next scheduled post time."""
-        next_items = self.service.queue_repo.get_pending(limit=1)
-        if next_items:
-            return next_items[0].scheduled_for.strftime("%H:%M UTC")
-        return "None scheduled"
+    def _get_cadence_display(self, chat_id: int) -> str:
+        """Get formatted posting cadence string for /status output."""
+        try:
+            chat_settings = self.service.settings_service.get_settings(chat_id)
+            ppd = chat_settings.posts_per_day
+            start = chat_settings.posting_hours_start
+            end = chat_settings.posting_hours_end
+            return f"{ppd}/day, {start:02d}:00-{end:02d}:00 UTC"
+        except Exception:
+            return "Unknown"
 
     def _get_last_posted_display(self, recent_posts) -> str:
         """Get formatted display for last post time."""

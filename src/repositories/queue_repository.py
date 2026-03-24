@@ -188,29 +188,6 @@ class QueueRepository(BaseRepository):
             self.db.refresh(queue_item)
         return queue_item
 
-    # NOTE: Unused in production as of 2026-02-10.
-    # Planned for automatic retry system when Instagram API posting fails.
-    def schedule_retry(
-        self, queue_id: str, error_message: str, retry_delay_minutes: int = 5
-    ) -> PostingQueue:
-        """Schedule a retry for failed queue item."""
-        queue_item = self.get_by_id(queue_id)
-        if queue_item:
-            queue_item.retry_count += 1
-            queue_item.last_error = error_message
-
-            if queue_item.retry_count < queue_item.max_retries:
-                queue_item.status = "retrying"
-                queue_item.next_retry_at = datetime.utcnow() + timedelta(
-                    minutes=retry_delay_minutes
-                )
-            else:
-                queue_item.status = "failed"
-
-            self.db.commit()
-            self.db.refresh(queue_item)
-        return queue_item
-
     def delete(self, queue_id: str) -> bool:
         """Delete a queue item (after moving to history)."""
         queue_item = self.get_by_id(queue_id)

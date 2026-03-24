@@ -83,14 +83,14 @@ class TestHealthCheckService:
 
     def test_check_queue_backlog(self, health_service):
         """Test queue check detects backlog when too many pending."""
-        health_service.queue_repo.count_pending.return_value = 60
+        health_service.queue_repo.count_pending.return_value = 15
         health_service.queue_repo.get_oldest_pending.return_value = None
 
         result = health_service._check_queue()
 
         assert result["healthy"] is False
         assert "backlog" in result["message"].lower()
-        assert result["pending_count"] == 60
+        assert result["pending_count"] == 15
 
     def test_check_queue_stale_items(self, health_service):
         """Test queue check detects stale items."""
@@ -98,7 +98,7 @@ class TestHealthCheckService:
 
         # Create mock old queue item
         old_item = Mock()
-        old_item.created_at = datetime.utcnow() - timedelta(hours=48)
+        old_item.created_at = datetime.utcnow() - timedelta(hours=8)
         health_service.queue_repo.get_oldest_pending.return_value = old_item
 
         result = health_service._check_queue()

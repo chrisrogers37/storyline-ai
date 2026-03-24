@@ -49,7 +49,7 @@ class PostingQueue(Base):
     telegram_message_id = Column(BigInteger)
     telegram_chat_id = Column(BigInteger)
 
-    # Retry logic
+    # Retry logic (unused — columns retained to avoid migration; never set in JIT mode)
     retry_count = Column(Integer, default=0)
     max_retries = Column(Integer, default=3)
     next_retry_at = Column(DateTime)

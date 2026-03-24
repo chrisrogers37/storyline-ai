@@ -1,6 +1,5 @@
 """Dashboard service - read-only aggregation queries for the Mini App."""
 
-from datetime import datetime, timezone
 from typing import Optional
 
 from src.services.base_service import BaseService
@@ -30,49 +29,57 @@ class DashboardService(BaseService):
         return str(chat_settings.id)
 
     def get_queue_detail(self, telegram_chat_id: int, limit: int = 10) -> dict:
-        """Return queue items with media info and schedule summary."""
+        """Return in-flight queue items with media info and activity summary.
+
+        JIT semantics: the queue holds only items currently awaiting team
+        action (0-5 typical), not a multi-day schedule.
+        """
         chat_settings_id = self._resolve_chat_settings_id(telegram_chat_id)
 
         pending_items = self.queue_repo.get_all(
             status="pending", chat_settings_id=chat_settings_id
         )
-
-        # Day summary from all pending items
-        day_counts: dict[str, int] = {}
-        for item in pending_items:
-            day_key = item.scheduled_for.strftime("%Y-%m-%d")
-            day_counts[day_key] = day_counts.get(day_key, 0) + 1
-
-        day_summary = [
-            {"date": date, "count": count} for date, count in sorted(day_counts.items())
-        ]
+        processing_items = self.queue_repo.get_all(
+            status="processing", chat_settings_id=chat_settings_id
+        )
+        all_in_flight = pending_items + processing_items
 
         # Item list (limited) with media info
         items = []
-        for item in pending_items[:limit]:
+        for item in all_in_flight[:limit]:
             media = self.media_repo.get_by_id(str(item.media_item_id))
             items.append(
                 {
                     "scheduled_for": item.scheduled_for.isoformat(),
                     "media_name": media.file_name if media else "Unknown",
                     "category": (media.category if media else None) or "uncategorized",
+                    "status": item.status,
                 }
             )
 
-        schedule_end = None
-        days_remaining = None
-        if pending_items:
-            schedule_end = pending_items[-1].scheduled_for.isoformat()
-            now = datetime.now(timezone.utc)
-            delta = pending_items[-1].scheduled_for.replace(tzinfo=timezone.utc) - now
-            days_remaining = max(0, delta.days)
+        # Posts today from posting_history
+        today_posts = self.history_repo.get_recent_posts(
+            hours=24, chat_settings_id=chat_settings_id
+        )
+        posts_today = len(today_posts)
+
+        # Last post time
+        last_post_at = None
+        if today_posts:
+            last_post_at = today_posts[0].posted_at.isoformat()
+        else:
+            # Check further back
+            recent = self.history_repo.get_recent_posts(
+                hours=720, chat_settings_id=chat_settings_id
+            )
+            if recent:
+                last_post_at = recent[0].posted_at.isoformat()
 
         return {
             "items": items,
-            "total_pending": len(pending_items),
-            "schedule_end": schedule_end,
-            "days_remaining": days_remaining,
-            "day_summary": day_summary,
+            "total_in_flight": len(all_in_flight),
+            "posts_today": posts_today,
+            "last_post_at": last_post_at,
         }
 
     def get_history_detail(self, telegram_chat_id: int, limit: int = 10) -> dict:
