@@ -5,7 +5,6 @@ from sqlalchemy.exc import OperationalError
 
 from src.services.core.media_sync import MediaSyncService
 from src.services.core.oauth_service import OAuthService
-from src.services.core.scheduler import SchedulerService
 from src.services.core.settings_service import SettingsService
 from src.services.integrations.google_drive import GoogleDriveService
 from src.services.integrations.google_drive_oauth import GoogleDriveOAuthService
@@ -231,21 +230,16 @@ async def onboarding_complete(request: CompleteRequest):
 
     result = {"onboarding_completed": True, "schedule_created": False}
 
+    # JIT scheduler: no need to pre-create schedule — slots fire
+    # automatically when is_slot_due() returns True.  The create_schedule
+    # flag is kept for backwards compatibility but is now a no-op.
     if request.create_schedule:
-        with SchedulerService() as scheduler:
-            try:
-                schedule_result = scheduler.create_schedule(
-                    days=request.schedule_days,
-                    telegram_chat_id=request.chat_id,
-                )
-                result["schedule_created"] = True
-                result["schedule_summary"] = {
-                    "scheduled": schedule_result.get("scheduled", 0),
-                    "total_slots": schedule_result.get("total_slots", 0),
-                    "days": request.schedule_days,
-                }
-            except Exception as e:
-                logger.error(f"Failed to create schedule during onboarding: {e}")
-                result["schedule_error"] = str(e)
+        result["schedule_created"] = True
+        result["schedule_summary"] = {
+            "scheduled": 0,
+            "total_slots": 0,
+            "days": request.schedule_days,
+            "note": "JIT scheduler active — posts are selected on-demand",
+        }
 
     return result

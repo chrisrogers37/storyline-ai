@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — JIT Scheduler Redesign
+- **Replace pre-assign scheduling with just-in-time selection** — Instead of populating the queue days in advance, the scheduler now checks `is_slot_due()` every 60 seconds and selects media at the moment a slot fires. The `posting_queue` narrows to an in-flight tracker for items awaiting team action.
+  - `SchedulerService.process_slot()` — Main entry point: checks timing, selects media, sends to Telegram
+  - `SchedulerService.force_send_next()` — JIT replacement for `/next` command (no queue shifting needed)
+  - `SchedulerService.is_slot_due()` — Computes whether a posting slot should fire based on interval and last_post_sent_at
+  - `SchedulerService._pick_category_for_slot()` — Weighted random category selection per-slot instead of per-batch
+- **Simplify PostingService** — Removed `process_pending_posts()`, `force_post_next()`, `reschedule_overdue_for_paused_chat()`, and all internal helpers. PostingService retains only `send_gdrive_auth_alert()`.
+- **Simplify main.py scheduler loop** — Calls `scheduler_service.process_slot()` per tenant instead of `posting_service.process_pending_posts()`. Removed paused-chat reschedule loop (JIT naturally skips paused tenants).
+- **Telegram /next command** — Now uses `SchedulerService.force_send_next()` for JIT selection instead of claiming a pre-queued item and shifting slots.
+- **Telegram schedule settings** — Removed extend/regenerate schedule actions (JIT is automatic). Replaced with clear queue action.
+
+### Added — Storage Bloat Fix
+- **Service runs retention policy** — `ServiceRunRepository.delete_older_than(days)` purges old records; called hourly from the scheduler loop (7-day retention)
+- **Skip no-op service_run logging** — `process_pending_posts()` checks pause state and pending items before creating a `service_run` row, eliminating ~1,400 empty rows/day
+- **`chat_settings.last_post_sent_at`** — New column tracking when the last post was sent per tenant, used by `is_slot_due()` for interval computation
+- **Migration 019** — `last_post_sent_at` column + backfill from `posting_history`
+- **Queue preview** — `SchedulerService.get_queue_preview()` computes the next N selections without persisting. Exposed via API (`/queue-preview`) and CLI (`queue-preview`)
+- **`SettingsService.update_last_post_sent_at()`** — Records post timestamps for JIT interval tracking
+
+### Removed
+- **Pre-assign scheduling** — `SchedulerService.create_schedule()`, `extend_schedule()`, `_generate_time_slots()`, `_fill_schedule_slots()`, `_generate_time_slots_from_date()`
+- **Queue slot manipulation** — `QueueRepository.shift_slots_forward()`, `reschedule_items()`, `get_overdue_pending()`
+- **API endpoints** — `/extend-schedule`, `/regenerate-schedule` (replaced by JIT automatic scheduling)
+- **CLI commands** — `create-schedule`, `process-queue` (replaced by JIT scheduler and `queue-preview`)
+- **Paused-chat reschedule** — `PostingService.reschedule_overdue_for_paused_chat()` (JIT naturally skips paused tenants)
+
 ### Changed
 - **Extract shared test fixtures** — Reduced ~360 lines of duplicated test boilerplate across 17 test files
   - `mock_telegram_service` fixture in `tests/src/services/conftest.py` replaces 5 identical ~55-line TelegramService mock setups

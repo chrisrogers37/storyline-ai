@@ -8,15 +8,16 @@ from src.main import run_scheduler_loop, media_sync_loop
 
 @pytest.mark.unit
 class TestSchedulerLoop:
-    """Tests for run_scheduler_loop multi-tenant behavior."""
+    """Tests for run_scheduler_loop JIT multi-tenant behavior."""
 
     @pytest.mark.asyncio
     async def test_scheduler_loop_iterates_over_active_chats(self):
-        """Scheduler loop processes each active chat's queue independently."""
+        """Scheduler loop calls process_slot for each active chat."""
+        scheduler_service = Mock()
+        scheduler_service.process_slot = AsyncMock(return_value={"posted": False})
+        scheduler_service.cleanup_transactions = Mock()
+
         posting_service = Mock()
-        posting_service.process_pending_posts = AsyncMock(
-            return_value={"processed": 1, "telegram": 1, "failed": 0}
-        )
         posting_service.cleanup_transactions = Mock()
 
         chat1 = Mock(telegram_chat_id=-100111)
@@ -24,30 +25,33 @@ class TestSchedulerLoop:
         settings_service = Mock()
         settings_service.get_all_active_chats.return_value = [chat1, chat2]
 
-        # First sleep (end of iteration 1) raises to break loop after one pass
         with (
             patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
             patch("src.main.QueueRepository") as mock_queue_repo_cls,
+            patch("src.main.ServiceRunRepository"),
         ):
             mock_queue_repo_cls.return_value.discard_abandoned_processing.return_value = 0
             mock_sleep.side_effect = StopAsyncIteration
             try:
-                await run_scheduler_loop(posting_service, settings_service)
+                await run_scheduler_loop(
+                    scheduler_service, posting_service, settings_service
+                )
             except StopAsyncIteration:
                 pass
 
-        # Should have called process_pending_posts for each chat
-        assert posting_service.process_pending_posts.call_count == 2
-        posting_service.process_pending_posts.assert_any_call(telegram_chat_id=-100111)
-        posting_service.process_pending_posts.assert_any_call(telegram_chat_id=-100222)
+        # Should have called process_slot for each chat
+        assert scheduler_service.process_slot.call_count == 2
+        scheduler_service.process_slot.assert_any_call(telegram_chat_id=-100111)
+        scheduler_service.process_slot.assert_any_call(telegram_chat_id=-100222)
 
     @pytest.mark.asyncio
-    async def test_scheduler_loop_falls_back_to_global_when_no_tenants(self):
-        """Scheduler loop uses global posting when no active chats exist."""
+    async def test_scheduler_loop_no_calls_when_no_tenants(self):
+        """Scheduler loop does nothing when no active chats exist."""
+        scheduler_service = Mock()
+        scheduler_service.process_slot = AsyncMock()
+        scheduler_service.cleanup_transactions = Mock()
+
         posting_service = Mock()
-        posting_service.process_pending_posts = AsyncMock(
-            return_value={"processed": 0, "telegram": 0, "failed": 0}
-        )
         posting_service.cleanup_transactions = Mock()
 
         settings_service = Mock()
@@ -56,50 +60,58 @@ class TestSchedulerLoop:
         with (
             patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
             patch("src.main.QueueRepository") as mock_queue_repo_cls,
+            patch("src.main.ServiceRunRepository"),
         ):
             mock_queue_repo_cls.return_value.discard_abandoned_processing.return_value = 0
             mock_sleep.side_effect = StopAsyncIteration
             try:
-                await run_scheduler_loop(posting_service, settings_service)
+                await run_scheduler_loop(
+                    scheduler_service, posting_service, settings_service
+                )
             except StopAsyncIteration:
                 pass
 
-        # Should fall back to global (no telegram_chat_id)
-        posting_service.process_pending_posts.assert_called_once_with()
+        # No active chats means no process_slot calls
+        scheduler_service.process_slot.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_scheduler_loop_falls_back_when_no_settings_service(self):
-        """Scheduler loop uses global posting when settings_service is None."""
+    async def test_scheduler_loop_no_calls_when_no_settings_service(self):
+        """Scheduler loop does nothing when settings_service is None."""
+        scheduler_service = Mock()
+        scheduler_service.process_slot = AsyncMock()
+        scheduler_service.cleanup_transactions = Mock()
+
         posting_service = Mock()
-        posting_service.process_pending_posts = AsyncMock(
-            return_value={"processed": 0, "telegram": 0, "failed": 0}
-        )
         posting_service.cleanup_transactions = Mock()
 
         with (
             patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
             patch("src.main.QueueRepository") as mock_queue_repo_cls,
+            patch("src.main.ServiceRunRepository"),
         ):
             mock_queue_repo_cls.return_value.discard_abandoned_processing.return_value = 0
             mock_sleep.side_effect = StopAsyncIteration
             try:
-                await run_scheduler_loop(posting_service, None)
+                await run_scheduler_loop(scheduler_service, posting_service, None)
             except StopAsyncIteration:
                 pass
 
-        # Should fall back to global (no telegram_chat_id)
-        posting_service.process_pending_posts.assert_called_once_with()
+        # No settings_service means no process_slot calls
+        scheduler_service.process_slot.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_scheduler_loop_skips_failed_tenant(self):
         """One tenant's error does not prevent other tenants from processing."""
-        posting_service = Mock()
-        posting_service.process_pending_posts = AsyncMock(
+        scheduler_service = Mock()
+        scheduler_service.process_slot = AsyncMock(
             side_effect=[
                 Exception("Chat 1 failed"),
-                {"processed": 1, "telegram": 1, "failed": 0},
+                {"posted": False},
             ]
         )
+        scheduler_service.cleanup_transactions = Mock()
+
+        posting_service = Mock()
         posting_service.cleanup_transactions = Mock()
 
         chat1 = Mock(telegram_chat_id=-100111)
@@ -110,16 +122,174 @@ class TestSchedulerLoop:
         with (
             patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
             patch("src.main.QueueRepository") as mock_queue_repo_cls,
+            patch("src.main.ServiceRunRepository"),
         ):
             mock_queue_repo_cls.return_value.discard_abandoned_processing.return_value = 0
             mock_sleep.side_effect = StopAsyncIteration
             try:
-                await run_scheduler_loop(posting_service, settings_service)
+                await run_scheduler_loop(
+                    scheduler_service, posting_service, settings_service
+                )
             except StopAsyncIteration:
                 pass
 
         # Both chats should have been attempted despite chat1 failing
-        assert posting_service.process_pending_posts.call_count == 2
+        assert scheduler_service.process_slot.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_scheduler_loop_handles_gdrive_auth_error(self):
+        """GoogleDriveAuthError triggers send_gdrive_auth_alert for that chat."""
+        from src.exceptions.google_drive import GoogleDriveAuthError
+
+        scheduler_service = Mock()
+        scheduler_service.process_slot = AsyncMock(
+            side_effect=[
+                GoogleDriveAuthError("Token expired"),
+                {"posted": False},
+            ]
+        )
+        scheduler_service.cleanup_transactions = Mock()
+
+        posting_service = Mock()
+        posting_service.send_gdrive_auth_alert = AsyncMock()
+        posting_service.cleanup_transactions = Mock()
+
+        chat1 = Mock(telegram_chat_id=-100111)
+        chat2 = Mock(telegram_chat_id=-100222)
+        settings_service = Mock()
+        settings_service.get_all_active_chats.return_value = [chat1, chat2]
+
+        with (
+            patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch("src.main.QueueRepository") as mock_queue_repo_cls,
+            patch("src.main.ServiceRunRepository"),
+        ):
+            mock_queue_repo_cls.return_value.discard_abandoned_processing.return_value = 0
+            mock_sleep.side_effect = StopAsyncIteration
+            try:
+                await run_scheduler_loop(
+                    scheduler_service, posting_service, settings_service
+                )
+            except StopAsyncIteration:
+                pass
+
+        # Alert should be sent for chat1's GDrive auth failure
+        posting_service.send_gdrive_auth_alert.assert_called_once_with(-100111)
+        # Chat2 should still have been processed
+        assert scheduler_service.process_slot.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_scheduler_loop_cleans_up_both_services(self):
+        """Both scheduler_service and posting_service get cleanup_transactions called."""
+        scheduler_service = Mock()
+        scheduler_service.process_slot = AsyncMock(return_value={"posted": False})
+        scheduler_service.cleanup_transactions = Mock()
+
+        posting_service = Mock()
+        posting_service.cleanup_transactions = Mock()
+
+        settings_service = Mock()
+        settings_service.get_all_active_chats.return_value = []
+
+        with (
+            patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch("src.main.QueueRepository") as mock_queue_repo_cls,
+            patch("src.main.ServiceRunRepository"),
+        ):
+            mock_queue_repo_cls.return_value.discard_abandoned_processing.return_value = 0
+            mock_sleep.side_effect = StopAsyncIteration
+            try:
+                await run_scheduler_loop(
+                    scheduler_service, posting_service, settings_service
+                )
+            except StopAsyncIteration:
+                pass
+
+        scheduler_service.cleanup_transactions.assert_called()
+        posting_service.cleanup_transactions.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_scheduler_loop_increments_session_posts_on_posted(self):
+        """Session counter increments when process_slot returns posted=True."""
+        import src.main as main_module
+
+        original = main_module.session_posts_sent
+        main_module.session_posts_sent = 0
+
+        scheduler_service = Mock()
+        scheduler_service.process_slot = AsyncMock(
+            return_value={"posted": True, "media_file": "test.jpg", "category": "meme"}
+        )
+        scheduler_service.cleanup_transactions = Mock()
+
+        posting_service = Mock()
+        posting_service.cleanup_transactions = Mock()
+
+        chat1 = Mock(telegram_chat_id=-100111)
+        settings_service = Mock()
+        settings_service.get_all_active_chats.return_value = [chat1]
+
+        with (
+            patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch("src.main.QueueRepository") as mock_queue_repo_cls,
+            patch("src.main.ServiceRunRepository"),
+        ):
+            mock_queue_repo_cls.return_value.discard_abandoned_processing.return_value = 0
+            mock_sleep.side_effect = StopAsyncIteration
+            try:
+                await run_scheduler_loop(
+                    scheduler_service, posting_service, settings_service
+                )
+            except StopAsyncIteration:
+                pass
+
+        assert main_module.session_posts_sent == 1
+        main_module.session_posts_sent = original
+
+    @pytest.mark.asyncio
+    async def test_scheduler_loop_runs_retention_at_interval(self):
+        """Service runs retention fires after RETENTION_INTERVAL_TICKS ticks."""
+        import src.main as main_module
+
+        scheduler_service = Mock()
+        scheduler_service.process_slot = AsyncMock(return_value={"posted": False})
+        scheduler_service.cleanup_transactions = Mock()
+
+        posting_service = Mock()
+        posting_service.cleanup_transactions = Mock()
+
+        settings_service = Mock()
+        settings_service.get_all_active_chats.return_value = []
+
+        tick_count = 0
+
+        async def counting_sleep(seconds):
+            nonlocal tick_count
+            tick_count += 1
+            if tick_count >= main_module.RETENTION_INTERVAL_TICKS:
+                raise StopAsyncIteration
+
+        with (
+            patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch("src.main.QueueRepository") as mock_queue_repo_cls,
+            patch("src.main.ServiceRunRepository") as mock_sr_repo_cls,
+        ):
+            mock_queue_repo_cls.return_value.discard_abandoned_processing.return_value = 0
+            mock_sr_repo = mock_sr_repo_cls.return_value
+            mock_sr_repo.delete_older_than.return_value = 5
+            mock_sr_repo.end_read_transaction = Mock()
+            mock_sleep.side_effect = counting_sleep
+
+            try:
+                await run_scheduler_loop(
+                    scheduler_service, posting_service, settings_service
+                )
+            except StopAsyncIteration:
+                pass
+
+        mock_sr_repo.delete_older_than.assert_called_once_with(
+            main_module.SERVICE_RUNS_RETENTION_DAYS
+        )
 
 
 @pytest.mark.unit

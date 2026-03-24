@@ -9,11 +9,13 @@ from src.config.settings import settings
 from src.utils.logger import logger
 from src.utils.validators import ConfigValidator
 from src.services.core.posting import PostingService
+from src.services.core.scheduler import SchedulerService
 from src.services.core.telegram_service import TelegramService
 from src.services.core.media_lock import MediaLockService
 from src.services.core.media_sync import MediaSyncService
 from src.repositories.queue_repository import QueueRepository
 from src.repositories.service_run_repository import ServiceRunRepository
+from src.exceptions.google_drive import GoogleDriveAuthError
 
 # Track session statistics
 session_start_time = None
@@ -27,23 +29,26 @@ RETENTION_INTERVAL_TICKS = 60
 
 
 async def run_scheduler_loop(
+    scheduler_service: SchedulerService,
     posting_service: PostingService,
     settings_service=None,
 ):
-    """Run scheduler loop - check for pending posts every minute.
+    """Run JIT scheduler loop — check for due slots every minute.
 
-    Iterates over all active (non-paused) tenants and processes each
-    tenant's pending posts independently.
+    For each active tenant, calls scheduler_service.process_slot() which
+    checks is_slot_due() and, if a slot is due, selects media and sends
+    to Telegram.  No service_run is created for no-op ticks.
 
     Also runs hourly retention cleanup on the service_runs table.
 
     Args:
-        posting_service: PostingService instance
-        settings_service: SettingsService instance for tenant discovery.
+        scheduler_service: SchedulerService instance (handles JIT logic)
+        posting_service: PostingService instance (handles GDrive alerts)
+        settings_service: SettingsService for tenant discovery.
             If None, falls back to global single-tenant behavior.
     """
     global session_posts_sent
-    logger.info("Starting scheduler loop...")
+    logger.info("Starting JIT scheduler loop...")
 
     queue_repo = QueueRepository()
     service_run_repo = ServiceRunRepository()
@@ -60,65 +65,46 @@ async def run_scheduler_loop(
                 logger.warning(
                     f"Discarded {discarded} abandoned processing item(s) (>24h old)"
                 )
+
             if settings_service:
                 active_chats = settings_service.get_all_active_chats()
             else:
                 active_chats = []
 
             if active_chats:
-                # Multi-tenant mode: process each tenant's queue
                 for chat in active_chats:
-                    # Cache chat_id before try block to avoid lazy-load
-                    # failures in the error handler (ORM objects can expire
-                    # after a failed transaction)
                     chat_id = chat.telegram_chat_id
                     try:
-                        result = await posting_service.process_pending_posts(
+                        result = await scheduler_service.process_slot(
                             telegram_chat_id=chat_id
                         )
 
-                        if result["processed"] > 0:
-                            session_posts_sent += result["telegram"]
+                        if result.get("posted"):
+                            session_posts_sent += 1
                             logger.info(
                                 f"[chat={chat_id}] "
-                                f"Processed {result['processed']} posts: "
-                                f"{result['telegram']} to Telegram, "
-                                f"{result['failed']} failed"
+                                f"Posted: {result.get('media_file', '?')} "
+                                f"[{result.get('category', '?')}]"
                             )
+
+                    except GoogleDriveAuthError:
+                        logger.error(
+                            f"Google Drive auth error for chat {chat_id}",
+                            exc_info=True,
+                        )
+                        await posting_service.send_gdrive_auth_alert(chat_id)
+
                     except Exception as e:
                         logger.error(
                             f"Error processing chat {chat_id}: {e}",
                             exc_info=True,
                         )
-                # Smart delivery reschedule for paused tenants
-                paused_chats = settings_service.get_all_paused_chats()
-                for chat in paused_chats:
-                    paused_chat_id = chat.telegram_chat_id
-                    try:
-                        posting_service.reschedule_overdue_for_paused_chat(
-                            telegram_chat_id=paused_chat_id
-                        )
-                    except Exception as e:
-                        logger.error(
-                            f"Error rescheduling for paused chat {paused_chat_id}: {e}",
-                            exc_info=True,
-                        )
-
-            else:
-                # Legacy single-tenant fallback
-                result = await posting_service.process_pending_posts()
-
-                if result["processed"] > 0:
-                    session_posts_sent += result["telegram"]
-                    logger.info(
-                        f"Processed {result['processed']} posts: "
-                        f"{result['telegram']} to Telegram, "
-                        f"{result['failed']} failed"
-                    )
+                # No paused-chat reschedule needed — JIT skips paused tenants
 
         except Exception as e:
             logger.error(f"Error in scheduler loop: {e}", exc_info=True)
         finally:
+            scheduler_service.cleanup_transactions()
             posting_service.cleanup_transactions()
 
         # Hourly retention: purge old service_runs to prevent table bloat
@@ -335,6 +321,7 @@ async def main_async():
     # Initialize services
     from src.services.core.settings_service import SettingsService
 
+    scheduler_service = SchedulerService()
     posting_service = PostingService()
     telegram_service = TelegramService()
     lock_service = MediaLockService()
@@ -348,14 +335,25 @@ async def main_async():
     # Initialize Telegram bot
     await telegram_service.initialize()
 
+    # Inject telegram_service into scheduler for sending notifications
+    scheduler_service.telegram_service = telegram_service
+
     # Send startup notification
     session_start_time = time()
     await telegram_service.send_startup_notification()
 
     # Create tasks
-    all_services = [posting_service, telegram_service, lock_service, settings_service]
+    all_services = [
+        scheduler_service,
+        posting_service,
+        telegram_service,
+        lock_service,
+        settings_service,
+    ]
     tasks = [
-        asyncio.create_task(run_scheduler_loop(posting_service, settings_service)),
+        asyncio.create_task(
+            run_scheduler_loop(scheduler_service, posting_service, settings_service)
+        ),
         asyncio.create_task(cleanup_locks_loop(lock_service)),
         asyncio.create_task(telegram_service.start_polling()),
     ]
@@ -375,7 +373,7 @@ async def main_async():
 
     tasks.append(asyncio.create_task(transaction_cleanup_loop(all_services)))
 
-    logger.info("✓ All services started")
+    logger.info("✓ All services started (JIT scheduler)")
     logger.info(
         f"✓ Phase: {'Hybrid (API + Telegram)' if settings.ENABLE_INSTAGRAM_API else 'Telegram-Only'}"
     )

@@ -410,19 +410,20 @@ class TelegramSettingsHandlers:
         )
 
     async def handle_schedule_action(self, action: str, user, query):
-        """Handle schedule management actions (regenerate/extend)."""
+        """Handle schedule management actions.
+
+        With the JIT scheduler, there is no pre-populated schedule to
+        extend.  The only action is clearing in-flight queue items.
+        """
         chat_id = query.message.chat_id
 
-        # Import scheduler service here to avoid circular imports
-        from src.services.core.scheduler import SchedulerService
-
-        if action == "regenerate":
-            # Confirm before regenerating (destructive action)
+        if action == "clear_queue":
+            # Confirm before clearing (destructive action)
             keyboard = [
                 [
                     InlineKeyboardButton(
-                        "✅ Yes, Regenerate",
-                        callback_data="schedule_confirm:regenerate",
+                        "✅ Yes, Clear Queue",
+                        callback_data="schedule_confirm:clear_queue",
                     ),
                     InlineKeyboardButton(
                         "❌ Cancel", callback_data="schedule_confirm:cancel"
@@ -437,53 +438,21 @@ class TelegramSettingsHandlers:
             )
 
             await query.edit_message_text(
-                f"⚠️ *Regenerate Schedule?*\n\n"
-                f"This will:\n"
-                f"• Clear all {pending_count} pending posts\n"
-                f"• Create a new 7-day schedule\n\n"
-                f"This cannot be undone.",
+                f"⚠️ *Clear Queue?*\n\n"
+                f"This will remove {pending_count} in-flight item(s) "
+                f"waiting for team action.\n\n"
+                f"The scheduler will continue selecting new posts automatically.",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup(keyboard),
             )
             await query.answer()
 
-        elif action == "extend":
-            # Extend immediately (non-destructive)
-            await query.answer("Extending schedule...")
-
-            with SchedulerService() as scheduler:
-                try:
-                    result = scheduler.extend_schedule(
-                        days=7,
-                        user_id=str(user.id),
-                        telegram_chat_id=chat_id,
-                    )
-
-                    # Log interaction
-                    self.service.interaction_service.log_callback(
-                        user_id=str(user.id),
-                        callback_name="schedule_action:extend",
-                        context={
-                            "scheduled": result["scheduled"],
-                            "skipped": result["skipped"],
-                            "extended_from": result.get("extended_from"),
-                        },
-                        telegram_chat_id=chat_id,
-                        telegram_message_id=query.message.message_id,
-                    )
-
-                    # Show result and return to settings
-                    await query.answer(f"Added {result['scheduled']} posts!")
-                    logger.info(
-                        f"Schedule extended by {self.service._get_display_name(user)}: +{result['scheduled']} posts"
-                    )
-
-                    # Refresh settings menu
-                    await self.refresh_settings_message(query, show_answer=False)
-
-                except Exception as e:
-                    logger.error(f"Schedule extension failed: {e}")
-                    await query.answer(f"Error: {str(e)[:100]}", show_alert=True)
+        else:
+            # Unknown action — JIT scheduler is automatic
+            await query.answer(
+                "Schedule is managed automatically by the JIT scheduler.",
+                show_alert=True,
+            )
 
     async def handle_schedule_confirm(self, action: str, user, query):
         """Handle schedule confirmation callbacks."""
@@ -495,51 +464,27 @@ class TelegramSettingsHandlers:
             await query.answer("Cancelled")
             return
 
-        if action == "regenerate":
-            from src.services.core.scheduler import SchedulerService
+        if action == "clear_queue":
+            await query.answer("Clearing queue...")
 
-            await query.answer("Regenerating schedule...")
-
-            # Clear queue (tenant-scoped)
             chat_settings = self.service.settings_service.get_settings(chat_id)
             chat_settings_id = str(chat_settings.id) if chat_settings else None
             cleared = self.service.queue_repo.delete_all_pending(
                 chat_settings_id=chat_settings_id
             )
 
-            # Create new schedule
-            with SchedulerService() as scheduler:
-                try:
-                    result = scheduler.create_schedule(
-                        days=7,
-                        user_id=str(user.id),
-                        telegram_chat_id=chat_id,
-                    )
+            self.service.interaction_service.log_callback(
+                user_id=str(user.id),
+                callback_name="schedule_action:clear_queue",
+                context={"cleared": cleared},
+                telegram_chat_id=chat_id,
+                telegram_message_id=query.message.message_id,
+            )
 
-                    # Log interaction
-                    self.service.interaction_service.log_callback(
-                        user_id=str(user.id),
-                        callback_name="schedule_action:regenerate",
-                        context={
-                            "cleared": cleared,
-                            "scheduled": result["scheduled"],
-                            "skipped": result["skipped"],
-                        },
-                        telegram_chat_id=chat_id,
-                        telegram_message_id=query.message.message_id,
-                    )
+            logger.info(
+                f"Queue cleared by {self.service._get_display_name(user)}: "
+                f"{cleared} items"
+            )
 
-                    logger.info(
-                        f"Schedule regenerated by {self.service._get_display_name(user)}: "
-                        f"cleared {cleared}, scheduled {result['scheduled']}"
-                    )
-
-                    # Show result and return to settings
-                    await query.answer(
-                        f"Cleared {cleared}, added {result['scheduled']} posts!"
-                    )
-                    await self.refresh_settings_message(query, show_answer=False)
-
-                except Exception as e:
-                    logger.error(f"Schedule regeneration failed: {e}")
-                    await query.answer(f"Error: {str(e)[:100]}", show_alert=True)
+            await query.answer(f"Cleared {cleared} items!")
+            await self.refresh_settings_message(query, show_answer=False)
