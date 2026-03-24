@@ -60,6 +60,9 @@ class SchedulerService(BaseService):
         interval_seconds = (window_hours * 3600) / chat_settings.posts_per_day
 
         last_sent = chat_settings.last_post_sent_at
+        # Strip tzinfo — DB column is TIMESTAMPTZ but codebase uses naive UTC
+        if last_sent and last_sent.tzinfo is not None:
+            last_sent = last_sent.replace(tzinfo=None)
         if last_sent and (now - last_sent).total_seconds() < interval_seconds:
             return False  # Too soon
 
