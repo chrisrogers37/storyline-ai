@@ -150,8 +150,8 @@ class TestBuildSettingsKeyboard:
         assert len(delivery_buttons) == 1
         assert "ON" in delivery_buttons[0].text
 
-    def test_keyboard_has_schedule_buttons(self, mock_settings_handlers):
-        """Test that keyboard includes Regenerate and +7 Days buttons."""
+    def test_keyboard_has_no_schedule_buttons(self, mock_settings_handlers):
+        """Test that keyboard does not include legacy schedule management buttons."""
         mock_settings_handlers.service.settings_service.get_settings_display.return_value = {
             "dry_run_mode": False,
             "enable_instagram_api": False,
@@ -172,10 +172,12 @@ class TestBuildSettingsKeyboard:
         _, markup = mock_settings_handlers.build_settings_message_and_keyboard(-100123)
 
         all_buttons = [btn for row in markup.inline_keyboard for btn in row]
-        regenerate = [b for b in all_buttons if "Regenerate" in b.text]
-        extend = [b for b in all_buttons if "+7 Days" in b.text]
-        assert len(regenerate) == 1
-        assert len(extend) == 1
+        schedule_buttons = [
+            b
+            for b in all_buttons
+            if any(kw in b.text for kw in ["Regenerate", "+7 Days", "Clear Queue"])
+        ]
+        assert len(schedule_buttons) == 0
 
     @patch("src.services.core.telegram_settings.app_settings")
     def test_mini_app_button_present_when_configured(

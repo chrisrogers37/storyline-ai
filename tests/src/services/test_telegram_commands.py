@@ -1080,7 +1080,7 @@ class TestRemovedCommandRedirects:
             ("/schedule", "/settings"),
             ("/stats", "/status"),
             ("/locks", "/status"),
-            ("/reset", "/settings"),
+            ("/reset", "JIT scheduler"),
             ("/dryrun", "/settings"),
             ("/backfill", "CLI"),
             ("/connect", "/start"),

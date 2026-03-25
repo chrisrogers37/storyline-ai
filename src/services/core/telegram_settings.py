@@ -28,7 +28,7 @@ class TelegramSettingsHandlers:
     """Handles /settings command and all settings-related callbacks.
 
     Manages toggle buttons, numeric setting edits (posts_per_day, hours),
-    and schedule management (regenerate/extend).
+    and queue management (clear queue).
     Uses composition: receives a TelegramService reference for shared state.
     """
 
@@ -51,11 +51,7 @@ class TelegramSettingsHandlers:
         settings_data = self.service.settings_service.get_settings_display(chat_id)
         account_data = self.service.ig_account_service.get_accounts_for_display(chat_id)
 
-        message = (
-            "⚙️ *Quick Setup*\n\n"
-            "_Regenerate: Clears queue, creates new schedule_\n"
-            "_+7 Days: Extends existing queue_"
-        )
+        message = "⚙️ *Quick Setup*"
 
         keyboard = [
             [
@@ -110,14 +106,6 @@ class TelegramSettingsHandlers:
                 InlineKeyboardButton(
                     f"🔄 Media Sync: {'ON' if settings_data['media_sync_enabled'] else 'OFF'}",
                     callback_data="settings_toggle:media_sync_enabled",
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    "🔄 Regenerate", callback_data="schedule_action:regenerate"
-                ),
-                InlineKeyboardButton(
-                    "📅 +7 Days", callback_data="schedule_action:extend"
                 ),
             ],
         ]

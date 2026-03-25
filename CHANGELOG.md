@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — JIT Scheduler Remaining Vestiges
+- **Telegram /settings: Remove schedule buttons** — Removed "Regenerate", "+7 Days", and "Clear Queue" buttons (vestigial in JIT model where queue has 0-1 items); handler methods kept as safety net for cached messages
+- **Removed command redirects** — `/schedule` and `/reset` redirect messages no longer reference "Regenerate / +7 Days"
+- **CLAUDE.md: Update SchedulerService** — Key methods updated from `create_schedule()`/`select_media()`/`add_to_queue()` to `process_slot()`/`force_send_next()`/`is_slot_due()`/`get_queue_preview()`
+- **CLAUDE.md: Update PostingService** — Key methods updated to reflect current `send_gdrive_auth_alert()` responsibility
+- **CLAUDE.md: Rewrite Scheduler Algorithm** — Replaced pre-assign time slot allocation description with JIT algorithm (`is_slot_due()` + `process_slot()`)
+- **CLAUDE.md: Remove deleted CLI commands** — Removed `create-schedule` and `process-queue` from common tasks; added `queue-preview`
+- **CLAUDE.md: Fix /next description** — Changed from "Force-send next scheduled post" to "Force-send next post now"
+
 ### Changed — JIT Scheduler Display Cleanup
 - **Frontend: Remove schedule extend/regenerate buttons** — Schedule card is now a read-only cadence summary (`3/day, 2pm-2am UTC`) with an Edit button instead of broken "+ 7 Days" and "Regenerate" buttons that called deleted endpoints
 - **Frontend: Remove "Create 7-day schedule" toggle** — Summary step shows "Posts will start automatically" instead of a no-op checkbox

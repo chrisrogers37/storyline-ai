@@ -171,11 +171,8 @@ cp .env.example .env
 # Index media files
 storyline-cli index-media /path/to/media/stories
 
-# Create posting schedule
-storyline-cli create-schedule --days 7 --posts-per-day 3
-
-# Process queue (manual trigger)
-storyline-cli process-queue
+# Preview upcoming posts (JIT scheduler)
+storyline-cli queue-preview
 
 # Check system health
 storyline-cli check-health
@@ -220,8 +217,8 @@ storyline-cli reset-queue        # Reset queue (clear all pending posts)
 | Service | Responsibility | Key Methods |
 |---------|---------------|-------------|
 | **MediaIngestionService** | Scan filesystem, index media | `scan_directory()`, `index_file()`, `detect_duplicates()` |
-| **SchedulerService** | Create posting schedule | `create_schedule()`, `select_media()`, `add_to_queue()` |
-| **PostingService** | Orchestrate posting workflow | `process_pending_posts()`, `post_automated()`, `post_via_telegram()` |
+| **SchedulerService** | JIT post scheduling | `process_slot()`, `force_send_next()`, `is_slot_due()`, `get_queue_preview()` |
+| **PostingService** | Google Drive auth alerting | `send_gdrive_auth_alert()` |
 | **TelegramService** | Telegram bot coordination | `send_notification()`, `initialize()`, `start_polling()` |
 | **TelegramCommandHandlers** | `/command` handlers | `handle_status()`, `handle_queue()`, `handle_next()` |
 | **TelegramCallbackHandlers** | Button callback handlers | `handle_posted()`, `handle_skipped()`, `handle_rejected()` |
@@ -331,7 +328,9 @@ Three tables work together for multi-account support:
    - Enables auditing: "Who changed the ratios and when?"
    - All active ratios must sum to 1.0 (100%)
 
-## Scheduler Algorithm
+## Scheduler Algorithm (JIT)
+
+The scheduler runs on a polling loop. Each tick, `is_slot_due()` checks whether enough time has elapsed since the last post. If a slot is due, `process_slot()` selects media on-demand and sends it to Telegram.
 
 **Selection Logic** (in order of priority):
 
@@ -348,23 +347,19 @@ Three tables work together for multi-account support:
    - **Secondary**: `times_posted ASC` (least-posted preferred)
    - **Tertiary**: `RANDOM()` (tie-breaker for variety)
 
-3. Time slot allocation:
+3. JIT slot timing:
    ```python
-   # Evenly distributed slots within posting window
+   # is_slot_due() checks interval since last_post_sent_at
    interval_hours = (POSTING_HOURS_END - POSTING_HOURS_START) / POSTS_PER_DAY
 
-   # Add ±30min jitter for unpredictability
-   scheduled_time = base_time + random_jitter(-30min, +30min)
+   # A slot is due when enough time has elapsed since the last post
+   # and we are within the posting window
    ```
 
-4. Category-based slot allocation (if ratios configured):
+4. Category selection per slot (if ratios configured):
    ```python
-   # Allocate slots proportionally to category ratios
-   # Example: 70% memes, 30% merch with 21 slots → 15 memes, 6 merch
-   slot_allocation = allocate_by_ratio(total_slots, category_ratios)
-   random.shuffle(slot_allocation)  # Variety in scheduling
-
-   # Fallback: If category exhausted, select from any category
+   # _pick_category_for_slot() selects category weighted by ratio
+   # Fallback: If chosen category exhausted, select from any category
    ```
 
 5. After posting:
@@ -379,7 +374,7 @@ Three tables work together for multi-account support:
 | `/start` | Open setup wizard or show dashboard | `telegram_commands.py` |
 | `/status` | System health, media stats, queue status + Open Dashboard button | `telegram_commands.py` |
 | `/help` | Show available commands | `telegram_commands.py` |
-| `/next` | Force-send next scheduled post | `telegram_commands.py` |
+| `/next` | Force-send next post now | `telegram_commands.py` |
 | `/cleanup` | Delete recent bot messages | `telegram_commands.py` |
 | `/setup` | Quick settings & toggles | `telegram_settings.py` |
 | `/settings` | Alias for /setup | `telegram_settings.py` |

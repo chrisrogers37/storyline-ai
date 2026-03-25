@@ -428,10 +428,10 @@ class TelegramCommandHandlers:
         command = update.message.text.split()[0].split("@")[0]  # Extract /command
 
         redirects = {
-            "/schedule": "Use /settings to manage your posting schedule (Regenerate / +7 Days).",
+            "/schedule": "Use /settings to adjust posting cadence, or the dashboard for full controls.",
             "/stats": "Media stats are now included in /status.",
             "/locks": "Lock count is shown in /status. Full list in the dashboard.",
-            "/reset": "Use /settings → Regenerate to rebuild your queue.",
+            "/reset": "The JIT scheduler manages the queue automatically.",
             "/dryrun": "Use /settings to toggle dry-run mode.",
             "/backfill": "Use the CLI: storyline-cli backfill-instagram",
             "/connect": "Use /start to open the setup wizard and connect Instagram.",
