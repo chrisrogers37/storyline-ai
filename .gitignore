@@ -85,3 +85,4 @@ landing/node_modules/
 landing/.next/
 landing/.env.local
 !landing/src/lib/
+pytest-of-chris/
