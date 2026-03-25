@@ -310,7 +310,7 @@ Three tables work together for multi-account support:
 2. **TTL Locks** (`media_posting_locks`):
    - Prevents premature reposts
    - Automatic expiration (no manual cleanup)
-   - Lock types: `recent_post`, `manual_hold`, `seasonal`, `permanent_reject`
+   - Lock types: `recent_post`, `manual_hold`, `seasonal`, `permanent_reject`, `skip`
    - Permanent locks: `locked_until = NULL` (infinite TTL)
 
 3. **User Auto-Discovery**:
@@ -413,8 +413,6 @@ If ENABLE_INSTAGRAM_API = false:
   → ALL posts go to Telegram (manual)
 
 If ENABLE_INSTAGRAM_API = true:
-  If media.requires_interaction = true:
-    → Telegram (manual)
   If rate_limit_remaining = 0:
     → Telegram (fallback, with warning log)
   Try Instagram API:
@@ -655,7 +653,7 @@ INSERT INTO schema_version (version, description)
 VALUES (2, 'Add new column to media_items');
 ```
 
-**Current migration history** (as of 2026-02-09):
+**Current migration history** (as of 2026-03-25):
 
 | Version | File | Description |
 |---------|------|-------------|
@@ -673,6 +671,14 @@ VALUES (2, 'Add new column to media_items');
 | 011 | `011_media_source_columns.sql` | Source type/identifier columns on media_items |
 | 012 | `012_chat_settings_media_sync.sql` | Per-chat media sync toggle |
 | 013 | `013_media_backfill_columns.sql` | Instagram backfill tracking columns |
+| 014 | `014_multi_tenant_chat_settings_fk.sql` | Multi-tenant chat_settings foreign keys |
+| 015 | `015_api_tokens_chat_settings_fk.sql` | API tokens chat_settings FK |
+| 016 | `016_chat_settings_onboarding.sql` | Chat settings onboarding columns |
+| 017 | `017_add_media_source_to_chat_settings.sql` | Per-chat media source config |
+| 018 | `018_backfill_queue_chat_settings_id.sql` | Backfill queue chat_settings_id |
+| 019 | `019_last_post_sent_at.sql` | JIT scheduler last_post_sent_at |
+| 020 | `020_data_model_cleanup.sql` | Drop vestigial columns, add constraints |
+| 021 | `021_fix_permanent_lock_uniqueness.sql` | Fix permanent lock uniqueness with partial indexes |
 
 ### 5. Pre-Commit Checklist (CRITICAL)
 
