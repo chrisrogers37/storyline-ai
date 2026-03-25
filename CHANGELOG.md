@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Model Drift** — `init_db()` now imports all 11 models (was missing 5)
 - **Model Drift** — Added CHECK constraints to ORM models matching existing DB constraints (chat_settings ranges, lock_reason, user role)
 - **DateTime Mismatch** — `chat_settings.last_post_sent_at` ORM now declares `DateTime(timezone=True)` matching the `TIMESTAMPTZ` DB column
+- **Lock Uniqueness** — Replaced broken `UniqueConstraint` on `media_posting_locks` with partial unique indexes that correctly prevent duplicate permanent locks (old constraint failed because `NULL != NULL` in SQL)
 
 ### Changed — JIT Scheduler Remaining Vestiges
 - **Telegram /settings: Remove schedule buttons** — Removed "Regenerate", "+7 Days", and "Clear Queue" buttons (vestigial in JIT model where queue has 0-1 items); handler methods kept as safety net for cached messages
