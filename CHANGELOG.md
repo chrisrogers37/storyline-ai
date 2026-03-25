@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — Data Model Remediation
+- **SQL Aggregation** — `/status`, dashboard stats, and interaction analytics now use SQL `COUNT`/`GROUP BY` instead of loading all rows into Python memory
+- **Dashboard N+1 Fix** — Queue and history detail endpoints now use JOIN queries instead of per-item media lookups
+- **Transaction Atomicity** — Telegram callback DB operations now commit atomically (single commit) instead of incrementally
+- **Connection Cleanup** — All repository read methods now call `end_read_transaction()` to prevent idle-in-transaction connections
+
+### Removed — Data Model Remediation
+- **posting_queue** — Dropped vestigial columns: `web_hosted_url`, `web_hosted_public_id`, `retry_count`, `max_retries`, `next_retry_at`, `last_error`; removed `retrying` from status CHECK
+- **posting_history** — Dropped unused columns: `media_metadata`, `error_message`, `retry_count`
+- **media_items** — Dropped unimplemented `requires_interaction` column and its index
+- **users** — Dropped unused `team_name` and `first_seen_at` columns
+- **chat_settings** — Dropped unused `chat_name` column
+
+### Fixed — Data Model Remediation
+- **Model Drift** — `init_db()` now imports all 11 models (was missing 5)
+- **Model Drift** — Added CHECK constraints to ORM models matching existing DB constraints (chat_settings ranges, lock_reason, user role)
+- **DateTime Mismatch** — `chat_settings.last_post_sent_at` ORM now declares `DateTime(timezone=True)` matching the `TIMESTAMPTZ` DB column
+
 ### Changed — JIT Scheduler Remaining Vestiges
 - **Telegram /settings: Remove schedule buttons** — Removed "Regenerate", "+7 Days", and "Clear Queue" buttons (vestigial in JIT model where queue has 0-1 items); handler methods kept as safety net for cached messages
 - **Removed command redirects** — `/schedule` and `/reset` redirect messages no longer reference "Regenerate / +7 Days"
