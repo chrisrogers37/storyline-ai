@@ -211,7 +211,6 @@ class MediaRepository(BaseRepository):
     def get_all(
         self,
         is_active: Optional[bool] = None,
-        requires_interaction: Optional[bool] = None,
         category: Optional[str] = None,
         limit: Optional[int] = None,
         chat_settings_id: Optional[str] = None,
@@ -221,9 +220,6 @@ class MediaRepository(BaseRepository):
 
         if is_active is not None:
             query = query.filter(MediaItem.is_active == is_active)
-
-        if requires_interaction is not None:
-            query = query.filter(MediaItem.requires_interaction == requires_interaction)
 
         if category is not None:
             query = query.filter(MediaItem.category == category)
@@ -253,7 +249,6 @@ class MediaRepository(BaseRepository):
         file_hash: str,
         file_size_bytes: int,
         mime_type: Optional[str] = None,
-        requires_interaction: bool = False,
         category: Optional[str] = None,
         title: Optional[str] = None,
         link_url: Optional[str] = None,
@@ -272,7 +267,6 @@ class MediaRepository(BaseRepository):
             file_hash=file_hash,
             file_size=file_size_bytes,
             mime_type=mime_type,
-            requires_interaction=requires_interaction,
             category=category,
             title=title,
             link_url=link_url,

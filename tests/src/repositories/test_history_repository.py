@@ -48,7 +48,6 @@ class TestHistoryRepository:
             status="posted",
             success=True,
             posted_by_user_id="some-user-id",
-            media_metadata={"file_name": "history.jpg"},
         )
 
         history_repo.create(params)

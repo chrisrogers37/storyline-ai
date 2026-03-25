@@ -40,7 +40,6 @@ class UserRepository(BaseRepository):
         telegram_username: Optional[str] = None,
         telegram_first_name: Optional[str] = None,
         telegram_last_name: Optional[str] = None,
-        team_name: Optional[str] = None,
         role: str = "member",
     ) -> User:
         """Create a new user."""
@@ -49,7 +48,6 @@ class UserRepository(BaseRepository):
             telegram_username=telegram_username,
             telegram_first_name=telegram_first_name,
             telegram_last_name=telegram_last_name,
-            team_name=team_name,
             role=role,
         )
         self.db.add(user)

@@ -27,15 +27,12 @@ class HistoryCreateParams:
     success: bool
 
     # Optional fields with defaults
-    media_metadata: Optional[dict] = None
     instagram_media_id: Optional[str] = None
     instagram_permalink: Optional[str] = None
     instagram_story_id: Optional[str] = None
     posting_method: str = "telegram_manual"
     posted_by_user_id: Optional[str] = None
     posted_by_telegram_username: Optional[str] = None
-    error_message: Optional[str] = None
-    retry_count: int = 0
     chat_settings_id: Optional[str] = None
 
 
