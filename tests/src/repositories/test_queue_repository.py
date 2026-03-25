@@ -258,6 +258,83 @@ class TestQueueRepositoryTenantFiltering:
 
 
 @pytest.mark.unit
+class TestGetAllWithMedia:
+    """Tests for get_all_with_media JOIN method."""
+
+    def test_returns_tuples_with_media_info(self, queue_repo, mock_db):
+        """get_all_with_media returns (PostingQueue, file_name, category) tuples."""
+        mock_item = MagicMock(spec=PostingQueue)
+        mock_query = mock_db.query.return_value
+        mock_query.outerjoin.return_value = mock_query
+        mock_query.add_columns.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.all.return_value = [(mock_item, "story.jpg", "memes")]
+
+        result = queue_repo.get_all_with_media(status="pending")
+
+        assert len(result) == 1
+        item, file_name, category = result[0]
+        assert item is mock_item
+        assert file_name == "story.jpg"
+        assert category == "memes"
+
+    def test_filters_by_status(self, queue_repo, mock_db):
+        """get_all_with_media applies status filter when provided."""
+        mock_query = mock_db.query.return_value
+        mock_query.outerjoin.return_value = mock_query
+        mock_query.add_columns.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.all.return_value = []
+
+        queue_repo.get_all_with_media(status="processing")
+
+        mock_query.filter.assert_called()
+
+    def test_no_status_filter(self, queue_repo, mock_db):
+        """get_all_with_media works without status filter."""
+        mock_query = mock_db.query.return_value
+        mock_query.outerjoin.return_value = mock_query
+        mock_query.add_columns.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.all.return_value = []
+
+        queue_repo.get_all_with_media()
+
+        # Should still call order_by and all
+        mock_query.order_by.assert_called()
+        mock_query.all.assert_called_once()
+
+    def test_calls_end_read_transaction(self, queue_repo, mock_db):
+        """get_all_with_media calls end_read_transaction after fetching."""
+        mock_query = mock_db.query.return_value
+        mock_query.outerjoin.return_value = mock_query
+        mock_query.add_columns.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.all.return_value = []
+
+        with patch.object(queue_repo, "end_read_transaction") as mock_end:
+            queue_repo.get_all_with_media()
+            mock_end.assert_called_once()
+
+    def test_passes_tenant_filter(self, queue_repo, mock_db):
+        """get_all_with_media passes chat_settings_id through tenant filter."""
+        mock_query = mock_db.query.return_value
+        mock_query.outerjoin.return_value = mock_query
+        mock_query.add_columns.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.all.return_value = []
+
+        with patch.object(
+            queue_repo, "_apply_tenant_filter", wraps=queue_repo._apply_tenant_filter
+        ) as mock_filter:
+            queue_repo.get_all_with_media(chat_settings_id="tenant-uuid-1")
+            mock_filter.assert_called_once()
+            assert mock_filter.call_args[0][2] == "tenant-uuid-1"
+
+
+@pytest.mark.unit
 class TestClaimForProcessing:
     """Tests for atomic claim_for_processing method."""
 

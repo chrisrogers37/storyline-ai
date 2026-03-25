@@ -76,6 +76,31 @@ class HistoryRepository(BaseRepository):
 
         return query.all()
 
+    def get_all_with_media(
+        self,
+        limit: Optional[int] = None,
+        chat_settings_id: Optional[str] = None,
+    ) -> list:
+        """Get history items with joined media info (file_name, category).
+
+        Returns list of (PostingHistory, file_name, category) tuples.
+        """
+        from src.models.media_item import MediaItem
+
+        query = (
+            self._tenant_query(PostingHistory, chat_settings_id)
+            .outerjoin(MediaItem, PostingHistory.media_item_id == MediaItem.id)
+            .add_columns(MediaItem.file_name, MediaItem.category)
+            .order_by(PostingHistory.posted_at.desc())
+        )
+
+        if limit:
+            query = query.limit(limit)
+
+        result = query.all()
+        self.end_read_transaction()
+        return result
+
     def get_by_media_id(
         self,
         media_id: str,
