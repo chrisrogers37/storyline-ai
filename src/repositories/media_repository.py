@@ -398,6 +398,55 @@ class MediaRepository(BaseRepository):
 
         return [(d.file_hash, d.count, d.paths) for d in duplicates]
 
+    def count_active(self, chat_settings_id: Optional[str] = None) -> int:
+        """Count active media items."""
+        result = (
+            self._tenant_query(MediaItem, chat_settings_id)
+            .with_entities(func.count(MediaItem.id))
+            .filter(MediaItem.is_active.is_(True))
+            .scalar()
+        )
+        self.end_read_transaction()
+        return result or 0
+
+    def count_by_posting_status(self, chat_settings_id: Optional[str] = None) -> dict:
+        """Count active media grouped by posting status."""
+        from sqlalchemy import case
+
+        query = (
+            self._tenant_query(MediaItem, chat_settings_id)
+            .with_entities(
+                case(
+                    (MediaItem.times_posted == 0, 0),
+                    (MediaItem.times_posted == 1, 1),
+                    else_=2,
+                ).label("bucket"),
+                func.count(MediaItem.id),
+            )
+            .filter(MediaItem.is_active.is_(True))
+            .group_by("bucket")
+        )
+        rows = query.all()
+        self.end_read_transaction()
+        buckets = {row[0]: row[1] for row in rows}
+        return {
+            "never_posted": buckets.get(0, 0),
+            "posted_once": buckets.get(1, 0),
+            "posted_multiple": buckets.get(2, 0),
+        }
+
+    def count_by_category(self, chat_settings_id: Optional[str] = None) -> dict:
+        """Count active media grouped by category."""
+        rows = (
+            self._tenant_query(MediaItem, chat_settings_id)
+            .with_entities(MediaItem.category, func.count(MediaItem.id))
+            .filter(MediaItem.is_active.is_(True))
+            .group_by(MediaItem.category)
+            .all()
+        )
+        self.end_read_transaction()
+        return {(cat or "uncategorized"): count for cat, count in rows}
+
     def get_next_eligible_for_posting(
         self,
         category: Optional[str] = None,

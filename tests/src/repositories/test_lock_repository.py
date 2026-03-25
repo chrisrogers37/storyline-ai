@@ -128,6 +128,44 @@ class TestLockRepository:
 
 
 @pytest.mark.unit
+class TestLockRepositoryCountMethods:
+    """Tests for SQL COUNT aggregation methods."""
+
+    def test_count_permanent_locks(self, lock_repo, mock_db):
+        """count_permanent_locks returns scalar count."""
+        mock_query = mock_db.query.return_value
+        mock_query.with_entities.return_value = mock_query
+        mock_query.scalar.return_value = 5
+
+        result = lock_repo.count_permanent_locks()
+
+        assert result == 5
+
+    def test_count_permanent_locks_returns_zero_when_none(self, lock_repo, mock_db):
+        """count_permanent_locks returns 0 when scalar returns None."""
+        mock_query = mock_db.query.return_value
+        mock_query.with_entities.return_value = mock_query
+        mock_query.scalar.return_value = None
+
+        result = lock_repo.count_permanent_locks()
+
+        assert result == 0
+
+    def test_count_permanent_locks_with_tenant(self, lock_repo, mock_db):
+        """count_permanent_locks passes chat_settings_id through tenant filter."""
+        mock_query = mock_db.query.return_value
+        mock_query.with_entities.return_value = mock_query
+        mock_query.scalar.return_value = 2
+
+        with patch.object(
+            lock_repo, "_apply_tenant_filter", wraps=lock_repo._apply_tenant_filter
+        ) as mock_filter:
+            lock_repo.count_permanent_locks(chat_settings_id="tenant-1")
+            mock_filter.assert_called_once()
+            assert mock_filter.call_args[0][2] == "tenant-1"
+
+
+@pytest.mark.unit
 class TestLockRepositoryTenantFiltering:
     """Tests for optional chat_settings_id tenant filtering on LockRepository."""
 

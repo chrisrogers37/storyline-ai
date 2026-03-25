@@ -19,6 +19,7 @@ def mock_db():
     mock_query.order_by.return_value = mock_query
     mock_query.limit.return_value = mock_query
     mock_query.offset.return_value = mock_query
+    mock_query.group_by.return_value = mock_query
     return session
 
 
@@ -73,18 +74,19 @@ class TestInteractionRepository:
         assert added.interaction_name == "posted"
         assert added.context["media_filename"] == "test.jpg"
 
-    def test_get_user_stats(self, interaction_repo, mock_db):
-        """Test getting aggregated user stats."""
-        # Mock interactions returned by the query
-        mock_interactions = [
-            MagicMock(interaction_type="callback", interaction_name="posted"),
-            MagicMock(interaction_type="callback", interaction_name="posted"),
-            MagicMock(interaction_type="callback", interaction_name="skip"),
-            MagicMock(interaction_type="callback", interaction_name="confirm_reject"),
-            MagicMock(interaction_type="command", interaction_name="/status"),
-        ]
+    def test_get_user_stats_sql_aggregation(self, interaction_repo, mock_db):
+        """Test getting aggregated user stats via SQL COUNT/CASE."""
+        # Mock the first query (.first()) for aggregate counts
+        mock_row = MagicMock()
+        mock_row.total = 5
+        mock_row.posted = 2
+        mock_row.skipped = 1
+        mock_row.rejected = 1
         mock_query = mock_db.query.return_value
-        mock_query.all.return_value = mock_interactions
+        mock_query.first.return_value = mock_row
+
+        # Mock the second query (.group_by().all()) for commands_used
+        mock_query.all.return_value = [("/status", 1)]
 
         stats = interaction_repo.get_user_stats("some-user-id")
 
@@ -93,40 +95,71 @@ class TestInteractionRepository:
         assert stats["posts_skipped"] == 1
         assert stats["posts_rejected"] == 1
         assert "/status" in stats["commands_used"]
+        assert stats["commands_used"]["/status"] == 1
 
-    def test_get_team_activity(self, interaction_repo, mock_db):
-        """Test getting team-wide activity."""
-        mock_interactions = [
-            MagicMock(
-                user_id="user1", interaction_type="callback", interaction_name="posted"
-            ),
-            MagicMock(
-                user_id="user2", interaction_type="callback", interaction_name="skip"
-            ),
-            MagicMock(
-                user_id="user1", interaction_type="command", interaction_name="/status"
-            ),
-        ]
+    def test_get_user_stats_empty(self, interaction_repo, mock_db):
+        """Test user stats when no interactions exist."""
+        mock_row = MagicMock()
+        mock_row.total = 0
+        mock_row.posted = 0
+        mock_row.skipped = 0
+        mock_row.rejected = 0
         mock_query = mock_db.query.return_value
-        mock_query.all.return_value = mock_interactions
+        mock_query.first.return_value = mock_row
+        mock_query.all.return_value = []
+
+        stats = interaction_repo.get_user_stats("some-user-id")
+
+        assert stats["total_interactions"] == 0
+        assert stats["posts_marked"] == 0
+        assert stats["commands_used"] == {}
+
+    def test_get_team_activity_sql_aggregation(self, interaction_repo, mock_db):
+        """Test getting team-wide activity via SQL aggregation."""
+        mock_query = mock_db.query.return_value
+
+        # Mock scalar calls for total and active_users
+        mock_query.scalar.side_effect = [3, 2]
+
+        # Mock .all() calls for by_type and by_name
+        mock_query.all.side_effect = [
+            [("callback", 2), ("command", 1)],
+            [("posted", 1), ("skip", 1), ("/status", 1)],
+        ]
 
         activity = interaction_repo.get_team_activity()
 
         assert activity["total_interactions"] == 3
         assert activity["active_users"] == 2
-        assert "command" in activity["interactions_by_type"]
-        assert "callback" in activity["interactions_by_type"]
+        assert activity["interactions_by_type"] == {"callback": 2, "command": 1}
+        assert activity["interactions_by_name"] == {
+            "posted": 1,
+            "skip": 1,
+            "/status": 1,
+        }
 
-    def test_get_content_decisions(self, interaction_repo, mock_db):
-        """Test getting content decision breakdown."""
-        mock_decisions = [
-            MagicMock(interaction_name="posted"),
-            MagicMock(interaction_name="posted"),
-            MagicMock(interaction_name="skip"),
-            MagicMock(interaction_name="confirm_reject"),
-        ]
+    def test_get_team_activity_empty(self, interaction_repo, mock_db):
+        """Test team activity when no interactions exist."""
         mock_query = mock_db.query.return_value
-        mock_query.all.return_value = mock_decisions
+        mock_query.scalar.side_effect = [0, 0]
+        mock_query.all.side_effect = [[], []]
+
+        activity = interaction_repo.get_team_activity()
+
+        assert activity["total_interactions"] == 0
+        assert activity["active_users"] == 0
+        assert activity["interactions_by_type"] == {}
+        assert activity["interactions_by_name"] == {}
+
+    def test_get_content_decisions_sql_aggregation(self, interaction_repo, mock_db):
+        """Test getting content decision breakdown via SQL."""
+        mock_row = MagicMock()
+        mock_row.total = 4
+        mock_row.posted = 2
+        mock_row.skipped = 1
+        mock_row.rejected = 1
+        mock_query = mock_db.query.return_value
+        mock_query.first.return_value = mock_row
 
         decisions = interaction_repo.get_content_decisions()
 
@@ -135,7 +168,25 @@ class TestInteractionRepository:
         assert decisions["skipped"] == 1
         assert decisions["rejected"] == 1
         assert decisions["posted_percentage"] == 50.0
-        assert "rejection_rate" in decisions
+        assert decisions["skip_percentage"] == 25.0
+        assert decisions["rejection_rate"] == 25.0
+
+    def test_get_content_decisions_empty(self, interaction_repo, mock_db):
+        """Test content decisions with no data returns zero percentages."""
+        mock_row = MagicMock()
+        mock_row.total = 0
+        mock_row.posted = 0
+        mock_row.skipped = 0
+        mock_row.rejected = 0
+        mock_query = mock_db.query.return_value
+        mock_query.first.return_value = mock_row
+
+        decisions = interaction_repo.get_content_decisions()
+
+        assert decisions["total_decisions"] == 0
+        assert decisions["posted_percentage"] == 0
+        assert decisions["skip_percentage"] == 0
+        assert decisions["rejection_rate"] == 0
 
     def test_get_recent(self, interaction_repo, mock_db):
         """Test getting recent interactions."""

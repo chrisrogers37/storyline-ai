@@ -223,6 +223,10 @@ class MediaIngestionService(BaseService):
         """Return all distinct category names in the library."""
         return self.media_repo.get_categories()
 
+    def get_category_counts(self) -> dict:
+        """Return count of active media per category."""
+        return self.media_repo.count_by_category()
+
     # ------------------------------------------------------------------
     # Category mix operations (wrapping CategoryMixRepository)
     # ------------------------------------------------------------------

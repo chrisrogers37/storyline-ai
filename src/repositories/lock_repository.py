@@ -3,6 +3,8 @@
 from typing import Optional, List
 from datetime import datetime, timedelta
 
+from sqlalchemy import func
+
 from src.repositories.base_repository import BaseRepository
 from src.models.media_lock import MediaPostingLock
 
@@ -103,6 +105,17 @@ class LockRepository(BaseRepository):
             .order_by(MediaPostingLock.created_at.desc())
             .all()
         )
+
+    def count_permanent_locks(self, chat_settings_id: Optional[str] = None) -> int:
+        """Count permanent locks (locked_until IS NULL)."""
+        result = (
+            self._tenant_query(MediaPostingLock, chat_settings_id)
+            .with_entities(func.count(MediaPostingLock.id))
+            .filter(MediaPostingLock.locked_until.is_(None))
+            .scalar()
+        )
+        self.end_read_transaction()
+        return result or 0
 
     def cleanup_expired(self, chat_settings_id: Optional[str] = None) -> int:
         """Delete all expired locks. Returns count of deleted locks."""

@@ -109,14 +109,10 @@ class DashboardService(BaseService):
         """Return media library breakdown by category."""
         chat_settings_id = self._resolve_chat_settings_id(telegram_chat_id)
 
-        all_active = self.media_repo.get_all(
-            is_active=True, chat_settings_id=chat_settings_id
+        total_active = self.media_repo.count_active(chat_settings_id=chat_settings_id)
+        category_counts = self.media_repo.count_by_category(
+            chat_settings_id=chat_settings_id
         )
-
-        category_counts: dict[str, int] = {}
-        for item in all_active:
-            cat = item.category or "uncategorized"
-            category_counts[cat] = category_counts.get(cat, 0) + 1
 
         categories = [
             {"name": name, "count": count}
@@ -126,7 +122,7 @@ class DashboardService(BaseService):
         ]
 
         return {
-            "total_active": len(all_active),
+            "total_active": total_active,
             "categories": categories,
         }
 
