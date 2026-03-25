@@ -115,7 +115,8 @@ class TestMediaRepository:
 
         assert mock_item.times_posted == 1
         assert mock_item.last_posted_at is not None
-        mock_db.commit.assert_called_once()
+        # commit called twice: once by get_by_id's end_read_transaction, once by the write
+        assert mock_db.commit.call_count == 2
         mock_db.refresh.assert_called_once_with(mock_item)
 
     def test_increment_times_posted_not_found(self, media_repo, mock_db):
@@ -125,7 +126,8 @@ class TestMediaRepository:
         result = media_repo.increment_times_posted("nonexistent-id")
 
         assert result is None
-        mock_db.commit.assert_not_called()
+        # commit called once by get_by_id's end_read_transaction (no write commit)
+        mock_db.commit.assert_called_once()
 
     def test_get_all_with_filters(self, media_repo, mock_db):
         """Test listing media with various filters."""
@@ -184,7 +186,8 @@ class TestMediaRepositorySyncMethods:
 
         assert mock_item.is_active is True
         assert mock_item.updated_at is not None
-        mock_db.commit.assert_called_once()
+        # commit called twice: once by get_by_id's end_read_transaction, once by the write
+        assert mock_db.commit.call_count == 2
         mock_db.refresh.assert_called_once_with(mock_item)
 
     def test_update_source_info_updates_fields(self, media_repo, mock_db):
@@ -203,7 +206,8 @@ class TestMediaRepositorySyncMethods:
         assert mock_item.file_name == "new_name.jpg"
         assert mock_item.source_identifier == "/new/path.jpg"
         assert mock_item.updated_at is not None
-        mock_db.commit.assert_called_once()
+        # commit called twice: once by get_by_id's end_read_transaction, once by the write
+        assert mock_db.commit.call_count == 2
 
     def test_update_source_info_partial_update(self, media_repo, mock_db):
         """Only updates fields that are not None."""
@@ -221,7 +225,8 @@ class TestMediaRepositorySyncMethods:
         # file_path and source_identifier should not be changed
         assert mock_item.file_path == "/original/path.jpg"
         assert mock_item.source_identifier == "/original/id"
-        mock_db.commit.assert_called_once()
+        # commit called twice: once by get_by_id's end_read_transaction, once by the write
+        assert mock_db.commit.call_count == 2
 
 
 @pytest.mark.unit

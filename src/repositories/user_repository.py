@@ -15,15 +15,19 @@ class UserRepository(BaseRepository):
 
     def get_by_id(self, user_id: str) -> Optional[User]:
         """Get user by ID."""
-        return self.db.query(User).filter(User.id == user_id).first()
+        result = self.db.query(User).filter(User.id == user_id).first()
+        self.end_read_transaction()
+        return result
 
     def get_by_telegram_id(self, telegram_user_id: int) -> Optional[User]:
         """Get user by Telegram user ID."""
-        return (
+        result = (
             self.db.query(User)
             .filter(User.telegram_user_id == telegram_user_id)
             .first()
         )
+        self.end_read_transaction()
+        return result
 
     def get_all(self, is_active: Optional[bool] = None) -> list[User]:
         """Get all users, optionally filtered by active status."""
@@ -32,7 +36,9 @@ class UserRepository(BaseRepository):
         if is_active is not None:
             query = query.filter(User.is_active == is_active)
 
-        return query.order_by(User.created_at.desc()).all()
+        result = query.order_by(User.created_at.desc()).all()
+        self.end_read_transaction()
+        return result
 
     def create(
         self,

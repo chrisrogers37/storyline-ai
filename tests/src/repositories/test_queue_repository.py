@@ -81,7 +81,8 @@ class TestQueueRepository:
         queue_repo.update_status("some-id", "posted")
 
         assert mock_item.status == "posted"
-        mock_db.commit.assert_called_once()
+        # commit called twice: once by get_by_id's end_read_transaction, once by the write
+        assert mock_db.commit.call_count == 2
         mock_db.refresh.assert_called_once_with(mock_item)
 
     def test_update_status_not_found(self, queue_repo, mock_db):
@@ -91,7 +92,8 @@ class TestQueueRepository:
         result = queue_repo.update_status("nonexistent-id", "posted")
 
         assert result is None
-        mock_db.commit.assert_not_called()
+        # commit called once by get_by_id's end_read_transaction (no write commit)
+        mock_db.commit.assert_called_once()
 
     def test_delete_queue_item(self, queue_repo, mock_db):
         """Test deleting a queue item."""
@@ -102,7 +104,8 @@ class TestQueueRepository:
 
         assert result is True
         mock_db.delete.assert_called_once_with(mock_item)
-        mock_db.commit.assert_called_once()
+        # commit called twice: once by get_by_id's end_read_transaction, once by the write
+        assert mock_db.commit.call_count == 2
 
     def test_delete_queue_item_not_found(self, queue_repo, mock_db):
         """Test deleting a non-existent queue item."""

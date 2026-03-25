@@ -37,11 +37,13 @@ class InteractionRepository(BaseRepository):
 
     def get_by_id(self, interaction_id: str) -> Optional[UserInteraction]:
         """Get interaction by ID."""
-        return (
+        result = (
             self.db.query(UserInteraction)
             .filter(UserInteraction.id == interaction_id)
             .first()
         )
+        self.end_read_transaction()
+        return result
 
     def get_recent(
         self,
@@ -50,13 +52,15 @@ class InteractionRepository(BaseRepository):
     ) -> List[UserInteraction]:
         """Get all recent interactions."""
         since = datetime.utcnow() - timedelta(days=days)
-        return (
+        result = (
             self.db.query(UserInteraction)
             .filter(UserInteraction.created_at >= since)
             .order_by(UserInteraction.created_at.desc())
             .limit(limit)
             .all()
         )
+        self.end_read_transaction()
+        return result
 
     def get_user_stats(self, user_id: str, days: int = 30) -> dict:
         """Get aggregated stats for a user using SQL."""
@@ -217,7 +221,7 @@ class InteractionRepository(BaseRepository):
             List of bot_response interactions with telegram_message_id
         """
         since = datetime.utcnow() - timedelta(hours=hours)
-        return (
+        result = (
             self.db.query(UserInteraction)
             .filter(
                 UserInteraction.interaction_type == "bot_response",
@@ -228,3 +232,5 @@ class InteractionRepository(BaseRepository):
             .order_by(UserInteraction.created_at.desc())
             .all()
         )
+        self.end_read_transaction()
+        return result

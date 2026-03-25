@@ -19,12 +19,14 @@ class CategoryMixRepository(BaseRepository):
         self, chat_settings_id: Optional[str] = None
     ) -> List[CategoryPostCaseMix]:
         """Get all current (active) category ratios."""
-        return (
+        result = (
             self._tenant_query(CategoryPostCaseMix, chat_settings_id)
             .filter(CategoryPostCaseMix.is_current)
             .order_by(CategoryPostCaseMix.category)
             .all()
         )
+        self.end_read_transaction()
+        return result
 
     def get_current_mix_as_dict(
         self, chat_settings_id: Optional[str] = None
@@ -42,10 +44,12 @@ class CategoryMixRepository(BaseRepository):
         if category:
             query = query.filter(CategoryPostCaseMix.category == category)
 
-        return query.order_by(
+        result = query.order_by(
             CategoryPostCaseMix.category,
             CategoryPostCaseMix.effective_from.desc(),
         ).all()
+        self.end_read_transaction()
+        return result
 
     def set_mix(
         self,
@@ -112,6 +116,7 @@ class CategoryMixRepository(BaseRepository):
             .filter(CategoryPostCaseMix.is_current)
             .scalar()
         )
+        self.end_read_transaction()
         return count > 0
 
     def get_categories_without_ratio(

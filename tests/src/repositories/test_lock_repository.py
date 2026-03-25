@@ -115,7 +115,8 @@ class TestLockRepository:
 
         assert result is True
         mock_db.delete.assert_called_once_with(mock_lock)
-        mock_db.commit.assert_called_once()
+        # commit called twice: once by get_by_id's end_read_transaction, once by the write
+        assert mock_db.commit.call_count == 2
 
     def test_delete_lock_not_found(self, lock_repo, mock_db):
         """Test deleting a non-existent lock."""
