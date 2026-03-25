@@ -27,15 +27,12 @@ class HistoryCreateParams:
     success: bool
 
     # Optional fields with defaults
-    media_metadata: Optional[dict] = None
     instagram_media_id: Optional[str] = None
     instagram_permalink: Optional[str] = None
     instagram_story_id: Optional[str] = None
     posting_method: str = "telegram_manual"
     posted_by_user_id: Optional[str] = None
     posted_by_telegram_username: Optional[str] = None
-    error_message: Optional[str] = None
-    retry_count: int = 0
     chat_settings_id: Optional[str] = None
 
 
@@ -49,11 +46,13 @@ class HistoryRepository(BaseRepository):
         self, history_id: str, chat_settings_id: Optional[str] = None
     ) -> Optional[PostingHistory]:
         """Get history record by ID."""
-        return (
+        result = (
             self._tenant_query(PostingHistory, chat_settings_id)
             .filter(PostingHistory.id == history_id)
             .first()
         )
+        self.end_read_transaction()
+        return result
 
     def get_all(
         self,
@@ -77,7 +76,34 @@ class HistoryRepository(BaseRepository):
         if limit:
             query = query.limit(limit)
 
-        return query.all()
+        result = query.all()
+        self.end_read_transaction()
+        return result
+
+    def get_all_with_media(
+        self,
+        limit: Optional[int] = None,
+        chat_settings_id: Optional[str] = None,
+    ) -> list:
+        """Get history items with joined media info (file_name, category).
+
+        Returns list of (PostingHistory, file_name, category) tuples.
+        """
+        from src.models.media_item import MediaItem
+
+        query = (
+            self._tenant_query(PostingHistory, chat_settings_id)
+            .outerjoin(MediaItem, PostingHistory.media_item_id == MediaItem.id)
+            .add_columns(MediaItem.file_name, MediaItem.category)
+            .order_by(PostingHistory.posted_at.desc())
+        )
+
+        if limit:
+            query = query.limit(limit)
+
+        result = query.all()
+        self.end_read_transaction()
+        return result
 
     def get_by_media_id(
         self,
@@ -95,7 +121,9 @@ class HistoryRepository(BaseRepository):
         if limit:
             query = query.limit(limit)
 
-        return query.all()
+        result = query.all()
+        self.end_read_transaction()
+        return result
 
     def create(self, params: HistoryCreateParams) -> PostingHistory:
         """Create a new history record."""
@@ -112,12 +140,14 @@ class HistoryRepository(BaseRepository):
     ) -> List[PostingHistory]:
         """Get posts from the last N hours."""
         since = datetime.utcnow() - timedelta(hours=hours)
-        return (
+        result = (
             self._tenant_query(PostingHistory, chat_settings_id)
             .filter(PostingHistory.posted_at >= since)
             .order_by(PostingHistory.posted_at.desc())
             .all()
         )
+        self.end_read_transaction()
+        return result
 
     def count_by_method(
         self, method: str, since: datetime, chat_settings_id: Optional[str] = None
@@ -135,7 +165,7 @@ class HistoryRepository(BaseRepository):
         Returns:
             Count of posts matching criteria
         """
-        return (
+        result = (
             self._tenant_query(PostingHistory, chat_settings_id)
             .with_entities(func.count(PostingHistory.id))
             .filter(
@@ -148,6 +178,8 @@ class HistoryRepository(BaseRepository):
             .scalar()
             or 0
         )
+        self.end_read_transaction()
+        return result
 
     def get_by_queue_item_id(self, queue_item_id: str) -> Optional[PostingHistory]:
         """Get the most recent history record for a specific queue item.
@@ -155,9 +187,11 @@ class HistoryRepository(BaseRepository):
         Used to determine what happened to a queue item that's no longer
         in the posting_queue (e.g., after a callback race condition).
         """
-        return (
+        result = (
             self.db.query(PostingHistory)
             .filter(PostingHistory.queue_item_id == queue_item_id)
             .order_by(PostingHistory.posted_at.desc())
             .first()
         )
+        self.end_read_transaction()
+        return result

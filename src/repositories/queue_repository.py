@@ -19,11 +19,13 @@ class QueueRepository(BaseRepository):
         self, queue_id: str, chat_settings_id: Optional[str] = None
     ) -> Optional[PostingQueue]:
         """Get queue item by ID."""
-        return (
+        result = (
             self._tenant_query(PostingQueue, chat_settings_id)
             .filter(PostingQueue.id == queue_id)
             .first()
         )
+        self.end_read_transaction()
+        return result
 
     def claim_for_processing(self, queue_id: str) -> Optional[PostingQueue]:
         """Atomically claim a queue item for callback processing.
@@ -72,21 +74,25 @@ class QueueRepository(BaseRepository):
         """
         from sqlalchemy import cast, String
 
-        return (
+        result = (
             self._tenant_query(PostingQueue, chat_settings_id)
             .filter(cast(PostingQueue.id, String).like(f"{id_prefix}%"))
             .first()
         )
+        self.end_read_transaction()
+        return result
 
     def get_by_media_id(
         self, media_id: str, chat_settings_id: Optional[str] = None
     ) -> Optional[PostingQueue]:
         """Get queue item by media ID."""
-        return (
+        result = (
             self._tenant_query(PostingQueue, chat_settings_id)
             .filter(PostingQueue.media_item_id == media_id)
             .first()
         )
+        self.end_read_transaction()
+        return result
 
     def get_pending(
         self, limit: Optional[int] = None, chat_settings_id: Optional[str] = None
@@ -118,26 +124,57 @@ class QueueRepository(BaseRepository):
         if status:
             query = query.filter(PostingQueue.status == status)
 
-        return query.order_by(PostingQueue.scheduled_for.asc()).all()
+        result = query.order_by(PostingQueue.scheduled_for.asc()).all()
+        self.end_read_transaction()
+        return result
+
+    def get_all_with_media(
+        self,
+        status: Optional[str] = None,
+        chat_settings_id: Optional[str] = None,
+    ) -> list:
+        """Get queue items with joined media info (file_name, category).
+
+        Returns list of (PostingQueue, file_name, category) tuples.
+        """
+        from src.models.media_item import MediaItem
+
+        query = (
+            self._tenant_query(PostingQueue, chat_settings_id)
+            .outerjoin(MediaItem, PostingQueue.media_item_id == MediaItem.id)
+            .add_columns(MediaItem.file_name, MediaItem.category)
+        )
+
+        if status:
+            query = query.filter(PostingQueue.status == status)
+
+        query = query.order_by(PostingQueue.scheduled_for.asc())
+        result = query.all()
+        self.end_read_transaction()
+        return result
 
     def count_pending(self, chat_settings_id: Optional[str] = None) -> int:
         """Count number of pending items."""
-        return (
+        result = (
             self._tenant_query(PostingQueue, chat_settings_id)
             .filter(PostingQueue.status == "pending")
             .count()
         )
+        self.end_read_transaction()
+        return result
 
     def get_oldest_pending(
         self, chat_settings_id: Optional[str] = None
     ) -> Optional[PostingQueue]:
         """Get the oldest pending item."""
-        return (
+        result = (
             self._tenant_query(PostingQueue, chat_settings_id)
             .filter(PostingQueue.status == "pending")
             .order_by(PostingQueue.created_at.asc())
             .first()
         )
+        self.end_read_transaction()
+        return result
 
     def create(
         self,

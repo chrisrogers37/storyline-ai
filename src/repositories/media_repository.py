@@ -20,31 +20,37 @@ class MediaRepository(BaseRepository):
         self, media_id: str, chat_settings_id: Optional[str] = None
     ) -> Optional[MediaItem]:
         """Get media item by ID."""
-        return (
+        result = (
             self._tenant_query(MediaItem, chat_settings_id)
             .filter(MediaItem.id == media_id)
             .first()
         )
+        self.end_read_transaction()
+        return result
 
     def get_by_path(
         self, file_path: str, chat_settings_id: Optional[str] = None
     ) -> Optional[MediaItem]:
         """Get media item by file path."""
-        return (
+        result = (
             self._tenant_query(MediaItem, chat_settings_id)
             .filter(MediaItem.file_path == file_path)
             .first()
         )
+        self.end_read_transaction()
+        return result
 
     def get_by_hash(
         self, file_hash: str, chat_settings_id: Optional[str] = None
     ) -> List[MediaItem]:
         """Get all media items with the same hash (duplicate content)."""
-        return (
+        result = (
             self._tenant_query(MediaItem, chat_settings_id)
             .filter(MediaItem.file_hash == file_hash)
             .all()
         )
+        self.end_read_transaction()
+        return result
 
     def get_by_instagram_media_id(
         self, instagram_media_id: str, chat_settings_id: Optional[str] = None
@@ -54,11 +60,13 @@ class MediaRepository(BaseRepository):
         Used by InstagramBackfillService to check if an Instagram media item
         has already been backfilled into the system.
         """
-        return (
+        result = (
             self._tenant_query(MediaItem, chat_settings_id)
             .filter(MediaItem.instagram_media_id == instagram_media_id)
             .first()
         )
+        self.end_read_transaction()
+        return result
 
     def get_backfilled_instagram_media_ids(
         self, chat_settings_id: Optional[str] = None
@@ -93,7 +101,7 @@ class MediaRepository(BaseRepository):
         Returns:
             MediaItem if found, None otherwise
         """
-        return (
+        result = (
             self._tenant_query(MediaItem, chat_settings_id)
             .filter(
                 MediaItem.source_type == source_type,
@@ -101,6 +109,8 @@ class MediaRepository(BaseRepository):
             )
             .first()
         )
+        self.end_read_transaction()
+        return result
 
     def get_active_by_source_type(
         self, source_type: str, chat_settings_id: Optional[str] = None
@@ -117,7 +127,7 @@ class MediaRepository(BaseRepository):
         Returns:
             List of active MediaItem instances for the given source type
         """
-        return (
+        result = (
             self._tenant_query(MediaItem, chat_settings_id)
             .filter(
                 MediaItem.source_type == source_type,
@@ -125,6 +135,8 @@ class MediaRepository(BaseRepository):
             )
             .all()
         )
+        self.end_read_transaction()
+        return result
 
     def get_inactive_by_source_identifier(
         self,
@@ -145,7 +157,7 @@ class MediaRepository(BaseRepository):
         Returns:
             Inactive MediaItem if found, None otherwise
         """
-        return (
+        result = (
             self._tenant_query(MediaItem, chat_settings_id)
             .filter(
                 MediaItem.source_type == source_type,
@@ -154,6 +166,8 @@ class MediaRepository(BaseRepository):
             )
             .first()
         )
+        self.end_read_transaction()
+        return result
 
     def reactivate(self, media_id: str) -> MediaItem:
         """Reactivate a previously deactivated media item.
@@ -211,7 +225,6 @@ class MediaRepository(BaseRepository):
     def get_all(
         self,
         is_active: Optional[bool] = None,
-        requires_interaction: Optional[bool] = None,
         category: Optional[str] = None,
         limit: Optional[int] = None,
         chat_settings_id: Optional[str] = None,
@@ -222,9 +235,6 @@ class MediaRepository(BaseRepository):
         if is_active is not None:
             query = query.filter(MediaItem.is_active == is_active)
 
-        if requires_interaction is not None:
-            query = query.filter(MediaItem.requires_interaction == requires_interaction)
-
         if category is not None:
             query = query.filter(MediaItem.category == category)
 
@@ -233,7 +243,9 @@ class MediaRepository(BaseRepository):
         if limit:
             query = query.limit(limit)
 
-        return query.all()
+        result = query.all()
+        self.end_read_transaction()
+        return result
 
     def get_categories(self, chat_settings_id: Optional[str] = None) -> List[str]:
         """Get all unique categories."""
@@ -244,6 +256,7 @@ class MediaRepository(BaseRepository):
             .distinct()
             .all()
         )
+        self.end_read_transaction()
         return [r[0] for r in result]
 
     def create(
@@ -253,7 +266,6 @@ class MediaRepository(BaseRepository):
         file_hash: str,
         file_size_bytes: int,
         mime_type: Optional[str] = None,
-        requires_interaction: bool = False,
         category: Optional[str] = None,
         title: Optional[str] = None,
         link_url: Optional[str] = None,
@@ -272,7 +284,6 @@ class MediaRepository(BaseRepository):
             file_hash=file_hash,
             file_size=file_size_bytes,
             mime_type=mime_type,
-            requires_interaction=requires_interaction,
             category=category,
             title=title,
             link_url=link_url,
@@ -402,7 +413,57 @@ class MediaRepository(BaseRepository):
             .all()
         )
 
+        self.end_read_transaction()
         return [(d.file_hash, d.count, d.paths) for d in duplicates]
+
+    def count_active(self, chat_settings_id: Optional[str] = None) -> int:
+        """Count active media items."""
+        result = (
+            self._tenant_query(MediaItem, chat_settings_id)
+            .with_entities(func.count(MediaItem.id))
+            .filter(MediaItem.is_active.is_(True))
+            .scalar()
+        )
+        self.end_read_transaction()
+        return result or 0
+
+    def count_by_posting_status(self, chat_settings_id: Optional[str] = None) -> dict:
+        """Count active media grouped by posting status."""
+        from sqlalchemy import case
+
+        query = (
+            self._tenant_query(MediaItem, chat_settings_id)
+            .with_entities(
+                case(
+                    (MediaItem.times_posted == 0, 0),
+                    (MediaItem.times_posted == 1, 1),
+                    else_=2,
+                ).label("bucket"),
+                func.count(MediaItem.id),
+            )
+            .filter(MediaItem.is_active.is_(True))
+            .group_by("bucket")
+        )
+        rows = query.all()
+        self.end_read_transaction()
+        buckets = {row[0]: row[1] for row in rows}
+        return {
+            "never_posted": buckets.get(0, 0),
+            "posted_once": buckets.get(1, 0),
+            "posted_multiple": buckets.get(2, 0),
+        }
+
+    def count_by_category(self, chat_settings_id: Optional[str] = None) -> dict:
+        """Count active media grouped by category."""
+        rows = (
+            self._tenant_query(MediaItem, chat_settings_id)
+            .with_entities(MediaItem.category, func.count(MediaItem.id))
+            .filter(MediaItem.is_active.is_(True))
+            .group_by(MediaItem.category)
+            .all()
+        )
+        self.end_read_transaction()
+        return {(cat or "uncategorized"): count for cat, count in rows}
 
     def get_next_eligible_for_posting(
         self,
@@ -460,4 +521,6 @@ class MediaRepository(BaseRepository):
         )
 
         # Return top result
-        return query.first()
+        result = query.first()
+        self.end_read_transaction()
+        return result

@@ -1,6 +1,6 @@
 """Media posting lock model - TTL-based repost prevention."""
 
-from sqlalchemy import Column, String, DateTime, UniqueConstraint
+from sqlalchemy import CheckConstraint, Column, String, DateTime
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy import ForeignKey
 from datetime import datetime
@@ -50,12 +50,15 @@ class MediaPostingLock(Base):
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    # Uniqueness for permanent locks is enforced by partial unique indexes
+    # in the DB (migration 021), not by ORM constraints, because SQLAlchemy
+    # UniqueConstraint cannot express WHERE clauses. The old
+    # unique_active_lock_per_tenant constraint was broken for NULL locked_until
+    # (NULL != NULL in SQL, so duplicates were allowed).
     __table_args__ = (
-        UniqueConstraint(
-            "media_item_id",
-            "locked_until",
-            "chat_settings_id",
-            name="unique_active_lock_per_tenant",
+        CheckConstraint(
+            "lock_reason IN ('recent_post', 'skip', 'manual_hold', 'seasonal', 'permanent_reject')",
+            name="check_lock_reason",
         ),
     )
 

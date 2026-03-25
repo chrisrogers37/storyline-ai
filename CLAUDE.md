@@ -171,11 +171,8 @@ cp .env.example .env
 # Index media files
 storyline-cli index-media /path/to/media/stories
 
-# Create posting schedule
-storyline-cli create-schedule --days 7 --posts-per-day 3
-
-# Process queue (manual trigger)
-storyline-cli process-queue
+# Preview upcoming posts (JIT scheduler)
+storyline-cli queue-preview
 
 # Check system health
 storyline-cli check-health
@@ -220,8 +217,8 @@ storyline-cli reset-queue        # Reset queue (clear all pending posts)
 | Service | Responsibility | Key Methods |
 |---------|---------------|-------------|
 | **MediaIngestionService** | Scan filesystem, index media | `scan_directory()`, `index_file()`, `detect_duplicates()` |
-| **SchedulerService** | Create posting schedule | `create_schedule()`, `select_media()`, `add_to_queue()` |
-| **PostingService** | Orchestrate posting workflow | `process_pending_posts()`, `post_automated()`, `post_via_telegram()` |
+| **SchedulerService** | JIT post scheduling | `process_slot()`, `force_send_next()`, `is_slot_due()`, `get_queue_preview()` |
+| **PostingService** | Google Drive auth alerting | `send_gdrive_auth_alert()` |
 | **TelegramService** | Telegram bot coordination | `send_notification()`, `initialize()`, `start_polling()` |
 | **TelegramCommandHandlers** | `/command` handlers | `handle_status()`, `handle_queue()`, `handle_next()` |
 | **TelegramCallbackHandlers** | Button callback handlers | `handle_posted()`, `handle_skipped()`, `handle_rejected()` |
@@ -313,7 +310,7 @@ Three tables work together for multi-account support:
 2. **TTL Locks** (`media_posting_locks`):
    - Prevents premature reposts
    - Automatic expiration (no manual cleanup)
-   - Lock types: `recent_post`, `manual_hold`, `seasonal`, `permanent_reject`
+   - Lock types: `recent_post`, `manual_hold`, `seasonal`, `permanent_reject`, `skip`
    - Permanent locks: `locked_until = NULL` (infinite TTL)
 
 3. **User Auto-Discovery**:
@@ -331,7 +328,9 @@ Three tables work together for multi-account support:
    - Enables auditing: "Who changed the ratios and when?"
    - All active ratios must sum to 1.0 (100%)
 
-## Scheduler Algorithm
+## Scheduler Algorithm (JIT)
+
+The scheduler runs on a polling loop. Each tick, `is_slot_due()` checks whether enough time has elapsed since the last post. If a slot is due, `process_slot()` selects media on-demand and sends it to Telegram.
 
 **Selection Logic** (in order of priority):
 
@@ -348,23 +347,19 @@ Three tables work together for multi-account support:
    - **Secondary**: `times_posted ASC` (least-posted preferred)
    - **Tertiary**: `RANDOM()` (tie-breaker for variety)
 
-3. Time slot allocation:
+3. JIT slot timing:
    ```python
-   # Evenly distributed slots within posting window
+   # is_slot_due() checks interval since last_post_sent_at
    interval_hours = (POSTING_HOURS_END - POSTING_HOURS_START) / POSTS_PER_DAY
 
-   # Add ±30min jitter for unpredictability
-   scheduled_time = base_time + random_jitter(-30min, +30min)
+   # A slot is due when enough time has elapsed since the last post
+   # and we are within the posting window
    ```
 
-4. Category-based slot allocation (if ratios configured):
+4. Category selection per slot (if ratios configured):
    ```python
-   # Allocate slots proportionally to category ratios
-   # Example: 70% memes, 30% merch with 21 slots → 15 memes, 6 merch
-   slot_allocation = allocate_by_ratio(total_slots, category_ratios)
-   random.shuffle(slot_allocation)  # Variety in scheduling
-
-   # Fallback: If category exhausted, select from any category
+   # _pick_category_for_slot() selects category weighted by ratio
+   # Fallback: If chosen category exhausted, select from any category
    ```
 
 5. After posting:
@@ -379,7 +374,7 @@ Three tables work together for multi-account support:
 | `/start` | Open setup wizard or show dashboard | `telegram_commands.py` |
 | `/status` | System health, media stats, queue status + Open Dashboard button | `telegram_commands.py` |
 | `/help` | Show available commands | `telegram_commands.py` |
-| `/next` | Force-send next scheduled post | `telegram_commands.py` |
+| `/next` | Force-send next post now | `telegram_commands.py` |
 | `/cleanup` | Delete recent bot messages | `telegram_commands.py` |
 | `/setup` | Quick settings & toggles | `telegram_settings.py` |
 | `/settings` | Alias for /setup | `telegram_settings.py` |
@@ -418,8 +413,6 @@ If ENABLE_INSTAGRAM_API = false:
   → ALL posts go to Telegram (manual)
 
 If ENABLE_INSTAGRAM_API = true:
-  If media.requires_interaction = true:
-    → Telegram (manual)
   If rate_limit_remaining = 0:
     → Telegram (fallback, with warning log)
   Try Instagram API:
@@ -660,7 +653,7 @@ INSERT INTO schema_version (version, description)
 VALUES (2, 'Add new column to media_items');
 ```
 
-**Current migration history** (as of 2026-02-09):
+**Current migration history** (as of 2026-03-25):
 
 | Version | File | Description |
 |---------|------|-------------|
@@ -678,6 +671,14 @@ VALUES (2, 'Add new column to media_items');
 | 011 | `011_media_source_columns.sql` | Source type/identifier columns on media_items |
 | 012 | `012_chat_settings_media_sync.sql` | Per-chat media sync toggle |
 | 013 | `013_media_backfill_columns.sql` | Instagram backfill tracking columns |
+| 014 | `014_multi_tenant_chat_settings_fk.sql` | Multi-tenant chat_settings foreign keys |
+| 015 | `015_api_tokens_chat_settings_fk.sql` | API tokens chat_settings FK |
+| 016 | `016_chat_settings_onboarding.sql` | Chat settings onboarding columns |
+| 017 | `017_add_media_source_to_chat_settings.sql` | Per-chat media source config |
+| 018 | `018_backfill_queue_chat_settings_id.sql` | Backfill queue chat_settings_id |
+| 019 | `019_last_post_sent_at.sql` | JIT scheduler last_post_sent_at |
+| 020 | `020_data_model_cleanup.sql` | Drop vestigial columns, add constraints |
+| 021 | `021_fix_permanent_lock_uniqueness.sql` | Fix permanent lock uniqueness with partial indexes |
 
 ### 5. Pre-Commit Checklist (CRITICAL)
 

@@ -4,9 +4,7 @@ from sqlalchemy import (
     Column,
     String,
     BigInteger,
-    Integer,
     DateTime,
-    Text,
     CheckConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -38,22 +36,11 @@ class PostingQueue(Base):
     scheduled_for = Column(DateTime, nullable=False, index=True)
     status = Column(
         String(50), default="pending", nullable=False, index=True
-    )  # 'pending', 'processing', 'retrying'
-
-    # Temporary web-hosted URL (e.g., Cloudinary, S3, etc.)
-    # Used during posting process, deleted after completion
-    web_hosted_url = Column(Text)
-    web_hosted_public_id = Column(Text)  # Provider-specific ID for cleanup
+    )  # 'pending', 'processing'
 
     # Telegram tracking (for manual posts)
     telegram_message_id = Column(BigInteger)
     telegram_chat_id = Column(BigInteger)
-
-    # Retry logic (unused — columns retained to avoid migration; never set in JIT mode)
-    retry_count = Column(Integer, default=0)
-    max_retries = Column(Integer, default=3)
-    next_retry_at = Column(DateTime)
-    last_error = Column(Text)
 
     # Multi-tenant: which chat owns this queue item (NULL = legacy single-tenant)
     chat_settings_id = Column(
@@ -67,9 +54,7 @@ class PostingQueue(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
-        CheckConstraint(
-            "status IN ('pending', 'processing', 'retrying')", name="check_status"
-        ),
+        CheckConstraint("status IN ('pending', 'processing')", name="check_status"),
     )
 
     def __repr__(self):

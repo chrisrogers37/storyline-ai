@@ -95,7 +95,8 @@ class TestUserRepository:
 
         assert mock_user.total_posts == 1
         assert mock_user.last_seen_at is not None
-        mock_db.commit.assert_called_once()
+        # commit called twice: once by get_by_id's end_read_transaction, once by the write
+        assert mock_db.commit.call_count == 2
 
     def test_update_role(self, user_repo, mock_db):
         """Test updating user role."""
@@ -106,7 +107,8 @@ class TestUserRepository:
         user_repo.update_role("some-user-id", "admin")
 
         assert mock_user.role == "admin"
-        mock_db.commit.assert_called_once()
+        # commit called twice: once by get_by_id's end_read_transaction, once by the write
+        assert mock_db.commit.call_count == 2
 
     def test_get_all_users(self, user_repo, mock_db):
         """Test listing all users."""
@@ -145,7 +147,8 @@ class TestUserRepository:
         assert mock_user.telegram_first_name == "New"
         assert mock_user.telegram_last_name == "Person"
         assert mock_user.last_seen_at is not None
-        mock_db.commit.assert_called_once()
+        # commit called twice: once by get_by_id's end_read_transaction, once by the write
+        assert mock_db.commit.call_count == 2
 
     def test_update_profile_adds_username(self, user_repo, mock_db):
         """Test adding username to user who didn't have one."""
@@ -186,4 +189,5 @@ class TestUserRepository:
         )
 
         assert result is None
-        mock_db.commit.assert_not_called()
+        # commit called once by get_by_id's end_read_transaction (no write commit)
+        mock_db.commit.assert_called_once()

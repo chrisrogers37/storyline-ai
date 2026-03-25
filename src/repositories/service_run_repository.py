@@ -15,7 +15,9 @@ class ServiceRunRepository(BaseRepository):
 
     def get_by_id(self, run_id: str) -> Optional[ServiceRun]:
         """Get service run by ID."""
-        return self.db.query(ServiceRun).filter(ServiceRun.id == run_id).first()
+        result = self.db.query(ServiceRun).filter(ServiceRun.id == run_id).first()
+        self.end_read_transaction()
+        return result
 
     def create_run(
         self,
@@ -95,7 +97,9 @@ class ServiceRunRepository(BaseRepository):
         if service_name:
             query = query.filter(ServiceRun.service_name == service_name)
 
-        return query.order_by(ServiceRun.started_at.desc()).limit(limit).all()
+        result = query.order_by(ServiceRun.started_at.desc()).limit(limit).all()
+        self.end_read_transaction()
+        return result
 
     def delete_older_than(self, days: int) -> int:
         """Delete service runs older than the given number of days.
@@ -122,10 +126,12 @@ class ServiceRunRepository(BaseRepository):
     ) -> List[ServiceRun]:
         """Get recent failed runs."""
         since = datetime.utcnow() - timedelta(hours=since_hours)
-        return (
+        result = (
             self.db.query(ServiceRun)
             .filter(ServiceRun.status == "failed", ServiceRun.started_at >= since)
             .order_by(ServiceRun.started_at.desc())
             .limit(limit)
             .all()
         )
+        self.end_read_transaction()
+        return result

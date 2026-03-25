@@ -36,23 +36,22 @@ class DashboardService(BaseService):
         """
         chat_settings_id = self._resolve_chat_settings_id(telegram_chat_id)
 
-        pending_items = self.queue_repo.get_all(
+        pending_rows = self.queue_repo.get_all_with_media(
             status="pending", chat_settings_id=chat_settings_id
         )
-        processing_items = self.queue_repo.get_all(
+        processing_rows = self.queue_repo.get_all_with_media(
             status="processing", chat_settings_id=chat_settings_id
         )
-        all_in_flight = pending_items + processing_items
+        all_in_flight = pending_rows + processing_rows
 
-        # Item list (limited) with media info
+        # Item list (limited) with media info from JOIN
         items = []
-        for item in all_in_flight[:limit]:
-            media = self.media_repo.get_by_id(str(item.media_item_id))
+        for item, file_name, category in all_in_flight[:limit]:
             items.append(
                 {
                     "scheduled_for": item.scheduled_for.isoformat(),
-                    "media_name": media.file_name if media else "Unknown",
-                    "category": (media.category if media else None) or "uncategorized",
+                    "media_name": file_name if file_name else "Unknown",
+                    "category": (category if category else None) or "uncategorized",
                     "status": item.status,
                 }
             )
@@ -86,18 +85,17 @@ class DashboardService(BaseService):
         """Return recent posting history with media info."""
         chat_settings_id = self._resolve_chat_settings_id(telegram_chat_id)
 
-        history_items = self.history_repo.get_all(
+        history_rows = self.history_repo.get_all_with_media(
             limit=limit, chat_settings_id=chat_settings_id
         )
 
         items = []
-        for item in history_items:
-            media = self.media_repo.get_by_id(str(item.media_item_id))
+        for item, file_name, category in history_rows:
             items.append(
                 {
                     "posted_at": item.posted_at.isoformat(),
-                    "media_name": media.file_name if media else "Unknown",
-                    "category": (media.category if media else None) or "uncategorized",
+                    "media_name": file_name if file_name else "Unknown",
+                    "category": (category if category else None) or "uncategorized",
                     "status": item.status,
                     "posting_method": item.posting_method,
                 }
@@ -109,14 +107,10 @@ class DashboardService(BaseService):
         """Return media library breakdown by category."""
         chat_settings_id = self._resolve_chat_settings_id(telegram_chat_id)
 
-        all_active = self.media_repo.get_all(
-            is_active=True, chat_settings_id=chat_settings_id
+        total_active = self.media_repo.count_active(chat_settings_id=chat_settings_id)
+        category_counts = self.media_repo.count_by_category(
+            chat_settings_id=chat_settings_id
         )
-
-        category_counts: dict[str, int] = {}
-        for item in all_active:
-            cat = item.category or "uncategorized"
-            category_counts[cat] = category_counts.get(cat, 0) + 1
 
         categories = [
             {"name": name, "count": count}
@@ -126,7 +120,7 @@ class DashboardService(BaseService):
         ]
 
         return {
-            "total_active": len(all_active),
+            "total_active": total_active,
             "categories": categories,
         }
 
@@ -135,18 +129,17 @@ class DashboardService(BaseService):
 
         Used by CLI ``list-queue`` command.
         """
-        raw_items = self.queue_repo.get_all(
+        rows = self.queue_repo.get_all_with_media(
             status="pending", chat_settings_id=chat_settings_id
         )
 
         items = []
-        for item in raw_items:
-            media = self.media_repo.get_by_id(str(item.media_item_id))
+        for item, file_name, category in rows:
             items.append(
                 {
                     "scheduled_for": item.scheduled_for,
-                    "file_name": media.file_name if media else "Unknown",
-                    "category": (media.category if media else None) or "-",
+                    "file_name": file_name if file_name else "Unknown",
+                    "category": (category if category else None) or "-",
                     "status": item.status,
                 }
             )

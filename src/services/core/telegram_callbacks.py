@@ -120,16 +120,12 @@ class TelegramCallbackHandlers:
 
     @contextmanager
     def _shared_session(self):
-        """Share one DB session across all repos for multi-step operations.
+        """Share one DB session with deferred commit for atomic operations.
 
-        Reduces connection pool usage from 5 connections to 1 during
-        multi-step queue operations. Also ensures consistent failure mode:
-        if the connection dies mid-operation, all subsequent steps fail
-        immediately on the same dead session rather than unpredictably
-        succeeding/failing on different connections.
-
-        On exception, rolls back the shared session to clear uncommitted state.
-        Original sessions are always restored in the finally block.
+        Individual repo methods call commit(), but within this context
+        manager we replace commit() with flush() so changes accumulate
+        without being committed. A single commit at the end makes the
+        entire operation atomic.
         """
         repos = [
             self.service.history_repo,
@@ -140,15 +136,26 @@ class TelegramCallbackHandlers:
         ]
         primary_session = self.service.history_repo.db
         originals = {}
+
+        # Swap sessions
         for repo in repos:
             originals[id(repo)] = repo._db
             repo.use_session(primary_session)
+
+        # Monkey-patch commit to flush instead (defers actual commit)
+        original_commit = primary_session.commit
+        primary_session.commit = primary_session.flush
+
         try:
             yield
+            # All ops succeeded — do the real commit
+            original_commit()
         except Exception:
-            self.service.history_repo.rollback()
+            primary_session.rollback()
             raise
         finally:
+            # Restore commit and sessions
+            primary_session.commit = original_commit
             for repo in repos:
                 if id(repo) in originals:
                     repo.use_session(originals[id(repo)])

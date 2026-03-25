@@ -115,7 +115,8 @@ class TestMediaRepository:
 
         assert mock_item.times_posted == 1
         assert mock_item.last_posted_at is not None
-        mock_db.commit.assert_called_once()
+        # commit called twice: once by get_by_id's end_read_transaction, once by the write
+        assert mock_db.commit.call_count == 2
         mock_db.refresh.assert_called_once_with(mock_item)
 
     def test_increment_times_posted_not_found(self, media_repo, mock_db):
@@ -125,7 +126,8 @@ class TestMediaRepository:
         result = media_repo.increment_times_posted("nonexistent-id")
 
         assert result is None
-        mock_db.commit.assert_not_called()
+        # commit called once by get_by_id's end_read_transaction (no write commit)
+        mock_db.commit.assert_called_once()
 
     def test_get_all_with_filters(self, media_repo, mock_db):
         """Test listing media with various filters."""
@@ -184,7 +186,8 @@ class TestMediaRepositorySyncMethods:
 
         assert mock_item.is_active is True
         assert mock_item.updated_at is not None
-        mock_db.commit.assert_called_once()
+        # commit called twice: once by get_by_id's end_read_transaction, once by the write
+        assert mock_db.commit.call_count == 2
         mock_db.refresh.assert_called_once_with(mock_item)
 
     def test_update_source_info_updates_fields(self, media_repo, mock_db):
@@ -203,7 +206,8 @@ class TestMediaRepositorySyncMethods:
         assert mock_item.file_name == "new_name.jpg"
         assert mock_item.source_identifier == "/new/path.jpg"
         assert mock_item.updated_at is not None
-        mock_db.commit.assert_called_once()
+        # commit called twice: once by get_by_id's end_read_transaction, once by the write
+        assert mock_db.commit.call_count == 2
 
     def test_update_source_info_partial_update(self, media_repo, mock_db):
         """Only updates fields that are not None."""
@@ -221,7 +225,8 @@ class TestMediaRepositorySyncMethods:
         # file_path and source_identifier should not be changed
         assert mock_item.file_path == "/original/path.jpg"
         assert mock_item.source_identifier == "/original/id"
-        mock_db.commit.assert_called_once()
+        # commit called twice: once by get_by_id's end_read_transaction, once by the write
+        assert mock_db.commit.call_count == 2
 
 
 @pytest.mark.unit
@@ -265,6 +270,107 @@ class TestMediaRepositoryBackfillMethods:
         result = media_repo.get_backfilled_instagram_media_ids()
 
         assert result == set()
+
+
+@pytest.mark.unit
+class TestMediaRepositoryCountMethods:
+    """Tests for SQL COUNT/GROUP BY aggregation methods."""
+
+    def test_count_active(self, media_repo, mock_db):
+        """count_active returns scalar count of active media items."""
+        mock_query = mock_db.query.return_value
+        mock_query.scalar.return_value = 42
+
+        result = media_repo.count_active()
+
+        assert result == 42
+
+    def test_count_active_returns_zero_when_none(self, media_repo, mock_db):
+        """count_active returns 0 when scalar returns None."""
+        mock_query = mock_db.query.return_value
+        mock_query.scalar.return_value = None
+
+        result = media_repo.count_active()
+
+        assert result == 0
+
+    def test_count_active_with_tenant(self, media_repo, mock_db):
+        """count_active passes chat_settings_id through tenant filter."""
+        mock_query = mock_db.query.return_value
+        mock_query.scalar.return_value = 5
+
+        with patch.object(
+            media_repo, "_apply_tenant_filter", wraps=media_repo._apply_tenant_filter
+        ) as mock_filter:
+            media_repo.count_active(chat_settings_id="tenant-1")
+            mock_filter.assert_called_once()
+            assert mock_filter.call_args[0][2] == "tenant-1"
+
+    def test_count_by_posting_status(self, media_repo, mock_db):
+        """count_by_posting_status returns grouped counts."""
+        mock_query = mock_db.query.return_value
+        mock_query.all.return_value = [(0, 10), (1, 5), (2, 3)]
+
+        result = media_repo.count_by_posting_status()
+
+        assert result == {
+            "never_posted": 10,
+            "posted_once": 5,
+            "posted_multiple": 3,
+        }
+
+    def test_count_by_posting_status_partial_buckets(self, media_repo, mock_db):
+        """count_by_posting_status handles missing buckets gracefully."""
+        mock_query = mock_db.query.return_value
+        mock_query.all.return_value = [(0, 10)]
+
+        result = media_repo.count_by_posting_status()
+
+        assert result == {
+            "never_posted": 10,
+            "posted_once": 0,
+            "posted_multiple": 0,
+        }
+
+    def test_count_by_posting_status_empty(self, media_repo, mock_db):
+        """count_by_posting_status returns all zeros when no media."""
+        mock_query = mock_db.query.return_value
+        mock_query.all.return_value = []
+
+        result = media_repo.count_by_posting_status()
+
+        assert result == {
+            "never_posted": 0,
+            "posted_once": 0,
+            "posted_multiple": 0,
+        }
+
+    def test_count_by_category(self, media_repo, mock_db):
+        """count_by_category returns category to count mapping."""
+        mock_query = mock_db.query.return_value
+        mock_query.all.return_value = [("memes", 10), ("merch", 5)]
+
+        result = media_repo.count_by_category()
+
+        assert result == {"memes": 10, "merch": 5}
+
+    def test_count_by_category_null_category(self, media_repo, mock_db):
+        """count_by_category maps NULL category to 'uncategorized'."""
+        mock_query = mock_db.query.return_value
+        mock_query.all.return_value = [(None, 3), ("memes", 7)]
+
+        result = media_repo.count_by_category()
+
+        assert result == {"uncategorized": 3, "memes": 7}
+
+    def test_count_by_category_empty(self, media_repo, mock_db):
+        """count_by_category returns empty dict when no media."""
+        mock_query = mock_db.query.return_value
+        mock_query.all.return_value = []
+
+        result = media_repo.count_by_category()
+
+        assert result == {}
 
 
 @pytest.mark.unit

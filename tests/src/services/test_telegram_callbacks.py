@@ -1374,3 +1374,176 @@ class TestAtomicClaim:
         assert service.history_repo.create.call_count == 1
         # Queue item still cleaned up
         service.queue_repo.delete.assert_called_once_with(queue_id)
+
+
+@pytest.mark.unit
+class TestSharedSessionAtomicity:
+    """Tests for _shared_session deferred-commit (flush-then-commit) pattern."""
+
+    def test_commit_replaced_with_flush_during_context(self, mock_callback_handlers):
+        """During _shared_session, session.commit should be session.flush."""
+        handlers = mock_callback_handlers
+        service = handlers.service
+
+        mock_session = Mock()
+        mock_session.commit = Mock(name="original_commit")
+        mock_session.flush = Mock(name="flush")
+        service.history_repo.db = mock_session
+
+        # Set _db on each repo so originals dict is populated
+        for repo in [
+            service.history_repo,
+            service.media_repo,
+            service.queue_repo,
+            service.user_repo,
+            service.lock_service.lock_repo,
+        ]:
+            repo._db = Mock()
+
+        with handlers._shared_session():
+            # Inside the context, commit should be replaced with flush
+            assert mock_session.commit is mock_session.flush
+
+    def test_real_commit_called_on_success(self, mock_callback_handlers):
+        """On successful exit, the original commit is called once."""
+        handlers = mock_callback_handlers
+        service = handlers.service
+
+        original_commit = Mock(name="original_commit")
+        mock_session = Mock()
+        mock_session.commit = original_commit
+        mock_session.flush = Mock(name="flush")
+        service.history_repo.db = mock_session
+
+        for repo in [
+            service.history_repo,
+            service.media_repo,
+            service.queue_repo,
+            service.user_repo,
+            service.lock_service.lock_repo,
+        ]:
+            repo._db = Mock()
+
+        with handlers._shared_session():
+            pass
+
+        # The original commit should have been called exactly once (at exit)
+        original_commit.assert_called_once()
+
+    def test_rollback_on_exception_no_commit(self, mock_callback_handlers):
+        """On exception, rollback is called and commit is NOT called."""
+        handlers = mock_callback_handlers
+        service = handlers.service
+
+        original_commit = Mock(name="original_commit")
+        mock_session = Mock()
+        mock_session.commit = original_commit
+        mock_session.flush = Mock(name="flush")
+        mock_session.rollback = Mock(name="rollback")
+        service.history_repo.db = mock_session
+
+        for repo in [
+            service.history_repo,
+            service.media_repo,
+            service.queue_repo,
+            service.user_repo,
+            service.lock_service.lock_repo,
+        ]:
+            repo._db = Mock()
+
+        with pytest.raises(ValueError, match="test error"):
+            with handlers._shared_session():
+                raise ValueError("test error")
+
+        # Rollback should be called
+        mock_session.rollback.assert_called_once()
+        # Original commit should NOT have been called
+        original_commit.assert_not_called()
+
+    def test_sessions_restored_in_finally(self, mock_callback_handlers):
+        """Original sessions are restored even after an exception."""
+        handlers = mock_callback_handlers
+        service = handlers.service
+
+        mock_session = Mock()
+        mock_session.commit = Mock(name="original_commit")
+        mock_session.flush = Mock(name="flush")
+        service.history_repo.db = mock_session
+
+        # Record original _db values
+        original_dbs = {}
+        repos = [
+            service.history_repo,
+            service.media_repo,
+            service.queue_repo,
+            service.user_repo,
+            service.lock_service.lock_repo,
+        ]
+        for repo in repos:
+            original_db = Mock(name=f"original_db_{id(repo)}")
+            repo._db = original_db
+            original_dbs[id(repo)] = original_db
+
+        with pytest.raises(RuntimeError):
+            with handlers._shared_session():
+                raise RuntimeError("boom")
+
+        # All repos should have their original sessions restored
+        for repo in repos:
+            repo.use_session.assert_called()
+            # The last call to use_session should restore the original
+            last_call_arg = repo.use_session.call_args_list[-1][0][0]
+            assert last_call_arg is original_dbs[id(repo)]
+
+    def test_commit_restored_after_success(self, mock_callback_handlers):
+        """After successful exit, session.commit is restored to original."""
+        handlers = mock_callback_handlers
+        service = handlers.service
+
+        original_commit = Mock(name="original_commit")
+        mock_session = Mock()
+        mock_session.commit = original_commit
+        mock_session.flush = Mock(name="flush")
+        service.history_repo.db = mock_session
+
+        for repo in [
+            service.history_repo,
+            service.media_repo,
+            service.queue_repo,
+            service.user_repo,
+            service.lock_service.lock_repo,
+        ]:
+            repo._db = Mock()
+
+        with handlers._shared_session():
+            pass
+
+        # After exiting, commit should be restored
+        assert mock_session.commit is original_commit
+
+    def test_commit_restored_after_exception(self, mock_callback_handlers):
+        """After exception, session.commit is restored to original."""
+        handlers = mock_callback_handlers
+        service = handlers.service
+
+        original_commit = Mock(name="original_commit")
+        mock_session = Mock()
+        mock_session.commit = original_commit
+        mock_session.flush = Mock(name="flush")
+        service.history_repo.db = mock_session
+
+        for repo in [
+            service.history_repo,
+            service.media_repo,
+            service.queue_repo,
+            service.user_repo,
+            service.lock_service.lock_repo,
+        ]:
+            repo._db = Mock()
+
+        with pytest.raises(ValueError):
+            with handlers._shared_session():
+                raise ValueError("error")
+
+        # After exiting, commit should be restored
+        assert mock_session.commit is original_commit

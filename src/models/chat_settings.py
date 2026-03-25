@@ -1,6 +1,7 @@
 """Chat settings model - per-chat runtime configuration."""
 
 from sqlalchemy import (
+    CheckConstraint,
     Column,
     String,
     Text,
@@ -32,7 +33,6 @@ class ChatSettings(Base):
 
     # Chat identification
     telegram_chat_id = Column(BigInteger, nullable=False, unique=True, index=True)
-    chat_name = Column(String(255))
 
     # Operational settings
     dry_run_mode = Column(Boolean, default=True)
@@ -49,7 +49,7 @@ class ChatSettings(Base):
     # JIT scheduler: when the last post was sent to Telegram for this tenant.
     # Used by is_slot_due() to determine when the next slot should fire.
     # NULL = no post sent yet (treat as "slot is due immediately").
-    last_post_sent_at = Column(DateTime, nullable=True)
+    last_post_sent_at = Column(DateTime(timezone=True), nullable=True)
 
     # Notification settings
     show_verbose_notifications = Column(Boolean, default=True)
@@ -80,6 +80,21 @@ class ChatSettings(Base):
 
     # Relationship to active Instagram account
     active_instagram_account = relationship("InstagramAccount")
+
+    __table_args__ = (
+        CheckConstraint(
+            "posts_per_day BETWEEN 1 AND 50",
+            name="valid_posts_per_day",
+        ),
+        CheckConstraint(
+            "posting_hours_start BETWEEN 0 AND 23",
+            name="valid_hours_start",
+        ),
+        CheckConstraint(
+            "posting_hours_end BETWEEN 0 AND 23",
+            name="valid_hours_end",
+        ),
+    )
 
     def __repr__(self):
         return f"<ChatSettings chat_id={self.telegram_chat_id} paused={self.is_paused}>"

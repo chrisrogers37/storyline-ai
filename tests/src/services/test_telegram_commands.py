@@ -477,12 +477,13 @@ class TestStatusCommand:
         service.queue_repo.count_pending.return_value = 5
         service.queue_repo.get_pending.return_value = []
         service.history_repo.get_recent_posts.return_value = []
-        service.media_repo.get_all.return_value = [
-            Mock(times_posted=0),
-            Mock(times_posted=1),
-            Mock(times_posted=2),
-        ]
-        service.lock_repo.get_permanent_locks.return_value = [Mock()]
+        service.media_repo.count_active.return_value = 3
+        service.media_repo.count_by_posting_status.return_value = {
+            "never_posted": 1,
+            "posted_once": 1,
+            "posted_multiple": 1,
+        }
+        service.lock_repo.count_permanent_locks.return_value = 1
 
         mock_update = Mock()
         mock_update.effective_user = Mock(
@@ -792,8 +793,13 @@ class TestStatusIncludesSetup:
         service.queue_repo.count_pending.return_value = 0
         service.queue_repo.get_pending.return_value = []
         service.history_repo.get_recent_posts.return_value = []
-        service.media_repo.get_all.return_value = []
-        service.lock_repo.get_permanent_locks.return_value = []
+        service.media_repo.count_active.return_value = 0
+        service.media_repo.count_by_posting_status.return_value = {
+            "never_posted": 0,
+            "posted_once": 0,
+            "posted_multiple": 0,
+        }
+        service.lock_repo.count_permanent_locks.return_value = 0
         service.ig_account_service.get_active_account.return_value = None
 
         mock_update = Mock()
@@ -885,8 +891,13 @@ class TestStatusDashboardButton:
         service.queue_repo.count_pending.return_value = 0
         service.queue_repo.get_pending.return_value = []
         service.history_repo.get_recent_posts.return_value = []
-        service.media_repo.get_all.return_value = []
-        service.lock_repo.get_permanent_locks.return_value = []
+        service.media_repo.count_active.return_value = 0
+        service.media_repo.count_by_posting_status.return_value = {
+            "never_posted": 0,
+            "posted_once": 0,
+            "posted_multiple": 0,
+        }
+        service.lock_repo.count_permanent_locks.return_value = 0
         service.ig_account_service.get_active_account.return_value = None
 
         mock_update = Mock()
@@ -953,8 +964,13 @@ class TestStatusDashboardButton:
         service.queue_repo.count_pending.return_value = 0
         service.queue_repo.get_pending.return_value = []
         service.history_repo.get_recent_posts.return_value = []
-        service.media_repo.get_all.return_value = []
-        service.lock_repo.get_permanent_locks.return_value = []
+        service.media_repo.count_active.return_value = 0
+        service.media_repo.count_by_posting_status.return_value = {
+            "never_posted": 0,
+            "posted_once": 0,
+            "posted_multiple": 0,
+        }
+        service.lock_repo.count_permanent_locks.return_value = 0
         service.ig_account_service.get_active_account.return_value = None
 
         mock_update = Mock()
@@ -1021,15 +1037,17 @@ class TestStatusLibraryBreakdown:
         service.user_repo.get_by_telegram_id.return_value = None
         service.user_repo.create.return_value = mock_user
 
-        # Create media items with varying times_posted
-        media_never = Mock(times_posted=0)
-        media_once = Mock(times_posted=1)
-        media_multi = Mock(times_posted=3)
-        service.media_repo.get_all.return_value = [media_never, media_once, media_multi]
+        # Set up SQL aggregation returns
+        service.media_repo.count_active.return_value = 3
+        service.media_repo.count_by_posting_status.return_value = {
+            "never_posted": 1,
+            "posted_once": 1,
+            "posted_multiple": 1,
+        }
         service.queue_repo.count_pending.return_value = 0
         service.queue_repo.get_pending.return_value = []
         service.history_repo.get_recent_posts.return_value = []
-        service.lock_repo.get_permanent_locks.return_value = []
+        service.lock_repo.count_permanent_locks.return_value = 0
 
         mock_update = Mock()
         mock_update.effective_user = Mock(
@@ -1080,7 +1098,7 @@ class TestRemovedCommandRedirects:
             ("/schedule", "/settings"),
             ("/stats", "/status"),
             ("/locks", "/status"),
-            ("/reset", "/settings"),
+            ("/reset", "JIT scheduler"),
             ("/dryrun", "/settings"),
             ("/backfill", "CLI"),
             ("/connect", "/start"),

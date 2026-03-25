@@ -32,12 +32,6 @@ class TestPostingQueueModel:
     def test_status_not_nullable(self):
         assert PostingQueue.status.nullable is False
 
-    def test_retry_count_defaults_to_zero(self):
-        assert PostingQueue.retry_count.default.arg == 0
-
-    def test_max_retries_defaults_to_three(self):
-        assert PostingQueue.max_retries.default.arg == 3
-
     def test_has_check_constraint(self):
         constraint_names = [
             c.name for c in PostingQueue.__table_args__ if hasattr(c, "name")

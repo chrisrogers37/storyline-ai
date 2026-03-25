@@ -1,7 +1,7 @@
 """Posting history model - permanent audit log."""
 
-from sqlalchemy import Column, String, Integer, DateTime, Text, Boolean, CheckConstraint
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import Column, String, DateTime, Text, Boolean, CheckConstraint
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy import ForeignKey
 from datetime import datetime
 import uuid
@@ -36,10 +36,6 @@ class PostingHistory(Base):
         DateTime, nullable=False, index=True
     )  # When the queue item was created (JIT: same as sent time)
 
-    # Media metadata snapshot (at posting time)
-    # Alternative to Type 2 SCD for media_items
-    media_metadata = Column(JSONB)  # {title, tags, caption, link_url, custom_metadata}
-
     # Posting outcome
     posted_at = Column(DateTime, nullable=False, index=True)
     status = Column(
@@ -60,10 +56,6 @@ class PostingHistory(Base):
     # User tracking
     posted_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     posted_by_telegram_username = Column(Text)  # Snapshot of username at posting time
-
-    # Error info (if failed)
-    error_message = Column(Text)
-    retry_count = Column(Integer, default=0)  # How many times we retried
 
     # Multi-tenant: which chat owns this history record (NULL = legacy single-tenant)
     chat_settings_id = Column(

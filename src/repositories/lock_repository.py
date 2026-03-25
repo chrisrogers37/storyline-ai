@@ -3,6 +3,8 @@
 from typing import Optional, List
 from datetime import datetime, timedelta
 
+from sqlalchemy import func
+
 from src.repositories.base_repository import BaseRepository
 from src.models.media_lock import MediaPostingLock
 
@@ -17,18 +19,20 @@ class LockRepository(BaseRepository):
         self, lock_id: str, chat_settings_id: Optional[str] = None
     ) -> Optional[MediaPostingLock]:
         """Get lock by ID."""
-        return (
+        result = (
             self._tenant_query(MediaPostingLock, chat_settings_id)
             .filter(MediaPostingLock.id == lock_id)
             .first()
         )
+        self.end_read_transaction()
+        return result
 
     def get_active_lock(
         self, media_id: str, chat_settings_id: Optional[str] = None
     ) -> Optional[MediaPostingLock]:
         """Get active lock for media item (if any)."""
         now = datetime.utcnow()
-        return (
+        result = (
             self._tenant_query(MediaPostingLock, chat_settings_id)
             .filter(
                 MediaPostingLock.media_item_id == media_id,
@@ -38,6 +42,8 @@ class LockRepository(BaseRepository):
             )
             .first()
         )
+        self.end_read_transaction()
+        return result
 
     def is_locked(self, media_id: str, chat_settings_id: Optional[str] = None) -> bool:
         """Check if media item is currently locked."""
@@ -48,7 +54,7 @@ class LockRepository(BaseRepository):
     ) -> List[MediaPostingLock]:
         """Get all active locks."""
         now = datetime.utcnow()
-        return (
+        result = (
             self._tenant_query(MediaPostingLock, chat_settings_id)
             .filter(
                 (MediaPostingLock.locked_until.is_(None))
@@ -57,6 +63,8 @@ class LockRepository(BaseRepository):
             .order_by(MediaPostingLock.locked_until.asc().nulls_last())
             .all()
         )
+        self.end_read_transaction()
+        return result
 
     def create(
         self,
@@ -97,12 +105,25 @@ class LockRepository(BaseRepository):
         self, chat_settings_id: Optional[str] = None
     ) -> List[MediaPostingLock]:
         """Get all permanent locks (locked_until IS NULL)."""
-        return (
+        result = (
             self._tenant_query(MediaPostingLock, chat_settings_id)
             .filter(MediaPostingLock.locked_until.is_(None))
             .order_by(MediaPostingLock.created_at.desc())
             .all()
         )
+        self.end_read_transaction()
+        return result
+
+    def count_permanent_locks(self, chat_settings_id: Optional[str] = None) -> int:
+        """Count permanent locks (locked_until IS NULL)."""
+        result = (
+            self._tenant_query(MediaPostingLock, chat_settings_id)
+            .with_entities(func.count(MediaPostingLock.id))
+            .filter(MediaPostingLock.locked_until.is_(None))
+            .scalar()
+        )
+        self.end_read_transaction()
+        return result or 0
 
     def cleanup_expired(self, chat_settings_id: Optional[str] = None) -> int:
         """Delete all expired locks. Returns count of deleted locks."""

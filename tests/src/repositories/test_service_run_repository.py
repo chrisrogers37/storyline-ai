@@ -98,7 +98,8 @@ class TestServiceRunRepository:
         assert mock_run.duration_ms == 1500
         assert mock_run.result_summary == {"items_processed": 10}
         assert mock_run.completed_at is not None
-        mock_db.commit.assert_called_once()
+        # commit called twice: once by get_by_id's end_read_transaction, once by the write
+        assert mock_db.commit.call_count == 2
 
     def test_fail_run(self, run_repo, mock_db):
         """Test marking a service run as failed."""
@@ -120,7 +121,8 @@ class TestServiceRunRepository:
         assert mock_run.stack_trace == "Traceback (most recent call last)..."
         assert mock_run.duration_ms == 500
         assert mock_run.completed_at is not None
-        mock_db.commit.assert_called_once()
+        # commit called twice: once by get_by_id's end_read_transaction, once by the write
+        assert mock_db.commit.call_count == 2
 
     def test_get_recent_runs(self, run_repo, mock_db):
         """Test retrieving recent service runs."""
@@ -163,4 +165,5 @@ class TestServiceRunRepository:
         run_repo.set_result_summary("some-run-id", {"processed": 5})
 
         assert mock_run.result_summary == {"processed": 5}
-        mock_db.commit.assert_called_once()
+        # commit called twice: once by get_by_id's end_read_transaction, once by the write
+        assert mock_db.commit.call_count == 2

@@ -32,9 +32,6 @@ class TestPostingHistoryModel:
     def test_success_not_nullable(self):
         assert PostingHistory.success.nullable is False
 
-    def test_retry_count_defaults_to_zero(self):
-        assert PostingHistory.retry_count.default.arg == 0
-
     def test_posting_method_defaults_to_telegram_manual(self):
         assert PostingHistory.posting_method.default.arg == "telegram_manual"
 

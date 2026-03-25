@@ -37,11 +37,13 @@ class InteractionRepository(BaseRepository):
 
     def get_by_id(self, interaction_id: str) -> Optional[UserInteraction]:
         """Get interaction by ID."""
-        return (
+        result = (
             self.db.query(UserInteraction)
             .filter(UserInteraction.id == interaction_id)
             .first()
         )
+        self.end_read_transaction()
+        return result
 
     def get_recent(
         self,
@@ -50,84 +52,130 @@ class InteractionRepository(BaseRepository):
     ) -> List[UserInteraction]:
         """Get all recent interactions."""
         since = datetime.utcnow() - timedelta(days=days)
-        return (
+        result = (
             self.db.query(UserInteraction)
             .filter(UserInteraction.created_at >= since)
             .order_by(UserInteraction.created_at.desc())
             .limit(limit)
             .all()
         )
+        self.end_read_transaction()
+        return result
 
     def get_user_stats(self, user_id: str, days: int = 30) -> dict:
-        """Get aggregated stats for a user."""
+        """Get aggregated stats for a user using SQL."""
+        from sqlalchemy import func, case
+
         since = datetime.utcnow() - timedelta(days=days)
 
-        interactions = (
-            self.db.query(UserInteraction)
+        row = (
+            self.db.query(
+                func.count(UserInteraction.id).label("total"),
+                func.count(
+                    case((UserInteraction.interaction_name == "posted", 1))
+                ).label("posted"),
+                func.count(case((UserInteraction.interaction_name == "skip", 1))).label(
+                    "skipped"
+                ),
+                func.count(
+                    case((UserInteraction.interaction_name == "confirm_reject", 1))
+                ).label("rejected"),
+            )
             .filter(
                 UserInteraction.user_id == user_id,
                 UserInteraction.created_at >= since,
             )
+            .first()
+        )
+        self.end_read_transaction()
+
+        cmd_rows = (
+            self.db.query(
+                UserInteraction.interaction_name,
+                func.count(UserInteraction.id),
+            )
+            .filter(
+                UserInteraction.user_id == user_id,
+                UserInteraction.interaction_type == "command",
+                UserInteraction.created_at >= since,
+            )
+            .group_by(UserInteraction.interaction_name)
             .all()
         )
-
-        stats = {
-            "total_interactions": len(interactions),
-            "posts_marked": 0,
-            "posts_skipped": 0,
-            "posts_rejected": 0,
-            "commands_used": {},
-        }
-
-        for interaction in interactions:
-            if interaction.interaction_name == "posted":
-                stats["posts_marked"] += 1
-            elif interaction.interaction_name == "skip":
-                stats["posts_skipped"] += 1
-            elif interaction.interaction_name == "confirm_reject":
-                stats["posts_rejected"] += 1
-            elif interaction.interaction_type == "command":
-                cmd = interaction.interaction_name
-                stats["commands_used"][cmd] = stats["commands_used"].get(cmd, 0) + 1
-
-        return stats
-
-    def get_team_activity(self, days: int = 30) -> dict:
-        """Get team-wide activity stats."""
-        since = datetime.utcnow() - timedelta(days=days)
-
-        interactions = (
-            self.db.query(UserInteraction)
-            .filter(UserInteraction.created_at >= since)
-            .all()
-        )
-
-        user_ids = set()
-        by_type = {}
-        by_name = {}
-
-        for interaction in interactions:
-            user_ids.add(str(interaction.user_id))
-
-            t = interaction.interaction_type
-            by_type[t] = by_type.get(t, 0) + 1
-
-            n = interaction.interaction_name
-            by_name[n] = by_name.get(n, 0) + 1
+        self.end_read_transaction()
 
         return {
-            "total_interactions": len(interactions),
-            "active_users": len(user_ids),
+            "total_interactions": row.total or 0,
+            "posts_marked": row.posted or 0,
+            "posts_skipped": row.skipped or 0,
+            "posts_rejected": row.rejected or 0,
+            "commands_used": {name: count for name, count in cmd_rows},
+        }
+
+    def get_team_activity(self, days: int = 30) -> dict:
+        """Get team-wide activity stats using SQL."""
+        from sqlalchemy import func
+
+        since = datetime.utcnow() - timedelta(days=days)
+        base_filter = UserInteraction.created_at >= since
+
+        total = (
+            self.db.query(func.count(UserInteraction.id)).filter(base_filter).scalar()
+            or 0
+        )
+
+        active_users = (
+            self.db.query(func.count(func.distinct(UserInteraction.user_id)))
+            .filter(base_filter)
+            .scalar()
+            or 0
+        )
+
+        by_type = dict(
+            self.db.query(
+                UserInteraction.interaction_type, func.count(UserInteraction.id)
+            )
+            .filter(base_filter)
+            .group_by(UserInteraction.interaction_type)
+            .all()
+        )
+
+        by_name = dict(
+            self.db.query(
+                UserInteraction.interaction_name, func.count(UserInteraction.id)
+            )
+            .filter(base_filter)
+            .group_by(UserInteraction.interaction_name)
+            .all()
+        )
+        self.end_read_transaction()
+
+        return {
+            "total_interactions": total,
+            "active_users": active_users,
             "interactions_by_type": by_type,
             "interactions_by_name": by_name,
         }
 
     def get_content_decisions(self, days: int = 30) -> dict:
-        """Get content decision breakdown (posted vs skipped vs rejected)."""
+        """Get content decision breakdown using SQL."""
+        from sqlalchemy import func, case
+
         since = datetime.utcnow() - timedelta(days=days)
 
-        decisions = (
-            self.db.query(UserInteraction)
+        row = (
+            self.db.query(
+                func.count(UserInteraction.id).label("total"),
+                func.count(
+                    case((UserInteraction.interaction_name == "posted", 1))
+                ).label("posted"),
+                func.count(case((UserInteraction.interaction_name == "skip", 1))).label(
+                    "skipped"
+                ),
+                func.count(
+                    case((UserInteraction.interaction_name == "confirm_reject", 1))
+                ).label("rejected"),
+            )
             .filter(
                 UserInteraction.interaction_type == "callback",
                 UserInteraction.interaction_name.in_(
@@ -135,13 +183,14 @@ class InteractionRepository(BaseRepository):
                 ),
                 UserInteraction.created_at >= since,
             )
-            .all()
+            .first()
         )
+        self.end_read_transaction()
 
-        posted = sum(1 for d in decisions if d.interaction_name == "posted")
-        skipped = sum(1 for d in decisions if d.interaction_name == "skip")
-        rejected = sum(1 for d in decisions if d.interaction_name == "confirm_reject")
-        total = len(decisions)
+        total = row.total or 0
+        posted = row.posted or 0
+        skipped = row.skipped or 0
+        rejected = row.rejected or 0
 
         return {
             "total_decisions": total,
@@ -172,7 +221,7 @@ class InteractionRepository(BaseRepository):
             List of bot_response interactions with telegram_message_id
         """
         since = datetime.utcnow() - timedelta(hours=hours)
-        return (
+        result = (
             self.db.query(UserInteraction)
             .filter(
                 UserInteraction.interaction_type == "bot_response",
@@ -183,3 +232,5 @@ class InteractionRepository(BaseRepository):
             .order_by(UserInteraction.created_at.desc())
             .all()
         )
+        self.end_read_transaction()
+        return result

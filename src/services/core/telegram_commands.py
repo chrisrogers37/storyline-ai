@@ -105,12 +105,12 @@ class TelegramCommandHandlers:
         # Gather stats
         pending_count = self.service.queue_repo.count_pending()
         recent_posts = self.service.history_repo.get_recent_posts(hours=24)
-        all_media = self.service.media_repo.get_all(is_active=True)
-        media_count = len(all_media)
-        never_posted = len([m for m in all_media if m.times_posted == 0])
-        posted_once = len([m for m in all_media if m.times_posted == 1])
-        posted_multiple = len([m for m in all_media if m.times_posted > 1])
-        locked_count = len(self.service.lock_repo.get_permanent_locks())
+        media_count = self.service.media_repo.count_active()
+        posting_stats = self.service.media_repo.count_by_posting_status()
+        never_posted = posting_stats["never_posted"]
+        posted_once = posting_stats["posted_once"]
+        posted_multiple = posting_stats["posted_multiple"]
+        locked_count = self.service.lock_repo.count_permanent_locks()
 
         cadence_str = self._get_cadence_display(chat_id)
         last_posted = self._get_last_posted_display(recent_posts)
@@ -428,10 +428,10 @@ class TelegramCommandHandlers:
         command = update.message.text.split()[0].split("@")[0]  # Extract /command
 
         redirects = {
-            "/schedule": "Use /settings to manage your posting schedule (Regenerate / +7 Days).",
+            "/schedule": "Use /settings to adjust posting cadence, or the dashboard for full controls.",
             "/stats": "Media stats are now included in /status.",
             "/locks": "Lock count is shown in /status. Full list in the dashboard.",
-            "/reset": "Use /settings → Regenerate to rebuild your queue.",
+            "/reset": "The JIT scheduler manages the queue automatically.",
             "/dryrun": "Use /settings to toggle dry-run mode.",
             "/backfill": "Use the CLI: storyline-cli backfill-instagram",
             "/connect": "Use /start to open the setup wizard and connect Instagram.",

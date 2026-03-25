@@ -100,8 +100,9 @@ def display_current_mix(service: MediaIngestionService):
     table.add_column("Ratio", justify="right")
     table.add_column("Media Count", justify="right", style="dim")
 
+    category_counts = service.get_category_counts()
     for mix in current_mix:
-        count = len(service.list_media(category=mix.category))
+        count = category_counts.get(mix.category, 0)
         table.add_row(
             mix.category,
             f"{float(mix.ratio) * 100:.0f}%",
@@ -291,8 +292,9 @@ def list_categories():
         table.add_column("Media Count", justify="right")
         table.add_column("Post Ratio", justify="right", style="magenta")
 
+        category_counts = service.get_category_counts()
         for cat in sorted(categories):
-            count = len(service.list_media(category=cat))
+            count = category_counts.get(cat, 0)
             ratio = current_mix.get(cat)
             ratio_str = f"{float(ratio) * 100:.0f}%" if ratio else "[dim]not set[/dim]"
             table.add_row(cat, str(count), ratio_str)
