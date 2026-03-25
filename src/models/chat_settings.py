@@ -32,7 +32,6 @@ class ChatSettings(Base):
 
     # Chat identification
     telegram_chat_id = Column(BigInteger, nullable=False, unique=True, index=True)
-    chat_name = Column(String(255))
 
     # Operational settings
     dry_run_mode = Column(Boolean, default=True)

@@ -43,9 +43,6 @@ class TestMediaItemModel:
     def test_source_type_not_nullable(self):
         assert MediaItem.source_type.nullable is False
 
-    def test_requires_interaction_defaults_to_false(self):
-        assert MediaItem.requires_interaction.default.arg is False
-
     def test_times_posted_defaults_to_zero(self):
         assert MediaItem.times_posted.default.arg == 0
 

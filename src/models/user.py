@@ -26,16 +26,12 @@ class User(Base):
     telegram_first_name = Column(String(255))
     telegram_last_name = Column(String(255))
 
-    # Team
-    team_name = Column(String(255))
-
     # Role (manually assigned via CLI)
     role = Column(String(50), default="member")  # 'admin', 'member'
     is_active = Column(Boolean, default=True)
 
     # Auto-tracked stats
     total_posts = Column(Integer, default=0)
-    first_seen_at = Column(DateTime, default=datetime.utcnow)
     last_seen_at = Column(DateTime, default=datetime.utcnow)
 
     # Timestamps
