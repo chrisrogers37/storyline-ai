@@ -1,6 +1,14 @@
 """User model - auto-populated from Telegram interactions."""
 
-from sqlalchemy import Column, String, BigInteger, Boolean, Integer, DateTime
+from sqlalchemy import (
+    CheckConstraint,
+    Column,
+    String,
+    BigInteger,
+    Boolean,
+    Integer,
+    DateTime,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime
 import uuid
@@ -37,6 +45,13 @@ class User(Base):
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('admin', 'member')",
+            name="check_user_role",
+        ),
+    )
 
     def __repr__(self):
         return f"<User {self.telegram_username or self.telegram_user_id} ({self.role})>"

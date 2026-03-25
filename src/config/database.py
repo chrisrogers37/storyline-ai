@@ -60,6 +60,11 @@ def init_db():
         posting_history,
         media_lock,
         service_run,
+        user_interaction,
+        category_mix,
+        instagram_account,
+        api_token,
+        chat_settings,
     )
 
     Base.metadata.create_all(bind=engine)
