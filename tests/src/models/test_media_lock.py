@@ -34,16 +34,14 @@ class TestMediaPostingLockModel:
     def test_chat_settings_id_nullable(self):
         assert MediaPostingLock.chat_settings_id.nullable is True
 
-    def test_has_tenant_scoped_unique_constraint(self):
+    def test_broken_unique_constraint_removed(self):
+        """The old UniqueConstraint on (media_item_id, locked_until, chat_settings_id)
+        was broken for permanent locks (NULL != NULL). Uniqueness is now enforced
+        by partial unique indexes in the DB (migration 021)."""
         constraint_names = [
             c.name for c in MediaPostingLock.__table_args__ if hasattr(c, "name")
         ]
-        assert "unique_active_lock_per_tenant" in constraint_names
-
-    def test_old_unique_constraint_removed(self):
-        constraint_names = [
-            c.name for c in MediaPostingLock.__table_args__ if hasattr(c, "name")
-        ]
+        assert "unique_active_lock_per_tenant" not in constraint_names
         assert "unique_active_lock" not in constraint_names
 
     def test_repr_format(self):
