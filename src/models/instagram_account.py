@@ -9,6 +9,10 @@ import uuid
 from src.config.database import Base
 
 
+AUTH_METHOD_OAUTH = "oauth"
+AUTH_METHOD_MANUAL = "manual"
+
+
 class InstagramAccount(Base):
     """
     Represents a connected Instagram account.
@@ -30,6 +34,7 @@ class InstagramAccount(Base):
 
     # Status
     is_active = Column(Boolean, default=True)
+    auth_method = Column(String(20), nullable=True, default=None)
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)

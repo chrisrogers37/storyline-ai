@@ -9,6 +9,7 @@ from urllib.parse import urlencode
 import httpx
 from telegram import Bot
 
+from src.models.instagram_account import AUTH_METHOD_OAUTH
 from src.services.base_service import BaseService
 from src.services.core.instagram_account_service import InstagramAccountService
 from src.config.settings import settings
@@ -196,6 +197,7 @@ class OAuthService(BaseService):
                     token_expires_at=expires_at,
                     set_as_active=True,
                     telegram_chat_id=telegram_chat_id,
+                    auth_method=AUTH_METHOD_OAUTH,
                 )
                 logger.info(f"OAuth: Updated token for existing account @{ig_username}")
             else:
@@ -208,6 +210,7 @@ class OAuthService(BaseService):
                     token_expires_at=expires_at,
                     set_as_active=True,
                     telegram_chat_id=telegram_chat_id,
+                    auth_method=AUTH_METHOD_OAUTH,
                 )
                 logger.info(f"OAuth: Created new account @{ig_username}")
 

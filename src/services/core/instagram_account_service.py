@@ -153,6 +153,7 @@ class InstagramAccountService(BaseService):
         user: Optional[User] = None,
         set_as_active: bool = False,
         telegram_chat_id: Optional[int] = None,
+        auth_method: Optional[str] = None,
     ) -> InstagramAccount:
         """
         Add a new Instagram account with its token.
@@ -166,6 +167,7 @@ class InstagramAccountService(BaseService):
             user: User adding the account
             set_as_active: If True, set this as the active account
             telegram_chat_id: Required if set_as_active is True
+            auth_method: How account was connected ('oauth', 'manual', or None)
 
         Returns:
             Created InstagramAccount
@@ -190,6 +192,7 @@ class InstagramAccountService(BaseService):
                 instagram_username=instagram_username,
                 access_token=access_token,
                 token_expires_at=token_expires_at,
+                auth_method=auth_method,
             )
 
             # Optionally set as active
@@ -247,6 +250,7 @@ class InstagramAccountService(BaseService):
         instagram_username: str,
         access_token: str,
         token_expires_at: Optional[datetime] = None,
+        auth_method: Optional[str] = None,
     ) -> InstagramAccount:
         """Create account record and store its encrypted token.
 
@@ -257,6 +261,7 @@ class InstagramAccountService(BaseService):
             display_name=display_name,
             instagram_account_id=instagram_account_id,
             instagram_username=instagram_username,
+            auth_method=auth_method,
         )
 
         encrypted_token = self.encryption.encrypt(access_token)
@@ -327,6 +332,7 @@ class InstagramAccountService(BaseService):
         user: Optional[User] = None,
         set_as_active: bool = False,
         telegram_chat_id: Optional[int] = None,
+        auth_method: Optional[str] = None,
     ) -> InstagramAccount:
         """
         Update the token for an existing Instagram account.
@@ -342,6 +348,7 @@ class InstagramAccountService(BaseService):
             user: User performing the update
             set_as_active: If True, set this as the active account
             telegram_chat_id: Required if set_as_active is True
+            auth_method: How account was connected ('oauth', 'manual', or None)
 
         Returns:
             Updated InstagramAccount
@@ -360,11 +367,14 @@ class InstagramAccountService(BaseService):
             if not account:
                 raise ValueError(f"Account with ID {instagram_account_id} not found")
 
-            # Update username if provided
+            # Update username and auth_method if provided
+            update_kwargs = {}
             if instagram_username and instagram_username != account.instagram_username:
-                account = self.account_repo.update(
-                    str(account.id), instagram_username=instagram_username
-                )
+                update_kwargs["instagram_username"] = instagram_username
+            if auth_method and auth_method != account.auth_method:
+                update_kwargs["auth_method"] = auth_method
+            if update_kwargs:
+                account = self.account_repo.update(str(account.id), **update_kwargs)
 
             # Encrypt and update/create token
             encrypted_token = self.encryption.encrypt(access_token)

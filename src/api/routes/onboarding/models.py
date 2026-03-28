@@ -55,3 +55,11 @@ class RemoveAccountRequest(BaseModel):
     init_data: str
     chat_id: int
     account_id: str
+
+
+class AddAccountRequest(BaseModel):
+    init_data: str
+    chat_id: int
+    display_name: str = Field(min_length=1, max_length=100)
+    instagram_account_id: str = Field(min_length=1, max_length=50, pattern=r"^\d+$")
+    access_token: str = Field(min_length=1, max_length=1024)

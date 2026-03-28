@@ -240,7 +240,6 @@ class TelegramService(BaseService):
         - settings_close: takes only (query)
         - settings_accounts: has sub-routing based on data value
         - accounts_config: has sub-routing based on data value
-        - account_add_cancel: takes (user, query, context)
         """
         if action == "settings_refresh":
             await self.settings_handler.refresh_settings_message(query)
@@ -269,15 +268,11 @@ class TelegramService(BaseService):
 
         elif action == "accounts_config":
             if data == "add":
-                await self.accounts.handle_add_account_start(user, query, context)
+                await self.accounts.handle_add_account_via_webapp(user, query)
             elif data == "remove":
                 await self.accounts.handle_remove_account_menu(user, query)
             elif data == "noop":
                 await query.answer()
-            return True
-
-        elif action == "account_add_cancel":
-            await self.accounts.handle_add_account_cancel(user, query, context)
             return True
 
         return False
@@ -321,12 +316,6 @@ class TelegramService(BaseService):
 
         Routes to appropriate conversation handler based on state in context.user_data.
         """
-        # Check for add account conversation
-        if "add_account_state" in context.user_data:
-            handled = await self.accounts.handle_add_account_message(update, context)
-            if handled:
-                return
-
         # Check for settings edit conversation
         if "settings_edit_state" in context.user_data:
             handled = await self.settings_handler.handle_settings_edit_message(

@@ -1240,3 +1240,148 @@ class TestRemoveAccount:
             )
 
         assert response.status_code == 401
+
+
+# =============================================================================
+# POST /api/onboarding/add-account
+# =============================================================================
+
+
+def _mock_httpx_response(status_code=200, json_data=None):
+    """Create a mock httpx response."""
+    resp = Mock()
+    resp.status_code = status_code
+    resp.json.return_value = json_data or {}
+    return resp
+
+
+@pytest.mark.unit
+class TestAddAccount:
+    """Test POST /api/onboarding/add-account."""
+
+    def _post(self, client, **overrides):
+        payload = {
+            "init_data": "test",
+            "chat_id": CHAT_ID,
+            "display_name": "My Account",
+            "instagram_account_id": "17841425591637879",
+            "access_token": "EAABwzLixnjYBO...",
+        }
+        payload.update(overrides)
+        return client.post("/api/onboarding/add-account", json=payload)
+
+    def test_add_account_success(self, client):
+        """New account is created and returned."""
+        acct = _mock_account("My Account", "myaccount")
+        ig_response = _mock_httpx_response(200, {"username": "myaccount"})
+
+        with (
+            mock_validate(),
+            patch("src.api.routes.onboarding.settings.httpx.AsyncClient") as MockHttpx,
+            patch(
+                "src.api.routes.onboarding.settings.InstagramAccountService"
+            ) as MockIGService,
+        ):
+            mock_client = MockHttpx.return_value.__aenter__.return_value
+            mock_client.get.return_value = ig_response
+            mock_svc = service_ctx(MockIGService)
+            mock_svc.get_account_by_instagram_id.return_value = None
+            mock_svc.add_account.return_value = acct
+
+            response = self._post(client)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["display_name"] == "My Account"
+        assert data["instagram_username"] == "myaccount"
+        assert data["is_update"] is False
+        mock_svc.add_account.assert_called_once()
+
+    def test_add_account_update_existing(self, client):
+        """Existing account gets token updated."""
+        existing = _mock_account("My Account", "myaccount")
+        ig_response = _mock_httpx_response(200, {"username": "myaccount"})
+
+        with (
+            mock_validate(),
+            patch("src.api.routes.onboarding.settings.httpx.AsyncClient") as MockHttpx,
+            patch(
+                "src.api.routes.onboarding.settings.InstagramAccountService"
+            ) as MockIGService,
+        ):
+            mock_client = MockHttpx.return_value.__aenter__.return_value
+            mock_client.get.return_value = ig_response
+            mock_svc = service_ctx(MockIGService)
+            mock_svc.get_account_by_instagram_id.return_value = existing
+            mock_svc.update_account_token.return_value = existing
+
+            response = self._post(client)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["is_update"] is True
+        mock_svc.update_account_token.assert_called_once()
+
+    def test_add_account_invalid_token(self, client):
+        """Invalid token returns 400 with error message."""
+        ig_response = _mock_httpx_response(
+            400, {"error": {"message": "Invalid OAuth access token"}}
+        )
+
+        with (
+            mock_validate(),
+            patch("src.api.routes.onboarding.settings.httpx.AsyncClient") as MockHttpx,
+        ):
+            mock_client = MockHttpx.return_value.__aenter__.return_value
+            mock_client.get.return_value = ig_response
+
+            response = self._post(client)
+
+        assert response.status_code == 400
+        assert "Invalid access token" in response.json()["detail"]
+
+    def test_add_account_non_numeric_id(self, client):
+        """Non-numeric account ID rejected by Pydantic validation."""
+        with mock_validate():
+            response = self._post(client, instagram_account_id="not-a-number")
+
+        assert response.status_code == 422
+
+    def test_add_account_empty_display_name(self, client):
+        """Empty display name rejected by Pydantic validation."""
+        with mock_validate():
+            response = self._post(client, display_name="")
+
+        assert response.status_code == 422
+
+    def test_add_account_unauthorized(self, client):
+        """Invalid auth returns 401."""
+        with (
+            patch(
+                "src.api.routes.onboarding.helpers.validate_init_data",
+                side_effect=ValueError("bad"),
+            ),
+            patch(
+                "src.api.routes.onboarding.helpers.validate_url_token",
+                side_effect=ValueError("bad"),
+            ),
+        ):
+            response = self._post(client)
+
+        assert response.status_code == 401
+
+    def test_add_account_network_error(self, client):
+        """Network error reaching Instagram API returns 502."""
+        import httpx
+
+        with (
+            mock_validate(),
+            patch("src.api.routes.onboarding.settings.httpx.AsyncClient") as MockHttpx,
+        ):
+            mock_client = MockHttpx.return_value.__aenter__.return_value
+            mock_client.get.side_effect = httpx.ConnectError("Connection refused")
+
+            response = self._post(client)
+
+        assert response.status_code == 502
+        assert "Instagram API" in response.json()["detail"]

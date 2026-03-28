@@ -841,6 +841,124 @@ const App = {
         }
     },
 
+    /**
+     * Show the add account form (manual token entry).
+     */
+    showAddAccountForm() {
+        const form = document.getElementById('add-account-form');
+        const actions = document.getElementById('instagram-account-actions');
+        const error = document.getElementById('add-account-error');
+        const success = document.getElementById('add-account-success');
+        if (form) form.classList.remove('hidden');
+        if (actions) actions.classList.add('hidden');
+        if (error) error.classList.add('hidden');
+        if (success) success.classList.add('hidden');
+    },
+
+    /**
+     * Cancel and hide the add account form.
+     */
+    cancelAddAccount() {
+        const form = document.getElementById('add-account-form');
+        const actions = document.getElementById('instagram-account-actions');
+        if (form) form.classList.add('hidden');
+        if (actions) actions.classList.remove('hidden');
+        // Clear inputs
+        const name = document.getElementById('add-account-name');
+        const id = document.getElementById('add-account-id');
+        const token = document.getElementById('add-account-token');
+        if (name) name.value = '';
+        if (id) id.value = '';
+        if (token) token.value = '';
+        const error = document.getElementById('add-account-error');
+        const success = document.getElementById('add-account-success');
+        if (error) error.classList.add('hidden');
+        if (success) success.classList.add('hidden');
+    },
+
+    /**
+     * Submit the add account form.
+     */
+    async submitAddAccount() {
+        const nameEl = document.getElementById('add-account-name');
+        const idEl = document.getElementById('add-account-id');
+        const tokenEl = document.getElementById('add-account-token');
+        const errorEl = document.getElementById('add-account-error');
+        const successEl = document.getElementById('add-account-success');
+        const submitBtn = document.getElementById('btn-submit-account');
+
+        const displayName = (nameEl?.value || '').trim();
+        const accountId = (idEl?.value || '').trim();
+        const accessToken = (tokenEl?.value || '').trim();
+
+        // Client-side validation
+        if (!displayName) {
+            this._showAddAccountError('Please enter a display name.');
+            return;
+        }
+        if (!accountId || !/^\d+$/.test(accountId)) {
+            this._showAddAccountError('Account ID must be a numeric value.');
+            return;
+        }
+        if (!accessToken) {
+            this._showAddAccountError('Please paste your access token.');
+            return;
+        }
+
+        // Hide error, show loading
+        if (errorEl) errorEl.classList.add('hidden');
+        if (successEl) successEl.classList.add('hidden');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Verifying...';
+        }
+
+        try {
+            const data = await this._api('/api/onboarding/add-account', {
+                init_data: this.initData,
+                chat_id: this.chatId,
+                display_name: displayName,
+                instagram_account_id: accountId,
+                access_token: accessToken,
+            });
+
+            // Clear token from input immediately
+            if (tokenEl) tokenEl.value = '';
+
+            // Show success
+            if (successEl) {
+                const action = data.is_update ? 'updated' : 'added';
+                successEl.textContent = `Account @${data.instagram_username} ${action} successfully.`;
+                successEl.classList.remove('hidden');
+            }
+
+            // Refresh account list after brief delay
+            setTimeout(async () => {
+                this.cancelAddAccount();
+                await this._refreshHome({ keepExpanded: true });
+            }, 1500);
+
+        } catch (err) {
+            this._showAddAccountError(err.message || 'Failed to add account.');
+        } finally {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Add Account';
+            }
+        }
+    },
+
+    /**
+     * Show an inline error in the add account form.
+     */
+    _showAddAccountError(message) {
+        const errorEl = document.getElementById('add-account-error');
+        if (errorEl) {
+            errorEl.textContent = message;
+            errorEl.classList.remove('hidden');
+        }
+    },
+
     // Toggle element IDs mapped to setting names
     _toggleIds: {
         'is_paused': 'toggle-delivery',
