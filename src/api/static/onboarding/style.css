@@ -1009,6 +1009,91 @@ h2 {
     display: none;
 }
 
+/* ==================== Add Account Form ==================== */
+
+.add-account-form {
+    margin-top: 12px;
+    padding: 12px;
+    background: var(--tg-theme-secondary-bg-color, rgba(0, 0, 0, 0.03));
+    border-radius: 8px;
+    border: 1px solid rgba(128, 128, 128, 0.15);
+}
+
+.add-account-form.hidden {
+    display: none;
+}
+
+.add-account-form .form-group {
+    margin-bottom: 12px;
+}
+
+.add-account-form label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--tg-theme-text-color);
+}
+
+.add-account-form input {
+    width: 100%;
+    padding: 8px 10px;
+    font-size: 14px;
+    border-radius: 6px;
+    border: 1px solid rgba(128, 128, 128, 0.25);
+    background: var(--tg-theme-bg-color, #fff);
+    color: var(--tg-theme-text-color);
+    box-sizing: border-box;
+}
+
+.add-account-form input:focus {
+    outline: none;
+    border-color: var(--tg-theme-link-color, #2481cc);
+}
+
+.add-account-form .form-hint {
+    font-size: 11px;
+    color: var(--tg-theme-hint-color, #999);
+    margin-top: 3px;
+}
+
+.add-account-error {
+    font-size: 13px;
+    color: #ef4444;
+    margin-bottom: 10px;
+    padding: 6px 8px;
+    background: rgba(239, 68, 68, 0.06);
+    border-radius: 4px;
+}
+
+.add-account-error.hidden {
+    display: none;
+}
+
+.add-account-success {
+    font-size: 13px;
+    color: #22c55e;
+    margin-bottom: 10px;
+    padding: 6px 8px;
+    background: rgba(34, 197, 94, 0.06);
+    border-radius: 4px;
+}
+
+.add-account-success.hidden {
+    display: none;
+}
+
+.btn-action-secondary {
+    background: none !important;
+    color: var(--tg-theme-link-color, #2481cc) !important;
+    border: 1px solid var(--tg-theme-link-color, #2481cc) !important;
+}
+
+.btn-action-link {
+    background: none !important;
+    color: var(--tg-theme-link-color, #2481cc) !important;
+}
+
 /* ==================== Empty State ==================== */
 
 .card-body-empty {

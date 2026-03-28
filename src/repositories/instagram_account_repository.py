@@ -92,6 +92,7 @@ class InstagramAccountRepository(BaseRepository):
         display_name: str,
         instagram_account_id: str,
         instagram_username: Optional[str] = None,
+        auth_method: Optional[str] = None,
     ) -> InstagramAccount:
         """Create a new Instagram account record."""
         # Strip @ if present in username
@@ -102,6 +103,7 @@ class InstagramAccountRepository(BaseRepository):
             display_name=display_name,
             instagram_account_id=instagram_account_id,
             instagram_username=instagram_username,
+            auth_method=auth_method,
         )
         self.db.add(account)
         self.db.commit()

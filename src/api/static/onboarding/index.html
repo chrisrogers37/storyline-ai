@@ -40,8 +40,30 @@
                                 <button class="btn btn-action-sm" onclick="App.cancelRemoveAccount()">Cancel</button>
                             </div>
                         </div>
+                        <div class="add-account-form hidden" id="add-account-form">
+                            <div class="form-group">
+                                <label for="add-account-name">Display Name</label>
+                                <input type="text" id="add-account-name" placeholder="e.g., Main Account" maxlength="100">
+                            </div>
+                            <div class="form-group">
+                                <label for="add-account-id">Instagram Account ID</label>
+                                <input type="text" id="add-account-id" placeholder="Numeric ID from Meta Business Suite" inputmode="numeric">
+                                <div class="form-hint">Found in Meta Business Suite: Settings &gt; Business Assets &gt; Instagram Accounts</div>
+                            </div>
+                            <div class="form-group">
+                                <label for="add-account-token">Access Token</label>
+                                <input type="password" id="add-account-token" placeholder="Paste your Graph API access token">
+                            </div>
+                            <div class="add-account-error hidden" id="add-account-error"></div>
+                            <div class="add-account-success hidden" id="add-account-success"></div>
+                            <div class="confirm-actions">
+                                <button class="btn btn-action-sm" id="btn-submit-account" onclick="App.submitAddAccount()">Add Account</button>
+                                <button class="btn btn-action-sm btn-action-link" onclick="App.cancelAddAccount()">Cancel</button>
+                            </div>
+                        </div>
                         <div class="card-body-actions" id="instagram-account-actions">
-                            <button class="btn btn-action-sm" onclick="App.connectOAuth('instagram')">Add Account</button>
+                            <button class="btn btn-action-sm" onclick="App.connectOAuth('instagram')">Connect via OAuth</button>
+                            <button class="btn btn-action-sm btn-action-secondary" onclick="App.showAddAccountForm()">Add Manually</button>
                         </div>
                     </div>
                 </div>

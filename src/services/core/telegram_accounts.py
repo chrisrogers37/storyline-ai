@@ -6,10 +6,11 @@ from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-from src.services.core.telegram_account_wizard import TelegramAccountWizard
+from src.config.settings import settings as app_settings
 from src.services.core.telegram_utils import (
     build_account_management_keyboard,
     build_queue_action_keyboard,
+    build_webapp_button,
     validate_queue_and_media,
     validate_queue_item,
 )
@@ -31,7 +32,6 @@ class TelegramAccountHandlers:
 
     def __init__(self, service: TelegramService):
         self.service = service
-        self.wizard = TelegramAccountWizard(self)
 
     async def handle_account_selection_menu(self, user, query):
         """Show Instagram account configuration menu."""
@@ -79,17 +79,49 @@ class TelegramAccountHandlers:
         except ValueError as e:
             await query.answer(f"Error: {e}", show_alert=True)
 
-    async def handle_add_account_start(self, user, query, context):
-        """Start the add account conversation flow. Delegates to wizard."""
-        return await self.wizard.handle_add_account_start(user, query, context)
+    async def handle_add_account_via_webapp(self, user, query):
+        """Redirect to Mini App for secure account input.
 
-    async def handle_add_account_message(self, update, context):
-        """Handle text messages during add account conversation. Delegates to wizard."""
-        return await self.wizard.handle_add_account_message(update, context)
+        Instead of collecting credentials in chat messages, opens the
+        Mini App dashboard where the user can add accounts securely.
+        """
+        chat_id = query.message.chat_id
+        user_id = query.from_user.id if query.from_user else 0
+        chat_type = query.message.chat.type
 
-    async def handle_add_account_cancel(self, user, query, context):
-        """Cancel add account flow. Delegates to wizard."""
-        return await self.wizard.handle_add_account_cancel(user, query, context)
+        webapp_url = (
+            f"{app_settings.OAUTH_REDIRECT_BASE_URL}/webapp/onboarding"
+            f"?chat_id={chat_id}"
+        )
+
+        webapp_button = build_webapp_button(
+            text="Open Dashboard",
+            webapp_url=webapp_url,
+            chat_type=chat_type,
+            chat_id=chat_id,
+            user_id=user_id,
+        )
+
+        keyboard = InlineKeyboardMarkup(
+            [
+                [webapp_button],
+                [
+                    InlineKeyboardButton(
+                        "↩️ Back", callback_data="settings_accounts:select"
+                    )
+                ],
+            ]
+        )
+
+        await query.edit_message_text(
+            "📸 *Add Instagram Account*\n\n"
+            "Open the dashboard to add an account securely.\n"
+            "Your credentials will be transmitted via HTTPS and "
+            "won't appear in chat history.",
+            parse_mode="Markdown",
+            reply_markup=keyboard,
+        )
+        await query.answer()
 
     async def handle_remove_account_menu(self, user, query):
         """Show menu to select account to remove."""

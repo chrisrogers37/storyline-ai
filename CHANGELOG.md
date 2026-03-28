@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Mini App Secure Account Input
+
+- **Secure account form in Mini App** — Instagram accounts can now be added via an HTTPS form in the Telegram Mini App dashboard, replacing the message-based wizard where credentials were visible in chat history
+  - New `POST /api/onboarding/add-account` endpoint with Instagram API credential validation
+  - Inline form with Display Name, Account ID, and Access Token (password-masked) fields
+  - Client-side validation and real-time error/success feedback
+  - Supports both new accounts and token updates for existing accounts
+
+- **`auth_method` tracking** — New column on `instagram_accounts` records how each account was connected (`oauth`, `manual`, or `NULL` for legacy)
+  - Migration `022_add_auth_method.sql`
+  - OAuth flow now tags accounts with `auth_method="oauth"`
+
+### Changed — Mini App Secure Account Input
+
+- **Telegram "Add Account" button** now opens the Mini App dashboard instead of starting a message-based wizard
+- **Instagram card actions** split into "Connect via OAuth" (primary) and "Add Manually" (secondary) buttons
+
+### Removed — Mini App Secure Account Input
+
+- **Message-based account wizard** (`telegram_account_wizard.py`) — deleted entirely; credentials are no longer collected through chat messages
+
 ### Changed — Documentation Review
 
 - **CLAUDE.md** — Fixed 4 wrong method names in service reference; added 10 undocumented services, media source provider pattern, API endpoint reference (16 endpoints), utilities table; rewrote file organization tree to reflect current codebase

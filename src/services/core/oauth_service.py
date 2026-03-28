@@ -196,6 +196,7 @@ class OAuthService(BaseService):
                     token_expires_at=expires_at,
                     set_as_active=True,
                     telegram_chat_id=telegram_chat_id,
+                    auth_method="oauth",
                 )
                 logger.info(f"OAuth: Updated token for existing account @{ig_username}")
             else:
@@ -208,6 +209,7 @@ class OAuthService(BaseService):
                     token_expires_at=expires_at,
                     set_as_active=True,
                     telegram_chat_id=telegram_chat_id,
+                    auth_method="oauth",
                 )
                 logger.info(f"OAuth: Created new account @{ig_username}")
 

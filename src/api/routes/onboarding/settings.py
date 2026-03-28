@@ -1,5 +1,6 @@
 """Settings and schedule action endpoints for onboarding Mini App."""
 
+import httpx
 from fastapi import APIRouter, HTTPException
 from sqlalchemy.exc import OperationalError
 
@@ -11,6 +12,7 @@ from src.utils.logger import logger
 
 from .helpers import _validate_request, service_error_handler
 from .models import (
+    AddAccountRequest,
     InitRequest,
     RemoveAccountRequest,
     SwitchAccountRequest,
@@ -173,3 +175,85 @@ async def onboarding_queue_preview(request: InitRequest):
             telegram_chat_id=request.chat_id, count=5
         )
         return {"items": previews}
+
+
+@router.post("/add-account")
+async def onboarding_add_account(request: AddAccountRequest):
+    """Add an Instagram account via secure Mini App form.
+
+    Validates credentials against Instagram Graph API, then creates
+    or updates the account. Credentials are transmitted via HTTPS
+    and never appear in Telegram chat history.
+    """
+    _validate_request(request.init_data, request.chat_id)
+
+    # Validate credentials against Instagram API
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"https://graph.facebook.com/v18.0/{request.instagram_account_id}",
+                params={
+                    "fields": "username",
+                    "access_token": request.access_token,
+                },
+                timeout=30.0,
+            )
+    except httpx.HTTPError as e:
+        logger.error(f"Instagram API network error during add-account: {e}")
+        raise HTTPException(
+            status_code=502,
+            detail="Could not reach Instagram API. Please try again.",
+        )
+
+    if response.status_code != 200:
+        error_data = response.json()
+        error_msg = error_data.get("error", {}).get("message", "Unknown error")
+        # Replace technical OAuth errors with user-friendly message
+        if "Invalid OAuth" in error_msg or "access token" in error_msg.lower():
+            error_msg = (
+                "Invalid access token. Please check it hasn't expired and try again."
+            )
+        raise HTTPException(status_code=400, detail=error_msg)
+
+    api_data = response.json()
+    username = api_data.get("username")
+    if not username:
+        raise HTTPException(
+            status_code=400,
+            detail="Could not fetch username from Instagram API.",
+        )
+
+    # Create or update account
+    with InstagramAccountService() as account_service, service_error_handler():
+        existing = account_service.get_account_by_instagram_id(
+            request.instagram_account_id
+        )
+
+        if existing:
+            account = account_service.update_account_token(
+                instagram_account_id=request.instagram_account_id,
+                access_token=request.access_token,
+                instagram_username=username,
+                set_as_active=True,
+                telegram_chat_id=request.chat_id,
+                auth_method="manual",
+            )
+            is_update = True
+        else:
+            account = account_service.add_account(
+                display_name=request.display_name,
+                instagram_account_id=request.instagram_account_id,
+                instagram_username=username,
+                access_token=request.access_token,
+                set_as_active=True,
+                telegram_chat_id=request.chat_id,
+                auth_method="manual",
+            )
+            is_update = False
+
+        return {
+            "account_id": str(account.id),
+            "display_name": account.display_name,
+            "instagram_username": account.instagram_username,
+            "is_update": is_update,
+        }

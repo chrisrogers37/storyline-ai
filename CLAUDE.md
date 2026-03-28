@@ -759,6 +759,7 @@ VALUES (2, 'Add new column to media_items');
 | 019 | `019_last_post_sent_at.sql` | JIT scheduler last_post_sent_at |
 | 020 | `020_data_model_cleanup.sql` | Drop vestigial columns, add constraints |
 | 021 | `021_fix_permanent_lock_uniqueness.sql` | Fix permanent lock uniqueness with partial indexes |
+| 022 | `022_add_auth_method.sql` | Add auth_method column to instagram_accounts |
 
 ### 5. Pre-Commit Checklist (CRITICAL)
 

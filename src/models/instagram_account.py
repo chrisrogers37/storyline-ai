@@ -30,6 +30,7 @@ class InstagramAccount(Base):
 
     # Status
     is_active = Column(Boolean, default=True)
+    auth_method = Column(String(20), nullable=True, default=None)
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
