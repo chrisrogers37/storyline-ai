@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     FACEBOOK_APP_ID: Optional[str] = None
     FACEBOOK_APP_SECRET: Optional[str] = None
     OAUTH_REDIRECT_BASE_URL: Optional[str] = None  # e.g., "https://api.storyline.ai"
+    INSTAGRAM_DEEPLINK_URL: str = "https://www.instagram.com/"
 
     # Google Drive OAuth (Phase 05 Multi-Tenant)
     GOOGLE_CLIENT_ID: Optional[str] = None
