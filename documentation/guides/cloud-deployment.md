@@ -59,7 +59,7 @@ Run the base schema and all migrations in order:
 psql "$DATABASE_URL" -f scripts/setup_database.sql
 
 # All migrations (run in order)
-for f in scripts/migrations/0{01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16}_*.sql; do
+for f in scripts/migrations/0{01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21}_*.sql; do
   echo "Running $f..."
   psql "$DATABASE_URL" -f "$f"
 done
@@ -71,7 +71,7 @@ done
 -- Check schema version
 SELECT * FROM schema_version ORDER BY version;
 
--- Should show version 16 as latest
+-- Should show version 21 as latest
 
 -- Check uuid-ossp extension
 SELECT extname FROM pg_extension WHERE extname = 'uuid-ossp';

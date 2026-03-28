@@ -1,8 +1,8 @@
 # Test Coverage Report
 
-**Last Updated**: 2026-02-09
-**Total Tests**: 494 (351 passing, 143 skipped integration tests)
-**Test Files**: 36
+**Last Updated**: 2026-03-28
+**Total Tests**: 1,417
+**Test Files**: 77
 **Test Framework**: pytest 7.4.3
 **Coverage Target**: Core business logic and critical paths
 **Status**: ✅ Current through v1.6.0 + race condition handling

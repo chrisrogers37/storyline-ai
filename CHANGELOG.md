@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — Documentation Review
+
+- **CLAUDE.md** — Fixed 4 wrong method names in service reference; added 10 undocumented services, media source provider pattern, API endpoint reference (16 endpoints), utilities table; rewrote file organization tree to reflect current codebase
+- **PROJECT_CONTEXT.md** — Fixed Raspberry Pi→Neon PostgreSQL, retired bot commands, wrong filenames; added media sources, Google Drive, API layer to architecture diagram
+- **QUICK_REFERENCE.md** — Fixed Raspberry Pi→Neon, removed SSH commands, updated common tasks
+- **documentation/README.md** — Removed broken 01_settings link, fixed test counts (494→1,417), file counts (36→77), updated archive count, dates
+- **ROADMAP.md** — Fixed test count, v1.0.0 date (2025-12-XX→2026-01-03), updated last-updated date
+- **Deployment guides** — Updated migration loops from 16→21 migrations across deployment.md, cloud-deployment.md, dev-environment-setup.md
+- **quickstart.md** — Replaced non-existent `process-queue` CLI command, updated Telegram bot commands to current 6 active commands
+- **testing-guide.md / TEST_COVERAGE.md** — Updated test counts and file counts
+- **.github/README.md** — Full rewrite removing obsolete Pi/Tailscale/deploy.sh references
+
+### Added — Documentation Review
+
+- **Media source provider docs** — Documented MediaSourceProvider, MediaSourceFactory, GoogleDriveProvider, LocalMediaProvider in CLAUDE.md
+- **API endpoint reference** — Documented all OAuth and onboarding/Mini App API routes in CLAUDE.md
+- **Utility modules reference** — Documented resilience.py, encryption.py, webapp_auth.py, validators.py in CLAUDE.md
+- **Landing site docs** — Added landing/ directory to architecture overview and file organization
+
+### Removed — Documentation Review
+
+- **Archived prod-hardening tech debt plans** — Moved 5 completed docs from planning/tech_debt/ to archive/ (PRs #78-#81, all completed)
+- **Renamed github-actions-tailscale.md** → ci-cd-pipeline.md (Tailscale not used; content was already about CI/CD)
+
 ### Changed — Data Model Remediation
 - **SQL Aggregation** — `/status`, dashboard stats, and interaction analytics now use SQL `COUNT`/`GROUP BY` instead of loading all rows into Python memory
 - **Dashboard N+1 Fix** — Queue and history detail endpoints now use JOIN queries instead of per-item media lookups

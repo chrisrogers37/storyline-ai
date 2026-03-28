@@ -47,7 +47,7 @@ createdb storyline_ai
 psql -d storyline_ai -f scripts/setup_database.sql
 
 # Run migrations
-for f in scripts/migrations/0{01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16}_*.sql; do
+for f in scripts/migrations/0{01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21}_*.sql; do
   psql -d storyline_ai -f "$f"
 done
 ```

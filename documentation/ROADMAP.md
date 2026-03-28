@@ -1,6 +1,6 @@
 # Storyline AI - Product Roadmap
 
-**Last Updated**: 2026-02-09
+**Last Updated**: 2026-03-28
 **Current Version**: v1.6.0 (Phase 2 Complete, Phase 1.8 Complete)
 **Next Version**: TBD
 
@@ -232,7 +232,7 @@ Build a delightful Instagram Story automation system that:
 - ✅ **Command Menu Registration** - Native Telegram `/` autocomplete
 - ✅ **Dry Run Bug Fix** - Fixed dry run not actually skipping Instagram API
 - ✅ **Button Race Condition Fix** - Async locks prevent duplicate operations on same queue item
-- ✅ **494 comprehensive tests** (351 passing, 143 skipped integration tests)
+- ✅ **1,417 comprehensive tests**
 
 **Completed**: February 2026
 
@@ -318,7 +318,7 @@ Build a delightful Instagram Story automation system that:
 | v1.3.0 | 2026-01-08 | Phase 1.5 | Bot management commands (/pause, /resume, /stats, etc.) |
 | v1.2.0 | 2026-01-05 | Phase 1.5 | Telegram workflow enhancements + Permanent Reject |
 | v1.0.1 | 2026-01-04 | Phase 1 | Production release with bug fixes |
-| v1.0.0 | 2025-12-XX | Phase 1 | Initial Telegram-only implementation |
+| v1.0.0 | 2026-01-03 | Phase 1 | Initial Telegram-only implementation |
 
 ---
 
