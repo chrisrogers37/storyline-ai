@@ -367,11 +367,14 @@ class InstagramAccountService(BaseService):
             if not account:
                 raise ValueError(f"Account with ID {instagram_account_id} not found")
 
-            # Update username if provided
+            # Update username and auth_method if provided
+            update_kwargs = {}
             if instagram_username and instagram_username != account.instagram_username:
-                account = self.account_repo.update(
-                    str(account.id), instagram_username=instagram_username
-                )
+                update_kwargs["instagram_username"] = instagram_username
+            if auth_method and auth_method != account.auth_method:
+                update_kwargs["auth_method"] = auth_method
+            if update_kwargs:
+                account = self.account_repo.update(str(account.id), **update_kwargs)
 
             # Encrypt and update/create token
             encrypted_token = self.encryption.encrypt(access_token)

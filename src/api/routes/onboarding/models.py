@@ -62,4 +62,4 @@ class AddAccountRequest(BaseModel):
     chat_id: int
     display_name: str = Field(min_length=1, max_length=100)
     instagram_account_id: str = Field(min_length=1, max_length=50, pattern=r"^\d+$")
-    access_token: str = Field(min_length=1)
+    access_token: str = Field(min_length=1, max_length=1024)

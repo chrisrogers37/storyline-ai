@@ -9,6 +9,10 @@ import uuid
 from src.config.database import Base
 
 
+AUTH_METHOD_OAUTH = "oauth"
+AUTH_METHOD_MANUAL = "manual"
+
+
 class InstagramAccount(Base):
     """
     Represents a connected Instagram account.

@@ -4,6 +4,7 @@ import httpx
 from fastapi import APIRouter, HTTPException
 from sqlalchemy.exc import OperationalError
 
+from src.models.instagram_account import AUTH_METHOD_MANUAL
 from src.services.core.instagram_account_service import InstagramAccountService
 from src.services.core.media_sync import MediaSyncService
 from src.services.core.scheduler import SchedulerService
@@ -19,6 +20,8 @@ from .models import (
     ToggleSettingRequest,
     UpdateSettingRequest,
 )
+
+META_GRAPH_BASE = "https://graph.facebook.com/v18.0"
 
 router = APIRouter(tags=["onboarding"])
 
@@ -191,7 +194,7 @@ async def onboarding_add_account(request: AddAccountRequest):
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"https://graph.facebook.com/v18.0/{request.instagram_account_id}",
+                f"{META_GRAPH_BASE}/{request.instagram_account_id}",
                 params={
                     "fields": "username",
                     "access_token": request.access_token,
@@ -236,7 +239,7 @@ async def onboarding_add_account(request: AddAccountRequest):
                 instagram_username=username,
                 set_as_active=True,
                 telegram_chat_id=request.chat_id,
-                auth_method="manual",
+                auth_method=AUTH_METHOD_MANUAL,
             )
             is_update = True
         else:
@@ -247,7 +250,7 @@ async def onboarding_add_account(request: AddAccountRequest):
                 access_token=request.access_token,
                 set_as_active=True,
                 telegram_chat_id=request.chat_id,
-                auth_method="manual",
+                auth_method=AUTH_METHOD_MANUAL,
             )
             is_update = False
 
