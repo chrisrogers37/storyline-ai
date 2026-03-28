@@ -7,12 +7,12 @@
 ## What This Project Does
 
 Storyline AI is a self-hosted Instagram Story scheduling system with Telegram-based workflow:
-1. Media files are indexed from a directory
-2. A scheduler creates a posting queue with time slots
+1. Media files are indexed from Google Drive (or local filesystem)
+2. A JIT scheduler checks if a posting slot is due each tick
 3. At each slot, the bot either:
    - Posts directly via Instagram Graph API (Phase 2), or
    - Sends the image to Telegram for manual posting (Phase 1)
-4. Users interact via Telegram bot commands (/settings, /queue, /status)
+4. Users interact via Telegram bot commands (/start, /status, /setup, /next, /cleanup, /help)
 
 ---
 
@@ -28,21 +28,25 @@ Storyline AI is a self-hosted Instagram Story scheduling system with Telegram-ba
 ┌───────────────▼─────────────────────┐
 │  Service Layer (Business Logic)     │
 │  • src/services/core/               │
-│    - TelegramService                │
-│    - PostingService                 │
-│    - SchedulerService               │
+│    - TelegramService + handlers     │
+│    - PostingService, SchedulerService│
 │    - MediaIngestionService          │
-│    - InstagramAccountService        │
+│    - DashboardService, OAuthService │
+│    - SettingsService, MediaSyncSvc  │
 │  • src/services/integrations/       │
 │    - InstagramAPIService            │
-│    - TokenRefreshService            │
+│    - GoogleDriveService + OAuth     │
+│    - CloudStorageService            │
+│  • src/services/media_sources/      │
+│    - MediaSourceFactory (pluggable) │
+│    - GoogleDriveProvider, LocalProv │
 └───────────────┬─────────────────────┘
                 │
 ┌───────────────▼─────────────────────┐
 │  Data Layer                         │
 │  • src/repositories/ - CRUD only    │
 │  • src/models/ - SQLAlchemy models  │
-│  • PostgreSQL on Raspberry Pi       │
+│  • Neon PostgreSQL (cloud)          │
 └─────────────────────────────────────┘
 ```
 
@@ -76,11 +80,15 @@ Storyline AI is a self-hosted Instagram Story scheduling system with Telegram-ba
 
 | File | Purpose |
 |------|---------|
-| `src/services/core/telegram_service.py` | Telegram bot command/callback handlers |
-| `src/services/core/posting_service.py` | Orchestrates posting workflow |
+| `src/services/core/telegram_service.py` | Telegram bot lifecycle + coordination |
+| `src/services/core/telegram_commands.py` | /command handlers |
+| `src/services/core/telegram_callbacks.py` | Button callback handlers |
+| `src/services/core/posting.py` | Orchestrates posting workflow |
 | `src/services/core/scheduler.py` | Creates posting schedules |
 | `src/services/integrations/instagram_api.py` | Instagram Graph API wrapper |
-| `src/services/core/instagram_account_service.py` | Multi-account management |
+| `src/services/integrations/google_drive.py` | Google Drive operations |
+| `src/services/media_sources/factory.py` | Media source provider routing |
+| `src/api/routes/onboarding/` | Mini App API (dashboard, settings) |
 | `src/models/chat_settings.py` | Per-chat settings model |
 
 ---
@@ -99,13 +107,14 @@ Storyline AI is a self-hosted Instagram Story scheduling system with Telegram-ba
 
 ---
 
-## Current Phase: 1.6
+## Current Version: v1.6.0
 
 - ✅ Phase 1: Telegram manual posting
 - ✅ Phase 1.5: Multi-account support
-- ✅ Phase 1.6: Settings improvements
-- 🔲 Phase 2: Full Instagram API automation
-- 🔲 Phase 3: Web UI
+- ✅ Phase 1.6: Settings & Telegram UX
+- ✅ Phase 2: Instagram API automation
+- 🔲 Phase 3: Shopify integration
+- 🔲 Phase 4+: Web UI, analytics
 
 ---
 
@@ -118,9 +127,9 @@ Storyline AI is a self-hosted Instagram Story scheduling system with Telegram-ba
 4. Update Telegram /settings handler
 
 **Adding a new command:**
-1. Create handler in `TelegramService`
-2. Register in `_register_handlers()`
-3. Update help text
+1. Create handler method in the appropriate handler module (e.g., `telegram_commands.py`)
+2. Register in `TelegramService.initialize()` via `_register_handlers()`
+3. Update help text in `telegram_commands.py`
 
 **Testing:**
 - All services should have unit tests in `tests/src/services/`

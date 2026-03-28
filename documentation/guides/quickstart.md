@@ -153,8 +153,8 @@ storyline-cli list-users
 # View queue
 storyline-cli list-queue
 
-# Process queue manually
-storyline-cli process-queue
+# Preview upcoming posts
+storyline-cli queue-preview
 ```
 
 ## Next Steps
@@ -162,7 +162,7 @@ storyline-cli process-queue
 1. **Customize schedule**: Use `/settings` in Telegram or edit .env for defaults
 2. **Add team members**: Just have them interact with the bot (auto-discovery)
 3. **Promote admins**: `storyline-cli promote-user <telegram_id> --role admin`
-4. **Run as service**: See [deployment.md](deployment.md) for systemd setup
+4. **Deploy to Railway**: See [deployment.md](deployment.md) for production setup
 5. **Enable Instagram API** (Phase 2): See [instagram-api-setup.md](instagram-api-setup.md)
 6. **Add multiple accounts**: `storyline-cli add-instagram-account --help`
 7. **Category scheduling**: Organize media in subfolders, use `storyline-cli list-categories`
@@ -173,17 +173,12 @@ Once running, these commands are available in Telegram:
 
 | Command | Description |
 |---------|-------------|
-| `/status` | System health and queue status |
-| `/queue` | View pending scheduled posts |
+| `/start` | Open setup wizard or show dashboard |
+| `/status` | System health, media stats, queue status |
+| `/setup` / `/settings` | Quick settings and toggles |
 | `/next` | Force-send next post immediately |
-| `/settings` | Configure bot settings (dry run, pause, accounts) |
-| `/schedule N` | Create N days of posting schedule |
-| `/pause` / `/resume` | Pause/resume automatic posting |
-| `/stats` | Media library statistics |
-| `/history N` | Recent post history |
-| `/locks` | View permanently rejected items |
 | `/cleanup` | Delete recent bot messages |
-| `/dryrun` | Toggle dry-run mode |
+| `/help` | Show available commands |
 
 ---
 

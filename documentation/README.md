@@ -2,10 +2,11 @@
 
 Welcome to the Storyline AI documentation hub. All project documentation is organized here by purpose.
 
-**Last Updated**: 2026-02-10
+**Last Updated**: 2026-03-28
 **Current Version**: v1.6.0
 **Current Phase**: Phase 2 (Instagram API Automation) - COMPLETED | Phase 1.8 (Telegram UX) - COMPLETED
 **Next Phase**: Phase 3 (Shopify Integration) - PENDING
+**Deployment**: Railway (worker + API) + Neon PostgreSQL
 
 ## Documentation Structure
 
@@ -17,7 +18,6 @@ documentation/
 ├── planning/                       # Planning and design documents
 │   ├── phases/                    # Phased implementation plans
 │   │   ├── 00_MASTER_ROADMAP.md   # Vision, architecture, phase overview
-│   │   ├── 01_settings_and_multitenancy.md  # COMPLETED (Phases 1-1.5)
 │   │   ├── 02_shopify_integration.md        # PENDING
 │   │   ├── 03_printify_integration.md       # PENDING
 │   │   ├── 04_media_product_linking.md      # PENDING
@@ -44,12 +44,6 @@ documentation/
 - Phase overview with status markers (8 phases total, 5 completed, 6 pending)
 
 ### Active Phase Planning Documents
-
-**[phases/01_settings_and_multitenancy.md](planning/phases/01_settings_and_multitenancy.md)** - Phases 1-1.5 COMPLETED | Phases 2-3 PENDING
-- Phase 1: Database-backed settings via `/settings` command (COMPLETED)
-- Phase 1.5: Multi-Instagram account management (COMPLETED)
-- Phase 2: Cloud Media Storage (PENDING)
-- Phase 3: Multi-Tenancy with full isolation (PENDING)
 
 **[phases/02_shopify_integration.md](planning/phases/02_shopify_integration.md)** - PENDING
 - Shopify Admin API integration, product catalog sync (Type 2 SCD), order tracking
@@ -83,8 +77,8 @@ documentation/
 - Decision: proceed with message-based approach for now
 
 ### Test Coverage Report
-**[TEST_COVERAGE.md](guides/TEST_COVERAGE.md)** - CURRENT (494 tests)
-- Test suite summary by layer (36 test files)
+**[TEST_COVERAGE.md](guides/TEST_COVERAGE.md)** - CURRENT (1,417 tests)
+- Test suite summary by layer (77 test files)
 - Phase 1.6 through Phase 2 test additions
 - Coverage gaps and future work
 - Test infrastructure documentation
@@ -121,7 +115,7 @@ documentation/
 **[testing-guide.md](guides/testing-guide.md)**
 - Automatic test database setup and fixture architecture
 - Running tests: `make test`, `make test-unit`, `pytest` with markers
-- 494 tests (351 passing, 143 skipped integration tests) as of v1.6.0
+- 1,417 tests collected as of v1.6.0
 - Test fixtures and patterns (session-scoped DB, function-scoped transactions)
 - CI/CD integration (GitHub Actions)
 
@@ -147,9 +141,9 @@ documentation/
 - GitHub Actions CI (lint, test, security scan on cloud runners)
 - Why not self-hosted runners (public repo security)
 
-### GitHub Actions CI/CD
-**[github-actions-tailscale.md](guides/github-actions-tailscale.md)**
-- GitHub Actions CI pipeline (lint, test, security)
+### CI/CD Pipeline
+**[ci-cd-pipeline.md](guides/ci-cd-pipeline.md)**
+- GitHub Actions CI pipeline (lint, test, security, changelog check)
 - Railway auto-deploy CD pipeline
 - Security for public repos (cloud runners only)
 
@@ -245,6 +239,7 @@ Completed and historical documents (see [archive/ARCHIVE_INDEX.md](archive/ARCHI
 | [verbose-settings-improvement-plan.md](archive/verbose-settings-improvement-plan.md) | COMPLETED | Verbose notifications expansion (v1.6.0) |
 | [phase-1.7-inline-account-selector.md](archive/phase-1.7-inline-account-selector.md) | COMPLETED | Inline account selection (v1.5.0) |
 | [user-interactions-design.md](archive/user-interactions-design.md) | COMPLETED | InteractionService design (v1.4.0) |
+| [prod-hardening_2026-02-23/](archive/prod-hardening_2026-02-23/) | COMPLETED | Production hardening tech debt (4 phases, PRs #78-#81) |
 
 ---
 
@@ -326,12 +321,12 @@ When adding new documentation:
 
 | Area | Status | Files | Notes |
 |------|--------|-------|-------|
-| **Planning** | Current | 8 active + 1 future | Phases 1-2.5 complete, 3-8 pending |
-| **Guides** | Current | 8 guides | Setup, deployment, testing, Instagram API, dev env, deployment options, Tailscale, test coverage |
+| **Planning** | Current | 7 active phase plans + 4 feed-queue + 4 tech-debt + 2 other | Phases 1-2 complete, 3-8 pending |
+| **Guides** | Current | 9 guides | Setup, deployment, testing, Instagram API, dev env, deployment options, Tailscale, test coverage |
 | **Operations** | Current | 3 files | Monitoring, backup, troubleshooting |
 | **Updates** | Current | 3 files | Bugfixes, category scheduling, force posting |
 | **Security** | Current | 1 file | Security review (updated post-refactor) |
-| **Archive** | Organized | 10 files | Historical docs preserved with index |
+| **Archive** | Organized | 22 entries | Historical docs preserved with index |
 | **API Docs** | Future | 0 files | Planned for Phase 5 (Dashboard UI) |
 
 ### Document Status Legend
@@ -353,4 +348,4 @@ When adding new documentation:
 
 ---
 
-*Last updated: 2026-03-03*
+*Last updated: 2026-03-28*

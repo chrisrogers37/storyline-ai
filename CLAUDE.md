@@ -104,7 +104,7 @@ psql "$DATABASE_URL" -c "SELECT * FROM service_runs ORDER BY started_at DESC LIM
 │  Interface Layer (Multiple UIs)          │
 │  • cli/       - Command-line interface  │
 │  • Telegram   - Bot workflow (Phase 1)  │
-│  • ui/        - Next.js frontend (Future)│
+│  • landing/   - Next.js marketing + setup│
 └─────────────────┬───────────────────────┘
                   │
 ┌─────────────────▼───────────────────────┐
@@ -216,20 +216,26 @@ storyline-cli reset-queue        # Reset queue (clear all pending posts)
 
 | Service | Responsibility | Key Methods |
 |---------|---------------|-------------|
-| **MediaIngestionService** | Scan filesystem, index media | `scan_directory()`, `index_file()`, `detect_duplicates()` |
+| **MediaIngestionService** | Scan filesystem, index media | `scan_directory()`, `detect_duplicates()` |
 | **SchedulerService** | JIT post scheduling | `process_slot()`, `force_send_next()`, `is_slot_due()`, `get_queue_preview()` |
 | **PostingService** | Google Drive auth alerting | `send_gdrive_auth_alert()` |
 | **TelegramService** | Telegram bot coordination | `send_notification()`, `initialize()`, `start_polling()` |
-| **TelegramCommandHandlers** | `/command` handlers | `handle_status()`, `handle_queue()`, `handle_next()` |
+| **TelegramCommandHandlers** | `/command` handlers | `handle_start()`, `handle_status()`, `handle_next()`, `handle_help()`, `handle_cleanup()` |
 | **TelegramCallbackHandlers** | Button callback handlers | `handle_posted()`, `handle_skipped()`, `handle_rejected()` |
 | **TelegramAutopostHandler** | Auto-posting via API | `handle_autopost()` |
 | **TelegramSettingsHandlers** | Settings UI | `handle_settings()`, `handle_settings_toggle()` |
 | **TelegramAccountHandlers** | Account selection | `handle_account_selection_menu()`, `handle_account_switch()` |
 | **MediaLockService** | TTL lock management | `create_lock()`, `is_locked()`, `cleanup_expired_locks()` |
-| **HealthCheckService** | System health monitoring | `check_all()`, `check_database()`, `check_instagram_api()` |
-| **SettingsService** | Per-chat runtime configuration | `get_settings()`, `toggle_setting()`, `update_schedule_settings()` |
+| **HealthCheckService** | System health monitoring | `check_all()` |
+| **SettingsService** | Per-chat runtime configuration | `get_settings()`, `toggle_setting()`, `update_setting()` |
 | **InstagramAccountService** | Multi-account management | `add_account()`, `switch_account()`, `get_active_account()` |
 | **InteractionService** | Bot interaction tracking | `log_command()`, `log_callback()`, `log_bot_response()` |
+| **DashboardService** | Mini App dashboard aggregation | `get_queue_detail()`, `get_history_detail()`, `get_media_stats()` |
+| **OAuthService** | Instagram OAuth flow | `generate_authorization_url()`, `exchange_and_store()` |
+| **SetupStateService** | Unified setup status | `get_setup_state()`, `format_setup_status()` |
+| **UserService** | User management | `list_users()`, `get_by_telegram_id()`, `promote_user()` |
+| **TelegramNotificationService** | Post notifications | `send_notification()` |
+| **MediaSyncService** | Media sync orchestration | `sync()`, `get_last_sync_info()` |
 
 > **Note**: `InteractionService` intentionally does NOT extend `BaseService` to avoid recursive tracking.
 > The Telegram handler modules (commands, callbacks, etc.) use a composition pattern — they receive
@@ -242,6 +248,10 @@ storyline-cli reset-queue        # Reset queue (clear all pending posts)
 | **CloudStorageService** | Upload to Cloudinary | `upload_media()`, `delete_media()`, `cleanup_expired()` |
 | **InstagramAPIService** | Post to Instagram Graph API | `post_story()`, `get_rate_limit_remaining()`, `validate_media_url()` |
 | **TokenRefreshService** | Manage OAuth token lifecycle | `get_token()`, `refresh_instagram_token()`, `check_token_health()` |
+| **GoogleDriveService** | Google Drive operations | `connect()`, `validate_access()`, `get_provider_for_chat()`, `disconnect()` |
+| **GoogleDriveOAuthService** | Google Drive OAuth flow | `generate_authorization_url()`, `exchange_and_store()`, `get_user_credentials()` |
+| **InstagramBackfillService** | Backfill from Instagram | `backfill()`, `get_backfill_status()` |
+| **InstagramCredentialManager** | Credential retrieval | `get_active_account_credentials()`, `is_configured()`, `safety_check_before_post()` |
 
 **Token Flow**: Initial token from `.env` → bootstrapped to DB → auto-refreshed before expiry (60 days).
 
@@ -255,6 +265,76 @@ storyline-cli reset-queue        # Reset queue (clear all pending posts)
 | **ProductLinkService** | Link media to products |
 | **InstagramMetricsService** | Fetch performance data |
 | **AnalyticsService** | Generate insights |
+
+### Media Source Providers (`src/services/media_sources/`)
+
+Pluggable media source abstraction using the factory pattern:
+
+| Component | Responsibility | Key Methods |
+|-----------|---------------|-------------|
+| **MediaSourceProvider** | Abstract base class | `list_files()`, `download_file()`, `file_exists()`, `get_folders()`, `calculate_file_hash()` |
+| **MediaSourceFactory** | Provider instantiation | `create()`, `get_provider_for_media_item()`, `register_provider()` |
+| **GoogleDriveProvider** | Google Drive media | Implements `MediaSourceProvider` for Drive API |
+| **LocalMediaProvider** | Local filesystem media | Implements `MediaSourceProvider` for local files |
+| **MediaFileInfo** | File metadata dataclass | `identifier`, `name`, `size_bytes`, `mime_type`, `folder`, `modified_at`, `hash` |
+
+**Adding a new media source**: Create a new provider class extending `MediaSourceProvider`, implement all abstract methods, and register it via `MediaSourceFactory.register_provider()`.
+
+### API Endpoints (`src/api/`)
+
+The API layer serves the Telegram Mini App and OAuth callbacks. Mounted in `src/api/app.py`:
+
+**OAuth Routes** (`/auth/*` — `src/api/routes/oauth.py`):
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/auth/instagram/start` | Initiate Instagram OAuth |
+| GET | `/auth/instagram/callback` | Instagram OAuth callback |
+| GET | `/auth/google-drive/start` | Initiate Google Drive OAuth |
+| GET | `/auth/google-drive/callback` | Google Drive OAuth callback |
+
+**Onboarding/Dashboard Routes** (`/api/onboarding/*` — `src/api/routes/onboarding/`):
+
+Setup (`setup.py`):
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/api/onboarding/init` | Initialize onboarding session |
+| GET | `/api/onboarding/oauth-url/{provider}` | Get OAuth URL |
+| POST | `/api/onboarding/media-folder` | Set media folder |
+| POST | `/api/onboarding/start-indexing` | Trigger media indexing |
+| POST | `/api/onboarding/schedule` | Save posting schedule |
+| POST | `/api/onboarding/complete` | Mark onboarding complete |
+
+Dashboard (`dashboard.py`):
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/onboarding/queue-detail` | Queue items |
+| GET | `/api/onboarding/history-detail` | Posting history |
+| GET | `/api/onboarding/media-stats` | Media library stats |
+| GET | `/api/onboarding/accounts` | Instagram accounts |
+
+Settings (`settings.py`):
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/api/onboarding/toggle-setting` | Toggle boolean setting |
+| POST | `/api/onboarding/update-setting` | Update numeric setting |
+| POST | `/api/onboarding/switch-account` | Switch Instagram account |
+| POST | `/api/onboarding/remove-account` | Deactivate account |
+| POST | `/api/onboarding/sync-media` | Trigger media sync |
+| POST | `/api/onboarding/queue-preview` | Preview next queue items |
+
+Mini App HTML: `GET /webapp/onboarding` serves the Telegram Mini App.
+
+### Key Utilities (`src/utils/`)
+
+| Module | Responsibility | Key Exports |
+|--------|---------------|-------------|
+| **resilience.py** | Failure handling | `CircuitBreaker`, `telegram_edit_with_retry()`, `get_pool_status()` |
+| **encryption.py** | Token encryption | `TokenEncryption` (Fernet AES+HMAC, singleton) |
+| **webapp_auth.py** | Mini App auth | `validate_init_data()`, `generate_url_token()`, `validate_url_token()` |
+| **validators.py** | Config validation | `ConfigValidator.validate_all()` |
+| **image_processing.py** | Image validation | `ImageProcessor.validate_image()`, `ImageProcessor.optimize_for_instagram()` |
+| **file_hash.py** | Dedup hashing | `calculate_file_hash()` |
+| **logger.py** | Structured logging | `logger` instance |
 
 ## Database Architecture
 
@@ -883,25 +963,70 @@ src/
 │   │   ├── telegram_autopost.py       # Auto-posting logic
 │   │   ├── telegram_settings.py       # Settings UI handlers
 │   │   ├── telegram_accounts.py       # Account selection handlers
+│   │   ├── telegram_notification.py   # Post notification delivery
+│   │   ├── telegram_utils.py         # Shared Telegram utilities
 │   │   ├── settings_service.py        # Per-chat runtime settings
 │   │   ├── instagram_account_service.py  # Multi-account management
 │   │   ├── interaction_service.py     # Bot interaction tracking
+│   │   ├── dashboard_service.py       # Mini App dashboard aggregation
+│   │   ├── oauth_service.py           # Instagram OAuth flow
+│   │   ├── setup_state_service.py     # Unified setup status
+│   │   ├── user_service.py            # User management
+│   │   ├── media_sync.py             # Media sync orchestration
 │   │   └── ...                        # Other core services
 │   ├── integrations/
 │   │   ├── instagram_api.py           # Class: InstagramAPIService
+│   │   ├── instagram_backfill.py      # Class: InstagramBackfillService
+│   │   ├── instagram_credentials.py   # Class: InstagramCredentialManager
 │   │   ├── cloud_storage.py           # Class: CloudStorageService
-│   │   └── token_refresh.py           # Class: TokenRefreshService
+│   │   ├── token_refresh.py           # Class: TokenRefreshService
+│   │   ├── google_drive.py            # Class: GoogleDriveService
+│   │   └── google_drive_oauth.py      # Class: GoogleDriveOAuthService
+│   ├── media_sources/
+│   │   ├── base_provider.py           # MediaSourceProvider (ABC) + MediaFileInfo
+│   │   ├── factory.py                 # MediaSourceFactory (provider routing)
+│   │   ├── google_drive_provider.py   # GoogleDriveProvider
+│   │   └── local_provider.py          # LocalMediaProvider
 │   └── domain/
 │       └── (empty - future analytics/AI services)
 ├── repositories/
 │   └── example_repository.py      # Class: ExampleRepository
 ├── models/
 │   └── example_model.py           # Class: ExampleModel (SQLAlchemy)
+├── config/
+│   ├── settings.py                # Pydantic Settings (env vars)
+│   ├── constants.py               # Application constants
+│   └── database.py                # DB connection + pooling
 ├── api/
+│   ├── app.py                     # FastAPI app, router mounting
 │   └── routes/
-│       └── example.py             # router = APIRouter()
+│       ├── oauth.py               # /auth/* OAuth callbacks
+│       └── onboarding/            # /api/onboarding/* Mini App API
+│           ├── setup.py           # Setup wizard endpoints
+│           ├── dashboard.py       # Dashboard data endpoints
+│           ├── settings.py        # Settings/actions endpoints
+│           ├── models.py          # Pydantic request models
+│           └── helpers.py         # Shared validators
 └── utils/
-    └── example_utility.py         # Stateless utility functions
+    ├── logger.py                  # Structured logging
+    ├── resilience.py              # CircuitBreaker, retry, pool monitoring
+    ├── encryption.py              # TokenEncryption (Fernet)
+    ├── webapp_auth.py             # Mini App init data validation
+    ├── validators.py              # ConfigValidator
+    ├── image_processing.py        # ImageProcessor
+    └── file_hash.py               # File dedup hashing
+
+landing/                           # Next.js marketing + setup guide site
+├── src/app/                       # Pages (/, /setup/*)
+│   ├── page.tsx                   # Landing page
+│   ├── setup/                     # 5-step setup wizard guide
+│   └── api/waitlist/              # POST /api/waitlist
+├── src/components/
+│   ├── landing/                   # Hero, features, pricing, FAQ, waitlist
+│   ├── setup/                     # Step cards, checklists, callouts
+│   └── ui/                        # shadcn/ui components
+├── src/lib/                       # DB (Drizzle + Neon), Telegram utils
+└── drizzle/                       # DB migrations (waitlist_signups table)
 ```
 
 ### Import Order

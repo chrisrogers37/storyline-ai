@@ -46,23 +46,24 @@ CLI/Telegram → Services → Repositories → Models/DB
 | Task | Command/Action |
 |------|----------------|
 | Run tests | `pytest tests/ -v` |
-| Check linting | `ruff check src/` |
-| Check bot status | `/telegram-status` command |
-| Quick commit | `/quick-commit` command |
-| Full PR workflow | `/commit-push-pr` command |
+| Check linting | `ruff check src/ tests/` |
+| Format code | `ruff format src/ tests/` |
+| Check bot status | `/telegram-status` skill |
+| Check DB status | `/db-status` skill |
+| Pre-commit check | `ruff check src/ tests/ && ruff format --check src/ tests/ && pytest` |
 
 ---
 
-## Database (Raspberry Pi)
+## Database (Neon PostgreSQL)
 
 ```bash
-# Connect via SSH
-ssh crogberrypi "psql -U storyline_user -d storyline_ai -c 'YOUR_QUERY'"
+# Connect to production database
+psql "$DATABASE_URL"
 
 # Safe queries
-SELECT * FROM posting_queue WHERE status = 'pending';
-SELECT * FROM posting_history ORDER BY posted_at DESC LIMIT 10;
-SELECT * FROM instagram_accounts WHERE is_active = true;
+psql "$DATABASE_URL" -c "SELECT * FROM posting_queue WHERE status = 'pending';"
+psql "$DATABASE_URL" -c "SELECT * FROM posting_history ORDER BY posted_at DESC LIMIT 10;"
+psql "$DATABASE_URL" -c "SELECT * FROM instagram_accounts WHERE is_active = true;"
 ```
 
 ---

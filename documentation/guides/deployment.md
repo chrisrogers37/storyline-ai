@@ -80,7 +80,7 @@ export DATABASE_URL="postgresql://user:pass@ep-xxx.neon.tech/storyline_ai?sslmod
 psql "$DATABASE_URL" -f scripts/setup_database.sql
 
 # Run all migrations
-for f in scripts/migrations/0{01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16}_*.sql; do
+for f in scripts/migrations/0{01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21}_*.sql; do
   echo "Running $f..."
   psql "$DATABASE_URL" -f "$f"
 done
