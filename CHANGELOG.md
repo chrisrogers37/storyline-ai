@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — /status Command Overhaul
+
+- **Multi-tenant scoping** — All `/status` data queries now pass `chat_settings_id`, ensuring each tenant only sees their own metrics (was showing global counts)
+- **Config reads from database** — `enable_instagram_api`, `is_paused`, and `dry_run_mode` now read from `chat_settings` table instead of env vars, fixing a bug where Telegram `/settings` toggles weren't reflected in `/status`
+- **Instagram API rate limit** — `get_rate_limit_remaining()` now accepts `chat_settings_id` for per-tenant rate tracking
+
+### Added — /status Command Overhaul
+
+- **Next post estimate** — New "Next: ~48m (15:30 UTC)" line shows when the JIT scheduler will fire next, using the same interval formula as `SchedulerService.is_slot_due()`
+- **Posted count** — Library section now shows "Posted: X" alongside "Never posted: Y" for a quick content runway vs. usage snapshot
+
+### Removed — /status Command Overhaul
+
+- **"Bot: Online"** — Always true (can't run `/status` if bot is offline)
+- **"Posting: Delivery ON"** — Duplicate of Setup Status delivery line
+- **"Queue: N pending"** — Misleading with JIT scheduling; the queue is an in-flight tracker, not a schedule
+- **"Locked: N"** — Not actionable from `/status`
+- **"Total: X active"** — Duplicate of Setup Status media library count
+- **"Cadence: ..."** — Duplicate of Setup Status schedule line
+- **"Posted once: X" / "Posted 2+: X"** — Low value; replaced by single "Posted: X" total
+- **"System:" section** — Removed entirely (Bot: Online, duplicate Delivery, env-var Dry Run)
+- **`_get_cadence_display()` helper** — No longer needed
+
 ### Added — Instagram Deep Link Redirect
 
 - **Story camera deep link** — "Open Instagram" button now opens the story camera directly on mobile instead of the feed
@@ -14,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Platform-aware: `intent://` syntax for Android Chrome, custom scheme for iOS, web fallback for desktop
   - Hosted via GitHub Pages (zero infrastructure)
 - **`INSTAGRAM_DEEPLINK_URL` setting** — configurable redirect URL with instant rollback (set to `https://www.instagram.com/` to revert)
+
 
 ### Added — Mini App Secure Account Input
 
