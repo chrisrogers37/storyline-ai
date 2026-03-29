@@ -254,29 +254,64 @@ class TestNextCommand:
 
 
 @pytest.mark.unit
-class TestGetCadenceDisplay:
-    """Tests for _get_cadence_display helper."""
+class TestGetNextPostDisplay:
+    """Tests for _get_next_post_display helper."""
 
-    def test_returns_cadence_string(self, mock_command_handlers):
-        """Test returns formatted cadence when settings are available."""
-        handlers = mock_command_handlers
+    def test_returns_paused_when_paused(self):
+        """Test returns 'Paused' when delivery is paused."""
+        mock_settings = Mock(is_paused=True)
+        result = TelegramCommandHandlers._get_next_post_display(mock_settings)
+        assert result == "Paused"
+
+    def test_returns_due_now_when_no_last_post(self):
+        """Test returns 'Due now' when no post has been sent yet."""
         mock_settings = Mock(
-            posts_per_day=3, posting_hours_start=14, posting_hours_end=2
+            is_paused=False,
+            posting_hours_start=12,
+            posting_hours_end=4,
+            posts_per_day=15,
+            last_post_sent_at=None,
         )
-        handlers.service.settings_service.get_settings.return_value = mock_settings
+        result = TelegramCommandHandlers._get_next_post_display(mock_settings)
+        assert result == "Due now"
 
-        result = handlers._get_cadence_display(-100123)
-        assert result == "3/day, 14:00-02:00 UTC"
-
-    def test_returns_unknown_on_error(self, mock_command_handlers):
-        """Test returns 'Unknown' when settings service fails."""
-        handlers = mock_command_handlers
-        handlers.service.settings_service.get_settings.side_effect = Exception(
-            "DB error"
+    def test_returns_due_now_when_past_due(self):
+        """Test returns 'Due now' when next post time is in the past."""
+        mock_settings = Mock(
+            is_paused=False,
+            posting_hours_start=12,
+            posting_hours_end=4,
+            posts_per_day=15,
+            last_post_sent_at=datetime(2026, 1, 1, 10, 0, 0),
         )
+        result = TelegramCommandHandlers._get_next_post_display(mock_settings)
+        assert result == "Due now"
 
-        result = handlers._get_cadence_display(-100123)
-        assert result == "Unknown"
+    def test_returns_time_estimate_when_future(self):
+        """Test returns time estimate when next post is in the future."""
+        # Set last_post_sent_at to just now so next is in the future
+        mock_settings = Mock(
+            is_paused=False,
+            posting_hours_start=12,
+            posting_hours_end=4,
+            posts_per_day=15,
+            last_post_sent_at=datetime.utcnow(),
+        )
+        result = TelegramCommandHandlers._get_next_post_display(mock_settings)
+        assert "UTC" in result
+        assert "~" in result
+
+    def test_returns_not_configured_for_zero_window(self):
+        """Test returns 'Not configured' when posting window is zero."""
+        mock_settings = Mock(
+            is_paused=False,
+            posting_hours_start=12,
+            posting_hours_end=12,
+            posts_per_day=5,
+            last_post_sent_at=None,
+        )
+        result = TelegramCommandHandlers._get_next_post_display(mock_settings)
+        assert result == "Not configured"
 
 
 @pytest.mark.unit
@@ -322,36 +357,33 @@ class TestGetLastPostedDisplay:
 class TestGetInstagramApiStatus:
     """Tests for _get_instagram_api_status helper."""
 
-    def test_enabled_with_rate_limit(self, mock_command_handlers):
+    def test_enabled_with_rate_limit(self):
         """Test shows enabled status with rate limit remaining."""
-        handlers = mock_command_handlers
+        mock_chat_settings = Mock(enable_instagram_api=True)
 
         mock_ig = Mock()
         mock_ig.get_rate_limit_remaining.return_value = 20
         mock_ig.__enter__ = Mock(return_value=mock_ig)
         mock_ig.__exit__ = Mock(return_value=False)
 
-        with (
-            patch("src.services.core.telegram_commands.settings") as mock_settings,
-            patch(
-                "src.services.integrations.instagram_api.InstagramAPIService",
-                return_value=mock_ig,
-            ),
+        with patch(
+            "src.services.integrations.instagram_api.InstagramAPIService",
+            return_value=mock_ig,
         ):
-            mock_settings.ENABLE_INSTAGRAM_API = True
-            mock_settings.INSTAGRAM_POSTS_PER_HOUR = 25
-            result = handlers._get_instagram_api_status()
+            result = TelegramCommandHandlers._get_instagram_api_status(
+                mock_chat_settings, "fake-cs-id"
+            )
 
         assert "Enabled" in result
         assert "20/25" in result
 
-    def test_disabled(self, mock_command_handlers):
-        """Test shows disabled status."""
-        handlers = mock_command_handlers
+    def test_disabled(self):
+        """Test shows disabled status when chat_settings has IG API off."""
+        mock_chat_settings = Mock(enable_instagram_api=False)
 
-        with patch("src.services.core.telegram_commands.settings") as mock_settings:
-            mock_settings.ENABLE_INSTAGRAM_API = False
-            result = handlers._get_instagram_api_status()
+        result = TelegramCommandHandlers._get_instagram_api_status(
+            mock_chat_settings, "fake-cs-id"
+        )
 
         assert "Disabled" in result
 
@@ -360,30 +392,24 @@ class TestGetInstagramApiStatus:
 class TestGetSyncStatusLine:
     """Tests for _get_sync_status_line helper."""
 
-    def test_sync_disabled(self, mock_command_handlers):
+    def test_sync_disabled(self):
         """Test shows disabled when media sync is off."""
-        handlers = mock_command_handlers
         mock_chat_settings = Mock(media_sync_enabled=False)
-        handlers.service.settings_service.get_settings.return_value = mock_chat_settings
 
         mock_sync = Mock()
         mock_sync.get_last_sync_info.return_value = None
-        mock_sync.__enter__ = Mock(return_value=mock_sync)
-        mock_sync.__exit__ = Mock(return_value=False)
 
         with patch(
             "src.services.core.media_sync.MediaSyncService",
             return_value=mock_sync,
         ):
-            result = handlers._get_sync_status_line(-100123)
+            result = TelegramCommandHandlers._get_sync_status_line(mock_chat_settings)
 
         assert "Disabled" in result
 
-    def test_no_syncs_yet(self, mock_command_handlers):
+    def test_no_syncs_yet(self):
         """Test shows 'No syncs yet' when no history."""
-        handlers = mock_command_handlers
         mock_chat_settings = Mock(media_sync_enabled=True)
-        handlers.service.settings_service.get_settings.return_value = mock_chat_settings
 
         mock_sync = Mock()
         mock_sync.get_last_sync_info.return_value = None
@@ -392,15 +418,13 @@ class TestGetSyncStatusLine:
             "src.services.core.media_sync.MediaSyncService",
             return_value=mock_sync,
         ):
-            result = handlers._get_sync_status_line(-100123)
+            result = TelegramCommandHandlers._get_sync_status_line(mock_chat_settings)
 
         assert "No syncs yet" in result
 
-    def test_successful_sync(self, mock_command_handlers):
+    def test_successful_sync(self):
         """Test shows OK with counts for successful sync."""
-        handlers = mock_command_handlers
         mock_chat_settings = Mock(media_sync_enabled=True)
-        handlers.service.settings_service.get_settings.return_value = mock_chat_settings
 
         mock_sync = Mock()
         mock_sync.get_last_sync_info.return_value = {
@@ -419,17 +443,15 @@ class TestGetSyncStatusLine:
             "src.services.core.media_sync.MediaSyncService",
             return_value=mock_sync,
         ):
-            result = handlers._get_sync_status_line(-100123)
+            result = TelegramCommandHandlers._get_sync_status_line(mock_chat_settings)
 
         assert "OK" in result
         assert "50 items" in result
         assert "5 new" in result
 
-    def test_failed_sync(self, mock_command_handlers):
+    def test_failed_sync(self):
         """Test shows warning for failed sync."""
-        handlers = mock_command_handlers
         mock_chat_settings = Mock(media_sync_enabled=True)
-        handlers.service.settings_service.get_settings.return_value = mock_chat_settings
 
         mock_sync = Mock()
         mock_sync.get_last_sync_info.return_value = {
@@ -441,19 +463,19 @@ class TestGetSyncStatusLine:
             "src.services.core.media_sync.MediaSyncService",
             return_value=mock_sync,
         ):
-            result = handlers._get_sync_status_line(-100123)
+            result = TelegramCommandHandlers._get_sync_status_line(mock_chat_settings)
 
         assert "failed" in result
 
-    def test_exception_shows_check_failed(self, mock_command_handlers):
+    def test_exception_shows_check_failed(self):
         """Test exception returns 'Check failed'."""
-        handlers = mock_command_handlers
+        mock_chat_settings = Mock(media_sync_enabled=True)
 
         with patch(
             "src.services.core.media_sync.MediaSyncService",
             side_effect=Exception("Import error"),
         ):
-            result = handlers._get_sync_status_line(-100123)
+            result = TelegramCommandHandlers._get_sync_status_line(mock_chat_settings)
 
         assert "Check failed" in result
 
@@ -464,7 +486,7 @@ class TestStatusCommand:
     """Tests for handle_status end-to-end."""
 
     async def test_sends_formatted_status_message(self, mock_command_handlers):
-        """Test /status sends a formatted message with all sections."""
+        """Test /status sends a formatted message with key sections."""
         handlers = mock_command_handlers
         service = handlers.service
 
@@ -473,17 +495,13 @@ class TestStatusCommand:
         service.user_repo.get_by_telegram_id.return_value = None
         service.user_repo.create.return_value = mock_user
 
-        # Set up repo returns
-        service.queue_repo.count_pending.return_value = 5
-        service.queue_repo.get_pending.return_value = []
+        # Set up repo returns (tenant-scoped)
         service.history_repo.get_recent_posts.return_value = []
-        service.media_repo.count_active.return_value = 3
         service.media_repo.count_by_posting_status.return_value = {
             "never_posted": 1,
             "posted_once": 1,
             "posted_multiple": 1,
         }
-        service.lock_repo.count_permanent_locks.return_value = 1
 
         mock_update = Mock()
         mock_update.effective_user = Mock(
@@ -495,7 +513,7 @@ class TestStatusCommand:
 
         mock_context = Mock()
 
-        # Mock settings_service for setup status checks
+        # Mock settings from DB (single source of truth)
         service.settings_service.get_settings.return_value = Mock(
             id="fake-uuid",
             posts_per_day=3,
@@ -503,8 +521,10 @@ class TestStatusCommand:
             posting_hours_end=2,
             is_paused=False,
             dry_run_mode=False,
+            enable_instagram_api=False,
             media_sync_enabled=False,
             media_source_root=None,
+            last_post_sent_at=None,
         )
 
         with (
@@ -532,21 +552,101 @@ class TestStatusCommand:
                 "src.services.core.setup_state_service.SetupStateService.close",
             ),
         ):
-            mock_settings.DRY_RUN_MODE = False
-            mock_settings.ENABLE_INSTAGRAM_API = False
+            mock_settings.OAUTH_REDIRECT_BASE_URL = None
             await handlers.handle_status(mock_update, mock_context)
 
         call_args = mock_update.message.reply_text.call_args
         message_text = call_args.args[0]
 
         assert "Storyline AI Status" in message_text
-        assert "Queue: 5 pending" in message_text
-        assert "Total: 3 active" in message_text
-        assert "Locked: 1" in message_text
-        assert "Cadence:" in message_text
+        assert "Never posted: 1" in message_text
+        assert "Next:" in message_text
+        assert "Last:" in message_text
+        assert "24h:" in message_text
+
+        # Verify removed lines are NOT present
+        assert "Bot: Online" not in message_text
+        assert "Dry Run" not in message_text
+        assert "Queue:" not in message_text
+        assert "Locked:" not in message_text
+        assert "Cadence:" not in message_text
 
         # Should log interaction
         service.interaction_service.log_command.assert_called_once()
+
+    async def test_status_reads_config_from_db_not_env(self, mock_command_handlers):
+        """Test /status reads all config from chat_settings DB, not env vars."""
+        handlers = mock_command_handlers
+        service = handlers.service
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        service.user_repo.get_by_telegram_id.return_value = None
+        service.user_repo.create.return_value = mock_user
+        service.history_repo.get_recent_posts.return_value = []
+        service.media_repo.count_by_posting_status.return_value = {
+            "never_posted": 0,
+            "posted_once": 0,
+            "posted_multiple": 0,
+        }
+
+        mock_update = Mock()
+        mock_update.effective_user = Mock(
+            id=123, username="test", first_name="Test", last_name=None
+        )
+        mock_update.effective_chat = Mock(id=-100123)
+        mock_update.message = AsyncMock()
+        mock_update.message.message_id = 1
+
+        # DB says IG API is enabled — env var should be irrelevant
+        service.settings_service.get_settings.return_value = Mock(
+            id="fake-uuid",
+            posts_per_day=3,
+            posting_hours_start=14,
+            posting_hours_end=2,
+            is_paused=False,
+            dry_run_mode=False,
+            enable_instagram_api=True,
+            media_sync_enabled=False,
+            media_source_root=None,
+            last_post_sent_at=None,
+        )
+
+        mock_ig = Mock()
+        mock_ig.get_rate_limit_remaining.return_value = 20
+        mock_ig.__enter__ = Mock(return_value=mock_ig)
+        mock_ig.__exit__ = Mock(return_value=False)
+
+        with (
+            patch("src.services.core.telegram_commands.settings") as mock_settings,
+            patch(
+                "src.services.core.media_sync.MediaSyncService",
+                side_effect=Exception("n/a"),
+            ),
+            patch(
+                "src.services.integrations.instagram_api.InstagramAPIService",
+                return_value=mock_ig,
+            ),
+            patch(
+                "src.services.core.setup_state_service.SetupStateService.__init__",
+                lambda self: None,
+            ),
+            patch(
+                "src.services.core.setup_state_service.SetupStateService.format_setup_status",
+                return_value="*Setup Status:*\n└── 📦 Delivery: ✅ Live",
+            ),
+            patch(
+                "src.services.core.setup_state_service.SetupStateService.close",
+            ),
+        ):
+            mock_settings.OAUTH_REDIRECT_BASE_URL = None
+            # Env says disabled, but DB says enabled — DB should win
+            mock_settings.ENABLE_INSTAGRAM_API = False
+            await handlers.handle_status(mock_update, Mock())
+
+        msg = mock_update.message.reply_text.call_args.args[0]
+        assert "Enabled" in msg
+        assert "20/25" in msg
 
 
 # ==================== Setup Status Tests ====================
@@ -789,18 +889,13 @@ class TestStatusIncludesSetup:
         service.user_repo.get_by_telegram_id.return_value = None
         service.user_repo.create.return_value = mock_user
 
-        # Set up repo returns
-        service.queue_repo.count_pending.return_value = 0
-        service.queue_repo.get_pending.return_value = []
+        # Set up repo returns (tenant-scoped)
         service.history_repo.get_recent_posts.return_value = []
-        service.media_repo.count_active.return_value = 0
         service.media_repo.count_by_posting_status.return_value = {
             "never_posted": 0,
             "posted_once": 0,
             "posted_multiple": 0,
         }
-        service.lock_repo.count_permanent_locks.return_value = 0
-        service.ig_account_service.get_active_account.return_value = None
 
         mock_update = Mock()
         mock_update.effective_user = Mock(
@@ -812,7 +907,6 @@ class TestStatusIncludesSetup:
 
         mock_context = Mock()
 
-        # Mock settings_service for setup checks
         mock_chat_settings = Mock(
             id="fake-uuid",
             posts_per_day=3,
@@ -820,8 +914,10 @@ class TestStatusIncludesSetup:
             posting_hours_end=2,
             is_paused=False,
             dry_run_mode=False,
+            enable_instagram_api=False,
             media_sync_enabled=False,
             media_source_root=None,
+            last_post_sent_at=None,
         )
         service.settings_service.get_settings.return_value = mock_chat_settings
 
@@ -852,8 +948,7 @@ class TestStatusIncludesSetup:
                 "src.services.core.setup_state_service.SetupStateService.close",
             ),
         ):
-            mock_settings.DRY_RUN_MODE = False
-            mock_settings.ENABLE_INSTAGRAM_API = False
+            mock_settings.OAUTH_REDIRECT_BASE_URL = None
 
             await handlers.handle_status(mock_update, mock_context)
 
@@ -870,7 +965,6 @@ class TestStatusIncludesSetup:
 
         # Existing sections should still be present
         assert "Storyline AI Status" in message_text
-        assert "Queue" in message_text
 
 
 @pytest.mark.unit
@@ -888,17 +982,12 @@ class TestStatusDashboardButton:
         service.user_repo.get_by_telegram_id.return_value = None
         service.user_repo.create.return_value = mock_user
 
-        service.queue_repo.count_pending.return_value = 0
-        service.queue_repo.get_pending.return_value = []
         service.history_repo.get_recent_posts.return_value = []
-        service.media_repo.count_active.return_value = 0
         service.media_repo.count_by_posting_status.return_value = {
             "never_posted": 0,
             "posted_once": 0,
             "posted_multiple": 0,
         }
-        service.lock_repo.count_permanent_locks.return_value = 0
-        service.ig_account_service.get_active_account.return_value = None
 
         mock_update = Mock()
         mock_update.effective_user = Mock(
@@ -915,8 +1004,10 @@ class TestStatusDashboardButton:
             posting_hours_end=2,
             is_paused=False,
             dry_run_mode=False,
+            enable_instagram_api=False,
             media_sync_enabled=False,
             media_source_root=None,
+            last_post_sent_at=None,
         )
         service.settings_service.get_settings.return_value = mock_chat_settings
 
@@ -938,8 +1029,6 @@ class TestStatusDashboardButton:
                 "src.services.core.setup_state_service.SetupStateService.close",
             ),
         ):
-            mock_settings.DRY_RUN_MODE = False
-            mock_settings.ENABLE_INSTAGRAM_API = False
             mock_settings.OAUTH_REDIRECT_BASE_URL = "https://example.com"
 
             await handlers.handle_status(mock_update, Mock())
@@ -961,17 +1050,12 @@ class TestStatusDashboardButton:
         service.user_repo.get_by_telegram_id.return_value = None
         service.user_repo.create.return_value = mock_user
 
-        service.queue_repo.count_pending.return_value = 0
-        service.queue_repo.get_pending.return_value = []
         service.history_repo.get_recent_posts.return_value = []
-        service.media_repo.count_active.return_value = 0
         service.media_repo.count_by_posting_status.return_value = {
             "never_posted": 0,
             "posted_once": 0,
             "posted_multiple": 0,
         }
-        service.lock_repo.count_permanent_locks.return_value = 0
-        service.ig_account_service.get_active_account.return_value = None
 
         mock_update = Mock()
         mock_update.effective_user = Mock(
@@ -988,8 +1072,10 @@ class TestStatusDashboardButton:
             posting_hours_end=2,
             is_paused=False,
             dry_run_mode=False,
+            enable_instagram_api=False,
             media_sync_enabled=False,
             media_source_root=None,
+            last_post_sent_at=None,
         )
         service.settings_service.get_settings.return_value = mock_chat_settings
 
@@ -1011,8 +1097,6 @@ class TestStatusDashboardButton:
                 "src.services.core.setup_state_service.SetupStateService.close",
             ),
         ):
-            mock_settings.DRY_RUN_MODE = False
-            mock_settings.ENABLE_INSTAGRAM_API = False
             mock_settings.OAUTH_REDIRECT_BASE_URL = None
 
             await handlers.handle_status(mock_update, Mock())
@@ -1025,10 +1109,10 @@ class TestStatusDashboardButton:
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestStatusLibraryBreakdown:
-    """Tests for /status library breakdown (merged from /stats)."""
+    """Tests for /status library section — now shows only never-posted count."""
 
-    async def test_status_includes_library_breakdown(self, mock_command_handlers):
-        """Test /status includes never-posted, posted-once, and posted-2+ counts."""
+    async def test_status_includes_never_posted_count(self, mock_command_handlers):
+        """Test /status shows never-posted count (content runway)."""
         handlers = mock_command_handlers
         service = handlers.service
 
@@ -1037,17 +1121,12 @@ class TestStatusLibraryBreakdown:
         service.user_repo.get_by_telegram_id.return_value = None
         service.user_repo.create.return_value = mock_user
 
-        # Set up SQL aggregation returns
-        service.media_repo.count_active.return_value = 3
         service.media_repo.count_by_posting_status.return_value = {
-            "never_posted": 1,
-            "posted_once": 1,
-            "posted_multiple": 1,
+            "never_posted": 42,
+            "posted_once": 10,
+            "posted_multiple": 5,
         }
-        service.queue_repo.count_pending.return_value = 0
-        service.queue_repo.get_pending.return_value = []
         service.history_repo.get_recent_posts.return_value = []
-        service.lock_repo.count_permanent_locks.return_value = 0
 
         mock_update = Mock()
         mock_update.effective_user = Mock(
@@ -1056,6 +1135,19 @@ class TestStatusLibraryBreakdown:
         mock_update.effective_chat = Mock(id=-100123)
         mock_update.message = AsyncMock()
         mock_update.message.message_id = 1
+
+        service.settings_service.get_settings.return_value = Mock(
+            id="fake-uuid",
+            posts_per_day=3,
+            posting_hours_start=14,
+            posting_hours_end=2,
+            is_paused=False,
+            dry_run_mode=False,
+            enable_instagram_api=False,
+            media_sync_enabled=False,
+            media_source_root=None,
+            last_post_sent_at=None,
+        )
 
         with (
             patch("src.services.core.telegram_commands.settings") as mock_settings,
@@ -1075,16 +1167,16 @@ class TestStatusLibraryBreakdown:
                 "src.services.core.setup_state_service.SetupStateService.close",
             ),
         ):
-            mock_settings.DRY_RUN_MODE = False
-            mock_settings.ENABLE_INSTAGRAM_API = False
+            mock_settings.OAUTH_REDIRECT_BASE_URL = None
 
             await handlers.handle_status(mock_update, Mock())
 
         msg = mock_update.message.reply_text.call_args.args[0]
-        assert "Never posted: 1" in msg
-        assert "Posted once: 1" in msg
-        assert "Posted 2+: 1" in msg
-        assert "Total: 3" in msg
+        assert "Never posted: 42" in msg
+        # These lines were removed from the streamlined /status
+        assert "Posted once" not in msg
+        assert "Posted 2+" not in msg
+        assert "Total:" not in msg
 
 
 @pytest.mark.unit

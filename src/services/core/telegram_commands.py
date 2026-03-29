@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -98,52 +98,45 @@ class TelegramCommandHandlers:
         )
 
     async def handle_status(self, update, context):
-        """Handle /status command."""
+        """Handle /status command.
+
+        All data is scoped to the current chat's tenant (chat_settings_id)
+        and all configuration is read from the database, never from env vars.
+        """
         user = self.service._get_or_create_user(update.effective_user)
         chat_id = update.effective_chat.id
 
-        # Gather stats
-        pending_count = self.service.queue_repo.count_pending()
-        recent_posts = self.service.history_repo.get_recent_posts(hours=24)
-        media_count = self.service.media_repo.count_active()
-        posting_stats = self.service.media_repo.count_by_posting_status()
-        never_posted = posting_stats["never_posted"]
-        posted_once = posting_stats["posted_once"]
-        posted_multiple = posting_stats["posted_multiple"]
-        locked_count = self.service.lock_repo.count_permanent_locks()
+        # Load tenant-scoped settings from DB (single source of truth)
+        chat_settings = self.service.settings_service.get_settings(chat_id)
+        cs_id = str(chat_settings.id)
 
-        cadence_str = self._get_cadence_display(chat_id)
+        # Gather stats — all scoped to this tenant
+        recent_posts = self.service.history_repo.get_recent_posts(
+            hours=24, chat_settings_id=cs_id
+        )
+        never_posted = self.service.media_repo.count_by_posting_status(
+            chat_settings_id=cs_id
+        )["never_posted"]
+
         last_posted = self._get_last_posted_display(recent_posts)
-
-        dry_run_status = "🧪 ON" if settings.DRY_RUN_MODE else "🚀 OFF"
-        pause_status = "📦 Delivery OFF" if self.service.is_paused else "📦 Delivery ON"
-        ig_status = self._get_instagram_api_status()
-        sync_status_line = self._get_sync_status_line(chat_id)
+        next_post = self._get_next_post_display(chat_settings)
+        ig_status = self._get_instagram_api_status(chat_settings, cs_id)
+        sync_status_line = self._get_sync_status_line(chat_settings)
 
         setup_section = self._get_setup_status(chat_id)
 
         status_msg = (
             f"📊 *Storyline AI Status*\n\n"
             f"{setup_section}\n\n"
-            f"*System:*\n"
-            f"🤖 Bot: Online\n"
-            f"⏯️ Posting: {pause_status}\n"
-            f"🧪 Dry Run: {dry_run_status}\n\n"
             f"*Instagram API:*\n"
             f"📸 {ig_status}\n\n"
             f"*Media Source:*\n"
             f"{sync_status_line}\n\n"
-            f"*Queue & Media:*\n"
-            f"📋 Queue: {pending_count} pending\n"
-            f"🔒 Locked: {locked_count}\n\n"
             f"*Library:*\n"
-            f"📁 Total: {media_count} active\n"
-            f"🆕 Never posted: {never_posted}\n"
-            f"1️⃣ Posted once: {posted_once}\n"
-            f"🔁 Posted 2+: {posted_multiple}\n\n"
+            f"🆕 Never posted: {never_posted}\n\n"
             f"*Activity:*\n"
-            f"🔄 Cadence: {cadence_str}\n"
             f"📤 Last: {last_posted}\n"
+            f"⏭️ Next: {next_post}\n"
             f"📈 24h: {len(recent_posts)} posts"
         )
 
@@ -171,8 +164,7 @@ class TelegramCommandHandlers:
             user_id=str(user.id),
             command="/status",
             context={
-                "queue_size": pending_count,
-                "media_count": media_count,
+                "never_posted": never_posted,
                 "posts_24h": len(recent_posts),
             },
             telegram_chat_id=chat_id,
@@ -180,17 +172,6 @@ class TelegramCommandHandlers:
         )
 
     # ==================== Status Helpers ====================
-
-    def _get_cadence_display(self, chat_id: int) -> str:
-        """Get formatted posting cadence string for /status output."""
-        try:
-            chat_settings = self.service.settings_service.get_settings(chat_id)
-            ppd = chat_settings.posts_per_day
-            start = chat_settings.posting_hours_start
-            end = chat_settings.posting_hours_end
-            return f"{ppd}/day, {start:02d}:00-{end:02d}:00 UTC"
-        except Exception:
-            return "Unknown"
 
     def _get_last_posted_display(self, recent_posts) -> str:
         """Get formatted display for last post time."""
@@ -200,24 +181,79 @@ class TelegramCommandHandlers:
             return f"{hours}h ago" if hours > 0 else "< 1h ago"
         return "Never"
 
-    def _get_instagram_api_status(self) -> str:
-        """Get formatted Instagram API status string."""
-        if settings.ENABLE_INSTAGRAM_API:
+    @staticmethod
+    def _get_next_post_display(chat_settings) -> str:
+        """Estimate when the next post is due based on JIT scheduler logic.
+
+        Uses the same formula as SchedulerService.is_slot_due():
+        next = last_post_sent_at + (window_hours * 3600 / posts_per_day)
+        """
+        try:
+            if chat_settings.is_paused:
+                return "Paused"
+
+            start = chat_settings.posting_hours_start
+            end = chat_settings.posting_hours_end
+            window_hours = (24 - start) + end if end < start else end - start
+
+            if window_hours <= 0 or chat_settings.posts_per_day <= 0:
+                return "Not configured"
+
+            interval_seconds = (window_hours * 3600) / chat_settings.posts_per_day
+
+            last_sent = chat_settings.last_post_sent_at
+            if not last_sent:
+                return "Due now"
+
+            if last_sent.tzinfo:
+                last_sent = last_sent.replace(tzinfo=None)
+
+            next_due = last_sent + timedelta(seconds=interval_seconds)
+            now = datetime.utcnow()
+
+            if next_due <= now:
+                return "Due now"
+
+            diff = next_due - now
+            hours = int(diff.total_seconds() / 3600)
+            minutes = int((diff.total_seconds() % 3600) / 60)
+            time_str = f"{next_due.strftime('%H:%M')} UTC"
+
+            if hours > 0:
+                return f"~{hours}h {minutes}m ({time_str})"
+            return f"~{minutes}m ({time_str})"
+        except Exception:
+            return "Unknown"
+
+    @staticmethod
+    def _get_instagram_api_status(chat_settings, chat_settings_id: str) -> str:
+        """Get formatted Instagram API status string.
+
+        Reads enabled state from chat_settings (DB) and scopes
+        rate-limit calculation to the tenant.
+        """
+        if not chat_settings.enable_instagram_api:
+            return "❌ Disabled"
+
+        try:
             from src.services.integrations.instagram_api import InstagramAPIService
 
             with InstagramAPIService() as ig_service:
-                rate_remaining = ig_service.get_rate_limit_remaining()
-            return f"✅ Enabled ({rate_remaining}/{settings.INSTAGRAM_POSTS_PER_HOUR} remaining)"
-        return "❌ Disabled"
+                rate_remaining = ig_service.get_rate_limit_remaining(
+                    chat_settings_id=chat_settings_id,
+                )
+            return f"✅ Enabled ({rate_remaining}/25 remaining)"
+        except Exception:
+            return "✅ Enabled (rate limit unknown)"
 
-    def _get_sync_status_line(self, chat_id) -> str:
+    @staticmethod
+    def _get_sync_status_line(chat_settings) -> str:
         """Get formatted media sync status (catches all exceptions internally)."""
         try:
             from src.services.core.media_sync import MediaSyncService
 
             sync_service = MediaSyncService()
             last_sync = sync_service.get_last_sync_info()
-            chat_settings = self.service.settings_service.get_settings(chat_id)
 
             if not chat_settings.media_sync_enabled:
                 return "🔄 Media Sync: ❌ Disabled"
