@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Opening Instagram...</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      text-align: center;
+      padding: 80px 20px;
+      margin: 0;
+      background: #fafafa;
+      color: #262626;
+    }
+    .container { max-width: 360px; margin: 0 auto; }
+    .icon { font-size: 48px; margin-bottom: 16px; }
+    .title { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+    .subtitle { font-size: 14px; color: #8e8e8e; margin-bottom: 24px; }
+    .fallback { display: none; margin-top: 24px; }
+    .fallback a {
+      display: inline-block;
+      padding: 10px 24px;
+      background: #0095f6;
+      color: #fff;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">&#x1F4F8;</div>
+    <div class="title">Opening Instagram Stories...</div>
+    <div class="subtitle">You should be redirected automatically.</div>
+    <div class="fallback" id="fallback">
+      <a href="https://www.instagram.com/">Open Instagram</a>
+    </div>
+  </div>
+  <script>
+    (function() {
+      var ua = navigator.userAgent || '';
+      var isAndroid = /android/i.test(ua);
+      var isIOS = /iphone|ipad|ipod/i.test(ua);
+      var fallbackUrl = 'https://www.instagram.com/';
+      var fallbackTimer;
+
+      if (isAndroid) {
+        // Chrome 25+ requires intent:// syntax for custom schemes.
+        // browser_fallback_url handles app-not-installed case natively.
+        window.location.href = 'intent://story-camera#Intent;scheme=instagram;package=com.instagram.android;S.browser_fallback_url=' + encodeURIComponent(fallbackUrl) + ';end';
+      } else if (isIOS) {
+        window.location.href = 'instagram://story-camera';
+
+        // Cancel fallback if page becomes hidden (app opened)
+        document.addEventListener('visibilitychange', function() {
+          if (document.hidden) clearTimeout(fallbackTimer);
+        });
+        document.addEventListener('pagehide', function() {
+          clearTimeout(fallbackTimer);
+        });
+
+        // Show manual fallback after 1.5s
+        setTimeout(function() {
+          document.getElementById('fallback').style.display = 'block';
+        }, 1500);
+
+        // Auto-fallback after 3s if app didn't open
+        fallbackTimer = setTimeout(function() {
+          window.location.href = fallbackUrl;
+        }, 3000);
+      } else {
+        // Desktop: go straight to Instagram web
+        window.location.href = fallbackUrl;
+      }
+    })();
+  </script>
+</body>
+</html>
