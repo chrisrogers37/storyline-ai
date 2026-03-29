@@ -559,6 +559,7 @@ class TestStatusCommand:
         message_text = call_args.args[0]
 
         assert "Storyline AI Status" in message_text
+        assert "Posted: 2" in message_text
         assert "Never posted: 1" in message_text
         assert "Next:" in message_text
         assert "Last:" in message_text
@@ -1172,6 +1173,7 @@ class TestStatusLibraryBreakdown:
             await handlers.handle_status(mock_update, Mock())
 
         msg = mock_update.message.reply_text.call_args.args[0]
+        assert "Posted: 15" in msg
         assert "Never posted: 42" in msg
         # These lines were removed from the streamlined /status
         assert "Posted once" not in msg

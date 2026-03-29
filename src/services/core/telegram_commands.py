@@ -114,9 +114,11 @@ class TelegramCommandHandlers:
         recent_posts = self.service.history_repo.get_recent_posts(
             hours=24, chat_settings_id=cs_id
         )
-        never_posted = self.service.media_repo.count_by_posting_status(
+        posting_stats = self.service.media_repo.count_by_posting_status(
             chat_settings_id=cs_id
-        )["never_posted"]
+        )
+        never_posted = posting_stats["never_posted"]
+        posted_count = posting_stats["posted_once"] + posting_stats["posted_multiple"]
 
         last_posted = self._get_last_posted_display(recent_posts)
         next_post = self._get_next_post_display(chat_settings)
@@ -133,6 +135,7 @@ class TelegramCommandHandlers:
             f"*Media Source:*\n"
             f"{sync_status_line}\n\n"
             f"*Library:*\n"
+            f"✅ Posted: {posted_count}\n"
             f"🆕 Never posted: {never_posted}\n\n"
             f"*Activity:*\n"
             f"📤 Last: {last_posted}\n"
@@ -164,6 +167,7 @@ class TelegramCommandHandlers:
             user_id=str(user.id),
             command="/status",
             context={
+                "posted": posted_count,
                 "never_posted": never_posted,
                 "posts_24h": len(recent_posts),
             },
