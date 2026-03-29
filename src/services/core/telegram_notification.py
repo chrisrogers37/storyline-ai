@@ -215,7 +215,7 @@ class TelegramNotificationService:
                 [
                     InlineKeyboardButton(
                         "📱 Open Instagram",
-                        url="https://www.instagram.com/",
+                        url=settings.INSTAGRAM_DEEPLINK_URL,
                     ),
                 ],
             ]

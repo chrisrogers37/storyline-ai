@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
+from src.config.settings import settings as app_settings
 from src.utils.logger import logger
 from src.utils.webapp_auth import generate_url_token
 
@@ -174,7 +175,7 @@ def build_queue_action_keyboard(
             ],
             [
                 InlineKeyboardButton(
-                    "📱 Open Instagram", url="https://www.instagram.com/"
+                    "📱 Open Instagram", url=app_settings.INSTAGRAM_DEEPLINK_URL
                 ),
             ],
         ]

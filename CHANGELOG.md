@@ -30,6 +30,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **"System:" section** — Removed entirely (Bot: Online, duplicate Delivery, env-var Dry Run)
 - **`_get_cadence_display()` helper** — No longer needed
 
+### Added — Instagram Deep Link Redirect
+
+- **Story camera deep link** — "Open Instagram" button now opens the story camera directly on mobile instead of the feed
+  - Static redirect page (`docs/index.html`) bridges HTTPS → `instagram://story-camera`
+  - Platform-aware: `intent://` syntax for Android Chrome, custom scheme for iOS, web fallback for desktop
+  - Hosted via GitHub Pages (zero infrastructure)
+- **`INSTAGRAM_DEEPLINK_URL` setting** — configurable redirect URL with instant rollback (set to `https://www.instagram.com/` to revert)
+
+
 ### Added — Mini App Secure Account Input
 
 - **Secure account form in Mini App** — Instagram accounts can now be added via an HTTPS form in the Telegram Mini App dashboard, replacing the message-based wizard where credentials were visible in chat history
