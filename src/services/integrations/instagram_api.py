@@ -340,12 +340,15 @@ class InstagramAPIService(BaseService):
             error_subcode=error_subcode,
         )
 
-    def get_rate_limit_remaining(self) -> int:
+    def get_rate_limit_remaining(self, chat_settings_id: Optional[str] = None) -> int:
         """
         Calculate remaining posts based on trailing 60 min history.
 
         Meta allows approximately 25 content publishing API calls per hour.
         We derive this from our posting history rather than tracking API headers.
+
+        Args:
+            chat_settings_id: Optional tenant filter for multi-tenant scoping
 
         Returns:
             Number of posts remaining in the current hour window
@@ -354,6 +357,7 @@ class InstagramAPIService(BaseService):
         recent_api_posts = self.history_repo.count_by_method(
             method="instagram_api",
             since=since,
+            chat_settings_id=chat_settings_id,
         )
         return max(0, settings.INSTAGRAM_POSTS_PER_HOUR - recent_api_posts)
 
