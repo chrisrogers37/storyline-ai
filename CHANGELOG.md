@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — CLAUDE.md Optimization
+
+- **CLAUDE.md reduced from 1,175 to 121 lines** — moved domain-specific reference content into `.claude/rules/` files that load on-demand when working in matching files
+  - `rules/testing.md` — test patterns, markers, templates (loads for `tests/**`)
+  - `rules/database.md` — schema, design patterns, migrations (loads for `src/models/**`, `src/repositories/**`)
+  - `rules/development-patterns.md` — BaseService usage, error handling, logging (loads for `src/**/*.py`)
+  - `rules/telegram.md` — bot commands, callbacks, handler architecture (loads for `telegram_*`)
+  - `rules/scheduler.md` — JIT algorithm, selection logic (loads for `scheduler*`)
+  - `rules/changelog.md` — format rules, entry examples (loads for `CHANGELOG.md`)
+- **Deleted ~770 lines of derivable content** — file organization tree, service reference tables, API endpoint tables, migration history, code templates that Claude can read directly from the codebase
+
 ### Changed — /status Command Overhaul
 
 - **Multi-tenant scoping** — All `/status` data queries now pass `chat_settings_id`, ensuring each tenant only sees their own metrics (was showing global counts)
