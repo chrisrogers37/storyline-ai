@@ -9,6 +9,7 @@ from src.services.core.instagram_account_service import InstagramAccountService
 from src.services.core.media_sync import MediaSyncService
 from src.services.core.scheduler import SchedulerService
 from src.services.core.settings_service import SettingsService
+from src.services.integrations.google_drive_oauth import GoogleDriveOAuthService
 from src.utils.logger import logger
 
 from .helpers import _validate_request, service_error_handler
@@ -109,6 +110,20 @@ async def onboarding_remove_account(request: RemoveAccountRequest):
             "display_name": account.display_name,
             "removed": True,
         }
+
+
+@router.post("/disconnect-gdrive")
+async def onboarding_disconnect_gdrive(request: InitRequest):
+    """Disconnect Google Drive for this chat.
+
+    Deletes OAuth tokens, clears the media folder config, and disables
+    media sync. The user can reconnect via the OAuth flow afterward.
+    """
+    _validate_request(request.init_data, request.chat_id)
+
+    with GoogleDriveOAuthService() as gdrive_service, service_error_handler():
+        result = gdrive_service.disconnect_for_chat(request.chat_id)
+        return result
 
 
 @router.post("/sync-media")

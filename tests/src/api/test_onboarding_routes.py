@@ -736,6 +736,81 @@ class TestOnboardingChatIdVerification:
 # =============================================================================
 
 
+# =============================================================================
+# POST /api/onboarding/disconnect-gdrive
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestDisconnectGdrive:
+    """Test POST /api/onboarding/disconnect-gdrive."""
+
+    def test_disconnect_success(self, client):
+        """Valid request disconnects Google Drive and returns result."""
+        with (
+            mock_validate(),
+            patch(
+                "src.api.routes.onboarding.settings.GoogleDriveOAuthService"
+            ) as MockService,
+        ):
+            svc = service_ctx(MockService)
+            svc.disconnect_for_chat.return_value = {
+                "disconnected": True,
+                "tokens_deleted": 2,
+            }
+
+            response = client.post(
+                "/api/onboarding/disconnect-gdrive",
+                json={"init_data": "test", "chat_id": CHAT_ID},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["disconnected"] is True
+        assert data["tokens_deleted"] == 2
+        svc.disconnect_for_chat.assert_called_once_with(CHAT_ID)
+
+    def test_disconnect_unauthorized(self, client):
+        """Bad initData returns 401."""
+        with (
+            patch(
+                "src.api.routes.onboarding.helpers.validate_init_data",
+                side_effect=ValueError("Invalid"),
+            ),
+            patch(
+                "src.api.routes.onboarding.helpers.validate_url_token",
+                side_effect=ValueError("Invalid"),
+            ),
+        ):
+            response = client.post(
+                "/api/onboarding/disconnect-gdrive",
+                json={"init_data": "bad", "chat_id": CHAT_ID},
+            )
+
+        assert response.status_code == 401
+
+    def test_disconnect_service_error(self, client):
+        """Service ValueError returns 400."""
+        with (
+            mock_validate(),
+            patch(
+                "src.api.routes.onboarding.settings.GoogleDriveOAuthService"
+            ) as MockService,
+        ):
+            svc = service_ctx(MockService)
+            svc.disconnect_for_chat.side_effect = ValueError(
+                "No settings found for chat"
+            )
+
+            response = client.post(
+                "/api/onboarding/disconnect-gdrive",
+                json={"init_data": "test", "chat_id": CHAT_ID},
+            )
+
+        assert response.status_code == 400
+        assert "No settings found" in response.json()["detail"]
+
+
 @pytest.mark.unit
 class TestOnboardingInputValidation:
     """Test Pydantic field validators reject out-of-range values."""

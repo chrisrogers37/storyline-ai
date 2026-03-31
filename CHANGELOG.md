@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Google Drive Disconnect & Onboarding Dead-End Fixes
+
+- **Google Drive disconnect/reconnect** — New `POST /disconnect-gdrive` endpoint and expandable dashboard card with Reconnect, Change Folder, and Disconnect actions
+- **Stale token detection** — Google Drive card shows "Needs Reconnect" warning when OAuth token has expired >7 days, surfacing the existing `gdrive_needs_reconnect` flag
+- **Wizard reconnect links** — "Reconnect with different account" link shown on Instagram and Google Drive wizard steps when already connected
+- **OAuth timeout recovery** — Polling timeout (10 min) now shows an error message and re-enables the connect button instead of failing silently
+- **Error recovery on fatal errors** — `_showError()` now includes a Reload button instead of leaving users stranded
+
+### Fixed — Onboarding Dead-End Fixes
+
+- **Silent error catch blocks** — `switchAccount()` and `executeRemoveAccount()` now display inline error messages instead of swallowing failures
+- **Schedule save errors** — `saveSchedule()` and `saveScheduleAndReturn()` use inline errors instead of destroying the app DOM
+- **OAuth connect errors** — `connectOAuth()` failure shows inline message instead of replacing the entire page
+- **Null dereference** — `_updateStatusIndicators()` now guards `gdStatus` element access, preventing TypeError when called from home screen
+
 ### Changed — CLAUDE.md Optimization
 
 - **CLAUDE.md reduced from 1,175 to 121 lines** — moved domain-specific reference content into `.claude/rules/` files that load on-demand when working in matching files

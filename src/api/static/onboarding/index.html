@@ -68,17 +68,41 @@
                     </div>
                 </div>
 
-                <!-- Google Drive (static, not expandable) -->
-                <div class="home-card" id="home-card-gdrive">
-                    <div class="home-card-header">
+                <!-- Google Drive (expandable with disconnect/reconnect) -->
+                <div class="home-card home-card-expandable" id="home-card-gdrive">
+                    <div class="home-card-header" onclick="App.toggleCard('gdrive')">
                         <div class="home-card-title">
                             <span class="home-card-icon">&#x1F4C1;</span>
                             <span>Google Drive</span>
                         </div>
-                        <span class="home-card-badge" id="home-badge-gdrive"></span>
+                        <div class="home-card-header-right">
+                            <span class="home-card-badge" id="home-badge-gdrive"></span>
+                            <span class="home-card-chevron">&#x25B8;</span>
+                        </div>
                     </div>
                     <div class="home-card-detail" id="home-detail-gdrive"></div>
-                    <button class="btn btn-card-edit" onclick="App.editSection('gdrive')">Edit</button>
+                    <div class="home-card-body" id="home-body-gdrive">
+                        <div class="card-body-loading hidden" id="gdrive-loading">
+                            <div class="spinner"></div>
+                        </div>
+                        <div id="gdrive-connection-info"></div>
+                        <div class="gdrive-reconnect-banner hidden" id="gdrive-reconnect-banner">
+                            <p>Your Google Drive connection has expired. Please reconnect.</p>
+                            <button class="btn btn-action-sm" onclick="App.connectOAuth('google-drive')">Reconnect Now</button>
+                        </div>
+                        <div class="confirm-dialog hidden" id="gdrive-disconnect-confirm">
+                            <p>Disconnect Google Drive? Your media folder config will be cleared.</p>
+                            <div class="confirm-actions">
+                                <button class="btn btn-action-sm btn-action-danger" onclick="App.executeDisconnectGdrive()">Yes, Disconnect</button>
+                                <button class="btn btn-action-sm" onclick="App.cancelDisconnectGdrive()">Cancel</button>
+                            </div>
+                        </div>
+                        <div class="card-body-actions" id="gdrive-card-actions">
+                            <button class="btn btn-action-sm" onclick="App.connectOAuth('google-drive')" id="btn-gdrive-reconnect" style="display:none">Reconnect</button>
+                            <button class="btn btn-action-sm" onclick="App.editSection('media-folder')" id="btn-gdrive-change-folder" style="display:none">Change Folder</button>
+                            <button class="btn btn-action-sm btn-action-danger" onclick="App.confirmDisconnectGdrive()" id="btn-gdrive-disconnect" style="display:none">Disconnect</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Quick Controls (expandable) -->
@@ -291,10 +315,12 @@
                 <button class="btn btn-primary" id="btn-connect-instagram" onclick="App.connectOAuth('instagram')">
                     Connect Instagram
                 </button>
+                <button class="btn btn-text hidden" id="btn-reconnect-instagram" onclick="App.connectOAuth('instagram')">Reconnect with different account</button>
                 <div id="instagram-polling" class="polling-indicator hidden">
                     <div class="spinner"></div>
                     <span>Waiting for authorization...</span>
                 </div>
+                <div id="instagram-timeout" class="polling-timeout hidden">Connection timed out. Click above to try again.</div>
                 <div class="step-nav">
                     <button class="btn btn-text" onclick="App.goToStep('gdrive')">Skip for now</button>
                 </div>
@@ -317,10 +343,12 @@
                 <button class="btn btn-primary" id="btn-connect-gdrive" onclick="App.connectOAuth('google-drive')">
                     Connect Google Drive
                 </button>
+                <button class="btn btn-text hidden" id="btn-reconnect-gdrive" onclick="App.connectOAuth('google-drive')">Reconnect with different account</button>
                 <div id="gdrive-polling" class="polling-indicator hidden">
                     <div class="spinner"></div>
                     <span>Waiting for authorization...</span>
                 </div>
+                <div id="gdrive-timeout" class="polling-timeout hidden">Connection timed out. Click above to try again.</div>
                 <div class="step-nav">
                     <button class="btn btn-text" onclick="App.goToStep('media-folder')">Skip for now</button>
                 </div>
@@ -423,6 +451,7 @@
                     <p class="hint">All times in UTC</p>
                 </div>
 
+                <div id="schedule-error" class="error-text hidden"></div>
                 <button class="btn btn-primary" id="btn-schedule-next" onclick="App.saveSchedule()">Continue</button>
                 <button class="btn btn-primary hidden" id="btn-schedule-return" onclick="App.saveScheduleAndReturn()">Save &amp; Return</button>
                 <div class="step-nav">

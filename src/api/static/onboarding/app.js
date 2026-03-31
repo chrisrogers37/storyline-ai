@@ -141,6 +141,7 @@ const App = {
      * Start OAuth flow for a provider.
      */
     async connectOAuth(provider) {
+        const key = provider === 'google-drive' ? 'gdrive' : provider;
         try {
             const queryParams = new URLSearchParams({
                 init_data: this.initData,
@@ -154,14 +155,17 @@ const App = {
             window.open(response.auth_url, '_blank');
 
             // Show polling indicator
-            const key = provider === 'google-drive' ? 'gdrive' : provider;
             document.getElementById(key + '-polling').classList.remove('hidden');
             document.getElementById('btn-connect-' + key).disabled = true;
 
             // Start polling for OAuth completion
             this._startPolling(key);
         } catch (err) {
-            this._showError('Failed to start ' + provider + ' connection. Please try again.');
+            const timeoutEl = document.getElementById(key + '-timeout');
+            if (timeoutEl) {
+                timeoutEl.textContent = err.message || 'Failed to start connection. Please try again.';
+                timeoutEl.classList.remove('hidden');
+            }
         }
     },
 
@@ -294,7 +298,11 @@ const App = {
             });
             this.goToStep('summary');
         } catch (err) {
-            this._showError('Failed to save schedule. Please try again.');
+            const errorEl = document.getElementById('schedule-error');
+            if (errorEl) {
+                errorEl.textContent = err.message || 'Failed to save schedule. Please try again.';
+                errorEl.classList.remove('hidden');
+            }
         } finally {
             this._showLoading(false);
         }
@@ -357,12 +365,15 @@ const App = {
         }
 
         // Google Drive card
-        if (s.gdrive_connected) {
+        if (s.gdrive_connected && s.gdrive_needs_reconnect) {
+            this._setHomeBadge('gdrive', 'error', 'Needs Reconnect');
+            this._setHomeDetail('gdrive', 'Token expired \u2014 tap to reconnect');
+        } else if (s.gdrive_connected) {
             this._setHomeBadge('gdrive', 'connected', 'Connected');
             this._setHomeDetail('gdrive', this._escapeHtml(s.gdrive_email || 'Connected'));
         } else {
             this._setHomeBadge('gdrive', 'warning', 'Not connected');
-            this._setHomeDetail('gdrive', 'Tap Edit to connect Google Drive');
+            this._setHomeDetail('gdrive', 'Tap to connect Google Drive');
         }
 
         // Quick Controls card summary
@@ -494,6 +505,7 @@ const App = {
     async _loadCardData(cardId) {
         const loaders = {
             instagram: () => this._loadAccounts(),
+            gdrive: () => this._loadGdriveDetail(),
             status: () => this._loadSystemStatus(),
             queue: () => this._loadQueueDetail('queue'),
             history: () => this._loadHistoryDetail(),
@@ -575,6 +587,91 @@ const App = {
             }
         } finally {
             if (loadingEl) loadingEl.classList.add('hidden');
+        }
+    },
+
+    /**
+     * Populate Google Drive card body based on setup state.
+     */
+    _loadGdriveDetail() {
+        const s = this.setupState || {};
+        const infoEl = document.getElementById('gdrive-connection-info');
+        const banner = document.getElementById('gdrive-reconnect-banner');
+        const actions = document.getElementById('gdrive-card-actions');
+        const reconnectBtn = document.getElementById('btn-gdrive-reconnect');
+        const changeFolderBtn = document.getElementById('btn-gdrive-change-folder');
+        const disconnectBtn = document.getElementById('btn-gdrive-disconnect');
+
+        if (!infoEl) return;
+
+        if (s.gdrive_connected) {
+            let html = '<div class="card-body-info-row">' +
+                '<span class="info-label">Account:</span> ' +
+                '<span>' + this._escapeHtml(s.gdrive_email || 'Connected') + '</span>' +
+                '</div>';
+            if (s.media_folder_id) {
+                html += '<div class="card-body-info-row">' +
+                    '<span class="info-label">Folder:</span> ' +
+                    '<span class="info-value-mono">' + this._escapeHtml(s.media_folder_id) + '</span>' +
+                    '</div>';
+            }
+            infoEl.innerHTML = html;
+
+            // Show reconnect banner if token is stale
+            if (banner) banner.classList.toggle('hidden', !s.gdrive_needs_reconnect);
+
+            // Show action buttons
+            if (reconnectBtn) reconnectBtn.style.display = s.gdrive_needs_reconnect ? '' : 'none';
+            if (changeFolderBtn) changeFolderBtn.style.display = s.media_folder_configured ? '' : 'none';
+            if (disconnectBtn) disconnectBtn.style.display = '';
+        } else {
+            infoEl.innerHTML = '<div class="card-body-empty">Not connected</div>';
+            if (banner) banner.classList.add('hidden');
+            // Show only connect button when disconnected
+            if (reconnectBtn) { reconnectBtn.style.display = ''; reconnectBtn.textContent = 'Connect'; }
+            if (changeFolderBtn) changeFolderBtn.style.display = 'none';
+            if (disconnectBtn) disconnectBtn.style.display = 'none';
+        }
+
+        if (actions) actions.style.display = '';
+    },
+
+    /**
+     * Show confirmation dialog for disconnecting Google Drive.
+     */
+    confirmDisconnectGdrive() {
+        const confirm = document.getElementById('gdrive-disconnect-confirm');
+        const actions = document.getElementById('gdrive-card-actions');
+        if (confirm) confirm.classList.remove('hidden');
+        if (actions) actions.style.display = 'none';
+    },
+
+    /**
+     * Cancel Google Drive disconnect.
+     */
+    cancelDisconnectGdrive() {
+        const confirm = document.getElementById('gdrive-disconnect-confirm');
+        const actions = document.getElementById('gdrive-card-actions');
+        if (confirm) confirm.classList.add('hidden');
+        if (actions) actions.style.display = '';
+    },
+
+    /**
+     * Execute Google Drive disconnect after confirmation.
+     */
+    async executeDisconnectGdrive() {
+        this.cancelDisconnectGdrive();
+        this._showLoading(true);
+        try {
+            await this._api('/api/onboarding/disconnect-gdrive', {
+                init_data: this.initData,
+                chat_id: this.chatId,
+            });
+            await this._refreshHome({ keepExpanded: true });
+        } catch (err) {
+            this._showCardError('gdrive-connection-info', err.message || 'Failed to disconnect');
+        } finally {
+            this._showLoading(false);
         }
     },
 
@@ -788,7 +885,7 @@ const App = {
             this._cardDataLoaded['instagram'] = false;
             await this._loadAccounts();
         } catch (err) {
-            // Show inline error
+            this._showCardError('instagram-account-list', err.message || 'Failed to switch account');
         } finally {
             this._showLoading(false);
         }
@@ -835,7 +932,7 @@ const App = {
             // Refresh home to get updated state
             await this._refreshHome({ keepExpanded: true });
         } catch (err) {
-            // Show inline error
+            this._showCardError('instagram-account-list', err.message || 'Failed to remove account');
         } finally {
             this._showLoading(false);
         }
@@ -1283,7 +1380,11 @@ const App = {
             });
             await this.returnToHome();
         } catch (err) {
-            this._showError('Failed to save schedule. Please try again.');
+            const errorEl = document.getElementById('schedule-error');
+            if (errorEl) {
+                errorEl.textContent = err.message || 'Failed to save schedule. Please try again.';
+                errorEl.classList.remove('hidden');
+            }
         } finally {
             this._showLoading(false);
         }
@@ -1384,16 +1485,20 @@ const App = {
                 '<span>Connected: @' + this._escapeHtml(s.instagram_username || '') + '</span>';
             document.getElementById('btn-connect-instagram').textContent = 'Connected';
             document.getElementById('btn-connect-instagram').disabled = true;
+            const reconnectIg = document.getElementById('btn-reconnect-instagram');
+            if (reconnectIg) reconnectIg.classList.remove('hidden');
         }
 
         // Google Drive
         const gdStatus = document.getElementById('gdrive-status');
-        if (s.gdrive_connected) {
+        if (gdStatus && s.gdrive_connected) {
             gdStatus.innerHTML =
                 '<div class="status-icon status-connected">&#9679;</div>' +
                 '<span>Connected: ' + this._escapeHtml(s.gdrive_email || '') + '</span>';
             document.getElementById('btn-connect-gdrive').textContent = 'Connected';
             document.getElementById('btn-connect-gdrive').disabled = true;
+            const reconnectGd = document.getElementById('btn-reconnect-gdrive');
+            if (reconnectGd) reconnectGd.classList.remove('hidden');
         }
 
         // Media folder
@@ -1470,8 +1575,25 @@ const App = {
             }
         }, 3000);
 
-        // Stop after 10 minutes
-        this.pollTimeout = setTimeout(() => this._stopPolling(), 600000);
+        // Stop after 10 minutes with user feedback
+        this.pollTimeout = setTimeout(() => {
+            this._stopPolling();
+            this._showPollingTimeout(provider);
+        }, 600000);
+    },
+
+    /**
+     * Show timeout message and re-enable the connect button after polling expires.
+     */
+    _showPollingTimeout(provider) {
+        const key = provider === 'google-drive' ? 'gdrive' : provider;
+        const btn = document.getElementById('btn-connect-' + key);
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = 'Retry Connection';
+        }
+        const timeoutEl = document.getElementById(key + '-timeout');
+        if (timeoutEl) timeoutEl.classList.remove('hidden');
     },
 
     _stopPolling() {
@@ -1541,11 +1663,12 @@ const App = {
     },
 
     _showError(message) {
-        // For critical errors, replace the whole app content
+        // For critical errors, replace the whole app content with recovery option
         const app = document.getElementById('app');
         app.innerHTML =
             '<div class="step"><div class="step-content" style="text-align:center;padding-top:60px">' +
             '<h2>Oops</h2><p class="subtitle">' + this._escapeHtml(message) + '</p>' +
+            '<button class="btn btn-primary" onclick="location.reload()" style="margin-top:24px">Reload</button>' +
             '</div></div>';
     },
 
@@ -1553,6 +1676,15 @@ const App = {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    },
+
+    _showCardError(containerId, message) {
+        const el = document.getElementById(containerId);
+        if (!el) return;
+        const existing = el.querySelector('.card-body-error');
+        if (existing) existing.remove();
+        el.insertAdjacentHTML('beforeend',
+            '<div class="card-body-error">' + this._escapeHtml(message) + '</div>');
     },
 
     _formatHour(h) {

@@ -401,3 +401,64 @@ class TestGDriveNotifyTelegram:
 
         # Should not raise
         await self.service.notify_telegram(-100123, "test", success=True)
+
+
+@pytest.mark.unit
+class TestGDriveDisconnect:
+    """Tests for GoogleDriveOAuthService.disconnect_for_chat()."""
+
+    @pytest.fixture(autouse=True)
+    def setup_service(self):
+        with patch.object(GoogleDriveOAuthService, "__init__", lambda self: None):
+            self.service = GoogleDriveOAuthService()
+            self.service.service_run_repo = Mock()
+            self.service.service_name = "GoogleDriveOAuthService"
+            self.service.track_execution = mock_track_execution
+            self.service.set_result_summary = Mock()
+            self.service.settings_repo = Mock()
+            self.service.token_repo = Mock()
+            self.service.SERVICE_NAME = "google_drive"
+
+    def test_disconnect_deletes_tokens(self):
+        """Disconnect deletes all Google Drive tokens for the chat."""
+        self.service.settings_repo.get_by_chat_id.return_value = Mock(id="uuid-123")
+        self.service.token_repo.delete_tokens_for_chat.return_value = 2
+
+        result = self.service.disconnect_for_chat(-1001234567890)
+
+        assert result["disconnected"] is True
+        assert result["tokens_deleted"] == 2
+        self.service.token_repo.delete_tokens_for_chat.assert_called_once_with(
+            "google_drive", "uuid-123"
+        )
+
+    def test_disconnect_clears_folder_and_sync(self):
+        """Disconnect clears media config via repo.update()."""
+        self.service.settings_repo.get_by_chat_id.return_value = Mock(id="uuid-123")
+        self.service.token_repo.delete_tokens_for_chat.return_value = 2
+
+        self.service.disconnect_for_chat(-1001234567890)
+
+        self.service.settings_repo.update.assert_called_once_with(
+            -1001234567890,
+            media_source_root=None,
+            media_source_type=None,
+            media_sync_enabled=False,
+        )
+
+    def test_disconnect_chat_not_found(self):
+        """Disconnect raises ValueError when chat not found."""
+        self.service.settings_repo.get_by_chat_id.return_value = None
+
+        with pytest.raises(ValueError, match="No settings found"):
+            self.service.disconnect_for_chat(-1001234567890)
+
+    def test_disconnect_no_tokens_is_idempotent(self):
+        """Disconnect with 0 tokens still succeeds."""
+        self.service.settings_repo.get_by_chat_id.return_value = Mock(id="uuid-123")
+        self.service.token_repo.delete_tokens_for_chat.return_value = 0
+
+        result = self.service.disconnect_for_chat(-1001234567890)
+
+        assert result["disconnected"] is True
+        assert result["tokens_deleted"] == 0

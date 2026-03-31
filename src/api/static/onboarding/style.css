@@ -1102,3 +1102,51 @@ h2 {
     font-size: 13px;
     color: var(--tg-theme-hint-color);
 }
+
+/* ==================== Inline Errors & Banners ==================== */
+
+.card-body-error {
+    /* Same as .error-text — used for dynamically injected errors in card bodies */
+    color: #ef4444;
+    font-size: 13px;
+    padding: 8px 0;
+}
+
+.card-body-info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: 13px;
+}
+
+.info-label {
+    color: var(--tg-theme-hint-color);
+}
+
+.info-value-mono {
+    font-family: monospace;
+    font-size: 12px;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gdrive-reconnect-banner {
+    background: rgba(245, 158, 11, 0.12);
+    border-radius: 8px;
+    padding: 12px;
+    margin: 8px 0;
+    font-size: 13px;
+}
+
+.gdrive-reconnect-banner p {
+    margin-bottom: 8px;
+    color: #b45309;
+}
+
+.polling-timeout {
+    color: #ef4444;
+    font-size: 13px;
+    padding: 8px 0;
+    text-align: center;
+}

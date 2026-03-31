@@ -264,6 +264,54 @@ class GoogleDriveOAuthService(BaseService):
                 f"Failed to send GDrive OAuth notification to chat {chat_id}: {e}"
             )
 
+    def disconnect_for_chat(self, telegram_chat_id: int) -> dict:
+        """Disconnect Google Drive for a tenant by deleting OAuth tokens.
+
+        Also clears the media source config and disables media sync,
+        since the folder is inaccessible without valid tokens.
+
+        Args:
+            telegram_chat_id: The Telegram chat to disconnect
+
+        Returns:
+            dict with disconnected status and tokens_deleted count
+
+        Raises:
+            ValueError: If chat not found
+        """
+        with self.track_execution(
+            method_name="disconnect_for_chat",
+            triggered_by="user",
+            input_params={"chat_id": telegram_chat_id},
+        ) as run_id:
+            chat_settings = self.settings_repo.get_by_chat_id(telegram_chat_id)
+            if not chat_settings:
+                raise ValueError(f"No settings found for chat {telegram_chat_id}")
+
+            chat_settings_id = str(chat_settings.id)
+            tokens_deleted = self.token_repo.delete_tokens_for_chat(
+                self.SERVICE_NAME, chat_settings_id
+            )
+
+            self.settings_repo.update(
+                telegram_chat_id,
+                media_source_root=None,
+                media_source_type=None,
+                media_sync_enabled=False,
+            )
+
+            logger.info(
+                f"Google Drive disconnected for chat {telegram_chat_id}: "
+                f"{tokens_deleted} tokens deleted"
+            )
+
+            result = {
+                "disconnected": True,
+                "tokens_deleted": tokens_deleted,
+            }
+            self.set_result_summary(run_id, result)
+            return result
+
     def get_user_credentials(self, telegram_chat_id: int):
         """
         Get Google OAuth credentials for a tenant, suitable for GoogleDriveProvider.
