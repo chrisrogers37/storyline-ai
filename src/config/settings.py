@@ -11,7 +11,10 @@ class Settings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8", case_sensitive=False, extra="ignore"
     )
 
-    # Phase Control
+    # Meta Graph API
+    META_GRAPH_API_VERSION: str = "v21.0"
+
+    # Phase Control (bootstrap only — runtime value in chat_settings)
     ENABLE_INSTAGRAM_API: bool = False
 
     # Database Configuration
@@ -31,7 +34,7 @@ class Settings(BaseSettings):
     TELEGRAM_CHANNEL_ID: int
     ADMIN_TELEGRAM_CHAT_ID: int
 
-    # Posting Schedule Configuration
+    # Posting Schedule Configuration (bootstrap only — runtime value in chat_settings)
     POSTS_PER_DAY: int = 3
     POSTING_HOURS_START: int = 14  # UTC
     POSTING_HOURS_END: int = 2  # UTC (next day)
@@ -48,8 +51,10 @@ class Settings(BaseSettings):
     # Instagram API Configuration (Phase 2 Only)
     INSTAGRAM_ACCOUNT_ID: Optional[str] = None
     INSTAGRAM_ACCESS_TOKEN: Optional[str] = None
-    FACEBOOK_APP_ID: Optional[str] = None
-    FACEBOOK_APP_SECRET: Optional[str] = None
+    FACEBOOK_APP_ID: Optional[str] = None  # Facebook Login OAuth (legacy)
+    FACEBOOK_APP_SECRET: Optional[str] = None  # Facebook Login OAuth (legacy)
+    INSTAGRAM_APP_ID: Optional[str] = None  # Instagram Login OAuth (preferred)
+    INSTAGRAM_APP_SECRET: Optional[str] = None  # Instagram Login OAuth (preferred)
     OAUTH_REDIRECT_BASE_URL: Optional[str] = None  # e.g., "https://api.storyline.ai"
     INSTAGRAM_DEEPLINK_URL: str = "https://www.instagram.com/"
 
@@ -70,13 +75,13 @@ class Settings(BaseSettings):
     # Security (Phase 2 - required for token encryption)
     ENCRYPTION_KEY: Optional[str] = None  # Fernet key for encrypting tokens in DB
 
-    # Media Sync Engine (Phase 03 Cloud Media)
+    # Media Sync Engine (bootstrap only — runtime value in chat_settings)
     MEDIA_SYNC_ENABLED: bool = False
     MEDIA_SYNC_INTERVAL_SECONDS: int = 300  # 5 minutes
-    MEDIA_SOURCE_TYPE: str = "local"  # 'local' or 'google_drive'
-    MEDIA_SOURCE_ROOT: str = ""  # Root path (local) or folder ID (google_drive)
+    MEDIA_SOURCE_TYPE: str = "local"  # bootstrap only — runtime in chat_settings
+    MEDIA_SOURCE_ROOT: str = ""  # bootstrap only — runtime in chat_settings
 
-    # Development Settings
+    # Development Settings (bootstrap only — runtime value in chat_settings)
     DRY_RUN_MODE: bool = False
     LOG_LEVEL: str = "INFO"
 
@@ -84,6 +89,11 @@ class Settings(BaseSettings):
     SEND_LIFECYCLE_NOTIFICATIONS: bool = True
     INSTAGRAM_USERNAME: Optional[str] = None
     CAPTION_STYLE: str = "enhanced"  # or 'simple'
+
+    @property
+    def meta_graph_base(self) -> str:
+        """Base URL for Meta Graph API calls."""
+        return f"https://graph.facebook.com/{self.META_GRAPH_API_VERSION}"
 
     @property
     def database_url(self) -> str:

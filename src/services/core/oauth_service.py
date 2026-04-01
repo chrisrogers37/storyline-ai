@@ -28,7 +28,6 @@ class OAuthService(BaseService):
     - Notifying Telegram after success/failure
     """
 
-    META_GRAPH_BASE = "https://graph.facebook.com/v18.0"
     META_OAUTH_DIALOG = "https://www.facebook.com/dialog/oauth"
     STATE_TTL_SECONDS = 600  # 10 minutes
 
@@ -231,7 +230,7 @@ class OAuthService(BaseService):
         """
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{self.META_GRAPH_BASE}/oauth/access_token",
+                f"{settings.meta_graph_base}/oauth/access_token",
                 params={
                     "client_id": settings.FACEBOOK_APP_ID,
                     "client_secret": settings.FACEBOOK_APP_SECRET,
@@ -263,7 +262,7 @@ class OAuthService(BaseService):
         """
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{self.META_GRAPH_BASE}/oauth/access_token",
+                f"{settings.meta_graph_base}/oauth/access_token",
                 params={
                     "grant_type": "fb_exchange_token",
                     "client_id": settings.FACEBOOK_APP_ID,
@@ -296,7 +295,7 @@ class OAuthService(BaseService):
         async with httpx.AsyncClient() as client:
             # Get Facebook Pages
             pages_resp = await client.get(
-                f"{self.META_GRAPH_BASE}/me/accounts",
+                f"{settings.meta_graph_base}/me/accounts",
                 params={"access_token": token},
                 timeout=30.0,
             )
@@ -313,7 +312,7 @@ class OAuthService(BaseService):
             # Get Instagram account linked to the first page
             page_id = pages[0]["id"]
             ig_resp = await client.get(
-                f"{self.META_GRAPH_BASE}/{page_id}",
+                f"{settings.meta_graph_base}/{page_id}",
                 params={
                     "fields": "instagram_business_account",
                     "access_token": token,
@@ -332,7 +331,7 @@ class OAuthService(BaseService):
 
             # Get username
             username_resp = await client.get(
-                f"{self.META_GRAPH_BASE}/{ig_account_id}",
+                f"{settings.meta_graph_base}/{ig_account_id}",
                 params={
                     "fields": "username",
                     "access_token": token,

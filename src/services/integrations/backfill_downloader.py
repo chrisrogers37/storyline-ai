@@ -152,7 +152,7 @@ class BackfillDownloader:
 
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{self.service.META_GRAPH_BASE}/{ig_account_id}/media",
+                f"{settings.meta_graph_base}/{ig_account_id}/media",
                 params=params,
                 timeout=self.service.API_TIMEOUT,
             )
@@ -173,7 +173,7 @@ class BackfillDownloader:
 
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{self.service.META_GRAPH_BASE}/{ig_account_id}/stories",
+                f"{settings.meta_graph_base}/{ig_account_id}/stories",
                 params=params,
                 timeout=self.service.API_TIMEOUT,
             )
@@ -194,7 +194,7 @@ class BackfillDownloader:
 
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{self.service.META_GRAPH_BASE}/{carousel_id}/children",
+                f"{settings.meta_graph_base}/{carousel_id}/children",
                 params=params,
                 timeout=self.service.API_TIMEOUT,
             )

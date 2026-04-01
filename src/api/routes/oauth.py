@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from src.api.routes.onboarding.helpers import service_error_handler
 from src.services.core.oauth_service import OAuthService
 from src.services.integrations.google_drive_oauth import GoogleDriveOAuthService
+from src.services.integrations.instagram_login_oauth import InstagramLoginOAuthService
 from src.utils.logger import logger
 
 router = APIRouter(tags=["oauth"])
@@ -100,6 +101,80 @@ async def instagram_oauth_callback(
             raise
         except Exception as e:
             logger.error(f"OAuth callback error: {e}", exc_info=True)
+            return _error_html_page(
+                "Connection Failed",
+                "Something went wrong connecting your Instagram account. "
+                "Please try again from Telegram.",
+            )
+
+
+@router.get("/instagram-login/callback")
+async def instagram_login_oauth_callback(
+    code: str = Query(None, description="Authorization code from Instagram"),
+    state: str = Query(..., description="Signed state token"),
+    error: str = Query(None, description="Error code if user denied"),
+    error_reason: str = Query(None, description="Error reason"),
+    error_description: str = Query(None, description="Human-readable error"),
+):
+    """Handle Instagram Login OAuth callback.
+
+    Instagram redirects here after user authorizes (or denies).
+    Exchanges the code for a long-lived token, stores it,
+    and notifies the user in Telegram.
+    """
+    with InstagramLoginOAuthService() as ig_login_service:
+        try:
+            if error:
+                logger.warning(
+                    f"Instagram Login OAuth denied: {error} - "
+                    f"{error_reason} - {error_description}"
+                )
+                try:
+                    chat_id = ig_login_service.validate_state_token(state)
+                    await ig_login_service.notify_telegram(
+                        chat_id,
+                        f"Instagram connection cancelled.\n"
+                        f"Reason: {error_description or error_reason or error}",
+                        success=False,
+                    )
+                except ValueError:
+                    pass
+                return _error_html_page(
+                    "Connection Cancelled",
+                    "You cancelled the Instagram connection. "
+                    "You can try again from Telegram.",
+                )
+
+            if not code:
+                raise HTTPException(
+                    status_code=400, detail="Missing authorization code"
+                )
+
+            try:
+                chat_id = ig_login_service.validate_state_token(state)
+            except ValueError as e:
+                logger.error(f"Invalid Instagram Login OAuth state: {e}")
+                return _error_html_page(
+                    "Link Expired",
+                    "This authorization link has expired or is invalid. "
+                    "Please request a new one from Telegram.",
+                )
+
+            result = await ig_login_service.exchange_and_store(code, chat_id)
+
+            await ig_login_service.notify_telegram(
+                chat_id,
+                f"Instagram connected! Account: @{result['username']}\n"
+                f"Token valid for {result['expires_in_days']} days.",
+                success=True,
+            )
+
+            return _success_html_page(result["username"])
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Instagram Login OAuth callback error: {e}", exc_info=True)
             return _error_html_page(
                 "Connection Failed",
                 "Something went wrong connecting your Instagram account. "
