@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Instagram Login OAuth + Graph API v21.0
+
+- **Instagram Login OAuth service** — New `InstagramLoginOAuthService` implementing the newer Instagram Login flow (no Facebook Page required). Uses `instagram_business_basic` + `instagram_business_content_publish` scopes. Coexists alongside the existing Facebook Login OAuth path.
+- **Instagram Login callback route** — `GET /auth/instagram-login/callback` handles the OAuth redirect, exchanges tokens, stores per-tenant, and notifies via Telegram
+- **Smart OAuth routing** — Onboarding "Connect Instagram" button automatically uses Instagram Login when `INSTAGRAM_APP_ID` is configured, falls back to Facebook Login otherwise
+- **Token refresh routing** — `TokenRefreshService` detects `auth_method="instagram_login"` accounts and routes to `graph.instagram.com/refresh_access_token` instead of the Facebook endpoint
+- **New env vars** — `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET` for Instagram Login OAuth (separate from `FACEBOOK_APP_ID`/`FACEBOOK_APP_SECRET`)
+
+### Changed — Instagram Login OAuth + Graph API v21.0
+
+- **Graph API v18.0 → v21.0** — Centralized `META_GRAPH_API_VERSION` in `settings.py` with `meta_graph_base` property; removed 6 scattered `META_GRAPH_BASE` constants across services
+- **Bootstrap-only env vars documented** — `DRY_RUN_MODE`, `ENABLE_INSTAGRAM_API`, `POSTS_PER_DAY`, `POSTING_HOURS_*`, `MEDIA_SYNC_ENABLED`, `MEDIA_SOURCE_*` now marked as bootstrap-only in settings (runtime values live in `chat_settings` table)
+
 ### Added — Google Drive Disconnect & Onboarding Dead-End Fixes
 
 - **Google Drive disconnect/reconnect** — New `POST /disconnect-gdrive` endpoint and expandable dashboard card with Reconnect, Change Folder, and Disconnect actions

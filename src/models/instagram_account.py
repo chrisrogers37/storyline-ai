@@ -9,7 +9,8 @@ import uuid
 from src.config.database import Base
 
 
-AUTH_METHOD_OAUTH = "oauth"
+AUTH_METHOD_OAUTH = "oauth"  # Facebook Login OAuth
+AUTH_METHOD_INSTAGRAM_LOGIN = "instagram_login"  # Instagram Login OAuth (preferred)
 AUTH_METHOD_MANUAL = "manual"
 
 

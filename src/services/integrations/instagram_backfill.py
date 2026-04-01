@@ -88,8 +88,6 @@ class InstagramBackfillService(BaseService):
     - Pagination: cursor-based with 'after' token
     """
 
-    META_GRAPH_BASE = "https://graph.facebook.com/v18.0"
-
     MEDIA_FIELDS = (
         "id,media_type,media_url,thumbnail_url,timestamp,caption,permalink,username"
     )

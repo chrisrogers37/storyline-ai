@@ -36,9 +36,8 @@ class TokenRefreshService(BaseService):
             await service.refresh_instagram_token()
     """
 
-    # Meta Graph API endpoints
-    META_GRAPH_BASE = "https://graph.facebook.com/v18.0"
-    META_TOKEN_REFRESH_ENDPOINT = f"{META_GRAPH_BASE}/oauth/access_token"
+    # Instagram Login token refresh endpoint (different from Facebook Login)
+    IG_LOGIN_REFRESH_ENDPOINT = "https://graph.instagram.com/refresh_access_token"
 
     # Refresh buffer: refresh tokens this many hours before expiry
     REFRESH_BUFFER_HOURS = 168  # 7 days
@@ -164,6 +163,19 @@ class TokenRefreshService(BaseService):
             self.set_result_summary(run_id, {"success": True, "service": service})
             return True
 
+    def _get_refresh_endpoint(self, instagram_account_id: Optional[str]) -> str:
+        """Return the correct token refresh URL based on account auth method.
+
+        Instagram Login tokens refresh via graph.instagram.com.
+        Facebook Login / legacy tokens refresh via graph.facebook.com.
+        """
+        if instagram_account_id:
+            account = self.account_repo.get_by_id(instagram_account_id)
+            if account and account.auth_method == "instagram_login":
+                return self.IG_LOGIN_REFRESH_ENDPOINT
+
+        return f"{settings.meta_graph_base}/oauth/access_token"
+
     async def refresh_instagram_token(
         self, instagram_account_id: Optional[str] = None
     ) -> bool:
@@ -211,8 +223,9 @@ class TokenRefreshService(BaseService):
 
             try:
                 async with httpx.AsyncClient() as client:
+                    refresh_url = self._get_refresh_endpoint(instagram_account_id)
                     response = await client.get(
-                        self.META_TOKEN_REFRESH_ENDPOINT,
+                        refresh_url,
                         params={
                             "grant_type": "ig_refresh_token",
                             "access_token": current_token,

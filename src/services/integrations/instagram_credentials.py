@@ -206,7 +206,7 @@ class InstagramCredentialManager:
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(
-                    f"{self.service.META_GRAPH_BASE}/{account_id}",
+                    f"{settings.meta_graph_base}/{account_id}",
                     params={
                         "fields": "username,name",
                         "access_token": token,

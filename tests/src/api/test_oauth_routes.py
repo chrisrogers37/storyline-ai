@@ -479,3 +479,87 @@ class TestOAuthHtmlEscaping:
         assert response.status_code == 200
         assert "<img src=" not in response.text
         assert "&lt;img" in response.text
+
+
+# =============================================================================
+# Instagram Login OAuth Callback
+# =============================================================================
+
+
+class TestInstagramLoginCallback:
+    """Test GET /auth/instagram-login/callback."""
+
+    def test_callback_success(self, client):
+        """Successful callback exchanges code and returns success page."""
+        with patch("src.api.routes.oauth.InstagramLoginOAuthService") as MockService:
+            mock_svc = MockService.return_value
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
+            mock_svc.validate_state_token.return_value = -100123
+            mock_svc.exchange_and_store = AsyncMock(
+                return_value={
+                    "username": "testuser",
+                    "account_id": "12345",
+                    "expires_in_days": 60,
+                }
+            )
+            mock_svc.notify_telegram = AsyncMock()
+
+            response = client.get(
+                "/auth/instagram-login/callback?code=AUTH_CODE&state=VALID_STATE"
+            )
+
+        assert response.status_code == 200
+        assert "testuser" in response.text
+        mock_svc.exchange_and_store.assert_called_once_with("AUTH_CODE", -100123)
+
+    def test_callback_user_denied(self, client):
+        """User denial shows cancellation page."""
+        with patch("src.api.routes.oauth.InstagramLoginOAuthService") as MockService:
+            mock_svc = MockService.return_value
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
+            mock_svc.validate_state_token.return_value = -100123
+            mock_svc.notify_telegram = AsyncMock()
+
+            response = client.get(
+                "/auth/instagram-login/callback"
+                "?state=VALID_STATE"
+                "&error=access_denied"
+                "&error_reason=user_denied"
+                "&error_description=User+denied"
+            )
+
+        assert response.status_code == 200
+        assert "Cancelled" in response.text
+
+    def test_callback_invalid_state(self, client):
+        """Invalid state token shows expired page."""
+        with patch("src.api.routes.oauth.InstagramLoginOAuthService") as MockService:
+            mock_svc = MockService.return_value
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
+            mock_svc.validate_state_token.side_effect = ValueError("expired")
+
+            response = client.get(
+                "/auth/instagram-login/callback?code=AUTH_CODE&state=BAD_STATE"
+            )
+
+        assert response.status_code == 200
+        assert "Expired" in response.text
+
+    def test_callback_exchange_failure(self, client):
+        """Exchange error shows failure page."""
+        with patch("src.api.routes.oauth.InstagramLoginOAuthService") as MockService:
+            mock_svc = MockService.return_value
+            mock_svc.__enter__ = Mock(return_value=mock_svc)
+            mock_svc.__exit__ = Mock(return_value=False)
+            mock_svc.validate_state_token.return_value = -100123
+            mock_svc.exchange_and_store = AsyncMock(side_effect=Exception("API error"))
+
+            response = client.get(
+                "/auth/instagram-login/callback?code=AUTH_CODE&state=VALID_STATE"
+            )
+
+        assert response.status_code == 200
+        assert "Failed" in response.text

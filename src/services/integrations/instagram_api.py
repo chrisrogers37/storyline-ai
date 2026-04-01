@@ -46,7 +46,6 @@ class InstagramAPIService(BaseService):
     """
 
     # Meta Graph API configuration
-    META_GRAPH_BASE = "https://graph.facebook.com/v18.0"
     CONTAINER_STATUS_POLL_INTERVAL = 2  # seconds
     CONTAINER_STATUS_MAX_POLLS = 30  # max ~60 seconds wait
     MIN_ACCOUNT_ID_LENGTH = 10  # Instagram account IDs are typically 15-17 digits
@@ -201,7 +200,7 @@ class InstagramAPIService(BaseService):
                 params["image_url"] = media_url
 
             response = await client.post(
-                f"{self.META_GRAPH_BASE}/{account_id}/media",
+                f"{settings.meta_graph_base}/{account_id}/media",
                 data=params,
                 timeout=60.0,
             )
@@ -223,7 +222,7 @@ class InstagramAPIService(BaseService):
         async with httpx.AsyncClient() as client:
             for poll_num in range(self.CONTAINER_STATUS_MAX_POLLS):
                 response = await client.get(
-                    f"{self.META_GRAPH_BASE}/{container_id}",
+                    f"{settings.meta_graph_base}/{container_id}",
                     params={
                         "fields": "status_code,status",
                         "access_token": token,
@@ -273,7 +272,7 @@ class InstagramAPIService(BaseService):
         """Publish the media container as a Story."""
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{self.META_GRAPH_BASE}/{account_id}/media_publish",
+                f"{settings.meta_graph_base}/{account_id}/media_publish",
                 data={
                     "creation_id": container_id,
                     "access_token": token,

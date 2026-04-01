@@ -3,11 +3,13 @@
 from fastapi import APIRouter, HTTPException
 from sqlalchemy.exc import OperationalError
 
+from src.config.settings import settings
 from src.services.core.media_sync import MediaSyncService
 from src.services.core.oauth_service import OAuthService
 from src.services.core.settings_service import SettingsService
 from src.services.integrations.google_drive import GoogleDriveService
 from src.services.integrations.google_drive_oauth import GoogleDriveOAuthService
+from src.services.integrations.instagram_login_oauth import InstagramLoginOAuthService
 from src.utils.logger import logger
 
 from .helpers import (
@@ -59,8 +61,13 @@ async def onboarding_oauth_url(
     _validate_request(init_data, chat_id)
 
     if provider == "instagram":
-        with OAuthService() as service, service_error_handler():
-            auth_url = service.generate_authorization_url(chat_id)
+        # Prefer Instagram Login OAuth when configured; fall back to Facebook Login
+        if settings.INSTAGRAM_APP_ID:
+            with InstagramLoginOAuthService() as service, service_error_handler():
+                auth_url = service.generate_authorization_url(chat_id)
+        else:
+            with OAuthService() as service, service_error_handler():
+                auth_url = service.generate_authorization_url(chat_id)
         return {"auth_url": auth_url}
 
     elif provider == "google-drive":
