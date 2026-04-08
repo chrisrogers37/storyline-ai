@@ -665,7 +665,9 @@ class TestSchedulerCategoryAllocation:
 
         result = scheduler_service._select_media(category="memes")
 
-        scheduler_service._select_media_from_pool.assert_called_with(category="memes")
+        scheduler_service._select_media_from_pool.assert_called_with(
+            category="memes", exclude_ids=None
+        )
         assert result == mock_media
 
     def test_select_media_fallback_when_category_exhausted(self, scheduler_service):
@@ -688,7 +690,9 @@ class TestSchedulerCategoryAllocation:
 
         result = scheduler_service._select_media(category=None)
 
-        scheduler_service._select_media_from_pool.assert_called_once_with(category=None)
+        scheduler_service._select_media_from_pool.assert_called_once_with(
+            category=None, exclude_ids=None
+        )
         assert result is None
 
 
@@ -726,7 +730,7 @@ class TestSchedulerMediaPool:
         result = scheduler_service._select_media_from_pool(category="memes")
 
         scheduler_service.media_repo.get_next_eligible_for_posting.assert_called_once_with(
-            category="memes"
+            category="memes", exclude_ids=None
         )
         assert result == mock_media
 
@@ -737,6 +741,6 @@ class TestSchedulerMediaPool:
         result = scheduler_service._select_media_from_pool(category=None)
 
         scheduler_service.media_repo.get_next_eligible_for_posting.assert_called_once_with(
-            category=None
+            category=None, exclude_ids=None
         )
         assert result is None

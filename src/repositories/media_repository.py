@@ -427,6 +427,17 @@ class MediaRepository(BaseRepository):
         self.end_read_transaction()
         return result or 0
 
+    def count_inactive(self, chat_settings_id: Optional[str] = None) -> int:
+        """Count inactive media items."""
+        result = (
+            self._tenant_query(MediaItem, chat_settings_id)
+            .with_entities(func.count(MediaItem.id))
+            .filter(MediaItem.is_active.is_(False))
+            .scalar()
+        )
+        self.end_read_transaction()
+        return result or 0
+
     def count_by_posting_status(self, chat_settings_id: Optional[str] = None) -> dict:
         """Count active media grouped by posting status."""
         from sqlalchemy import case
@@ -469,16 +480,18 @@ class MediaRepository(BaseRepository):
         self,
         category: Optional[str] = None,
         chat_settings_id: Optional[str] = None,
+        exclude_ids: Optional[List[str]] = None,
     ) -> Optional[MediaItem]:
         """
         Get the next eligible media item for posting.
 
-        Filters out inactive, locked, and already-queued items.
+        Filters out inactive, locked, already-queued, and hash-duplicate-of-locked items.
         Prioritizes never-posted items, then least-posted, with random tie-breaking.
 
         Args:
             category: Filter by category, or None for all categories
             chat_settings_id: Optional tenant filter (applied to main query and subqueries)
+            exclude_ids: Optional list of media item IDs to exclude (for preview)
 
         Returns:
             The highest-priority eligible MediaItem, or None if no eligible media exists
@@ -490,6 +503,10 @@ class MediaRepository(BaseRepository):
         # Filter by category if specified
         if category:
             query = query.filter(MediaItem.category == category)
+
+        # Exclude specific IDs (used by queue preview)
+        if exclude_ids:
+            query = query.filter(~MediaItem.id.in_(exclude_ids))
 
         # Exclude already queued items (tenant-scoped subquery)
         queued_where = [PostingQueue.media_item_id == MediaItem.id]
@@ -510,6 +527,22 @@ class MediaRepository(BaseRepository):
         locked_subquery = exists(select(MediaPostingLock.id).where(and_(*lock_where)))
         query = query.filter(~locked_subquery)
 
+        # Exclude items whose file_hash matches any currently-locked item's hash
+        # (prevents posting duplicate files stored under different filenames)
+        locked_hashes_subquery = (
+            select(MediaItem.file_hash)
+            .join(MediaPostingLock, MediaPostingLock.media_item_id == MediaItem.id)
+            .where(
+                (MediaPostingLock.locked_until.is_(None))
+                | (MediaPostingLock.locked_until > now)
+            )
+            .where(MediaItem.file_hash.isnot(None))
+        )
+        query = query.filter(
+            (MediaItem.file_hash.is_(None))
+            | (~MediaItem.file_hash.in_(locked_hashes_subquery))
+        )
+
         # Sort by priority:
         # 1. Never posted first (NULLS FIRST)
         # 2. Then least posted
@@ -524,3 +557,178 @@ class MediaRepository(BaseRepository):
         result = query.first()
         self.end_read_transaction()
         return result
+
+    def get_active_by_hash(
+        self, file_hash: str, chat_settings_id: Optional[str] = None
+    ) -> Optional[MediaItem]:
+        """Get an active media item by file hash."""
+        result = (
+            self._tenant_query(MediaItem, chat_settings_id)
+            .filter(MediaItem.is_active.is_(True), MediaItem.file_hash == file_hash)
+            .first()
+        )
+        self.end_read_transaction()
+        return result
+
+    def count_eligible(self, chat_settings_id: Optional[str] = None) -> int:
+        """Count media items eligible for posting right now.
+
+        Excludes inactive, locked, queued, and hash-duplicates of locked items.
+        """
+        now = datetime.utcnow()
+        query = (
+            self._tenant_query(MediaItem, chat_settings_id)
+            .with_entities(func.count(MediaItem.id))
+            .filter(MediaItem.is_active.is_(True))
+        )
+
+        # Exclude queued
+        queued_where = [PostingQueue.media_item_id == MediaItem.id]
+        if chat_settings_id:
+            queued_where.append(PostingQueue.chat_settings_id == chat_settings_id)
+        query = query.filter(
+            ~exists(select(PostingQueue.id).where(and_(*queued_where)))
+        )
+
+        # Exclude locked
+        lock_where = [
+            MediaPostingLock.media_item_id == MediaItem.id,
+            (MediaPostingLock.locked_until.is_(None))
+            | (MediaPostingLock.locked_until > now),
+        ]
+        if chat_settings_id:
+            lock_where.append(MediaPostingLock.chat_settings_id == chat_settings_id)
+        query = query.filter(
+            ~exists(select(MediaPostingLock.id).where(and_(*lock_where)))
+        )
+
+        # Exclude hash-duplicates of locked items
+        locked_hashes_subquery = (
+            select(MediaItem.file_hash)
+            .join(MediaPostingLock, MediaPostingLock.media_item_id == MediaItem.id)
+            .where(
+                (MediaPostingLock.locked_until.is_(None))
+                | (MediaPostingLock.locked_until > now)
+            )
+            .where(MediaItem.file_hash.isnot(None))
+        )
+        query = query.filter(
+            (MediaItem.file_hash.is_(None))
+            | (~MediaItem.file_hash.in_(locked_hashes_subquery))
+        )
+
+        result = query.scalar()
+        self.end_read_transaction()
+        return result or 0
+
+    def count_eligible_by_category(
+        self, chat_settings_id: Optional[str] = None
+    ) -> dict:
+        """Count eligible media per category (not locked, not queued, not hash-duped)."""
+        now = datetime.utcnow()
+        query = (
+            self._tenant_query(MediaItem, chat_settings_id)
+            .with_entities(MediaItem.category, func.count(MediaItem.id))
+            .filter(MediaItem.is_active.is_(True))
+        )
+
+        queued_where = [PostingQueue.media_item_id == MediaItem.id]
+        if chat_settings_id:
+            queued_where.append(PostingQueue.chat_settings_id == chat_settings_id)
+        query = query.filter(
+            ~exists(select(PostingQueue.id).where(and_(*queued_where)))
+        )
+
+        lock_where = [
+            MediaPostingLock.media_item_id == MediaItem.id,
+            (MediaPostingLock.locked_until.is_(None))
+            | (MediaPostingLock.locked_until > now),
+        ]
+        if chat_settings_id:
+            lock_where.append(MediaPostingLock.chat_settings_id == chat_settings_id)
+        query = query.filter(
+            ~exists(select(MediaPostingLock.id).where(and_(*lock_where)))
+        )
+
+        locked_hashes_subquery = (
+            select(MediaItem.file_hash)
+            .join(MediaPostingLock, MediaPostingLock.media_item_id == MediaItem.id)
+            .where(
+                (MediaPostingLock.locked_until.is_(None))
+                | (MediaPostingLock.locked_until > now)
+            )
+            .where(MediaItem.file_hash.isnot(None))
+        )
+        query = query.filter(
+            (MediaItem.file_hash.is_(None))
+            | (~MediaItem.file_hash.in_(locked_hashes_subquery))
+        )
+
+        rows = query.group_by(MediaItem.category).all()
+        self.end_read_transaction()
+        return {(cat or "uncategorized"): count for cat, count in rows}
+
+    def get_duplicate_hash_groups(
+        self, chat_settings_id: Optional[str] = None
+    ) -> List[dict]:
+        """Get groups of active items sharing the same file_hash.
+
+        Returns list of dicts: {hash, count, file_names, ids}.
+        """
+        subq = (
+            self._tenant_query(MediaItem, chat_settings_id)
+            .with_entities(
+                MediaItem.file_hash,
+                func.count(MediaItem.id).label("cnt"),
+            )
+            .filter(
+                MediaItem.is_active.is_(True),
+                MediaItem.file_hash.isnot(None),
+            )
+            .group_by(MediaItem.file_hash)
+            .having(func.count(MediaItem.id) > 1)
+            .subquery()
+        )
+
+        rows = (
+            self.db.query(
+                MediaItem.file_hash,
+                MediaItem.id,
+                MediaItem.file_name,
+                MediaItem.times_posted,
+                MediaItem.last_posted_at,
+            )
+            .join(subq, MediaItem.file_hash == subq.c.file_hash)
+            .filter(MediaItem.is_active.is_(True))
+            .order_by(MediaItem.file_hash, MediaItem.times_posted.desc())
+            .all()
+        )
+        self.end_read_transaction()
+
+        # Group by hash
+        groups: dict = {}
+        for row in rows:
+            h = row.file_hash
+            if h not in groups:
+                groups[h] = {"hash": h, "items": []}
+            groups[h]["items"].append(
+                {
+                    "id": str(row.id),
+                    "file_name": row.file_name,
+                    "times_posted": row.times_posted,
+                    "last_posted_at": row.last_posted_at,
+                }
+            )
+        return list(groups.values())
+
+    def deactivate_by_ids(self, media_ids: List[str]) -> int:
+        """Bulk deactivate media items by ID list. Returns count deactivated."""
+        if not media_ids:
+            return 0
+        count = (
+            self.db.query(MediaItem)
+            .filter(MediaItem.id.in_(media_ids))
+            .update({MediaItem.is_active: False}, synchronize_session="fetch")
+        )
+        self.db.commit()
+        return count

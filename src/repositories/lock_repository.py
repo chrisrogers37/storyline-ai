@@ -125,6 +125,25 @@ class LockRepository(BaseRepository):
         self.end_read_transaction()
         return result or 0
 
+    def count_by_reason(self, chat_settings_id: Optional[str] = None) -> dict:
+        """Count active locks grouped by lock_reason."""
+        now = datetime.utcnow()
+        rows = (
+            self._tenant_query(MediaPostingLock, chat_settings_id)
+            .with_entities(
+                MediaPostingLock.lock_reason,
+                func.count(MediaPostingLock.id),
+            )
+            .filter(
+                (MediaPostingLock.locked_until.is_(None))
+                | (MediaPostingLock.locked_until > now)
+            )
+            .group_by(MediaPostingLock.lock_reason)
+            .all()
+        )
+        self.end_read_transaction()
+        return {reason: count for reason, count in rows}
+
     def cleanup_expired(self, chat_settings_id: Optional[str] = None) -> int:
         """Delete all expired locks. Returns count of deleted locks."""
         now = datetime.utcnow()

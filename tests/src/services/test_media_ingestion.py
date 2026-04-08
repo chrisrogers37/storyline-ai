@@ -54,7 +54,7 @@ class TestMediaIngestionService:
 
             # Mock to avoid actual indexing
             ingestion_service.media_repo.get_by_path.return_value = None
-            ingestion_service.media_repo.get_by_hash.return_value = []
+            ingestion_service.media_repo.get_active_by_hash.return_value = None
 
             # Mock image processor validation
             mock_validation = Mock()
@@ -79,7 +79,7 @@ class TestMediaIngestionService:
 
             # Mock dependencies
             ingestion_service.media_repo.get_by_path.return_value = None
-            ingestion_service.media_repo.get_by_hash.return_value = []
+            ingestion_service.media_repo.get_active_by_hash.return_value = None
             mock_validation = Mock(is_valid=True, warnings=[])
             ingestion_service.image_processor.validate_image.return_value = (
                 mock_validation
@@ -106,7 +106,7 @@ class TestMediaIngestionService:
 
             # Mock dependencies
             ingestion_service.media_repo.get_by_path.return_value = None
-            ingestion_service.media_repo.get_by_hash.return_value = []
+            ingestion_service.media_repo.get_active_by_hash.return_value = None
             mock_validation = Mock(is_valid=True, warnings=[])
             ingestion_service.image_processor.validate_image.return_value = (
                 mock_validation
@@ -150,7 +150,7 @@ class TestMediaIngestionService:
         """Test that _index_file creates media item for new files."""
         mock_hash.return_value = "abc123hash"
         ingestion_service.media_repo.get_by_path.return_value = None
-        ingestion_service.media_repo.get_by_hash.return_value = []
+        ingestion_service.media_repo.get_active_by_hash.return_value = None
         mock_validation = Mock(is_valid=True, warnings=[])
         ingestion_service.image_processor.validate_image.return_value = mock_validation
 
@@ -174,7 +174,7 @@ class TestMediaIngestionService:
         """Test that _index_file validates image files."""
         mock_hash.return_value = "hash123"
         ingestion_service.media_repo.get_by_path.return_value = None
-        ingestion_service.media_repo.get_by_hash.return_value = []
+        ingestion_service.media_repo.get_active_by_hash.return_value = None
 
         # Mock invalid validation
         mock_validation = Mock(is_valid=False, errors=["Image too small"])
@@ -189,24 +189,21 @@ class TestMediaIngestionService:
                 os.unlink(tmp.name)
 
     @patch("src.services.core.media_ingestion.calculate_file_hash")
-    def test_index_file_detects_duplicates(self, mock_hash, ingestion_service):
-        """Test that _index_file detects duplicate content."""
+    def test_index_file_skips_duplicate_hash(self, mock_hash, ingestion_service):
+        """Test that _index_file skips files with duplicate content hash."""
         mock_hash.return_value = "duplicate_hash"
         ingestion_service.media_repo.get_by_path.return_value = None
-        ingestion_service.media_repo.get_by_hash.return_value = [
+        ingestion_service.media_repo.get_active_by_hash.return_value = (
             Mock()
-        ]  # Has duplicate
-        mock_validation = Mock(is_valid=True, warnings=[])
-        ingestion_service.image_processor.validate_image.return_value = mock_validation
+        )  # Existing
 
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
             tmp.write(b"duplicate content")
             try:
-                # Should still index (with warning logged)
                 ingestion_service._index_file(Path(tmp.name), user_id=None)
 
-                # Should still create the record
-                ingestion_service.media_repo.create.assert_called_once()
+                # Should NOT create — duplicate hash detected
+                ingestion_service.media_repo.create.assert_not_called()
             finally:
                 os.unlink(tmp.name)
 
@@ -272,7 +269,7 @@ class TestMediaIngestionService:
 
             # Mock dependencies
             ingestion_service.media_repo.get_by_path.return_value = None
-            ingestion_service.media_repo.get_by_hash.return_value = []
+            ingestion_service.media_repo.get_active_by_hash.return_value = None
             mock_validation = Mock(is_valid=True, warnings=[])
             ingestion_service.image_processor.validate_image.return_value = (
                 mock_validation
@@ -293,7 +290,7 @@ class TestMediaIngestionService:
 
             # Mock dependencies
             ingestion_service.media_repo.get_by_path.return_value = None
-            ingestion_service.media_repo.get_by_hash.return_value = []
+            ingestion_service.media_repo.get_active_by_hash.return_value = None
             mock_validation = Mock(is_valid=True, warnings=[])
             ingestion_service.image_processor.validate_image.return_value = (
                 mock_validation
@@ -311,7 +308,7 @@ class TestMediaIngestionService:
         """Test that _index_file passes category to repository create."""
         mock_hash.return_value = "abc123hash"
         ingestion_service.media_repo.get_by_path.return_value = None
-        ingestion_service.media_repo.get_by_hash.return_value = []
+        ingestion_service.media_repo.get_active_by_hash.return_value = None
         mock_validation = Mock(is_valid=True, warnings=[])
         ingestion_service.image_processor.validate_image.return_value = mock_validation
 

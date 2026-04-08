@@ -20,9 +20,11 @@ from cli.commands.instagram import (
 )
 from cli.commands.media import (
     category_mix_history,
+    dedup_media,
     index,
     list_categories,
     list_media,
+    pool_health,
     update_category_mix,
     validate,
 )
@@ -67,6 +69,8 @@ cli.add_command(sync_media)
 cli.add_command(sync_status)
 cli.add_command(backfill_instagram)
 cli.add_command(backfill_status)
+cli.add_command(dedup_media)
+cli.add_command(pool_health)
 
 
 if __name__ == "__main__":
