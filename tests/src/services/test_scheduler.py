@@ -372,8 +372,8 @@ class TestSendToTelegram:
         )
 
     @pytest.mark.asyncio
-    async def test_failure_rolls_back_to_pending(self, scheduler_service_mocked):
-        """Rolls back to pending when send_notification returns False."""
+    async def test_failure_marks_as_failed(self, scheduler_service_mocked):
+        """Marks queue item as 'failed' when send_notification returns False."""
         service = scheduler_service_mocked
         queue_item = Mock(id=uuid4())
         service.telegram_service.send_notification = AsyncMock(return_value=False)
@@ -381,14 +381,16 @@ class TestSendToTelegram:
         result = await service._send_to_telegram(queue_item)
 
         assert result is False
-        # First call: processing, second call: rollback to pending
+        # First call: processing, second call: failed (cleaned up by TTL)
         calls = service.queue_repo.update_status.call_args_list
         assert calls[0][0] == (str(queue_item.id), "processing")
-        assert calls[1][0] == (str(queue_item.id), "pending")
+        assert calls[1][0] == (str(queue_item.id), "failed")
 
     @pytest.mark.asyncio
-    async def test_google_drive_auth_error_reraises(self, scheduler_service_mocked):
-        """GoogleDriveAuthError rolls back and re-raises."""
+    async def test_google_drive_auth_error_deletes_and_reraises(
+        self, scheduler_service_mocked
+    ):
+        """GoogleDriveAuthError deletes queue item and re-raises."""
         service = scheduler_service_mocked
         queue_item = Mock(id=uuid4())
         service.telegram_service.send_notification = AsyncMock(
@@ -398,12 +400,12 @@ class TestSendToTelegram:
         with pytest.raises(GoogleDriveAuthError, match="Token expired"):
             await service._send_to_telegram(queue_item)
 
-        # Should have rolled back to pending
-        service.queue_repo.update_status.assert_any_call(str(queue_item.id), "pending")
+        # Should have deleted the queue item (auth broken, retry won't help)
+        service.queue_repo.delete.assert_called_once_with(str(queue_item.id))
 
     @pytest.mark.asyncio
-    async def test_generic_exception_returns_false(self, scheduler_service_mocked):
-        """Generic exceptions are caught, rolled back, returns False."""
+    async def test_generic_exception_marks_as_failed(self, scheduler_service_mocked):
+        """Generic exceptions are caught, marked failed, returns False."""
         service = scheduler_service_mocked
         queue_item = Mock(id=uuid4())
         service.telegram_service.send_notification = AsyncMock(
@@ -413,21 +415,18 @@ class TestSendToTelegram:
         result = await service._send_to_telegram(queue_item)
 
         assert result is False
-        service.queue_repo.update_status.assert_any_call(str(queue_item.id), "pending")
+        service.queue_repo.update_status.assert_any_call(str(queue_item.id), "failed")
 
     @pytest.mark.asyncio
-    async def test_rollback_failure_suppressed(self, scheduler_service_mocked):
-        """If rollback itself fails, the original exception still propagates."""
+    async def test_delete_failure_suppressed(self, scheduler_service_mocked):
+        """If delete itself fails, the original exception still propagates."""
         service = scheduler_service_mocked
         queue_item = Mock(id=uuid4())
         service.telegram_service.send_notification = AsyncMock(
             side_effect=GoogleDriveAuthError("Auth fail")
         )
-        # Make the rollback raise too
-        service.queue_repo.update_status.side_effect = [
-            None,  # processing
-            Exception("DB down"),  # rollback fails
-        ]
+        # Make the delete raise too
+        service.queue_repo.delete.side_effect = Exception("DB down")
 
         with pytest.raises(GoogleDriveAuthError, match="Auth fail"):
             await service._send_to_telegram(queue_item)

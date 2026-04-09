@@ -84,6 +84,9 @@ class SchedulerService(BaseService):
             Dict with keys: posted (bool), reason (str), and optionally
             queue_item_id, media_file, category.
         """
+        # Defense-in-depth: clean up failed/stale queue items from prior ticks
+        self.queue_repo.delete_stale_pending(max_age_minutes=10)
+
         chat_settings = self.settings_service.get_settings(telegram_chat_id)
 
         if chat_settings.is_paused:
@@ -268,7 +271,9 @@ class SchedulerService(BaseService):
 
         Claims (status → processing) BEFORE sending to prevent duplicate
         sends if the scheduler fires again before Telegram responds.
-        Rolls back to pending on failure.
+
+        On failure: marks as 'failed' (cleaned up by delete_stale_pending).
+        On GoogleDriveAuthError: deletes immediately (auth broken, retry won't help).
         """
         queue_item_id = str(queue_item.id)
         try:
@@ -280,17 +285,17 @@ class SchedulerService(BaseService):
                 logger.error(
                     f"Failed to send Telegram notification for {queue_item_id}"
                 )
-                self.queue_repo.update_status(queue_item_id, "pending")
+                self.queue_repo.update_status(queue_item_id, "failed")
             else:
                 logger.info(f"Sent Telegram notification for {queue_item_id}")
             return success
 
         except GoogleDriveAuthError:
             logger.error(
-                f"Google Drive auth error for {queue_item_id} — rolling back to pending"
+                f"Google Drive auth error for {queue_item_id} — deleting queue item"
             )
             try:
-                self.queue_repo.update_status(queue_item_id, "pending")
+                self.queue_repo.delete(queue_item_id)
             except Exception:
                 pass
             raise
@@ -298,7 +303,7 @@ class SchedulerService(BaseService):
         except Exception as e:
             logger.error(f"Error sending to Telegram: {e}")
             try:
-                self.queue_repo.update_status(queue_item_id, "pending")
+                self.queue_repo.update_status(queue_item_id, "failed")
             except Exception:
                 pass
             return False
