@@ -33,6 +33,8 @@ storyline-cli sync-media
 storyline-cli sync-status
 storyline-cli backfill-instagram --dry-run
 storyline-cli backfill-status
+storyline-cli pool-health
+storyline-cli dedup-media            # Dry-run by default (--apply mutates)
 pytest                               # Tests - always safe
 ```
 
