@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Stale Queue Item Accumulation (#124)
+
+- **Failed Telegram sends no longer orphan queue items** — `_send_to_telegram()` now marks failed items as `failed` status (previously rolled back to `pending`, where they accumulated indefinitely and blocked media from reselection)
+- **GoogleDriveAuthError deletes queue item immediately** — auth failures are non-retryable, so the queue item is removed and the media freed for reselection
+- **Stale queue cleanup** — `delete_stale_pending()` runs at the start of each scheduler tick, deleting unsent pending/failed items older than 10 minutes as defense-in-depth
+
 ### Fixed — Media Pool Deduplication & Selection
 
 - **Hash-based duplicate detection** — Selection query now excludes items whose file hash matches any currently-locked item, preventing the same photo from being posted twice under different filenames
