@@ -9,9 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed — Stale Queue Item Accumulation (#124)
 
-- **Failed Telegram sends no longer orphan queue items** — `_send_to_telegram()` now marks failed items as `failed` status (previously rolled back to `pending`, where they accumulated indefinitely and blocked media from reselection)
+- **Failed Telegram sends delete queue item immediately** — `_send_to_telegram()` now deletes the queue item on failure instead of rolling back to `pending` (which violated the DB CHECK constraint and caused orphan accumulation)
 - **GoogleDriveAuthError deletes queue item immediately** — auth failures are non-retryable, so the queue item is removed and the media freed for reselection
-- **Stale queue cleanup** — `delete_stale_pending()` runs at the start of each scheduler tick, deleting unsent pending/failed items older than 10 minutes as defense-in-depth
+- **Stale queue cleanup** — `delete_stale_pending()` runs at the start of each scheduler tick, deleting unsent pending items older than 10 minutes as defense-in-depth
+
+### Fixed — Hash Algorithm Mismatch
+
+- **Normalized file hashing to MD5** — `calculate_file_hash()` now uses MD5 to match Google Drive's `md5Checksum`, enabling cross-source deduplication (was SHA-256, producing incompatible 64-char hashes vs Drive's 32-char MD5)
 
 ### Fixed — Media Pool Deduplication & Selection
 

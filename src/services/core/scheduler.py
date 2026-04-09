@@ -272,8 +272,9 @@ class SchedulerService(BaseService):
         Claims (status → processing) BEFORE sending to prevent duplicate
         sends if the scheduler fires again before Telegram responds.
 
-        On failure: marks as 'failed' (cleaned up by delete_stale_pending).
-        On GoogleDriveAuthError: deletes immediately (auth broken, retry won't help).
+        On failure: deletes the queue item immediately so the media becomes
+        eligible again. The delete_stale_pending() cleanup handles items
+        orphaned by crashes/restarts as defense-in-depth.
         """
         queue_item_id = str(queue_item.id)
         try:
@@ -285,7 +286,7 @@ class SchedulerService(BaseService):
                 logger.error(
                     f"Failed to send Telegram notification for {queue_item_id}"
                 )
-                self.queue_repo.update_status(queue_item_id, "failed")
+                self.queue_repo.delete(queue_item_id)
             else:
                 logger.info(f"Sent Telegram notification for {queue_item_id}")
             return success
@@ -303,7 +304,7 @@ class SchedulerService(BaseService):
         except Exception as e:
             logger.error(f"Error sending to Telegram: {e}")
             try:
-                self.queue_repo.update_status(queue_item_id, "failed")
+                self.queue_repo.delete(queue_item_id)
             except Exception:
                 pass
             return False
