@@ -157,6 +157,7 @@ async def cleanup_cloud_storage_loop(cloud_service):
     Runs hourly as a safety net — normal flow deletes immediately after posting.
     """
     from src.repositories.media_repository import MediaRepository
+    from src.services.integrations.cloud_storage import CLOUD_UPLOAD_FOLDER
 
     media_repo = MediaRepository()
     logger.info("Starting cloud storage cleanup loop...")
@@ -165,7 +166,7 @@ async def cleanup_cloud_storage_loop(cloud_service):
         try:
             await asyncio.sleep(3600)
 
-            cloud_count = cloud_service.cleanup_expired(folder="instagram_stories")
+            cloud_count = cloud_service.cleanup_expired(folder=CLOUD_UPLOAD_FOLDER)
             db_count = media_repo.clear_stale_cloud_info(
                 retention_hours=settings.CLOUD_UPLOAD_RETENTION_HOURS
             )

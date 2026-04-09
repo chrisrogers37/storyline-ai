@@ -41,7 +41,14 @@ class MediaLifecycleService(BaseService):
             # Best-effort Cloudinary cleanup
             if media_item.cloud_public_id and self.cloud_service.is_configured():
                 try:
-                    self.cloud_service.delete_media(media_item.cloud_public_id)
+                    deleted_cloud = self.cloud_service.delete_media(
+                        media_item.cloud_public_id
+                    )
+                    if not deleted_cloud:
+                        logger.warning(
+                            f"Cloudinary delete returned false for "
+                            f"{media_item.cloud_public_id}"
+                        )
                 except Exception as e:
                     logger.warning(
                         f"Failed to delete Cloudinary resource "

@@ -197,8 +197,8 @@ class TelegramAutopostHandler:
                 return
 
             self._record_successful_post(ctx, story_id)
-            self._cleanup_cloudinary(ctx)
             await self._send_success_message(ctx, story_id)
+            self._cleanup_cloudinary(ctx)
 
         except Exception as e:
             await self._handle_autopost_error(ctx, e)
@@ -233,10 +233,12 @@ class TelegramAutopostHandler:
         )
         file_bytes = provider.download_file(ctx.media_item.source_identifier)
 
+        from src.services.integrations.cloud_storage import CLOUD_UPLOAD_FOLDER
+
         folder = (
-            f"instagram_stories/{ctx.queue_item.chat_settings_id}"
+            f"{CLOUD_UPLOAD_FOLDER}/{ctx.queue_item.chat_settings_id}"
             if ctx.queue_item.chat_settings_id
-            else "instagram_stories"
+            else CLOUD_UPLOAD_FOLDER
         )
         upload_result = ctx.cloud_service.upload_media(
             file_bytes=file_bytes,
@@ -256,10 +258,7 @@ class TelegramAutopostHandler:
             logger.info(
                 f"Auto-post cancelled after Cloudinary upload for {ctx.media_item.file_name}"
             )
-            try:
-                ctx.cloud_service.delete_media(ctx.cloud_public_id)
-            except Exception:
-                logger.warning("Failed to clean up Cloudinary after cancel")
+            self._cleanup_cloudinary(ctx)
             await ctx.query.edit_message_caption(
                 caption="❌ Auto-post cancelled (another action was taken)"
             )
@@ -510,7 +509,6 @@ class TelegramAutopostHandler:
 
     async def _handle_autopost_error(self, ctx: AutopostContext, e: Exception) -> None:
         """Handle auto-post failure: show error message with recovery options."""
-        self._cleanup_cloudinary(ctx)
         logger.error(f"Auto-post failed: {e}", exc_info=True)
 
         user_msg = self._get_user_friendly_error(e)
@@ -545,6 +543,8 @@ class TelegramAutopostHandler:
             telegram_chat_id=ctx.query.message.chat_id,
             telegram_message_id=ctx.query.message.message_id,
         )
+
+        self._cleanup_cloudinary(ctx)
 
     @staticmethod
     def _get_user_friendly_error(e: Exception) -> str:
