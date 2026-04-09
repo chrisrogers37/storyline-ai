@@ -136,20 +136,20 @@ class SchedulerService(BaseService):
     ) -> list:
         """Compute the next N selections without persisting.
 
-        Runs _select_media() with a simulated exclusion set so the caller
-        can see what would be posted next.
+        Passes previously-selected IDs as exclude_ids so each iteration
+        returns a different item.
 
         Returns:
             List of dicts with media_id, file_name, category.
         """
         previews = []
-        seen_ids = set()
+        seen_ids: list[str] = []
 
         for _ in range(count):
-            media_item = self._select_media(category=None)
-            if not media_item or str(media_item.id) in seen_ids:
+            media_item = self._select_media(category=None, exclude_ids=seen_ids or None)
+            if not media_item:
                 break
-            seen_ids.add(str(media_item.id))
+            seen_ids.append(str(media_item.id))
             previews.append(
                 {
                     "media_id": str(media_item.id),
@@ -390,7 +390,11 @@ class SchedulerService(BaseService):
     # Internal: media selection (unchanged)
     # ------------------------------------------------------------------
 
-    def _select_media(self, category: Optional[str] = None):
+    def _select_media(
+        self,
+        category: Optional[str] = None,
+        exclude_ids: Optional[list] = None,
+    ):
         """Select next media item to post.
 
         Selection priority:
@@ -401,19 +405,29 @@ class SchedulerService(BaseService):
 
         Falls back to any category if target category is exhausted.
         """
-        media_item = self._select_media_from_pool(category=category)
+        media_item = self._select_media_from_pool(
+            category=category, exclude_ids=exclude_ids
+        )
 
         if not media_item and category:
             logger.warning(
                 f"Category '{category}' exhausted, falling back to any available media"
             )
-            media_item = self._select_media_from_pool(category=None)
+            media_item = self._select_media_from_pool(
+                category=None, exclude_ids=exclude_ids
+            )
 
         return media_item
 
-    def _select_media_from_pool(self, category: Optional[str] = None):
+    def _select_media_from_pool(
+        self,
+        category: Optional[str] = None,
+        exclude_ids: Optional[list] = None,
+    ):
         """Select media from a specific pool (category or all).
 
         Delegates to MediaRepository.get_next_eligible_for_posting().
         """
-        return self.media_repo.get_next_eligible_for_posting(category=category)
+        return self.media_repo.get_next_eligible_for_posting(
+            category=category, exclude_ids=exclude_ids
+        )

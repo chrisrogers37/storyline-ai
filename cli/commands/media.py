@@ -371,3 +371,150 @@ def validate(image_path):
     console.print(f"  Aspect Ratio: {result.aspect_ratio:.2f}")
     console.print(f"  File Size: {result.file_size_mb:.2f} MB")
     console.print(f"  Format: {result.format}")
+
+
+@click.command(name="dedup-media")
+@click.option("--dry-run", is_flag=True, default=True, help="Preview only (default)")
+@click.option(
+    "--apply", is_flag=True, default=False, help="Actually deactivate duplicates"
+)
+def dedup_media(dry_run, apply):
+    """Find and deactivate duplicate media items (same file content, different filenames)."""
+    from src.repositories.media_repository import MediaRepository
+
+    repo = MediaRepository()
+    try:
+        groups = repo.get_duplicate_hash_groups()
+    finally:
+        repo.close()
+
+    if not groups:
+        console.print("[green]No duplicate files found.[/green]")
+        return
+
+    total_extras = 0
+    ids_to_deactivate = []
+
+    table = Table(title=f"Duplicate File Groups ({len(groups)} groups)")
+    table.add_column("Hash", style="dim", max_width=10)
+    table.add_column("Keep", style="green")
+    table.add_column("Deactivate", style="red")
+    table.add_column("Times Posted", justify="right")
+
+    for group in groups:
+        items = group["items"]
+        # Keep the item with highest times_posted (then first by name as tiebreak)
+        keeper = items[0]  # Already sorted by times_posted DESC
+        extras = items[1:]
+        total_extras += len(extras)
+
+        extra_names = ", ".join(i["file_name"][:30] for i in extras)
+        ids_to_deactivate.extend(i["id"] for i in extras)
+
+        table.add_row(
+            group["hash"][:10],
+            keeper["file_name"][:35],
+            extra_names[:60],
+            str(keeper["times_posted"]),
+        )
+
+    console.print(table)
+    console.print(
+        f"\n[bold]{len(groups)} groups, {total_extras} duplicate items to deactivate[/bold]"
+    )
+
+    if apply:
+        if not Confirm.ask(
+            f"Deactivate {total_extras} duplicate items? This is reversible (is_active=false)."
+        ):
+            console.print("[yellow]Aborted.[/yellow]")
+            return
+
+        repo = MediaRepository()
+        try:
+            count = repo.deactivate_by_ids(ids_to_deactivate)
+        finally:
+            repo.close()
+        console.print(f"[green]Deactivated {count} duplicate items.[/green]")
+    else:
+        console.print("\n[dim]Dry run — use --apply to deactivate duplicates.[/dim]")
+
+
+@click.command(name="pool-health")
+def pool_health():
+    """Show media pool health: active, locked, eligible, and duplicate counts."""
+    from src.repositories.media_repository import MediaRepository
+    from src.repositories.lock_repository import LockRepository
+    from src.repositories.queue_repository import QueueRepository
+
+    media_repo = MediaRepository()
+    lock_repo = LockRepository()
+    queue_repo = QueueRepository()
+
+    try:
+        # Overall counts
+        posting_status = media_repo.count_by_posting_status()
+        total_active = (
+            posting_status["never_posted"]
+            + posting_status["posted_once"]
+            + posting_status["posted_multiple"]
+        )
+        total_inactive = media_repo.count_inactive()
+        eligible = media_repo.count_eligible()
+
+        # Lock breakdown
+        locks_by_reason = lock_repo.count_by_reason()
+        total_locks = sum(locks_by_reason.values())
+
+        # Queue
+        queued = queue_repo.count_pending()
+
+        # Duplicates
+        dupe_groups = media_repo.get_duplicate_hash_groups()
+        dupe_extras = sum(len(g["items"]) - 1 for g in dupe_groups)
+
+        # Per-category
+        category_counts = media_repo.count_by_category()
+        eligible_by_cat = media_repo.count_eligible_by_category()
+    finally:
+        media_repo.close()
+        lock_repo.close()
+        queue_repo.close()
+
+    # Summary table
+    summary = Table(title="Media Pool Health", show_header=False)
+    summary.add_column("Metric", style="bold")
+    summary.add_column("Value", justify="right")
+
+    summary.add_row("Active items", str(total_active))
+    summary.add_row("Inactive items", str(total_inactive))
+    summary.add_row("  Never posted", str(posting_status["never_posted"]))
+    summary.add_row("  Posted once", str(posting_status["posted_once"]))
+    summary.add_row("  Posted 2+", str(posting_status["posted_multiple"]))
+    summary.add_row("", "")
+    summary.add_row("Currently locked", str(total_locks))
+    for reason, count in sorted(locks_by_reason.items(), key=lambda x: -x[1]):
+        summary.add_row(f"  {reason}", str(count))
+    summary.add_row("In queue", str(queued))
+    summary.add_row("", "")
+    summary.add_row("[green]Eligible right now[/green]", f"[green]{eligible}[/green]")
+    summary.add_row("", "")
+    summary.add_row("Duplicate file groups", str(len(dupe_groups)))
+    summary.add_row("Extra duplicate items", str(dupe_extras))
+
+    console.print(summary)
+
+    # Per-category table
+    cat_table = Table(title="Per-Category Breakdown")
+    cat_table.add_column("Category", style="cyan")
+    cat_table.add_column("Active", justify="right")
+    cat_table.add_column("Eligible", justify="right", style="green")
+    cat_table.add_column("Locked/Queued", justify="right", style="yellow")
+
+    for cat in sorted(category_counts.keys()):
+        active = category_counts[cat]
+        elig = eligible_by_cat.get(cat, 0)
+        locked = active - elig
+        cat_table.add_row(cat, str(active), str(elig), str(locked))
+
+    console.print(cat_table)

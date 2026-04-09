@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Media Pool Deduplication & Selection
+
+- **Hash-based duplicate detection** — Selection query now excludes items whose file hash matches any currently-locked item, preventing the same photo from being posted twice under different filenames
+- **Duplicate prevention during sync/ingestion** — Media sync and index-media now skip files whose content hash already exists in the active pool, preventing future duplicates from entering the system
+
+### Added — Media Pool Deduplication & Selection
+
+- **`storyline-cli dedup-media`** — New CLI command to find and deactivate duplicate media items (same file content, different filenames). Supports `--dry-run` (default) and `--apply` modes
+- **`storyline-cli pool-health`** — New CLI command showing media pool health: active/inactive/locked/eligible counts, lock breakdown by reason, per-category breakdown, and duplicate file groups
+- **Queue preview fix** — `queue-preview` now correctly shows N different upcoming items instead of repeating the first item
+
 ### Added — Instagram Login OAuth + Graph API v21.0
 
 - **Instagram Login OAuth service** — New `InstagramLoginOAuthService` implementing the newer Instagram Login flow (no Facebook Page required). Uses `instagram_business_basic` + `instagram_business_content_publish` scopes. Coexists alongside the existing Facebook Login OAuth path.

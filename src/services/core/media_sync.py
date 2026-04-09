@@ -284,7 +284,15 @@ class MediaSyncService(BaseService):
             logger.info(f"[MediaSyncService] Reactivated: {inactive.file_name}")
             return
 
-        # Case 4: Truly new file -- index it
+        # Case 4: Truly new file -- check for hash duplicate before indexing
+        if file_hash and self.media_repo.get_active_by_hash(file_hash):
+            result.unchanged += 1
+            logger.info(
+                f"[MediaSyncService] Skipped duplicate: {file_info.name} "
+                f"(hash {file_hash[:8]}... already exists)"
+            )
+            return
+
         file_path = self._build_file_path(source_type, file_info)
         self.media_repo.create(
             file_path=file_path,

@@ -149,12 +149,12 @@ class MediaIngestionService(BaseService):
         # Calculate file hash
         file_hash = calculate_file_hash(file_path)
 
-        # Check for duplicate content
-        duplicates = self.media_repo.get_by_hash(file_hash)
-        if duplicates:
-            logger.warning(
-                f"Duplicate content detected: {file_path.name} (hash: {file_hash[:8]}...)"
+        # Check for duplicate content — skip if an active item with same hash exists
+        if self.media_repo.get_active_by_hash(file_hash):
+            logger.info(
+                f"Skipping duplicate content: {file_path.name} (hash: {file_hash[:8]}...)"
             )
+            return
 
         # Validate image (if it's an image)
         if file_path.suffix.lower() in {".jpg", ".jpeg", ".png", ".gif"}:

@@ -74,6 +74,8 @@ def sync_service():
     with patch.object(MediaSyncService, "__init__", lambda self: None):
         service = MediaSyncService()
         service.media_repo = Mock()
+        # Default: no existing item with same hash (allow new items to be created)
+        service.media_repo.get_active_by_hash.return_value = None
         service.service_run_repo = Mock()
         # Mock track_execution context manager
         service.track_execution = MagicMock()
