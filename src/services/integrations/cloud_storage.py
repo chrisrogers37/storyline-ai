@@ -14,6 +14,9 @@ from src.exceptions import MediaUploadError
 from src.utils.logger import logger
 
 
+CLOUD_UPLOAD_FOLDER = "instagram_stories"
+
+
 class CloudStorageService(BaseService):
     """
     Abstraction for cloud storage operations (currently Cloudinary).

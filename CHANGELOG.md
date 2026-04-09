@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security — Cloudinary Media Lifecycle Cleanup
+
+- **Immediate cleanup after posting** — Cloudinary uploads are deleted as soon as Instagram fetches them (success, dry-run, error, and cancel paths all clean up)
+- **Safety-net cleanup loop** — Hourly background task deletes orphaned Cloudinary uploads past retention window, clearing stale DB references
+- **Tenant folder isolation** — Uploads now go to `instagram_stories/{tenant_id}/` instead of a flat shared folder
+- **Cloud URL leak removed** — `cloud_url` no longer persisted in interaction logs (only `cloud_public_id` for debugging)
+- **MediaLifecycleService** — New service for media item deletion that cascades to Cloudinary cleanup, respecting layer separation
+- **Repository warning** — `MediaRepository.delete()` docstring warns to use `MediaLifecycleService` for full cleanup
+
 ### Fixed — Stale Queue Item Accumulation (#124)
 
 - **Failed Telegram sends delete queue item immediately** — `_send_to_telegram()` now deletes the queue item on failure instead of rolling back to `pending` (which violated the DB CHECK constraint and caused orphan accumulation)

@@ -1,7 +1,7 @@
 """Media item repository - CRUD operations for media items."""
 
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy import func, and_, exists, select
 
 from src.repositories.base_repository import BaseRepository
@@ -375,6 +375,39 @@ class MediaRepository(BaseRepository):
             self.db.refresh(media_item)
         return media_item
 
+    def clear_stale_cloud_info(self, retention_hours: int) -> int:
+        """Clear cloud storage fields on media items past the retention window.
+
+        Called by the safety-net cleanup loop after Cloudinary resources have
+        been deleted. Prevents stale URLs from lingering in the database.
+
+        Args:
+            retention_hours: Items uploaded more than this many hours ago are cleared.
+
+        Returns:
+            Number of rows updated.
+        """
+        cutoff = datetime.utcnow() - timedelta(hours=retention_hours)
+        count = (
+            self.db.query(MediaItem)
+            .filter(
+                MediaItem.cloud_public_id.isnot(None),
+                MediaItem.cloud_uploaded_at.isnot(None),
+                MediaItem.cloud_uploaded_at < cutoff,
+            )
+            .update(
+                {
+                    MediaItem.cloud_url: None,
+                    MediaItem.cloud_public_id: None,
+                    MediaItem.cloud_uploaded_at: None,
+                    MediaItem.cloud_expires_at: None,
+                },
+                synchronize_session="fetch",
+            )
+        )
+        self.db.commit()
+        return count
+
     def deactivate(self, media_id: str) -> MediaItem:
         """Deactivate a media item."""
         media_item = self.get_by_id(media_id)
@@ -386,7 +419,11 @@ class MediaRepository(BaseRepository):
         return media_item
 
     def delete(self, media_id: str) -> bool:
-        """Permanently delete a media item."""
+        """Permanently delete a media item.
+
+        WARNING: Does not clean up Cloudinary resources. Use
+        MediaLifecycleService.delete_media_item() for full cleanup.
+        """
         media_item = self.get_by_id(media_id)
         if media_item:
             self.db.delete(media_item)
