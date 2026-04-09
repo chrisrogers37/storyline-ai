@@ -237,12 +237,12 @@ class QueueRepository(BaseRepository):
     def delete_stale_pending(self, max_age_minutes: int = 10) -> int:
         """Delete pending items that were never sent to Telegram.
 
-        When _send_to_telegram() fails, queue items are left in 'pending' or
-        'failed' status with no telegram_message_id. This cleanup prevents them
-        from accumulating and blocking media from reselection.
+        Defense-in-depth for items orphaned by crashes or restarts.
+        Normal failures delete the queue item immediately in
+        _send_to_telegram(); this catches anything that slipped through.
 
         Args:
-            max_age_minutes: Minutes after which an unsent pending/failed item
+            max_age_minutes: Minutes after which an unsent pending item
                 is considered stale and deleted (default: 10).
 
         Returns:
@@ -252,7 +252,7 @@ class QueueRepository(BaseRepository):
         stale = (
             self.db.query(PostingQueue)
             .filter(
-                PostingQueue.status.in_(["pending", "failed"]),
+                PostingQueue.status == "pending",
                 PostingQueue.telegram_message_id.is_(None),
                 PostingQueue.created_at <= cutoff,
             )

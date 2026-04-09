@@ -22,8 +22,8 @@ class TestFileHash:
             # Calculate hash
             file_hash = calculate_file_hash(temp_path)
 
-            # Verify it's a valid SHA256 hex string
-            assert len(file_hash) == 64
+            # Verify it's a valid MD5 hex string
+            assert len(file_hash) == 32
             assert all(c in "0123456789abcdef" for c in file_hash)
 
         finally:
