@@ -372,8 +372,8 @@ class TestSendToTelegram:
         )
 
     @pytest.mark.asyncio
-    async def test_failure_marks_as_failed(self, scheduler_service_mocked):
-        """Marks queue item as 'failed' when send_notification returns False."""
+    async def test_failure_deletes_queue_item(self, scheduler_service_mocked):
+        """Deletes queue item when send_notification returns False."""
         service = scheduler_service_mocked
         queue_item = Mock(id=uuid4())
         service.telegram_service.send_notification = AsyncMock(return_value=False)
@@ -381,10 +381,10 @@ class TestSendToTelegram:
         result = await service._send_to_telegram(queue_item)
 
         assert result is False
-        # First call: processing, second call: failed (cleaned up by TTL)
-        calls = service.queue_repo.update_status.call_args_list
-        assert calls[0][0] == (str(queue_item.id), "processing")
-        assert calls[1][0] == (str(queue_item.id), "failed")
+        service.queue_repo.update_status.assert_called_once_with(
+            str(queue_item.id), "processing"
+        )
+        service.queue_repo.delete.assert_called_once_with(str(queue_item.id))
 
     @pytest.mark.asyncio
     async def test_google_drive_auth_error_deletes_and_reraises(
@@ -404,8 +404,8 @@ class TestSendToTelegram:
         service.queue_repo.delete.assert_called_once_with(str(queue_item.id))
 
     @pytest.mark.asyncio
-    async def test_generic_exception_marks_as_failed(self, scheduler_service_mocked):
-        """Generic exceptions are caught, marked failed, returns False."""
+    async def test_generic_exception_deletes_queue_item(self, scheduler_service_mocked):
+        """Generic exceptions are caught, queue item deleted, returns False."""
         service = scheduler_service_mocked
         queue_item = Mock(id=uuid4())
         service.telegram_service.send_notification = AsyncMock(
@@ -415,7 +415,7 @@ class TestSendToTelegram:
         result = await service._send_to_telegram(queue_item)
 
         assert result is False
-        service.queue_repo.update_status.assert_any_call(str(queue_item.id), "failed")
+        service.queue_repo.delete.assert_called_once_with(str(queue_item.id))
 
     @pytest.mark.asyncio
     async def test_delete_failure_suppressed(self, scheduler_service_mocked):

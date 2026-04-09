@@ -204,7 +204,7 @@ class TestLocalMediaProvider:
         hash1 = provider.calculate_file_hash(file_path)
         hash2 = provider.calculate_file_hash(file_path)
         assert hash1 == hash2
-        assert len(hash1) == 64  # SHA256 hex length
+        assert len(hash1) == 32  # MD5 hex length
 
     def test_calculate_file_hash_different_content(self, media_dir):
         """Test that different content produces different hashes."""
