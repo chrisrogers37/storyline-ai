@@ -577,3 +577,37 @@ class TestMediaRepositoryTenantFiltering:
             media_repo.get_next_eligible_for_posting(chat_settings_id=self.TENANT_ID)
             mock_filter.assert_called_once()
             assert mock_filter.call_args[0][2] == self.TENANT_ID
+
+
+@pytest.mark.unit
+class TestClearStaleCloudInfo:
+    """Tests for clear_stale_cloud_info method."""
+
+    def test_clears_old_records(self, media_repo, mock_db):
+        """Test that items past retention are cleared."""
+        mock_query = mock_db.query.return_value
+        mock_query.filter.return_value.update.return_value = 3
+
+        count = media_repo.clear_stale_cloud_info(retention_hours=24)
+
+        assert count == 3
+        mock_db.commit.assert_called_once()
+
+    def test_returns_zero_when_nothing_to_clear(self, media_repo, mock_db):
+        """Test returns 0 when no stale records exist."""
+        mock_query = mock_db.query.return_value
+        mock_query.filter.return_value.update.return_value = 0
+
+        count = media_repo.clear_stale_cloud_info(retention_hours=24)
+
+        assert count == 0
+        mock_db.commit.assert_called_once()
+
+    def test_queries_media_item_table(self, media_repo, mock_db):
+        """Test that the query targets MediaItem."""
+        mock_query = mock_db.query.return_value
+        mock_query.filter.return_value.update.return_value = 0
+
+        media_repo.clear_stale_cloud_info(retention_hours=24)
+
+        mock_db.query.assert_called_with(MediaItem)

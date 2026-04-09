@@ -535,6 +535,68 @@ class TestUploadToCloudinary:
         assert ctx.cloud_public_id == "instagram_stories/abc"
         handler.service.media_repo.update_cloud_info.assert_called_once()
 
+    async def test_upload_uses_tenant_folder(
+        self, mock_autopost_handler, make_autopost_ctx
+    ):
+        """Test upload uses tenant-scoped folder when chat_settings_id is set."""
+        handler = mock_autopost_handler
+        mock_cloud = Mock()
+        mock_cloud.upload_media.return_value = {
+            "url": "https://res.cloudinary.com/test/img.jpg",
+            "public_id": "instagram_stories/tenant123/abc",
+        }
+
+        queue_item = Mock(
+            media_item_id=uuid4(),
+            created_at="2026-01-01",
+            scheduled_for="2026-01-01",
+            chat_settings_id="tenant-uuid-123",
+        )
+        ctx = make_autopost_ctx(cloud_service=mock_cloud, queue_item=queue_item)
+
+        mock_provider = Mock()
+        mock_provider.download_file.return_value = b"fake bytes"
+
+        with patch(
+            "src.services.media_sources.factory.MediaSourceFactory.get_provider_for_media_item",
+            return_value=mock_provider,
+        ):
+            await handler._upload_to_cloudinary(ctx)
+
+        call_kwargs = mock_cloud.upload_media.call_args.kwargs
+        assert call_kwargs["folder"] == "instagram_stories/tenant-uuid-123"
+
+    async def test_upload_uses_default_folder_when_no_tenant(
+        self, mock_autopost_handler, make_autopost_ctx
+    ):
+        """Test upload uses default folder when chat_settings_id is None."""
+        handler = mock_autopost_handler
+        mock_cloud = Mock()
+        mock_cloud.upload_media.return_value = {
+            "url": "https://res.cloudinary.com/test/img.jpg",
+            "public_id": "instagram_stories/abc",
+        }
+
+        queue_item = Mock(
+            media_item_id=uuid4(),
+            created_at="2026-01-01",
+            scheduled_for="2026-01-01",
+            chat_settings_id=None,
+        )
+        ctx = make_autopost_ctx(cloud_service=mock_cloud, queue_item=queue_item)
+
+        mock_provider = Mock()
+        mock_provider.download_file.return_value = b"fake bytes"
+
+        with patch(
+            "src.services.media_sources.factory.MediaSourceFactory.get_provider_for_media_item",
+            return_value=mock_provider,
+        ):
+            await handler._upload_to_cloudinary(ctx)
+
+        call_kwargs = mock_cloud.upload_media.call_args.kwargs
+        assert call_kwargs["folder"] == "instagram_stories"
+
     async def test_cancelled_returns_false(
         self, mock_autopost_handler, make_autopost_ctx
     ):
@@ -829,3 +891,312 @@ class TestHandleAutopostError:
         ]
         assert log_ctx["success"] is False
         assert "API error" in log_ctx["error"]
+
+
+@pytest.mark.unit
+class TestCloudinaryCleanup:
+    """Tests for _cleanup_cloudinary helper and its integration points."""
+
+    def test_cleanup_deletes_and_clears_db(
+        self, mock_autopost_handler, make_autopost_ctx
+    ):
+        """Test successful cleanup deletes from Cloudinary and clears DB fields."""
+        handler = mock_autopost_handler
+        mock_cloud = Mock()
+        mock_cloud.delete_media.return_value = True
+
+        ctx = make_autopost_ctx(
+            cloud_service=mock_cloud,
+            cloud_url="https://res.cloudinary.com/test/img.jpg",
+            cloud_public_id="instagram_stories/abc",
+        )
+
+        handler._cleanup_cloudinary(ctx)
+
+        mock_cloud.delete_media.assert_called_once_with("instagram_stories/abc")
+        handler.service.media_repo.update_cloud_info.assert_called_once_with(
+            media_id=str(ctx.media_item.id),
+            cloud_url=None,
+            cloud_public_id=None,
+            cloud_uploaded_at=None,
+            cloud_expires_at=None,
+        )
+
+    def test_cleanup_skipped_when_no_public_id(
+        self, mock_autopost_handler, make_autopost_ctx
+    ):
+        """Test cleanup is a no-op when cloud_public_id is None."""
+        handler = mock_autopost_handler
+        mock_cloud = Mock()
+        ctx = make_autopost_ctx(cloud_service=mock_cloud, cloud_public_id=None)
+
+        handler._cleanup_cloudinary(ctx)
+
+        mock_cloud.delete_media.assert_not_called()
+
+    def test_cleanup_failure_does_not_raise(
+        self, mock_autopost_handler, make_autopost_ctx
+    ):
+        """Test that Cloudinary delete failure is swallowed (best-effort)."""
+        handler = mock_autopost_handler
+        mock_cloud = Mock()
+        mock_cloud.delete_media.side_effect = Exception("Cloudinary timeout")
+
+        ctx = make_autopost_ctx(
+            cloud_service=mock_cloud,
+            cloud_public_id="instagram_stories/abc",
+        )
+
+        # Should NOT raise
+        handler._cleanup_cloudinary(ctx)
+
+    def test_cleanup_delete_returns_false_does_not_clear_db(
+        self, mock_autopost_handler, make_autopost_ctx
+    ):
+        """Test that when delete_media returns False, DB fields are not cleared."""
+        handler = mock_autopost_handler
+        mock_cloud = Mock()
+        mock_cloud.delete_media.return_value = False
+
+        ctx = make_autopost_ctx(
+            cloud_service=mock_cloud,
+            cloud_public_id="instagram_stories/abc",
+        )
+
+        handler._cleanup_cloudinary(ctx)
+
+        mock_cloud.delete_media.assert_called_once()
+        handler.service.media_repo.update_cloud_info.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestCloudinaryCleanupIntegration:
+    """Tests that cleanup is called in the right places during autopost flow."""
+
+    async def test_cleanup_called_after_successful_post(
+        self, mock_autopost_handler, make_autopost_ctx
+    ):
+        """Test cleanup is called between record and success message."""
+        handler = mock_autopost_handler
+        handler.service.settings_service.get_settings.return_value = Mock(
+            dry_run_mode=False
+        )
+        handler.service._is_verbose = Mock(return_value=False)
+        handler.service._get_display_name = Mock(return_value="@tester")
+
+        mock_cloud = Mock()
+        mock_cloud.upload_media.return_value = {
+            "url": "https://res.cloudinary.com/test/img.jpg",
+            "public_id": "instagram_stories/test123",
+        }
+        mock_cloud.get_story_optimized_url.return_value = (
+            "https://res.cloudinary.com/test/optimized.jpg"
+        )
+        mock_cloud.delete_media.return_value = True
+
+        mock_ig = Mock()
+        mock_ig.safety_check_before_post.return_value = {
+            "safe_to_post": True,
+            "errors": [],
+        }
+        mock_ig.post_story = AsyncMock(return_value={"story_id": "story_123"})
+        mock_ig.get_account_info = AsyncMock(return_value={"username": "testaccount"})
+
+        mock_provider = Mock()
+        mock_provider.download_file.return_value = b"fake bytes"
+
+        with patch(
+            "src.services.media_sources.factory.MediaSourceFactory.get_provider_for_media_item",
+            return_value=mock_provider,
+        ):
+            await handler._do_autopost(
+                str(uuid4()),
+                Mock(
+                    media_item_id=uuid4(),
+                    created_at="2026-01-01",
+                    scheduled_for="2026-01-01",
+                    chat_settings_id=None,
+                ),
+                Mock(
+                    id=uuid4(),
+                    file_path="/test/story.jpg",
+                    file_name="story.jpg",
+                    source_identifier="/test/story.jpg",
+                    mime_type="image/jpeg",
+                ),
+                Mock(
+                    id=uuid4(), telegram_username="tester", telegram_first_name="Test"
+                ),
+                AsyncMock(message=Mock(chat_id=-100123, message_id=1)),
+                mock_ig,
+                mock_cloud,
+            )
+
+        mock_cloud.delete_media.assert_called_once_with("instagram_stories/test123")
+
+    async def test_cleanup_called_after_dry_run(
+        self, mock_autopost_handler, make_autopost_ctx
+    ):
+        """Test cleanup is called at end of dry-run flow."""
+        handler = mock_autopost_handler
+        handler.service._is_verbose = Mock(return_value=False)
+        handler.service._get_display_name = Mock(return_value="@tester")
+
+        mock_cloud = Mock()
+        mock_cloud.delete_media.return_value = True
+        ctx = make_autopost_ctx(
+            cloud_service=mock_cloud,
+            cloud_url="https://res.cloudinary.com/test/img.jpg",
+            cloud_public_id="instagram_stories/abc",
+            instagram_service=AsyncMock(
+                get_account_info=AsyncMock(return_value={"username": "testaccount"})
+            ),
+        )
+
+        await handler._handle_dry_run(ctx)
+
+        mock_cloud.delete_media.assert_called_once_with("instagram_stories/abc")
+
+    async def test_cleanup_called_on_error(
+        self, mock_autopost_handler, make_autopost_ctx
+    ):
+        """Test cleanup is called when autopost encounters an error."""
+        handler = mock_autopost_handler
+        mock_cloud = Mock()
+        mock_cloud.delete_media.return_value = True
+
+        ctx = make_autopost_ctx(
+            cloud_service=mock_cloud,
+            cloud_public_id="instagram_stories/err",
+        )
+
+        await handler._handle_autopost_error(ctx, Exception("some error"))
+
+        mock_cloud.delete_media.assert_called_once_with("instagram_stories/err")
+
+    async def test_cleanup_called_on_cancel_after_upload(
+        self, mock_autopost_handler, make_autopost_ctx
+    ):
+        """Test Cloudinary resource is deleted when cancel flag is set after upload."""
+        handler = mock_autopost_handler
+        mock_cloud = Mock()
+        mock_cloud.upload_media.return_value = {
+            "url": "https://res.cloudinary.com/test/img.jpg",
+            "public_id": "instagram_stories/cancelled",
+        }
+
+        cancel_flag = threading.Event()
+        cancel_flag.set()
+
+        ctx = make_autopost_ctx(cloud_service=mock_cloud, cancel_flag=cancel_flag)
+
+        mock_provider = Mock()
+        mock_provider.download_file.return_value = b"fake bytes"
+
+        with patch(
+            "src.services.media_sources.factory.MediaSourceFactory.get_provider_for_media_item",
+            return_value=mock_provider,
+        ):
+            result = await handler._upload_to_cloudinary(ctx)
+
+        assert result is False
+        mock_cloud.delete_media.assert_called_once_with("instagram_stories/cancelled")
+
+    async def test_cleanup_failure_does_not_break_success_flow(
+        self, mock_autopost_handler, make_autopost_ctx
+    ):
+        """Test that Cloudinary cleanup failure doesn't prevent success message."""
+        handler = mock_autopost_handler
+        handler.service.settings_service.get_settings.return_value = Mock(
+            dry_run_mode=False
+        )
+        handler.service._is_verbose = Mock(return_value=False)
+        handler.service._get_display_name = Mock(return_value="@tester")
+
+        mock_cloud = Mock()
+        mock_cloud.upload_media.return_value = {
+            "url": "https://res.cloudinary.com/test/img.jpg",
+            "public_id": "instagram_stories/test123",
+        }
+        mock_cloud.get_story_optimized_url.return_value = (
+            "https://res.cloudinary.com/test/optimized.jpg"
+        )
+        mock_cloud.delete_media.side_effect = Exception("Cloudinary is down")
+
+        mock_ig = Mock()
+        mock_ig.safety_check_before_post.return_value = {
+            "safe_to_post": True,
+            "errors": [],
+        }
+        mock_ig.post_story = AsyncMock(return_value={"story_id": "story_123"})
+        mock_ig.get_account_info = AsyncMock(return_value={"username": "testaccount"})
+
+        mock_query = AsyncMock(message=Mock(chat_id=-100123, message_id=1))
+        mock_provider = Mock()
+        mock_provider.download_file.return_value = b"fake bytes"
+
+        with patch(
+            "src.services.media_sources.factory.MediaSourceFactory.get_provider_for_media_item",
+            return_value=mock_provider,
+        ):
+            # Should NOT raise despite cleanup failure
+            await handler._do_autopost(
+                str(uuid4()),
+                Mock(
+                    media_item_id=uuid4(),
+                    created_at="2026-01-01",
+                    scheduled_for="2026-01-01",
+                    chat_settings_id=None,
+                ),
+                Mock(
+                    id=uuid4(),
+                    file_path="/test/story.jpg",
+                    file_name="story.jpg",
+                    source_identifier="/test/story.jpg",
+                    mime_type="image/jpeg",
+                ),
+                Mock(
+                    id=uuid4(), telegram_username="tester", telegram_first_name="Test"
+                ),
+                mock_query,
+                mock_ig,
+                mock_cloud,
+            )
+
+        # Success message should still be sent
+        handler.service.interaction_service.log_callback.assert_called_once()
+        log_ctx = handler.service.interaction_service.log_callback.call_args.kwargs[
+            "context"
+        ]
+        assert log_ctx["success"] is True
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestCloudUrlNotInDryRunLog:
+    """Test that cloud_url is not leaked in interaction logs."""
+
+    async def test_cloud_url_not_in_dry_run_interaction_log(
+        self, mock_autopost_handler, make_autopost_ctx
+    ):
+        """Test that dry-run interaction log does not contain cloud_url."""
+        handler = mock_autopost_handler
+        handler.service._is_verbose = Mock(return_value=False)
+        handler.service._get_display_name = Mock(return_value="@tester")
+
+        ctx = make_autopost_ctx(
+            cloud_url="https://res.cloudinary.com/test/img.jpg",
+            cloud_public_id="instagram_stories/abc",
+            instagram_service=AsyncMock(
+                get_account_info=AsyncMock(return_value={"username": "testaccount"})
+            ),
+        )
+
+        await handler._handle_dry_run(ctx)
+
+        log_ctx = handler.service.interaction_service.log_callback.call_args.kwargs[
+            "context"
+        ]
+        assert "cloud_url" not in log_ctx
+        assert "cloud_public_id" in log_ctx

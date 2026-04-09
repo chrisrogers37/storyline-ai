@@ -197,6 +197,7 @@ class TelegramAutopostHandler:
                 return
 
             self._record_successful_post(ctx, story_id)
+            self._cleanup_cloudinary(ctx)
             await self._send_success_message(ctx, story_id)
 
         except Exception as e:
@@ -232,10 +233,15 @@ class TelegramAutopostHandler:
         )
         file_bytes = provider.download_file(ctx.media_item.source_identifier)
 
+        folder = (
+            f"instagram_stories/{ctx.queue_item.chat_settings_id}"
+            if ctx.queue_item.chat_settings_id
+            else "instagram_stories"
+        )
         upload_result = ctx.cloud_service.upload_media(
             file_bytes=file_bytes,
             filename=ctx.media_item.file_name,
-            folder="instagram_stories",
+            folder=folder,
         )
 
         ctx.cloud_url = upload_result.get("url")
@@ -250,6 +256,10 @@ class TelegramAutopostHandler:
             logger.info(
                 f"Auto-post cancelled after Cloudinary upload for {ctx.media_item.file_name}"
             )
+            try:
+                ctx.cloud_service.delete_media(ctx.cloud_public_id)
+            except Exception:
+                logger.warning("Failed to clean up Cloudinary after cancel")
             await ctx.query.edit_message_caption(
                 caption="❌ Auto-post cancelled (another action was taken)"
             )
@@ -329,7 +339,6 @@ class TelegramAutopostHandler:
                 "queue_item_id": ctx.queue_id,
                 "media_id": str(ctx.queue_item.media_item_id),
                 "media_filename": ctx.media_item.file_name,
-                "cloud_url": ctx.cloud_url,
                 "cloud_public_id": ctx.cloud_public_id,
                 "dry_run": True,
             },
@@ -342,6 +351,8 @@ class TelegramAutopostHandler:
             f"User: {self.service._get_display_name(ctx.user)}, "
             f"File: {ctx.media_item.file_name}"
         )
+
+        self._cleanup_cloudinary(ctx)
 
     async def _execute_instagram_post(self, ctx: AutopostContext) -> str | None:
         """Post media to Instagram via the Graph API.
@@ -468,8 +479,38 @@ class TelegramAutopostHandler:
             f"{ctx.media_item.file_name} (story_id={story_id})"
         )
 
+    def _cleanup_cloudinary(self, ctx: AutopostContext) -> None:
+        """Delete the temporary Cloudinary upload and clear DB references.
+
+        Best-effort: failures are logged but never propagate. The safety-net
+        cleanup loop in main.py catches any orphaned uploads.
+        """
+        if not ctx.cloud_public_id:
+            return
+
+        try:
+            deleted = ctx.cloud_service.delete_media(ctx.cloud_public_id)
+            if deleted:
+                self.service.media_repo.update_cloud_info(
+                    media_id=str(ctx.media_item.id),
+                    cloud_url=None,
+                    cloud_public_id=None,
+                    cloud_uploaded_at=None,
+                    cloud_expires_at=None,
+                )
+                logger.info(f"Cleaned up Cloudinary upload: {ctx.cloud_public_id}")
+            else:
+                logger.warning(
+                    f"Cloudinary delete returned false for {ctx.cloud_public_id}"
+                )
+        except Exception as e:
+            logger.warning(
+                f"Failed to clean up Cloudinary upload {ctx.cloud_public_id}: {e}"
+            )
+
     async def _handle_autopost_error(self, ctx: AutopostContext, e: Exception) -> None:
         """Handle auto-post failure: show error message with recovery options."""
+        self._cleanup_cloudinary(ctx)
         logger.error(f"Auto-post failed: {e}", exc_info=True)
 
         user_msg = self._get_user_friendly_error(e)

@@ -151,6 +151,38 @@ async def cleanup_locks_loop(lock_service: MediaLockService):
             lock_service.cleanup_transactions()
 
 
+async def cleanup_cloud_storage_loop(cloud_service):
+    """Remove orphaned Cloudinary uploads that outlived their retention window.
+
+    Runs hourly as a safety net — normal flow deletes immediately after posting.
+    """
+    from src.repositories.media_repository import MediaRepository
+
+    media_repo = MediaRepository()
+    logger.info("Starting cloud storage cleanup loop...")
+
+    while True:
+        try:
+            await asyncio.sleep(3600)
+
+            cloud_count = cloud_service.cleanup_expired(folder="instagram_stories")
+            db_count = media_repo.clear_stale_cloud_info(
+                retention_hours=settings.CLOUD_UPLOAD_RETENTION_HOURS
+            )
+
+            if cloud_count > 0 or db_count > 0:
+                logger.info(
+                    f"Cloud storage cleanup: {cloud_count} Cloudinary resources deleted, "
+                    f"{db_count} stale DB references cleared"
+                )
+
+        except Exception as e:
+            logger.error(f"Error in cloud storage cleanup loop: {e}", exc_info=True)
+        finally:
+            cloud_service.cleanup_transactions()
+            media_repo.cleanup_transactions()
+
+
 async def transaction_cleanup_loop(services: list):
     """
     Periodically clean up idle database transactions from all services.
@@ -357,6 +389,14 @@ async def main_async():
         asyncio.create_task(cleanup_locks_loop(lock_service)),
         asyncio.create_task(telegram_service.start_polling()),
     ]
+
+    # Add cloud storage cleanup loop if Cloudinary is configured
+    from src.services.integrations.cloud_storage import CloudStorageService
+
+    cloud_service = CloudStorageService()
+    if cloud_service.is_configured():
+        all_services.append(cloud_service)
+        tasks.append(asyncio.create_task(cleanup_cloud_storage_loop(cloud_service)))
 
     # Add media sync loop if enabled
     if sync_service:
