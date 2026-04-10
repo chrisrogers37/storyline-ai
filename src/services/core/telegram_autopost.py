@@ -89,6 +89,7 @@ class TelegramAutopostHandler:
         cancel_flag.clear()
 
         await lock.acquire()  # Manual acquire — background task will release
+        task_spawned = False
         try:
             # Immediate visual feedback: remove buttons to signal action received
             try:
@@ -103,8 +104,6 @@ class TelegramAutopostHandler:
             # Atomic claim: prevents duplicate auto-posts from rapid double-taps
             queue_item = self.service.queue_repo.claim_for_processing(queue_id)
             if not queue_item:
-                lock.release()
-                self.service.cleanup_operation_state(queue_id)
                 await validate_queue_item(self.service, queue_id, query)
                 return
 
@@ -113,8 +112,6 @@ class TelegramAutopostHandler:
                 str(queue_item.media_item_id)
             )
             if not media_item:
-                lock.release()
-                self.service.cleanup_operation_state(queue_id)
                 await query.edit_message_caption(caption="⚠️ Media item not found")
                 return
 
@@ -126,10 +123,11 @@ class TelegramAutopostHandler:
             )
             self._background_tasks.add(task)
             task.add_done_callback(self._background_tasks.discard)
-        except Exception:
-            lock.release()
-            self.service.cleanup_operation_state(queue_id)
-            raise
+            task_spawned = True
+        finally:
+            if not task_spawned:
+                lock.release()
+                self.service.cleanup_operation_state(queue_id)
 
     async def _autopost_background(
         self, queue_id, queue_item, media_item, user, query, cancel_flag, lock

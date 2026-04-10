@@ -377,8 +377,9 @@ class TestAutopostOperationLock:
 class TestAutopostBackgroundTask:
     """Tests for the background task lifecycle."""
 
-    async def test_handle_autopost_spawns_background_task(self, mock_autopost_handler):
-        """handle_autopost spawns a background task for the heavy work."""
+    @pytest.fixture
+    def background_test_setup(self, mock_autopost_handler):
+        """Common setup for background task tests: handler with claimable queue item."""
         handler = mock_autopost_handler
         service = handler.service
         queue_id = str(uuid4())
@@ -395,110 +396,69 @@ class TestAutopostBackgroundTask:
         mock_query = AsyncMock()
         mock_query.message = Mock(chat_id=-100, message_id=1)
 
-        with (
-            patch(
-                "src.services.integrations.instagram_api.InstagramAPIService"
-            ) as mock_ig,
-            patch(
-                "src.services.integrations.cloud_storage.CloudStorageService"
-            ) as mock_cloud,
-        ):
-            mock_ig.return_value.close = Mock()
-            mock_ig.return_value.safety_check_before_post.return_value = {
-                "safe_to_post": False,
-                "errors": ["test"],
-            }
-            mock_cloud.return_value.close = Mock()
+        return handler, service, queue_id, mock_user, mock_query
 
+    @staticmethod
+    def _patch_services():
+        """Context manager patching InstagramAPIService and CloudStorageService."""
+        ig_patch = patch("src.services.integrations.instagram_api.InstagramAPIService")
+        cloud_patch = patch(
+            "src.services.integrations.cloud_storage.CloudStorageService"
+        )
+
+        class _Combined:
+            def __enter__(self_ctx):
+                mock_ig = ig_patch.__enter__()
+                mock_cloud = cloud_patch.__enter__()
+                mock_ig.return_value.close = Mock()
+                mock_ig.return_value.safety_check_before_post.return_value = {
+                    "safe_to_post": False,
+                    "errors": ["test"],
+                }
+                mock_cloud.return_value.close = Mock()
+                return self_ctx
+
+            def __exit__(self_ctx, *args):
+                cloud_patch.__exit__(*args)
+                ig_patch.__exit__(*args)
+
+        return _Combined()
+
+    async def test_handle_autopost_spawns_background_task(self, background_test_setup):
+        """handle_autopost spawns a background task for the heavy work."""
+        handler, _, queue_id, mock_user, mock_query = background_test_setup
+
+        with self._patch_services():
             await handler.handle_autopost(queue_id, mock_user, mock_query)
-
-            # Task should be spawned
             assert len(handler._background_tasks) == 1
-
             await _await_background_tasks(handler)
 
-        # Task should be cleaned up after completion
         assert len(handler._background_tasks) == 0
 
     async def test_background_task_releases_lock_on_success(
-        self, mock_autopost_handler
+        self, background_test_setup
     ):
         """Background task releases the operation lock after success."""
-        handler = mock_autopost_handler
-        service = handler.service
-        queue_id = str(uuid4())
+        handler, service, queue_id, mock_user, mock_query = background_test_setup
 
-        mock_queue_item = Mock()
-        mock_queue_item.media_item_id = uuid4()
-        service.queue_repo.claim_for_processing.return_value = mock_queue_item
-
-        mock_media = Mock(id=uuid4(), file_name="test.jpg")
-        service.media_repo.get_by_id.return_value = mock_media
-
-        mock_user = Mock(id=uuid4())
-        mock_query = AsyncMock()
-        mock_query.message = Mock(chat_id=-100, message_id=1)
-
-        with (
-            patch(
-                "src.services.integrations.instagram_api.InstagramAPIService"
-            ) as mock_ig,
-            patch(
-                "src.services.integrations.cloud_storage.CloudStorageService"
-            ) as mock_cloud,
-        ):
-            mock_ig.return_value.close = Mock()
-            mock_ig.return_value.safety_check_before_post.return_value = {
-                "safe_to_post": False,
-                "errors": ["test"],
-            }
-            mock_cloud.return_value.close = Mock()
-
+        with self._patch_services():
             await handler.handle_autopost(queue_id, mock_user, mock_query)
 
             lock = service.get_operation_lock(queue_id)
-            assert lock.locked()  # Lock held by background task
+            assert lock.locked()
 
             await _await_background_tasks(handler)
 
-        assert not lock.locked()  # Lock released after task completes
+        assert not lock.locked()
 
     async def test_background_task_calls_cleanup_transactions(
-        self, mock_autopost_handler
+        self, background_test_setup
     ):
         """Background task calls cleanup_transactions on completion."""
-        handler = mock_autopost_handler
-        service = handler.service
-        queue_id = str(uuid4())
-
-        mock_queue_item = Mock()
-        mock_queue_item.media_item_id = uuid4()
-        service.queue_repo.claim_for_processing.return_value = mock_queue_item
-
-        mock_media = Mock(id=uuid4(), file_name="test.jpg")
-        service.media_repo.get_by_id.return_value = mock_media
-
-        mock_user = Mock(id=uuid4())
-        mock_query = AsyncMock()
-        mock_query.message = Mock(chat_id=-100, message_id=1)
-
+        handler, service, queue_id, mock_user, mock_query = background_test_setup
         service.cleanup_transactions = Mock()
 
-        with (
-            patch(
-                "src.services.integrations.instagram_api.InstagramAPIService"
-            ) as mock_ig,
-            patch(
-                "src.services.integrations.cloud_storage.CloudStorageService"
-            ) as mock_cloud,
-        ):
-            mock_ig.return_value.close = Mock()
-            mock_ig.return_value.safety_check_before_post.return_value = {
-                "safe_to_post": False,
-                "errors": ["test"],
-            }
-            mock_cloud.return_value.close = Mock()
-
+        with self._patch_services():
             await handler.handle_autopost(queue_id, mock_user, mock_query)
             await _await_background_tasks(handler)
 
