@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 from src.services.core.telegram_utils import (
     _build_already_handled_caption,
+    _has_terminal_caption,
     build_account_management_keyboard,
     build_webapp_button,
     cleanup_conversation_messages,
@@ -318,3 +319,132 @@ class TestValidateQueueItem:
 
         assert result is mock_item
         query.edit_message_caption.assert_not_called()
+
+    async def test_preserves_terminal_caption_on_double_tap(self):
+        """Double-tap: caption already shows 'Posted to @account', don't overwrite."""
+        service = Mock()
+        service.queue_repo.get_by_id.return_value = None
+        service.history_repo.get_by_queue_item_id.return_value = Mock(
+            status="posted", posting_method="instagram_api"
+        )
+        query = AsyncMock()
+        query.message.caption = "✅ Posted to @gatortails by @juicelord"
+
+        result = await validate_queue_item(service, "q-5", query)
+
+        assert result is None
+        query.edit_message_caption.assert_not_called()
+        query.answer.assert_called_once_with("Already processed", show_alert=False)
+
+    async def test_preserves_verbose_autopost_caption(self):
+        """Double-tap: verbose autopost caption preserved."""
+        service = Mock()
+        service.queue_repo.get_by_id.return_value = None
+        service.history_repo.get_by_queue_item_id.return_value = Mock(
+            status="posted", posting_method="instagram_api"
+        )
+        query = AsyncMock()
+        query.message.caption = (
+            "✅ *Posted to Instagram!*\n\n📁 meme.jpg\n📸 Account: @gatortails"
+        )
+
+        result = await validate_queue_item(service, "q-6", query)
+
+        assert result is None
+        query.edit_message_caption.assert_not_called()
+
+    async def test_preserves_skipped_caption(self):
+        """Double-tap: skipped caption preserved."""
+        service = Mock()
+        service.queue_repo.get_by_id.return_value = None
+        service.history_repo.get_by_queue_item_id.return_value = Mock(
+            status="skipped", posting_method="telegram_manual"
+        )
+        query = AsyncMock()
+        query.message.caption = "⏭️ Skipped by @juicelord"
+
+        result = await validate_queue_item(service, "q-7", query)
+
+        assert result is None
+        query.edit_message_caption.assert_not_called()
+
+    async def test_overwrites_non_terminal_caption(self):
+        """Non-terminal caption (uploading status) should be overwritten."""
+        service = Mock()
+        service.queue_repo.get_by_id.return_value = None
+        service.history_repo.get_by_queue_item_id.return_value = Mock(
+            status="posted", posting_method="instagram_api"
+        )
+        query = AsyncMock()
+        query.message.caption = "⏳ *Uploading to Cloudinary...*"
+
+        result = await validate_queue_item(service, "q-8", query)
+
+        assert result is None
+        query.edit_message_caption.assert_called_once()
+        caption = query.edit_message_caption.call_args.kwargs.get("caption", "")
+        assert "Already posted via Instagram API" in caption
+
+    async def test_no_history_always_overwrites(self):
+        """No history record — always show 'not found' regardless of caption."""
+        service = Mock()
+        service.queue_repo.get_by_id.return_value = None
+        service.history_repo.get_by_queue_item_id.return_value = None
+        query = AsyncMock()
+        query.message.caption = "✅ Posted to @gatortails by @juicelord"
+
+        result = await validate_queue_item(service, "q-9", query)
+
+        assert result is None
+        query.edit_message_caption.assert_called_once()
+        caption = query.edit_message_caption.call_args.kwargs.get("caption", "")
+        assert "Queue item not found" in caption
+
+
+@pytest.mark.unit
+class TestHasTerminalCaption:
+    """Tests for _has_terminal_caption helper."""
+
+    @pytest.mark.parametrize(
+        "caption",
+        [
+            "✅ Posted to @gatortails by @juicelord",
+            "✅ *Posted to Instagram!*\n\n📁 meme.jpg",
+            "✅ Marked as posted by @user",
+            "✅ Posted by @user",
+            "⏭️ Skipped by @user",
+            "🚫 Rejected by @user",
+            "🚫 *Permanently rejected*",
+        ],
+    )
+    def test_recognizes_terminal_captions(self, caption):
+        query = Mock()
+        query.message.caption = caption
+        assert _has_terminal_caption(query) is True
+
+    @pytest.mark.parametrize(
+        "caption",
+        [
+            "⏳ *Uploading to Cloudinary...*",
+            "⏳ *Posting to Instagram...*",
+            "📸 meme.jpg\n📁 Category: funny",
+            "⚠️ Queue item not found",
+            "✅ Already posted via Instagram API",
+            "",
+        ],
+    )
+    def test_rejects_non_terminal_captions(self, caption):
+        query = Mock()
+        query.message.caption = caption
+        assert _has_terminal_caption(query) is False
+
+    def test_handles_none_caption(self):
+        query = Mock()
+        query.message.caption = None
+        assert _has_terminal_caption(query) is False
+
+    def test_handles_mock_caption(self):
+        """AsyncMock/Mock caption (not a str) returns False."""
+        query = AsyncMock()
+        # AsyncMock auto-creates message.caption as a Mock, not a str
+        assert _has_terminal_caption(query) is False

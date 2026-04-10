@@ -24,6 +24,28 @@ if TYPE_CHECKING:
 # Pattern 1: Queue Item Validation
 # =========================================================================
 
+_TERMINAL_CAPTION_PREFIXES = (
+    "✅ Posted to ",  # autopost simple
+    "✅ *Posted to ",  # autopost verbose (Markdown)
+    "✅ Marked as posted",  # manual posted verbose
+    "✅ Posted by ",  # manual posted simple
+    "⏭️ Skipped by ",
+    "🚫 Rejected by ",
+    "🚫 *Permanently ",  # rejected verbose
+)
+
+
+def _has_terminal_caption(query) -> bool:
+    """Check whether the message already shows a terminal action caption.
+
+    Terminal captions contain attribution info (who posted, which account)
+    that should not be overwritten by a generic "Already handled" fallback.
+    """
+    caption = getattr(query.message, "caption", None)
+    if not isinstance(caption, str):
+        return False
+    return caption.startswith(_TERMINAL_CAPTION_PREFIXES)
+
 
 def _build_already_handled_caption(history) -> str:
     """Build user-friendly caption for a queue item already handled."""
@@ -75,7 +97,14 @@ async def validate_queue_item(service: TelegramService, queue_id: str, query):
         else:
             caption = "⚠️ Queue item not found"
             logger.warning(f"Queue item {queue_id[:8]} not found in queue or history")
-        await query.edit_message_caption(caption=caption)
+        if history and _has_terminal_caption(query):
+            logger.info(
+                f"Preserving terminal caption for {queue_id[:8]} "
+                f"(already shows completed action)"
+            )
+            await query.answer("Already processed", show_alert=False)
+        else:
+            await query.edit_message_caption(caption=caption)
         return None
     return queue_item
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -63,6 +64,7 @@ class TelegramAutopostHandler:
 
     def __init__(self, service: TelegramService):
         self.service = service
+        self._background_tasks: set[asyncio.Task] = set()
 
     async def handle_autopost(self, queue_id: str, user, query):
         """
@@ -73,6 +75,10 @@ class TelegramAutopostHandler:
 
         Uses operation locks to prevent duplicate auto-posts from rapid clicks.
         Checks cancellation flags so terminal actions (Posted/Skip/Reject) can abort.
+
+        The fast path (claim item, remove buttons) runs synchronously.
+        The heavy work (upload, post, record) is spawned as a background task
+        so the callback pipeline is unblocked for other messages.
         """
         lock = self.service.get_operation_lock(queue_id)
         if lock.locked():
@@ -82,60 +88,89 @@ class TelegramAutopostHandler:
         cancel_flag = self.service.get_cancel_flag(queue_id)
         cancel_flag.clear()
 
-        async with lock:
-            try:
-                # Immediate visual feedback: remove buttons to signal action received
-                try:
-                    await query.edit_message_reply_markup(
-                        reply_markup=InlineKeyboardMarkup([])
-                    )
-                except Exception as e:
-                    logger.debug(
-                        f"Could not remove keyboard for autopost item {queue_id}: {e}"
-                    )
-
-                await self._locked_autopost(queue_id, user, query, cancel_flag)
-            finally:
-                self.service.cleanup_operation_state(queue_id)
-
-    async def _locked_autopost(self, queue_id, user, query, cancel_flag):
-        """Autopost implementation that runs under the operation lock."""
-        # Atomic claim: prevents duplicate auto-posts from rapid double-taps
-        queue_item = self.service.queue_repo.claim_for_processing(queue_id)
-        if not queue_item:
-            await validate_queue_item(self.service, queue_id, query)
-            return
-
-        # Get media item
-        media_item = self.service.media_repo.get_by_id(str(queue_item.media_item_id))
-        if not media_item:
-            await query.edit_message_caption(caption="⚠️ Media item not found")
-            return
-
-        # ============================================
-        # CRITICAL SAFETY GATES
-        # ============================================
-        from src.services.integrations.instagram_api import InstagramAPIService
-        from src.services.integrations.cloud_storage import CloudStorageService
-
-        # Create services and ensure cleanup on exit
-        instagram_service = InstagramAPIService()
-        cloud_service = CloudStorageService()
+        await lock.acquire()  # Manual acquire — background task will release
         try:
-            await self._do_autopost(
-                queue_id,
-                queue_item,
-                media_item,
-                user,
-                query,
-                instagram_service,
-                cloud_service,
-                cancel_flag,
+            # Immediate visual feedback: remove buttons to signal action received
+            try:
+                await query.edit_message_reply_markup(
+                    reply_markup=InlineKeyboardMarkup([])
+                )
+            except Exception as e:
+                logger.debug(
+                    f"Could not remove keyboard for autopost item {queue_id}: {e}"
+                )
+
+            # Atomic claim: prevents duplicate auto-posts from rapid double-taps
+            queue_item = self.service.queue_repo.claim_for_processing(queue_id)
+            if not queue_item:
+                lock.release()
+                self.service.cleanup_operation_state(queue_id)
+                await validate_queue_item(self.service, queue_id, query)
+                return
+
+            # Get media item
+            media_item = self.service.media_repo.get_by_id(
+                str(queue_item.media_item_id)
+            )
+            if not media_item:
+                lock.release()
+                self.service.cleanup_operation_state(queue_id)
+                await query.edit_message_caption(caption="⚠️ Media item not found")
+                return
+
+            # Spawn background task — lock is transferred to the task
+            task = asyncio.create_task(
+                self._autopost_background(
+                    queue_id, queue_item, media_item, user, query, cancel_flag, lock
+                )
+            )
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
+        except Exception:
+            lock.release()
+            self.service.cleanup_operation_state(queue_id)
+            raise
+
+    async def _autopost_background(
+        self, queue_id, queue_item, media_item, user, query, cancel_flag, lock
+    ):
+        """Background task that performs the heavy auto-post work.
+
+        Runs Cloudinary upload + Instagram API call without blocking
+        the callback pipeline. Owns the operation lock and releases it
+        on completion.
+        """
+        try:
+            # ============================================
+            # CRITICAL SAFETY GATES
+            # ============================================
+            from src.services.integrations.instagram_api import InstagramAPIService
+            from src.services.integrations.cloud_storage import CloudStorageService
+
+            instagram_service = InstagramAPIService()
+            cloud_service = CloudStorageService()
+            try:
+                await self._do_autopost(
+                    queue_id,
+                    queue_item,
+                    media_item,
+                    user,
+                    query,
+                    instagram_service,
+                    cloud_service,
+                    cancel_flag,
+                )
+            finally:
+                instagram_service.close()
+                cloud_service.close()
+        except Exception as e:
+            logger.error(
+                f"Background autopost failed for {queue_id[:8]}: {e}", exc_info=True
             )
         finally:
-            # Ensure services are cleaned up to prevent connection pool exhaustion
-            instagram_service.close()
-            cloud_service.close()
+            lock.release()
+            self.service.cleanup_operation_state(queue_id)
+            self.service.cleanup_transactions()
 
     async def _do_autopost(
         self,

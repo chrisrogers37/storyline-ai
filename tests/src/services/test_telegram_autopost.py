@@ -1,5 +1,7 @@
 """Tests for TelegramAutopostHandler."""
 
+import asyncio
+
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
 from uuid import uuid4
@@ -9,6 +11,12 @@ from src.services.core.telegram_autopost import (
     AutopostContext,
     TelegramAutopostHandler,
 )
+
+
+async def _await_background_tasks(handler):
+    """Wait for all background autopost tasks to complete."""
+    if handler._background_tasks:
+        await asyncio.gather(*handler._background_tasks, return_exceptions=True)
 
 
 @pytest.fixture
@@ -120,6 +128,7 @@ class TestAutopostSafetyGates:
             mock_cloud_instance.close = Mock()
 
             await handler.handle_autopost(queue_id, mock_user, mock_query)
+            await _await_background_tasks(handler)
 
         # Should show safety check failure message
         found_safety_fail = False
@@ -208,6 +217,7 @@ class TestAutopostDryRun:
             mock_cloud_instance.close = Mock()
 
             await handler.handle_autopost(queue_id, mock_user, mock_query)
+            await _await_background_tasks(handler)
 
         # Cloudinary upload SHOULD have been called
         mock_cloud_instance.upload_media.assert_called_once()
@@ -289,6 +299,7 @@ class TestAutopostErrorRecovery:
             mock_cloud_instance.close = Mock()
 
             await handler.handle_autopost(queue_id, mock_user, mock_query)
+            await _await_background_tasks(handler)
 
         # Should show error message
         found_error = False
@@ -314,17 +325,20 @@ class TestAutopostEarlyFeedback:
     ):
         """handle_autopost removes keyboard immediately after lock acquisition."""
         handler = mock_autopost_handler
+        service = handler.service
         queue_id = str(uuid4())
+
+        # claim returns None so no background task is spawned
+        service.queue_repo.claim_for_processing.return_value = None
+        service.queue_repo.get_by_id.return_value = None
+        service.history_repo.get_by_queue_item_id.return_value = None
 
         mock_user = Mock()
         mock_query = AsyncMock()
 
-        # Make _locked_autopost return immediately (we only care about keyboard removal)
-        handler._locked_autopost = AsyncMock()
-
         await handler.handle_autopost(queue_id, mock_user, mock_query)
 
-        # Keyboard should be removed before _locked_autopost is called
+        # Keyboard should be removed before claim_for_processing
         mock_query.edit_message_reply_markup.assert_called_once()
 
 
@@ -356,6 +370,139 @@ class TestAutopostOperationLock:
 
         # Clean up
         lock.release()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestAutopostBackgroundTask:
+    """Tests for the background task lifecycle."""
+
+    async def test_handle_autopost_spawns_background_task(self, mock_autopost_handler):
+        """handle_autopost spawns a background task for the heavy work."""
+        handler = mock_autopost_handler
+        service = handler.service
+        queue_id = str(uuid4())
+
+        mock_queue_item = Mock()
+        mock_queue_item.media_item_id = uuid4()
+        mock_queue_item.chat_settings_id = None
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
+
+        mock_media = Mock(id=uuid4(), file_name="test.jpg")
+        service.media_repo.get_by_id.return_value = mock_media
+
+        mock_user = Mock(id=uuid4())
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100, message_id=1)
+
+        with (
+            patch(
+                "src.services.integrations.instagram_api.InstagramAPIService"
+            ) as mock_ig,
+            patch(
+                "src.services.integrations.cloud_storage.CloudStorageService"
+            ) as mock_cloud,
+        ):
+            mock_ig.return_value.close = Mock()
+            mock_ig.return_value.safety_check_before_post.return_value = {
+                "safe_to_post": False,
+                "errors": ["test"],
+            }
+            mock_cloud.return_value.close = Mock()
+
+            await handler.handle_autopost(queue_id, mock_user, mock_query)
+
+            # Task should be spawned
+            assert len(handler._background_tasks) == 1
+
+            await _await_background_tasks(handler)
+
+        # Task should be cleaned up after completion
+        assert len(handler._background_tasks) == 0
+
+    async def test_background_task_releases_lock_on_success(
+        self, mock_autopost_handler
+    ):
+        """Background task releases the operation lock after success."""
+        handler = mock_autopost_handler
+        service = handler.service
+        queue_id = str(uuid4())
+
+        mock_queue_item = Mock()
+        mock_queue_item.media_item_id = uuid4()
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
+
+        mock_media = Mock(id=uuid4(), file_name="test.jpg")
+        service.media_repo.get_by_id.return_value = mock_media
+
+        mock_user = Mock(id=uuid4())
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100, message_id=1)
+
+        with (
+            patch(
+                "src.services.integrations.instagram_api.InstagramAPIService"
+            ) as mock_ig,
+            patch(
+                "src.services.integrations.cloud_storage.CloudStorageService"
+            ) as mock_cloud,
+        ):
+            mock_ig.return_value.close = Mock()
+            mock_ig.return_value.safety_check_before_post.return_value = {
+                "safe_to_post": False,
+                "errors": ["test"],
+            }
+            mock_cloud.return_value.close = Mock()
+
+            await handler.handle_autopost(queue_id, mock_user, mock_query)
+
+            lock = service.get_operation_lock(queue_id)
+            assert lock.locked()  # Lock held by background task
+
+            await _await_background_tasks(handler)
+
+        assert not lock.locked()  # Lock released after task completes
+
+    async def test_background_task_calls_cleanup_transactions(
+        self, mock_autopost_handler
+    ):
+        """Background task calls cleanup_transactions on completion."""
+        handler = mock_autopost_handler
+        service = handler.service
+        queue_id = str(uuid4())
+
+        mock_queue_item = Mock()
+        mock_queue_item.media_item_id = uuid4()
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
+
+        mock_media = Mock(id=uuid4(), file_name="test.jpg")
+        service.media_repo.get_by_id.return_value = mock_media
+
+        mock_user = Mock(id=uuid4())
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100, message_id=1)
+
+        service.cleanup_transactions = Mock()
+
+        with (
+            patch(
+                "src.services.integrations.instagram_api.InstagramAPIService"
+            ) as mock_ig,
+            patch(
+                "src.services.integrations.cloud_storage.CloudStorageService"
+            ) as mock_cloud,
+        ):
+            mock_ig.return_value.close = Mock()
+            mock_ig.return_value.safety_check_before_post.return_value = {
+                "safe_to_post": False,
+                "errors": ["test"],
+            }
+            mock_cloud.return_value.close = Mock()
+
+            await handler.handle_autopost(queue_id, mock_user, mock_query)
+            await _await_background_tasks(handler)
+
+        service.cleanup_transactions.assert_called()
 
 
 # ==================== Extracted Helper Tests ====================

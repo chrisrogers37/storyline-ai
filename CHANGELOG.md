@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Telegram Callback Concurrency
+
+- **Preserve post attribution on duplicate callbacks** — Double-tapping Auto Post (or any button after a post completes) no longer overwrites the "Posted to @account by @user" caption with a generic "Already posted via Instagram API" message. The race condition guard now silently acknowledges duplicate callbacks instead of replacing attribution info.
+- **Non-blocking auto-post** — Auto Post to Instagram now runs as a background task, unblocking the Telegram callback pipeline immediately. Clicking buttons on other posts is no longer blocked during the 5-15 second upload + API call. Multiple auto-posts can run concurrently.
+- **Planning doc for per-request session isolation** — Documented future architectural enhancement for enabling `concurrent_updates` with per-request database session scoping (`documentation/planning/per-request-session-isolation.md`)
+
 ### Security — Cloudinary Media Lifecycle Cleanup
 
 - **Immediate cleanup after posting** — Cloudinary uploads are deleted as soon as Instagram fetches them (success, dry-run, error, and cancel paths all clean up)
