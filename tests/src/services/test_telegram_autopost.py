@@ -1,5 +1,7 @@
 """Tests for TelegramAutopostHandler."""
 
+import asyncio
+
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
 from uuid import uuid4
@@ -9,6 +11,12 @@ from src.services.core.telegram_autopost import (
     AutopostContext,
     TelegramAutopostHandler,
 )
+
+
+async def _await_background_tasks(handler):
+    """Wait for all background autopost tasks to complete."""
+    if handler._background_tasks:
+        await asyncio.gather(*handler._background_tasks, return_exceptions=True)
 
 
 @pytest.fixture
@@ -120,6 +128,7 @@ class TestAutopostSafetyGates:
             mock_cloud_instance.close = Mock()
 
             await handler.handle_autopost(queue_id, mock_user, mock_query)
+            await _await_background_tasks(handler)
 
         # Should show safety check failure message
         found_safety_fail = False
@@ -208,6 +217,7 @@ class TestAutopostDryRun:
             mock_cloud_instance.close = Mock()
 
             await handler.handle_autopost(queue_id, mock_user, mock_query)
+            await _await_background_tasks(handler)
 
         # Cloudinary upload SHOULD have been called
         mock_cloud_instance.upload_media.assert_called_once()
@@ -289,6 +299,7 @@ class TestAutopostErrorRecovery:
             mock_cloud_instance.close = Mock()
 
             await handler.handle_autopost(queue_id, mock_user, mock_query)
+            await _await_background_tasks(handler)
 
         # Should show error message
         found_error = False
@@ -314,17 +325,20 @@ class TestAutopostEarlyFeedback:
     ):
         """handle_autopost removes keyboard immediately after lock acquisition."""
         handler = mock_autopost_handler
+        service = handler.service
         queue_id = str(uuid4())
+
+        # claim returns None so no background task is spawned
+        service.queue_repo.claim_for_processing.return_value = None
+        service.queue_repo.get_by_id.return_value = None
+        service.history_repo.get_by_queue_item_id.return_value = None
 
         mock_user = Mock()
         mock_query = AsyncMock()
 
-        # Make _locked_autopost return immediately (we only care about keyboard removal)
-        handler._locked_autopost = AsyncMock()
-
         await handler.handle_autopost(queue_id, mock_user, mock_query)
 
-        # Keyboard should be removed before _locked_autopost is called
+        # Keyboard should be removed before claim_for_processing
         mock_query.edit_message_reply_markup.assert_called_once()
 
 
@@ -356,6 +370,99 @@ class TestAutopostOperationLock:
 
         # Clean up
         lock.release()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestAutopostBackgroundTask:
+    """Tests for the background task lifecycle."""
+
+    @pytest.fixture
+    def background_test_setup(self, mock_autopost_handler):
+        """Common setup for background task tests: handler with claimable queue item."""
+        handler = mock_autopost_handler
+        service = handler.service
+        queue_id = str(uuid4())
+
+        mock_queue_item = Mock()
+        mock_queue_item.media_item_id = uuid4()
+        mock_queue_item.chat_settings_id = None
+        service.queue_repo.claim_for_processing.return_value = mock_queue_item
+
+        mock_media = Mock(id=uuid4(), file_name="test.jpg")
+        service.media_repo.get_by_id.return_value = mock_media
+
+        mock_user = Mock(id=uuid4())
+        mock_query = AsyncMock()
+        mock_query.message = Mock(chat_id=-100, message_id=1)
+
+        return handler, service, queue_id, mock_user, mock_query
+
+    @staticmethod
+    def _patch_services():
+        """Context manager patching InstagramAPIService and CloudStorageService."""
+        ig_patch = patch("src.services.integrations.instagram_api.InstagramAPIService")
+        cloud_patch = patch(
+            "src.services.integrations.cloud_storage.CloudStorageService"
+        )
+
+        class _Combined:
+            def __enter__(self_ctx):
+                mock_ig = ig_patch.__enter__()
+                mock_cloud = cloud_patch.__enter__()
+                mock_ig.return_value.close = Mock()
+                mock_ig.return_value.safety_check_before_post.return_value = {
+                    "safe_to_post": False,
+                    "errors": ["test"],
+                }
+                mock_cloud.return_value.close = Mock()
+                return self_ctx
+
+            def __exit__(self_ctx, *args):
+                cloud_patch.__exit__(*args)
+                ig_patch.__exit__(*args)
+
+        return _Combined()
+
+    async def test_handle_autopost_spawns_background_task(self, background_test_setup):
+        """handle_autopost spawns a background task for the heavy work."""
+        handler, _, queue_id, mock_user, mock_query = background_test_setup
+
+        with self._patch_services():
+            await handler.handle_autopost(queue_id, mock_user, mock_query)
+            assert len(handler._background_tasks) == 1
+            await _await_background_tasks(handler)
+
+        assert len(handler._background_tasks) == 0
+
+    async def test_background_task_releases_lock_on_success(
+        self, background_test_setup
+    ):
+        """Background task releases the operation lock after success."""
+        handler, service, queue_id, mock_user, mock_query = background_test_setup
+
+        with self._patch_services():
+            await handler.handle_autopost(queue_id, mock_user, mock_query)
+
+            lock = service.get_operation_lock(queue_id)
+            assert lock.locked()
+
+            await _await_background_tasks(handler)
+
+        assert not lock.locked()
+
+    async def test_background_task_calls_cleanup_transactions(
+        self, background_test_setup
+    ):
+        """Background task calls cleanup_transactions on completion."""
+        handler, service, queue_id, mock_user, mock_query = background_test_setup
+        service.cleanup_transactions = Mock()
+
+        with self._patch_services():
+            await handler.handle_autopost(queue_id, mock_user, mock_query)
+            await _await_background_tasks(handler)
+
+        service.cleanup_transactions.assert_called()
 
 
 # ==================== Extracted Helper Tests ====================
