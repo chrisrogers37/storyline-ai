@@ -206,6 +206,7 @@ class TestMediaSyncServiceSync:
             source_identifier="/media/original.jpg",
         )
         sync_service.media_repo.get_active_by_source_type.return_value = [db_item]
+        sync_service.media_repo.get_by_path.return_value = None
 
         result = sync_service.sync()
 

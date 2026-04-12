@@ -179,6 +179,7 @@ class MediaSyncService(BaseService):
                         result=result,
                     )
                 except Exception as e:
+                    self.media_repo.rollback()
                     result.errors += 1
                     error_msg = f"Error processing {file_info.name}: {e}"
                     result.error_details.append(error_msg)
@@ -260,6 +261,14 @@ class MediaSyncService(BaseService):
             existing = existing_items[0]
 
             file_path = self._build_file_path(source_type, file_info)
+
+            # Skip if another item already holds this file_path (e.g. inactive
+            # duplicate with same Drive ID).  Updating would hit the unique
+            # constraint and poison the session.
+            if self.media_repo.get_by_path(file_path):
+                result.unchanged += 1
+                return
+
             self.media_repo.update_source_info(
                 media_id=str(existing.id),
                 file_name=file_info.name,
