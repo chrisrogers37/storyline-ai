@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Worker Crash in Cloud Storage Cleanup
+
+- **Fix fatal AttributeError in cleanup loop** — `cleanup_cloud_storage_loop` called `cleanup_transactions()` on a `MediaRepository`, but that method only exists on `BaseService`. Replaced with the correct `end_read_transaction()` call. This crash killed the entire worker process after the first hourly cleanup cycle.
+- **Add task-level exception isolation** — Background loops (scheduler, lock cleanup, cloud cleanup, media sync, transaction cleanup) are now wrapped with `_guarded()` so an unhandled exception in one loop logs a critical error instead of crashing the entire worker via `asyncio.gather()`.
+
 ### Fixed — Telegram Callback Concurrency
 
 - **Preserve post attribution on duplicate callbacks** — Double-tapping Auto Post (or any button after a post completes) no longer overwrites the "Posted to @account by @user" caption with a generic "Already posted via Instagram API" message. The race condition guard now silently acknowledges duplicate callbacks instead of replacing attribution info.

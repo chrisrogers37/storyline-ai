@@ -5,6 +5,8 @@ import signal
 import sys
 from time import time
 
+from typing import Coroutine
+
 from src.config.settings import settings
 from src.utils.logger import logger
 from src.utils.validators import ConfigValidator
@@ -26,6 +28,20 @@ shutdown_in_progress = False
 SERVICE_RUNS_RETENTION_DAYS = 7
 # Run retention once per hour (60 ticks at 1-minute intervals)
 RETENTION_INTERVAL_TICKS = 60
+
+
+async def _guarded(name: str, coro: Coroutine) -> None:
+    """Run a coroutine and log (not propagate) unhandled exceptions.
+
+    Prevents a crash in one background loop from killing the whole worker
+    via asyncio.gather().
+    """
+    try:
+        await coro
+    except asyncio.CancelledError:
+        raise  # let shutdown propagate
+    except Exception:
+        logger.critical(f"Background task '{name}' crashed", exc_info=True)
 
 
 async def run_scheduler_loop(
@@ -181,7 +197,7 @@ async def cleanup_cloud_storage_loop(cloud_service):
             logger.error(f"Error in cloud storage cleanup loop: {e}", exc_info=True)
         finally:
             cloud_service.cleanup_transactions()
-            media_repo.cleanup_transactions()
+            media_repo.end_read_transaction()
 
 
 async def transaction_cleanup_loop(services: list):
@@ -385,9 +401,14 @@ async def main_async():
     ]
     tasks = [
         asyncio.create_task(
-            run_scheduler_loop(scheduler_service, posting_service, settings_service)
+            _guarded(
+                "scheduler",
+                run_scheduler_loop(
+                    scheduler_service, posting_service, settings_service
+                ),
+            )
         ),
-        asyncio.create_task(cleanup_locks_loop(lock_service)),
+        asyncio.create_task(_guarded("lock_cleanup", cleanup_locks_loop(lock_service))),
         asyncio.create_task(telegram_service.start_polling()),
     ]
 
@@ -397,22 +418,33 @@ async def main_async():
     cloud_service = CloudStorageService()
     if cloud_service.is_configured():
         all_services.append(cloud_service)
-        tasks.append(asyncio.create_task(cleanup_cloud_storage_loop(cloud_service)))
+        tasks.append(
+            asyncio.create_task(
+                _guarded("cloud_cleanup", cleanup_cloud_storage_loop(cloud_service))
+            )
+        )
 
     # Add media sync loop if enabled
     if sync_service:
         all_services.append(sync_service)
         tasks.append(
             asyncio.create_task(
-                media_sync_loop(
-                    sync_service,
-                    settings_service=settings_service,
-                    telegram_service=telegram_service,
+                _guarded(
+                    "media_sync",
+                    media_sync_loop(
+                        sync_service,
+                        settings_service=settings_service,
+                        telegram_service=telegram_service,
+                    ),
                 )
             )
         )
 
-    tasks.append(asyncio.create_task(transaction_cleanup_loop(all_services)))
+    tasks.append(
+        asyncio.create_task(
+            _guarded("transaction_cleanup", transaction_cleanup_loop(all_services))
+        )
+    )
 
     logger.info("✓ All services started (JIT scheduler)")
     logger.info(
