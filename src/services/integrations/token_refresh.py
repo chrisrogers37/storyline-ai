@@ -9,6 +9,7 @@ from src.services.base_service import BaseService
 from src.repositories.token_repository import TokenRepository
 from src.repositories.instagram_account_repository import InstagramAccountRepository
 from src.utils.encryption import TokenEncryption
+from src.config.constants import IG_LOGIN_GRAPH_BASE
 from src.config.settings import settings
 from src.exceptions import TokenExpiredError
 from src.utils.logger import logger
@@ -37,7 +38,7 @@ class TokenRefreshService(BaseService):
     """
 
     # Instagram Login token refresh endpoint (different from Facebook Login)
-    IG_LOGIN_REFRESH_ENDPOINT = "https://graph.instagram.com/refresh_access_token"
+    IG_LOGIN_REFRESH_ENDPOINT = f"{IG_LOGIN_GRAPH_BASE}/refresh_access_token"
 
     # Refresh buffer: refresh tokens this many hours before expiry
     REFRESH_BUFFER_HOURS = 168  # 7 days

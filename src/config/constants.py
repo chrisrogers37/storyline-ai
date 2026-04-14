@@ -10,3 +10,8 @@ MIN_POSTS_PER_DAY = 1
 MAX_POSTS_PER_DAY = 50
 MIN_POSTING_HOUR = 0
 MAX_POSTING_HOUR = 23
+
+# Instagram Login API base URLs (unversioned, separate from Meta Graph API)
+# Used by instagram_login_oauth.py and token_refresh.py
+IG_LOGIN_GRAPH_BASE = "https://graph.instagram.com"
+IG_LOGIN_API_BASE = "https://api.instagram.com"
