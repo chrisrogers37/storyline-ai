@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — Verbose Flag Consistency (#138)
+
+- **Verbose flag now means the same thing in both caption modes** — `verbose=True` controls debug metadata (file name, ID) in both simple and enhanced modes. Enhanced mode's workflow instructions are now always shown regardless of verbose setting. Previously, verbose controlled different content per mode (debug info in simple, instructions in enhanced).
+
 ### Fixed — Worker Crash in Cloud Storage Cleanup
 
 - **Fix fatal AttributeError in cleanup loop** — `cleanup_cloud_storage_loop` called `cleanup_transactions()` on a `MediaRepository`, but that method only exists on `BaseService`. Replaced with the correct `end_read_transaction()` call. This crash killed the entire worker process after the first hourly cleanup cycle.

@@ -243,8 +243,8 @@ class TestBuildEnhancedCaption:
         assert "Click & hold image" in result
         assert "Open Instagram" in result
 
-    def test_verbose_off_hides_workflow_instructions(self, notification_service):
-        """Test verbose=False omits workflow instructions."""
+    def test_workflow_instructions_always_shown(self, notification_service):
+        """Test workflow instructions are shown even when verbose=False."""
         media = Mock(
             title="Test",
             caption=None,
@@ -256,8 +256,44 @@ class TestBuildEnhancedCaption:
             media, verbose=False, active_account=None
         )
 
-        assert "Click & hold image" not in result
-        assert "Open Instagram" not in result
+        assert "Click & hold image" in result
+        assert "Open Instagram" in result
+
+    def test_verbose_on_shows_debug_info(self, notification_service):
+        """Test verbose=True shows file name and ID in enhanced mode."""
+        media = Mock(
+            title="Test",
+            caption=None,
+            link_url=None,
+            tags=[],
+            file_name="image.jpg",
+            id="12345678-abcd-efgh",
+        )
+
+        result = notification_service._build_enhanced_caption(
+            media, verbose=True, active_account=None
+        )
+
+        assert "File: image.jpg" in result
+        assert "ID: 12345678" in result
+
+    def test_verbose_off_hides_debug_info(self, notification_service):
+        """Test verbose=False omits file name and ID in enhanced mode."""
+        media = Mock(
+            title="Test",
+            caption=None,
+            link_url=None,
+            tags=[],
+            file_name="image.jpg",
+            id="12345678-abcd-efgh",
+        )
+
+        result = notification_service._build_enhanced_caption(
+            media, verbose=False, active_account=None
+        )
+
+        assert "File:" not in result
+        assert "ID:" not in result
 
     def test_verbose_off_still_shows_account(self, notification_service):
         """Test verbose=False still shows the account indicator."""

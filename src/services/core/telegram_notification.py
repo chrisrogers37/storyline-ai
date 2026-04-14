@@ -323,15 +323,16 @@ class TelegramNotificationService:
             tags_str = " ".join([f"#{tag}" for tag in media_item.tags])
             lines.append(f"\n{tags_str}")
 
-        # Only show workflow instructions if verbose mode is ON
+        # Debug info (consistent with simple mode — controlled by verbose)
         if verbose:
-            # Separator
-            lines.append(f"\n{'━' * 20}")
+            lines.append(f"\n📝 File: {media_item.file_name}")
+            lines.append(f"🆔 ID: {str(media_item.id)[:8]}")
 
-            # Workflow instructions
-            lines.append("1️⃣ Click & hold image → Save")
-            lines.append('2️⃣ Tap "Open Instagram" below')
-            lines.append("3️⃣ Post your story!")
+        # Workflow instructions (always shown in enhanced mode)
+        lines.append(f"\n{'━' * 20}")
+        lines.append("1️⃣ Click & hold image → Save")
+        lines.append('2️⃣ Tap "Open Instagram" below')
+        lines.append("3️⃣ Post your story!")
 
         return "\n".join(lines)
 
