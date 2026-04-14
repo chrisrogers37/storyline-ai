@@ -7,6 +7,7 @@ from src.services.core.settings_service import SettingsService
 from src.repositories.history_repository import HistoryRepository
 from src.repositories.media_repository import MediaRepository
 from src.repositories.queue_repository import QueueRepository
+from src.repositories.category_mix_repository import CategoryMixRepository
 
 
 class DashboardService(BaseService):
@@ -23,6 +24,7 @@ class DashboardService(BaseService):
         self.queue_repo = QueueRepository()
         self.history_repo = HistoryRepository()
         self.media_repo = MediaRepository()
+        self.category_mix_repo = CategoryMixRepository()
 
     def _resolve_chat_settings_id(self, telegram_chat_id: int) -> str:
         chat_settings = self.settings_service.get_settings(telegram_chat_id)
@@ -176,6 +178,59 @@ class DashboardService(BaseService):
 
             self.set_result_summary(run_id, {"total_posts": total, "days": days})
             return result
+
+    def get_category_analytics(self, telegram_chat_id: int, days: int = 30) -> dict:
+        """Return per-category performance with configured vs actual ratios.
+
+        Enriches posting history stats with the configured category mix
+        ratios, showing how actual posting patterns compare to the target.
+        """
+        with self.track_execution(
+            "get_category_analytics",
+            input_params={"telegram_chat_id": telegram_chat_id, "days": days},
+        ) as run_id:
+            chat_settings_id = self._resolve_chat_settings_id(telegram_chat_id)
+
+            # Posting performance by category
+            category_stats = self.history_repo.get_stats_by_category(
+                days=days, chat_settings_id=chat_settings_id
+            )
+
+            # Configured ratios from category_post_case_mix
+            configured_ratios = self.category_mix_repo.get_current_mix_as_dict(
+                chat_settings_id=chat_settings_id
+            )
+
+            # Compute actual ratios and enrich with configured targets
+            total_all = sum(c.get("total", 0) for c in category_stats)
+            categories = []
+            for cat_data in category_stats:
+                name = cat_data["category"]
+                total = cat_data.get("total", 0)
+                actual_ratio = round(total / total_all, 2) if total_all else 0
+                configured = configured_ratios.get(name)
+
+                entry = {
+                    "category": name,
+                    "posted": cat_data.get("posted", 0),
+                    "skipped": cat_data.get("skipped", 0),
+                    "rejected": cat_data.get("rejected", 0),
+                    "failed": cat_data.get("failed", 0),
+                    "total": total,
+                    "success_rate": cat_data.get("success_rate", 0),
+                    "actual_ratio": actual_ratio,
+                    "configured_ratio": float(configured) if configured else None,
+                }
+                categories.append(entry)
+
+            self.set_result_summary(
+                run_id, {"categories": len(categories), "days": days}
+            )
+            return {
+                "categories": categories,
+                "total_posts": total_all,
+                "days": days,
+            }
 
     def get_pending_queue_items(self, chat_settings_id: Optional[str] = None) -> list:
         """Return pending queue items with media details.

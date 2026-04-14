@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Category Performance Insights (#154)
+
+- **Category analytics API endpoint** — `GET /api/onboarding/analytics/categories?chat_id=X&days=30` returns per-category posting performance enriched with configured ratios from category_post_case_mix. Shows actual vs target ratio, skip/reject rates, and success rate per category.
+- **DashboardService.get_category_analytics()** — Combines posting history stats with configured category mix ratios for performance comparison.
+
 ### Added — Posting Analytics Dashboard (#153)
 
 - **Analytics API endpoint** — `GET /api/onboarding/analytics?chat_id=X&days=30` returns aggregated posting statistics: total posts, success rate, avg per day, method breakdown, daily counts, hourly distribution, and category performance.
