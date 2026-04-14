@@ -224,6 +224,7 @@ class TelegramService(BaseService):
             "account_remove": self.accounts.handle_account_remove_confirm,
             "account_remove_confirmed": self.accounts.handle_account_remove_execute,
             "select_account": self.accounts.handle_post_account_selector,
+            "cycle_account": self.accounts.handle_cycle_account,
             "sap": self.accounts.handle_post_account_switch,
             "btp": self.accounts.handle_back_to_post,
         }

@@ -314,6 +314,33 @@ class QueueRepository(BaseRepository):
 
         return len(abandoned)
 
+    def get_pending_with_telegram_message(
+        self, telegram_chat_id: int
+    ) -> List[PostingQueue]:
+        """Get pending/processing queue items that have been sent to Telegram.
+
+        Used to find all active notifications for a chat so their captions
+        and keyboards can be batch-updated (e.g., after an account switch).
+
+        Args:
+            telegram_chat_id: The Telegram chat ID to filter by
+
+        Returns:
+            List of PostingQueue items with telegram_message_id set
+        """
+        result = (
+            self.db.query(PostingQueue)
+            .filter(
+                PostingQueue.telegram_chat_id == telegram_chat_id,
+                PostingQueue.telegram_message_id.isnot(None),
+                PostingQueue.status.in_(["pending", "processing"]),
+            )
+            .order_by(PostingQueue.scheduled_for.asc())
+            .all()
+        )
+        self.end_read_transaction()
+        return result
+
     def delete_all_pending(self, chat_settings_id: Optional[str] = None) -> int:
         """Delete all pending queue items. Returns count of deleted items."""
         count = (
