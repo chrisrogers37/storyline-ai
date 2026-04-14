@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Smart Auto-Approval (#155)
+
+- **Auto-approve returning media** — When the scheduler selects a media item that has been posted before (`times_posted > 0`), it skips the Telegram approval step and directly records the item as posted. Uses existing `media_items.times_posted` field — no schema changes.
+- **Quiet Telegram notification** — Sends a brief "Auto-approved: filename [category]" message for visibility without requiring user action.
+- **Posting method tracking** — Auto-approved items recorded with `posting_method='auto_reapproval'` in posting_history for analytics distinction.
+- **Only applies to scheduler** — `/next` command and manual flows always go through Telegram approval regardless of prior history.
+
 ### Added — Category Performance Insights (#154)
 
 - **Category analytics API endpoint** — `GET /api/onboarding/analytics/categories?chat_id=X&days=30` returns per-category posting performance enriched with configured ratios from category_post_case_mix. Shows actual vs target ratio, skip/reject rates, and success rate per category.

@@ -178,6 +178,24 @@ async def run_scheduler_loop(
                                 f"[{result.get('category', '?')}]"
                             )
 
+                            # Send quiet notification for auto-approved items
+                            if (
+                                result.get("auto_approved")
+                                and scheduler_service.telegram_service
+                            ):
+                                try:
+                                    bot = scheduler_service.telegram_service.application.bot
+                                    await bot.send_message(
+                                        chat_id=chat_id,
+                                        text=(
+                                            f"\u2705 Auto-approved: "
+                                            f"{result.get('media_file', '?')} "
+                                            f"[{result.get('category', '?')}]"
+                                        ),
+                                    )
+                                except Exception:
+                                    pass
+
                     except GoogleDriveAuthError:
                         logger.error(
                             f"Google Drive auth error for chat {chat_id}",
