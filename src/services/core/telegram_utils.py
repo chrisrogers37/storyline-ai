@@ -146,34 +146,39 @@ def build_queue_action_keyboard(
     enable_instagram_api: bool = False,
     active_account=None,
     account_count: int = 0,
+    error_recovery: bool = False,
 ) -> InlineKeyboardMarkup:
-    """Build the standard action keyboard for a queue item notification.
+    """Build the action keyboard for a queue item notification.
 
-    This is the keyboard shown on every posting notification message. It includes:
-    - Auto Post button (if Instagram API is enabled)
-    - Posted / Skip buttons
-    - Reject button
-    - Account selector button (cycle for 2-3 accounts, submenu for 4+)
-    - Open Instagram link
+    Handles both the standard posting workflow and error recovery after
+    a failed auto-post. The ``error_recovery`` flag swaps the Auto Post
+    button for Retry, hides the account selector, and uses a plain
+    Instagram URL instead of the deeplink.
+
+    For 2-3 accounts, the account button cycles inline; for 4+ it opens
+    a submenu. Account selector is hidden in error recovery mode.
 
     Args:
         queue_id: The queue item UUID string (used in callback_data)
-        enable_instagram_api: Whether to show the Auto Post button
+        enable_instagram_api: Whether to show the Auto Post / Retry button
         active_account: The active InstagramAccount object (for account label),
-                        or None to show "No Account"
+                        or None to show "No Account". Ignored when error_recovery=True.
         account_count: Total number of active accounts (determines cycle vs submenu)
+        error_recovery: If True, show "Retry Auto Post" instead of "Auto Post"
+                        and omit the account selector button.
 
     Returns:
         InlineKeyboardMarkup with the complete action keyboard
     """
     keyboard = []
 
-    # Auto Post button (if Instagram API is enabled)
+    # Auto Post / Retry button
     if enable_instagram_api:
+        label = "🔄 Retry Auto Post" if error_recovery else "🤖 Auto Post to Instagram"
         keyboard.append(
             [
                 InlineKeyboardButton(
-                    "🤖 Auto Post to Instagram",
+                    label,
                     callback_data=f"autopost:{queue_id}",
                 ),
             ]
@@ -192,79 +197,33 @@ def build_queue_action_keyboard(
         ]
     )
 
-    # Account button: cycle (2-3 accounts) or submenu (4+)
-    account_label = (
-        f"📸 {active_account.display_name}" if active_account else "📸 No Account"
-    )
-    if 2 <= account_count <= 3:
-        # Single-tap cycle: switches to next account inline
-        callback = f"cycle_account:{queue_id}"
-    else:
-        # Submenu: opens account selector list
-        callback = f"select_account:{queue_id}"
-
-    keyboard.extend(
-        [
+    # Account selector (hidden in error recovery)
+    if not error_recovery:
+        account_label = (
+            f"📸 {active_account.display_name}" if active_account else "📸 No Account"
+        )
+        if 2 <= account_count <= 3:
+            callback = f"cycle_account:{queue_id}"
+        else:
+            callback = f"select_account:{queue_id}"
+        keyboard.append(
             [
                 InlineKeyboardButton(
                     account_label,
                     callback_data=callback,
                 ),
-            ],
-            [
-                InlineKeyboardButton(
-                    "📱 Open Instagram", url=app_settings.INSTAGRAM_DEEPLINK_URL
-                ),
-            ],
-        ]
-    )
-
-    return InlineKeyboardMarkup(keyboard)
-
-
-def build_error_recovery_keyboard(
-    queue_id: str,
-    enable_instagram_api: bool = False,
-) -> InlineKeyboardMarkup:
-    """Build the keyboard shown after an auto-post failure.
-
-    Similar to the standard keyboard but with a "Retry" button instead of
-    Auto Post, and no account selector.
-
-    Args:
-        queue_id: The queue item UUID string
-        enable_instagram_api: Whether to show the Retry Auto Post button
-
-    Returns:
-        InlineKeyboardMarkup with retry and fallback options
-    """
-    keyboard = []
-
-    if enable_instagram_api:
-        keyboard.append(
-            [
-                InlineKeyboardButton(
-                    "🔄 Retry Auto Post",
-                    callback_data=f"autopost:{queue_id}",
-                ),
             ]
         )
 
-    keyboard.extend(
+    # Instagram link (plain URL for error recovery, deeplink for standard)
+    instagram_url = (
+        "https://www.instagram.com/"
+        if error_recovery
+        else app_settings.INSTAGRAM_DEEPLINK_URL
+    )
+    keyboard.append(
         [
-            [
-                InlineKeyboardButton("✅ Posted", callback_data=f"posted:{queue_id}"),
-                InlineKeyboardButton("⏭️ Skip", callback_data=f"skip:{queue_id}"),
-            ],
-            [
-                InlineKeyboardButton(
-                    "📱 Open Instagram",
-                    url="https://www.instagram.com/",
-                ),
-            ],
-            [
-                InlineKeyboardButton("🚫 Reject", callback_data=f"reject:{queue_id}"),
-            ],
+            InlineKeyboardButton("📱 Open Instagram", url=instagram_url),
         ]
     )
 

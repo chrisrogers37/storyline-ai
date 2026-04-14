@@ -18,7 +18,7 @@ from src.exceptions.instagram import (
 from src.repositories.history_repository import HistoryCreateParams
 from src.services.core.telegram_service import _escape_markdown
 from src.services.core.telegram_utils import (
-    build_error_recovery_keyboard,
+    build_queue_action_keyboard,
     validate_queue_item,
 )
 from src.utils.logger import logger
@@ -552,8 +552,10 @@ class TelegramAutopostHandler:
             f"You can try again or use manual posting."
         )
 
-        reply_markup = build_error_recovery_keyboard(
-            ctx.queue_id, enable_instagram_api=settings.ENABLE_INSTAGRAM_API
+        reply_markup = build_queue_action_keyboard(
+            ctx.queue_id,
+            enable_instagram_api=settings.ENABLE_INSTAGRAM_API,
+            error_recovery=True,
         )
 
         await telegram_edit_with_retry(

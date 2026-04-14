@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — Keyboard Builder Consolidation (#137)
+
+- **Merge `build_error_recovery_keyboard` into `build_queue_action_keyboard`** — The two near-identical keyboard builders are now one function with an `error_recovery` parameter. Error recovery mode shows "Retry Auto Post" instead of "Auto Post" and hides the account selector.
+
 ### Changed — Verbose Flag Consistency (#138)
 
 - **Verbose flag now means the same thing in both caption modes** — `verbose=True` controls debug metadata (file name, ID) and workflow instructions in both simple and enhanced modes. Enhanced mode now also shows file name and ID when verbose is on, matching simple mode's behavior.
