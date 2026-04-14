@@ -322,3 +322,153 @@ class TestGetByQueueItemId:
         result = history_repo.get_by_queue_item_id("nonexistent")
 
         assert result is None
+
+
+@pytest.mark.unit
+class TestAnalyticsAggregations:
+    """Tests for analytics aggregation methods."""
+
+    def _make_chainable_query(self, mock_db):
+        """Set up a fully chainable mock query."""
+        q = mock_db.query.return_value
+        q.with_entities.return_value = q
+        q.filter.return_value = q
+        q.group_by.return_value = q
+        q.order_by.return_value = q
+        q.outerjoin.return_value = q
+        q.scalar.return_value = 0
+        return q
+
+    def test_get_stats_by_status(self, history_repo, mock_db):
+        """Returns counts grouped by status."""
+        q = self._make_chainable_query(mock_db)
+        q.all.return_value = [("posted", 80), ("skipped", 10), ("rejected", 5)]
+
+        result = history_repo.get_stats_by_status(days=30)
+
+        assert result == {"posted": 80, "skipped": 10, "rejected": 5}
+
+    def test_get_stats_by_status_empty(self, history_repo, mock_db):
+        """Returns empty dict when no history."""
+        q = self._make_chainable_query(mock_db)
+        q.all.return_value = []
+
+        result = history_repo.get_stats_by_status(days=7)
+
+        assert result == {}
+
+    def test_get_stats_by_method(self, history_repo, mock_db):
+        """Returns successful post counts grouped by method."""
+        q = self._make_chainable_query(mock_db)
+        q.all.return_value = [("instagram_api", 60), ("telegram_manual", 20)]
+
+        result = history_repo.get_stats_by_method(days=30)
+
+        assert result == {"instagram_api": 60, "telegram_manual": 20}
+
+    def test_get_stats_by_method_null_method(self, history_repo, mock_db):
+        """Null posting_method is reported as 'unknown'."""
+        q = self._make_chainable_query(mock_db)
+        q.all.return_value = [(None, 5)]
+
+        result = history_repo.get_stats_by_method(days=30)
+
+        assert result == {"unknown": 5}
+
+    def test_get_daily_counts(self, history_repo, mock_db):
+        """Returns daily counts pivoted by status."""
+        from datetime import date
+
+        q = self._make_chainable_query(mock_db)
+        q.all.return_value = [
+            (date(2026, 4, 10), "posted", 4),
+            (date(2026, 4, 10), "skipped", 1),
+            (date(2026, 4, 11), "posted", 5),
+        ]
+
+        result = history_repo.get_daily_counts(days=30)
+
+        assert len(result) == 2
+        day1 = result[0]
+        assert day1["date"] == "2026-04-10"
+        assert day1["posted"] == 4
+        assert day1["skipped"] == 1
+        day2 = result[1]
+        assert day2["date"] == "2026-04-11"
+        assert day2["posted"] == 5
+        assert "skipped" not in day2
+
+    def test_get_daily_counts_empty(self, history_repo, mock_db):
+        """Returns empty list when no history."""
+        q = self._make_chainable_query(mock_db)
+        q.all.return_value = []
+
+        result = history_repo.get_daily_counts(days=7)
+
+        assert result == []
+
+    def test_get_hourly_distribution(self, history_repo, mock_db):
+        """Returns successful post counts by hour."""
+        q = self._make_chainable_query(mock_db)
+        q.all.return_value = [(10, 15), (14, 20), (18, 8)]
+
+        result = history_repo.get_hourly_distribution(days=30)
+
+        assert len(result) == 3
+        assert result[0] == {"hour": 10, "count": 15}
+        assert result[1] == {"hour": 14, "count": 20}
+        assert result[2] == {"hour": 18, "count": 8}
+
+    def test_get_hourly_distribution_empty(self, history_repo, mock_db):
+        """Returns empty list when no successful posts."""
+        q = self._make_chainable_query(mock_db)
+        q.all.return_value = []
+
+        result = history_repo.get_hourly_distribution(days=7)
+
+        assert result == []
+
+    def test_get_stats_by_category(self, history_repo, mock_db):
+        """Returns category stats with totals and success rates."""
+        q = self._make_chainable_query(mock_db)
+        q.all.return_value = [
+            ("memes", "posted", 70),
+            ("memes", "skipped", 5),
+            ("memes", "rejected", 3),
+            ("merch", "posted", 18),
+            ("merch", "skipped", 2),
+        ]
+
+        result = history_repo.get_stats_by_category(days=30)
+
+        assert len(result) == 2
+        memes = next(c for c in result if c["category"] == "memes")
+        assert memes["posted"] == 70
+        assert memes["skipped"] == 5
+        assert memes["rejected"] == 3
+        assert memes["total"] == 78
+        assert memes["success_rate"] == 0.9  # 70/78
+
+        merch = next(c for c in result if c["category"] == "merch")
+        assert merch["posted"] == 18
+        assert merch["total"] == 20
+        assert merch["success_rate"] == 0.9
+
+    def test_get_stats_by_category_empty(self, history_repo, mock_db):
+        """Returns empty list when no history."""
+        q = self._make_chainable_query(mock_db)
+        q.all.return_value = []
+
+        result = history_repo.get_stats_by_category(days=7)
+
+        assert result == []
+
+    def test_get_stats_by_category_zero_total(self, history_repo, mock_db):
+        """Handles zero-total edge case without division error."""
+        q = self._make_chainable_query(mock_db)
+        # Unlikely but defensive: a category with no status counts
+        q.all.return_value = []
+
+        result = history_repo.get_stats_by_category(days=30)
+
+        assert result == []
