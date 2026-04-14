@@ -37,6 +37,7 @@ class TestAccountSelectorCallbacks:
         )
 
         mock_account_handlers.service.ig_account_service = Mock()
+        mock_account_handlers.service.ig_account_service.count_active_accounts.return_value = 2
         mock_account_handlers.service.ig_account_service.get_accounts_for_display.return_value = {
             "accounts": [
                 {"id": "acc1", "display_name": "Main Account", "username": "main"},
@@ -85,6 +86,7 @@ class TestAccountSelectorCallbacks:
         )
 
         mock_account_handlers.service.ig_account_service = Mock()
+        mock_account_handlers.service.ig_account_service.count_active_accounts.return_value = 1
         mock_account_handlers.service.ig_account_service.get_active_account.return_value = None
 
         mock_account_handlers.service.settings_service = Mock()
@@ -131,6 +133,7 @@ class TestAccountSelectorCallbacks:
         mock_account.display_name = "Test Account"
         mock_account.instagram_username = "testaccount"
         mock_account_handlers.service.ig_account_service = Mock()
+        mock_account_handlers.service.ig_account_service.count_active_accounts.return_value = 1
         mock_account_handlers.service.ig_account_service.get_account_by_id_prefix.return_value = mock_account
         mock_account_handlers.service.ig_account_service.switch_account.return_value = (
             mock_account
