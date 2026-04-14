@@ -216,10 +216,10 @@ async def cleanup_locks_loop(lock_service: MediaLockService):
     logger.info("Starting cleanup loop...")
 
     while True:
+        record_heartbeat("lock_cleanup")
         try:
             # Wait 1 hour
             await asyncio.sleep(3600)
-            record_heartbeat("lock_cleanup")
 
             # Cleanup expired locks
             count = lock_service.cleanup_expired_locks()
@@ -246,9 +246,9 @@ async def cleanup_cloud_storage_loop(cloud_service):
     logger.info("Starting cloud storage cleanup loop...")
 
     while True:
+        record_heartbeat("cloud_cleanup")
         try:
             await asyncio.sleep(3600)
-            record_heartbeat("cloud_cleanup")
 
             cloud_count = cloud_service.cleanup_expired(folder=CLOUD_UPLOAD_FOLDER)
             db_count = media_repo.clear_stale_cloud_info(
@@ -281,8 +281,8 @@ async def transaction_cleanup_loop(services: list):
     from src.utils.resilience import log_pool_status
 
     while True:
-        await asyncio.sleep(30)  # Run every 30 seconds
         record_heartbeat("transaction_cleanup")
+        await asyncio.sleep(30)  # Run every 30 seconds
 
         # Log pool status for monitoring
         log_pool_status()

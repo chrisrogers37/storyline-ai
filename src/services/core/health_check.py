@@ -351,6 +351,7 @@ class HealthCheckService(BaseService):
         records a heartbeat on every iteration; a loop is stale if its
         last heartbeat exceeds 2x its expected interval.
         """
+        # Inline import: src.main imports services, so a top-level import would be circular
         from src.main import get_loop_liveness
 
         liveness = get_loop_liveness()
