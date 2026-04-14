@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from typing import Optional, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, and_
 
 from src.repositories.base_repository import BaseRepository
@@ -68,7 +68,7 @@ class HistoryRepository(BaseRepository):
             query = query.filter(PostingHistory.status == status)
 
         if days:
-            since = datetime.utcnow() - timedelta(days=days)
+            since = datetime.now(timezone.utc) - timedelta(days=days)
             query = query.filter(PostingHistory.posted_at >= since)
 
         query = query.order_by(PostingHistory.posted_at.desc())
@@ -139,7 +139,7 @@ class HistoryRepository(BaseRepository):
         self, hours: int = 24, chat_settings_id: Optional[str] = None
     ) -> List[PostingHistory]:
         """Get posts from the last N hours."""
-        since = datetime.utcnow() - timedelta(hours=hours)
+        since = datetime.now(timezone.utc) - timedelta(hours=hours)
         result = (
             self._tenant_query(PostingHistory, chat_settings_id)
             .filter(PostingHistory.posted_at >= since)
@@ -207,7 +207,7 @@ class HistoryRepository(BaseRepository):
 
         Returns: {"posted": N, "skipped": N, "rejected": N, "failed": N}
         """
-        since = datetime.utcnow() - timedelta(days=days)
+        since = datetime.now(timezone.utc) - timedelta(days=days)
         rows = (
             self._tenant_query(PostingHistory, chat_settings_id)
             .with_entities(PostingHistory.status, func.count(PostingHistory.id))
@@ -225,7 +225,7 @@ class HistoryRepository(BaseRepository):
 
         Returns: {"instagram_api": N, "telegram_manual": N}
         """
-        since = datetime.utcnow() - timedelta(days=days)
+        since = datetime.now(timezone.utc) - timedelta(days=days)
         rows = (
             self._tenant_query(PostingHistory, chat_settings_id)
             .with_entities(PostingHistory.posting_method, func.count(PostingHistory.id))
@@ -245,7 +245,7 @@ class HistoryRepository(BaseRepository):
         """
         from sqlalchemy import cast, Date
 
-        since = datetime.utcnow() - timedelta(days=days)
+        since = datetime.now(timezone.utc) - timedelta(days=days)
         rows = (
             self._tenant_query(PostingHistory, chat_settings_id)
             .with_entities(
@@ -279,7 +279,7 @@ class HistoryRepository(BaseRepository):
         """
         from sqlalchemy import extract
 
-        since = datetime.utcnow() - timedelta(days=days)
+        since = datetime.now(timezone.utc) - timedelta(days=days)
         rows = (
             self._tenant_query(PostingHistory, chat_settings_id)
             .with_entities(
@@ -304,7 +304,7 @@ class HistoryRepository(BaseRepository):
         """
         from src.models.media_item import MediaItem
 
-        since = datetime.utcnow() - timedelta(days=days)
+        since = datetime.now(timezone.utc) - timedelta(days=days)
         coalesced_category = func.coalesce(MediaItem.category, "uncategorized")
         rows = (
             self._tenant_query(PostingHistory, chat_settings_id)
@@ -346,7 +346,7 @@ class HistoryRepository(BaseRepository):
         """
         from sqlalchemy import extract
 
-        since = datetime.utcnow() - timedelta(days=days)
+        since = datetime.now(timezone.utc) - timedelta(days=days)
         rows = (
             self._tenant_query(PostingHistory, chat_settings_id)
             .with_entities(
@@ -396,7 +396,7 @@ class HistoryRepository(BaseRepository):
             "Saturday",
         ]
 
-        since = datetime.utcnow() - timedelta(days=days)
+        since = datetime.now(timezone.utc) - timedelta(days=days)
         rows = (
             self._tenant_query(PostingHistory, chat_settings_id)
             .with_entities(
