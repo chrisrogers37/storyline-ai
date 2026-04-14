@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Telegram Message Formatting Inconsistencies (#135, #136, #139, #142)
+
+- **Add `parse_mode="Markdown"` to photo captions** — Initial notifications now render Markdown formatting consistently with callback edits. (#135)
+- **Standardize on Markdown across all commands** — Convert `/start` from MarkdownV2 to Markdown, removing the only MarkdownV2 usage. (#136)
+- **Escape user-generated content in captions** — Apply Markdown escaping to media titles, captions, filenames, and account names. (#142)
+- **Standardize caption spacing** — Both caption modes now use consistent `"\n".join()` spacing and always show account status. (#139)
+- **Add `parse_mode="Markdown"` to callback edits** — Posted, skipped, back, cancel-reject, and dry-run messages now use Markdown consistently. (#142)
+
 ### Fixed — Worker Crash in Cloud Storage Cleanup
 
 - **Fix fatal AttributeError in cleanup loop** — `cleanup_cloud_storage_loop` called `cleanup_transactions()` on a `MediaRepository`, but that method only exists on `BaseService`. Replaced with the correct `end_read_transaction()` call. This crash killed the entire worker process after the first hourly cleanup cycle.

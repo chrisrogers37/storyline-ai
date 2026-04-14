@@ -438,4 +438,6 @@ class TelegramAccountHandlers:
             active_account=active_account,
         )
 
-        await query.edit_message_caption(caption=caption, reply_markup=reply_markup)
+        await query.edit_message_caption(
+            caption=caption, reply_markup=reply_markup, parse_mode="Markdown"
+        )

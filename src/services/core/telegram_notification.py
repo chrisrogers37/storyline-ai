@@ -1,5 +1,7 @@
 """Notification sending and caption building for Telegram."""
 
+import re
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from src.config.settings import settings
@@ -23,6 +25,11 @@ def _is_google_auth_error(exc: Exception) -> bool:
             return True
         current = getattr(current, "__cause__", None)
     return False
+
+
+def _escape_md(text: str) -> str:
+    """Escape Telegram Markdown special characters in user-generated text."""
+    return re.sub(r"([_*`\[])", r"\\\1", text)
 
 
 def _extract_button_labels(reply_markup) -> list:
@@ -128,6 +135,7 @@ class TelegramNotificationService:
                 photo=photo_buffer,
                 caption=caption,
                 reply_markup=reply_markup,
+                parse_mode="Markdown",
             )
 
             # Save telegram message ID
@@ -256,34 +264,34 @@ class TelegramNotificationService:
         active_account=None,
     ) -> str:
         """Build simple caption (original format)."""
-        caption_parts = []
+        lines = []
 
-        # Subtle indicator for force-sent posts
         if force_sent:
-            caption_parts.append("⚡")
+            lines.append("⚡")
 
         if media_item.title:
-            caption_parts.append(f"📸 {media_item.title}")
+            lines.append(f"📸 {_escape_md(media_item.title)}")
 
-        # Account indicator
         if active_account:
-            caption_parts.append(f"📸 Account: {active_account.display_name}")
+            lines.append(f"📸 Account: {_escape_md(active_account.display_name)}")
+        else:
+            lines.append("📸 Account: Not set")
 
         if media_item.caption:
-            caption_parts.append(media_item.caption)
+            lines.append(f"\n{_escape_md(media_item.caption)}")
 
         if media_item.link_url:
-            caption_parts.append(f"🔗 {media_item.link_url}")
+            lines.append(f"\n🔗 {media_item.link_url}")
 
         if media_item.tags:
             tags_str = " ".join([f"#{tag}" for tag in media_item.tags])
-            caption_parts.append(tags_str)
+            lines.append(f"\n{tags_str}")
 
         if verbose:
-            caption_parts.append(f"\n📝 File: {media_item.file_name}")
-            caption_parts.append(f"🆔 ID: {str(media_item.id)[:8]}")
+            lines.append(f"\n📝 File: {_escape_md(media_item.file_name)}")
+            lines.append(f"🆔 ID: {str(media_item.id)[:8]}")
 
-        return "\n\n".join(caption_parts)
+        return "\n".join(lines)
 
     def _build_enhanced_caption(
         self,
@@ -296,29 +304,23 @@ class TelegramNotificationService:
         """Build enhanced caption with better formatting."""
         lines = []
 
-        # Subtle indicator for force-sent posts (just a lightning bolt at the start)
         if force_sent:
             lines.append("⚡")
 
-        # Title and metadata
         if media_item.title:
-            lines.append(f"📸 {media_item.title}")
+            lines.append(f"📸 {_escape_md(media_item.title)}")
 
-        # Active account indicator (for multi-account awareness)
         if active_account:
-            lines.append(f"📸 Account: {active_account.display_name}")
+            lines.append(f"📸 Account: {_escape_md(active_account.display_name)}")
         else:
             lines.append("📸 Account: Not set")
 
-        # Caption
         if media_item.caption:
-            lines.append(f"\n{media_item.caption}")
+            lines.append(f"\n{_escape_md(media_item.caption)}")
 
-        # Link
         if media_item.link_url:
             lines.append(f"\n🔗 {media_item.link_url}")
 
-        # Tags
         if media_item.tags:
             tags_str = " ".join([f"#{tag}" for tag in media_item.tags])
             lines.append(f"\n{tags_str}")
