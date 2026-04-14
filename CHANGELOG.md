@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — Verbose Flag Consistency (#138)
+
+- **Verbose flag now means the same thing in both caption modes** — `verbose=True` controls debug metadata (file name, ID) and workflow instructions in both simple and enhanced modes. Enhanced mode now also shows file name and ID when verbose is on, matching simple mode's behavior.
+
 ### Fixed — Telegram Message Formatting Inconsistencies (#135, #136, #139, #142)
 
 - **Add `parse_mode="Markdown"` to photo captions** — Initial notifications now render Markdown formatting consistently with callback edits. (#135)
