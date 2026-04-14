@@ -26,6 +26,7 @@ def mock_telegram_service():
     service.settings_service = Mock()
     service.interaction_service = Mock()
     service.ig_account_service = Mock()
+    service.ig_account_service.count_active_accounts.return_value = 1
     return service
 
 
@@ -259,6 +260,42 @@ class TestBuildEnhancedCaption:
         assert "Click & hold image" not in result
         assert "Open Instagram" not in result
 
+    def test_verbose_on_shows_debug_info(self, notification_service):
+        """Test verbose=True shows file name and ID in enhanced mode."""
+        media = Mock(
+            title="Test",
+            caption=None,
+            link_url=None,
+            tags=[],
+            file_name="image.jpg",
+            id="12345678-abcd-efgh",
+        )
+
+        result = notification_service._build_enhanced_caption(
+            media, verbose=True, active_account=None
+        )
+
+        assert "File: image.jpg" in result
+        assert "ID: 12345678" in result
+
+    def test_verbose_off_hides_debug_info(self, notification_service):
+        """Test verbose=False omits file name and ID in enhanced mode."""
+        media = Mock(
+            title="Test",
+            caption=None,
+            link_url=None,
+            tags=[],
+            file_name="image.jpg",
+            id="12345678-abcd-efgh",
+        )
+
+        result = notification_service._build_enhanced_caption(
+            media, verbose=False, active_account=None
+        )
+
+        assert "File:" not in result
+        assert "ID:" not in result
+
     def test_verbose_off_still_shows_account(self, notification_service):
         """Test verbose=False still shows the account indicator."""
         media = Mock(
@@ -371,108 +408,88 @@ class TestGetHeaderEmoji:
 
 @pytest.mark.unit
 class TestBuildKeyboard:
-    """Tests for _build_keyboard."""
+    """Tests for build_queue_action_keyboard (via telegram_utils)."""
 
-    def test_includes_autopost_when_api_enabled(self, notification_service):
+    def test_includes_autopost_when_api_enabled(self):
         """Test keyboard includes Auto Post button when Instagram API is on."""
+        from src.services.core.telegram_utils import build_queue_action_keyboard
+
         queue_id = str(uuid4())
-        chat_settings = Mock(enable_instagram_api=True)
         active_account = Mock(display_name="Test Account")
 
-        result = notification_service._build_keyboard(
-            queue_id, chat_settings, active_account
+        result = build_queue_action_keyboard(
+            queue_id, enable_instagram_api=True, active_account=active_account
         )
 
-        # Extract all button texts
-        buttons = []
-        for row in result.inline_keyboard:
-            for button in row:
-                buttons.append(button.text)
-
+        buttons = [b.text for row in result.inline_keyboard for b in row]
         assert any("Auto Post" in b for b in buttons)
 
-    def test_excludes_autopost_when_api_disabled(self, notification_service):
+    def test_excludes_autopost_when_api_disabled(self):
         """Test keyboard excludes Auto Post button when Instagram API is off."""
+        from src.services.core.telegram_utils import build_queue_action_keyboard
+
         queue_id = str(uuid4())
-        chat_settings = Mock(enable_instagram_api=False)
         active_account = Mock(display_name="Test Account")
 
-        result = notification_service._build_keyboard(
-            queue_id, chat_settings, active_account
+        result = build_queue_action_keyboard(
+            queue_id, enable_instagram_api=False, active_account=active_account
         )
 
-        # Extract all button texts
-        buttons = []
-        for row in result.inline_keyboard:
-            for button in row:
-                buttons.append(button.text)
-
+        buttons = [b.text for row in result.inline_keyboard for b in row]
         assert not any("Auto Post" in b for b in buttons)
 
-    def test_includes_posted_skip_reject_buttons(self, notification_service):
+    def test_includes_posted_skip_reject_buttons(self):
         """Test keyboard always includes Posted, Skip, and Reject buttons."""
-        queue_id = str(uuid4())
-        chat_settings = Mock(enable_instagram_api=False)
-        active_account = None
+        from src.services.core.telegram_utils import build_queue_action_keyboard
 
-        result = notification_service._build_keyboard(
-            queue_id, chat_settings, active_account
+        queue_id = str(uuid4())
+
+        result = build_queue_action_keyboard(
+            queue_id, enable_instagram_api=False, active_account=None
         )
 
-        buttons = []
-        for row in result.inline_keyboard:
-            for button in row:
-                buttons.append(button.text)
-
+        buttons = [b.text for row in result.inline_keyboard for b in row]
         assert any("Posted" in b for b in buttons)
         assert any("Skip" in b for b in buttons)
         assert any("Reject" in b for b in buttons)
 
-    def test_shows_account_display_name(self, notification_service):
+    def test_shows_account_display_name(self):
         """Test account selector button shows display name."""
+        from src.services.core.telegram_utils import build_queue_action_keyboard
+
         queue_id = str(uuid4())
-        chat_settings = Mock(enable_instagram_api=False)
         active_account = Mock(display_name="My Brand")
 
-        result = notification_service._build_keyboard(
-            queue_id, chat_settings, active_account
+        result = build_queue_action_keyboard(
+            queue_id, enable_instagram_api=False, active_account=active_account
         )
 
-        buttons = []
-        for row in result.inline_keyboard:
-            for button in row:
-                buttons.append(button.text)
-
+        buttons = [b.text for row in result.inline_keyboard for b in row]
         assert any("My Brand" in b for b in buttons)
 
-    def test_shows_no_account_when_none(self, notification_service):
+    def test_shows_no_account_when_none(self):
         """Test account selector shows 'No Account' when none configured."""
-        queue_id = str(uuid4())
-        chat_settings = Mock(enable_instagram_api=False)
-        active_account = None
+        from src.services.core.telegram_utils import build_queue_action_keyboard
 
-        result = notification_service._build_keyboard(
-            queue_id, chat_settings, active_account
+        queue_id = str(uuid4())
+
+        result = build_queue_action_keyboard(
+            queue_id, enable_instagram_api=False, active_account=None
         )
 
-        buttons = []
-        for row in result.inline_keyboard:
-            for button in row:
-                buttons.append(button.text)
-
+        buttons = [b.text for row in result.inline_keyboard for b in row]
         assert any("No Account" in b for b in buttons)
 
-    def test_includes_open_instagram_link(self, notification_service):
+    def test_includes_open_instagram_link(self):
         """Test keyboard includes Open Instagram button with URL."""
-        queue_id = str(uuid4())
-        chat_settings = Mock(enable_instagram_api=False)
-        active_account = None
+        from src.services.core.telegram_utils import build_queue_action_keyboard
 
-        result = notification_service._build_keyboard(
-            queue_id, chat_settings, active_account
+        queue_id = str(uuid4())
+
+        result = build_queue_action_keyboard(
+            queue_id, enable_instagram_api=False, active_account=None
         )
 
-        # Find the Open Instagram button
         for row in result.inline_keyboard:
             for button in row:
                 if "Instagram" in button.text:

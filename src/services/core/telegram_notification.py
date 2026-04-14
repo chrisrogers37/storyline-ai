@@ -1,6 +1,6 @@
 """Notification sending and caption building for Telegram."""
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+import re
 
 from src.config.settings import settings
 from src.exceptions.google_drive import GoogleDriveAuthError
@@ -23,6 +23,11 @@ def _is_google_auth_error(exc: Exception) -> bool:
             return True
         current = getattr(current, "__cause__", None)
     return False
+
+
+def _escape_md(text: str) -> str:
+    """Escape Telegram Markdown special characters in user-generated text."""
+    return re.sub(r"([_*`\[])", r"\\\1", text)
 
 
 def _extract_button_labels(reply_markup) -> list:
@@ -105,9 +110,17 @@ class TelegramNotificationService:
             active_account=active_account,
         )
 
+        # Get account count for keyboard cycle behavior
+        account_count = self.service.ig_account_service.count_active_accounts()
+
         # Build inline keyboard
-        reply_markup = self._build_keyboard(
-            queue_item_id, chat_settings, active_account
+        from src.services.core.telegram_utils import build_queue_action_keyboard
+
+        reply_markup = build_queue_action_keyboard(
+            queue_item_id,
+            enable_instagram_api=chat_settings.enable_instagram_api,
+            active_account=active_account,
+            account_count=account_count,
         )
 
         try:
@@ -128,6 +141,7 @@ class TelegramNotificationService:
                 photo=photo_buffer,
                 caption=caption,
                 reply_markup=reply_markup,
+                parse_mode="Markdown",
             )
 
             # Save telegram message ID
@@ -161,66 +175,6 @@ class TelegramNotificationService:
                 ) from e
             logger.error(f"Failed to send Telegram notification: {e}")
             return False
-
-    def _build_keyboard(self, queue_item_id, chat_settings, active_account):
-        """Build inline keyboard buttons for the notification.
-
-        Layout: Auto Post (if enabled) -> Status actions -> Instagram actions
-        """
-        keyboard = []
-
-        # Add Auto Post button if Instagram API is enabled (from database settings)
-        if chat_settings.enable_instagram_api:
-            keyboard.append(
-                [
-                    InlineKeyboardButton(
-                        "🤖 Auto Post to Instagram",
-                        callback_data=f"autopost:{queue_item_id}",
-                    ),
-                ]
-            )
-
-        # Status action buttons (grouped together)
-        keyboard.extend(
-            [
-                [
-                    InlineKeyboardButton(
-                        "✅ Posted", callback_data=f"posted:{queue_item_id}"
-                    ),
-                    InlineKeyboardButton(
-                        "⏭️ Skip", callback_data=f"skip:{queue_item_id}"
-                    ),
-                ],
-                [
-                    InlineKeyboardButton(
-                        "🚫 Reject",
-                        callback_data=f"reject:{queue_item_id}",
-                    ),
-                ],
-            ]
-        )
-
-        # Instagram-related buttons (grouped together)
-        account_label = (
-            f"📸 {active_account.display_name}" if active_account else "📸 No Account"
-        )
-        keyboard.extend(
-            [
-                [
-                    InlineKeyboardButton(
-                        account_label,
-                        callback_data=f"select_account:{queue_item_id}",
-                    ),
-                ],
-                [
-                    InlineKeyboardButton(
-                        "📱 Open Instagram",
-                        url=settings.INSTAGRAM_DEEPLINK_URL,
-                    ),
-                ],
-            ]
-        )
-        return InlineKeyboardMarkup(keyboard)
 
     def _build_caption(
         self,
@@ -256,34 +210,34 @@ class TelegramNotificationService:
         active_account=None,
     ) -> str:
         """Build simple caption (original format)."""
-        caption_parts = []
+        lines = []
 
-        # Subtle indicator for force-sent posts
         if force_sent:
-            caption_parts.append("⚡")
+            lines.append("⚡")
 
         if media_item.title:
-            caption_parts.append(f"📸 {media_item.title}")
+            lines.append(f"📸 {_escape_md(media_item.title)}")
 
-        # Account indicator
         if active_account:
-            caption_parts.append(f"📸 Account: {active_account.display_name}")
+            lines.append(f"📸 Account: {_escape_md(active_account.display_name)}")
+        else:
+            lines.append("📸 Account: Not set")
 
         if media_item.caption:
-            caption_parts.append(media_item.caption)
+            lines.append(f"\n{_escape_md(media_item.caption)}")
 
         if media_item.link_url:
-            caption_parts.append(f"🔗 {media_item.link_url}")
+            lines.append(f"\n🔗 {media_item.link_url}")
 
         if media_item.tags:
             tags_str = " ".join([f"#{tag}" for tag in media_item.tags])
-            caption_parts.append(tags_str)
+            lines.append(f"\n{tags_str}")
 
         if verbose:
-            caption_parts.append(f"\n📝 File: {media_item.file_name}")
-            caption_parts.append(f"🆔 ID: {str(media_item.id)[:8]}")
+            lines.append(f"\n📝 File: {_escape_md(media_item.file_name)}")
+            lines.append(f"🆔 ID: {str(media_item.id)[:8]}")
 
-        return "\n\n".join(caption_parts)
+        return "\n".join(lines)
 
     def _build_enhanced_caption(
         self,
@@ -296,39 +250,33 @@ class TelegramNotificationService:
         """Build enhanced caption with better formatting."""
         lines = []
 
-        # Subtle indicator for force-sent posts (just a lightning bolt at the start)
         if force_sent:
             lines.append("⚡")
 
-        # Title and metadata
         if media_item.title:
-            lines.append(f"📸 {media_item.title}")
+            lines.append(f"📸 {_escape_md(media_item.title)}")
 
-        # Active account indicator (for multi-account awareness)
         if active_account:
-            lines.append(f"📸 Account: {active_account.display_name}")
+            lines.append(f"📸 Account: {_escape_md(active_account.display_name)}")
         else:
             lines.append("📸 Account: Not set")
 
-        # Caption
         if media_item.caption:
-            lines.append(f"\n{media_item.caption}")
+            lines.append(f"\n{_escape_md(media_item.caption)}")
 
-        # Link
         if media_item.link_url:
             lines.append(f"\n🔗 {media_item.link_url}")
 
-        # Tags
         if media_item.tags:
             tags_str = " ".join([f"#{tag}" for tag in media_item.tags])
             lines.append(f"\n{tags_str}")
 
-        # Only show workflow instructions if verbose mode is ON
+        # Verbose: debug info + workflow instructions (consistent across modes)
         if verbose:
-            # Separator
-            lines.append(f"\n{'━' * 20}")
+            lines.append(f"\n📝 File: {media_item.file_name}")
+            lines.append(f"🆔 ID: {str(media_item.id)[:8]}")
 
-            # Workflow instructions
+            lines.append(f"\n{'━' * 20}")
             lines.append("1️⃣ Click & hold image → Save")
             lines.append('2️⃣ Tap "Open Instagram" below')
             lines.append("3️⃣ Post your story!")

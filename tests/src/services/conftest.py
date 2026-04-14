@@ -77,5 +77,6 @@ def mock_telegram_service():
         service.interaction_service = mock_interaction_service_class.return_value
         service.settings_service = mock_settings_service_class.return_value
         service.ig_account_service = mock_ig_account_service_class.return_value
+        service.ig_account_service.count_active_accounts.return_value = 1
 
         yield service

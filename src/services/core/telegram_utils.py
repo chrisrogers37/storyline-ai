@@ -145,6 +145,7 @@ def build_queue_action_keyboard(
     queue_id: str,
     enable_instagram_api: bool = False,
     active_account=None,
+    account_count: int = 0,
     error_recovery: bool = False,
 ) -> InlineKeyboardMarkup:
     """Build the action keyboard for a queue item notification.
@@ -154,11 +155,15 @@ def build_queue_action_keyboard(
     button for Retry, hides the account selector, and uses a plain
     Instagram URL instead of the deeplink.
 
+    For 2-3 accounts, the account button cycles inline; for 4+ it opens
+    a submenu. Account selector is hidden in error recovery mode.
+
     Args:
         queue_id: The queue item UUID string (used in callback_data)
         enable_instagram_api: Whether to show the Auto Post / Retry button
         active_account: The active InstagramAccount object (for account label),
                         or None to show "No Account". Ignored when error_recovery=True.
+        account_count: Total number of active accounts (determines cycle vs submenu)
         error_recovery: If True, show "Retry Auto Post" instead of "Auto Post"
                         and omit the account selector button.
 
@@ -192,16 +197,20 @@ def build_queue_action_keyboard(
         ]
     )
 
-    # Account selector (hidden in error recovery — user needs simpler options)
+    # Account selector (hidden in error recovery)
     if not error_recovery:
         account_label = (
             f"📸 {active_account.display_name}" if active_account else "📸 No Account"
         )
+        if 2 <= account_count <= 3:
+            callback = f"cycle_account:{queue_id}"
+        else:
+            callback = f"select_account:{queue_id}"
         keyboard.append(
             [
                 InlineKeyboardButton(
                     account_label,
-                    callback_data=f"select_account:{queue_id}",
+                    callback_data=callback,
                 ),
             ]
         )

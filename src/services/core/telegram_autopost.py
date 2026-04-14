@@ -362,6 +362,7 @@ class TelegramAutopostHandler:
             ctx.query.edit_message_caption,
             caption=caption,
             reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown",
         )
 
         self.service.interaction_service.log_callback(

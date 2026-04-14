@@ -52,7 +52,7 @@ class TestRejectConfirmation:
         # Check caption contains warning text
         caption = call_kwargs.kwargs.get("caption") or call_kwargs.args[0]
         assert "Are you sure?" in caption
-        assert "test_image.jpg" in caption
+        assert "test\\_image.jpg" in caption
         assert "cannot be undone" in caption
 
         # Check keyboard has confirm/cancel buttons
@@ -138,6 +138,8 @@ class TestRejectConfirmation:
         mock_media_item.link_url = None
         mock_media_item.tags = []
         service.media_repo.get_by_id.return_value = mock_media_item
+
+        service.ig_account_service.get_active_account.return_value = None
 
         mock_user = Mock()
         mock_user.id = uuid4()
