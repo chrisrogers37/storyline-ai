@@ -468,8 +468,7 @@ class TelegramCommandHandlers:
         """Handle /approveall command — batch approve all pending queue items.
 
         Shows a summary of pending items and a confirmation button.
-        On confirmation, processes each item via auto-post (if Instagram API
-        enabled) or marks as posted (manual mode).
+        On confirmation, marks each item as posted with history and lock creation.
         """
         user = self.service._get_or_create_user(update.effective_user)
         chat_id = update.effective_chat.id
@@ -504,16 +503,10 @@ class TelegramCommandHandlers:
         ]
         summary = ", ".join(summary_parts)
 
-        mode = (
-            "auto-post via Instagram API"
-            if chat_settings.enable_instagram_api
-            else "mark as posted"
-        )
-
         text = (
             f"📋 *Batch Approve — {len(all_items)} pending posts*\n\n"
             f"Categories: {summary}\n"
-            f"Mode: {mode}\n\n"
+            f"Mode: mark as posted\n\n"
             f"Approve all {len(all_items)} items?"
         )
 

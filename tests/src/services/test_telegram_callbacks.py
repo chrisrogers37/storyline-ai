@@ -1655,7 +1655,7 @@ class TestBatchApprove:
 
         final_text = mock_query.edit_message_text.call_args[0][0]
         assert "0 items marked as posted" in final_text
-        assert "1 items failed" in final_text
+        assert "1 item failed" in final_text
 
     async def test_batch_approve_cancel(self, mock_callback_handlers):
         """Batch approve cancel shows cancelled message."""

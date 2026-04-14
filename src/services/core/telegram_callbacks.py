@@ -819,11 +819,11 @@ class TelegramCallbackHandlers:
                 )
                 failed += 1
 
-        result_text = (
-            f"✅ *Batch Approve Complete*\n\n📤 {approved} items marked as posted\n"
-        )
+        item_word = "item" if approved == 1 else "items"
+        result_text = f"✅ *Batch Approve Complete*\n\n📤 {approved} {item_word} marked as posted\n"
         if failed > 0:
-            result_text += f"⚠️ {failed} items failed\n"
+            fail_word = "item" if failed == 1 else "items"
+            result_text += f"⚠️ {failed} {fail_word} failed\n"
 
         await telegram_edit_with_retry(
             query.edit_message_text,
