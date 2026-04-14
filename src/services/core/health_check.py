@@ -58,6 +58,7 @@ class HealthCheckService(BaseService):
             "queue": self._check_queue(),
             "recent_posts": self._check_recent_posts(),
             "media_sync": self._check_media_sync(),
+            "loop_liveness": self._check_loop_liveness(),
         }
 
         # Determine overall status
@@ -342,3 +343,29 @@ class HealthCheckService(BaseService):
                 "message": f"Sync check error: {str(e)}",
                 "enabled": True,
             }
+
+    def _check_loop_liveness(self) -> dict:
+        """Check if background loops are still ticking.
+
+        Uses in-memory heartbeat timestamps from src.main. Each loop
+        records a heartbeat on every iteration; a loop is stale if its
+        last heartbeat exceeds 2x its expected interval.
+        """
+        # Inline import: src.main imports services, so a top-level import would be circular
+        from src.main import get_loop_liveness
+
+        liveness = get_loop_liveness()
+        stale = [name for name, info in liveness.items() if not info["alive"]]
+
+        if stale:
+            return {
+                "healthy": False,
+                "message": f"Stale loops: {', '.join(stale)}",
+                "loops": liveness,
+            }
+
+        return {
+            "healthy": True,
+            "message": f"All {len(liveness)} loops alive",
+            "loops": liveness,
+        }

@@ -29,6 +29,55 @@ SERVICE_RUNS_RETENTION_DAYS = 7
 # Run retention once per hour (60 ticks at 1-minute intervals)
 RETENTION_INTERVAL_TICKS = 60
 
+# Loop liveness tracking — each loop updates its timestamp on every tick.
+# Expected intervals (seconds) per loop, used to detect stalls.
+LOOP_EXPECTED_INTERVALS: dict[str, int] = {
+    "scheduler": 60,
+    "lock_cleanup": 3600,
+    "cloud_cleanup": 3600,
+    "media_sync": 300,
+    "transaction_cleanup": 30,
+}
+# In-memory heartbeat timestamps (UTC). Updated by loops, read by health check.
+loop_heartbeats: dict[str, float] = {}
+
+
+def record_heartbeat(name: str) -> None:
+    """Record a heartbeat for a named loop."""
+    loop_heartbeats[name] = time()
+
+
+def get_loop_liveness() -> dict[str, dict]:
+    """Return liveness status for all registered loops.
+
+    Each loop is reported as alive or stale based on whether its last
+    heartbeat is within 2x its expected interval. Loops that have never
+    sent a heartbeat are reported as not started.
+    """
+    now = time()
+    result = {}
+    for name, expected_interval in LOOP_EXPECTED_INTERVALS.items():
+        last_beat = loop_heartbeats.get(name)
+        if last_beat is None:
+            result[name] = {
+                "alive": False,
+                "message": "Not started",
+                "expected_interval_s": expected_interval,
+            }
+        else:
+            elapsed = now - last_beat
+            threshold = expected_interval * 2
+            alive = elapsed <= threshold
+            result[name] = {
+                "alive": alive,
+                "last_heartbeat_s_ago": round(elapsed),
+                "expected_interval_s": expected_interval,
+                "message": "OK"
+                if alive
+                else f"Stale ({round(elapsed)}s since last tick)",
+            }
+    return result
+
 
 async def _guarded(name: str, coro: Coroutine, *, bot=None) -> None:
     """Run a coroutine and log (not propagate) unhandled exceptions.
@@ -87,6 +136,7 @@ async def run_scheduler_loop(
     retention_tick_counter = 0
 
     while True:
+        record_heartbeat("scheduler")
         try:
             # Discard queue items abandoned in 'processing' for over 24h.
             # Items enter 'processing' when sent to Telegram — they stay
@@ -166,6 +216,7 @@ async def cleanup_locks_loop(lock_service: MediaLockService):
     logger.info("Starting cleanup loop...")
 
     while True:
+        record_heartbeat("lock_cleanup")
         try:
             # Wait 1 hour
             await asyncio.sleep(3600)
@@ -195,6 +246,7 @@ async def cleanup_cloud_storage_loop(cloud_service):
     logger.info("Starting cloud storage cleanup loop...")
 
     while True:
+        record_heartbeat("cloud_cleanup")
         try:
             await asyncio.sleep(3600)
 
@@ -229,6 +281,7 @@ async def transaction_cleanup_loop(services: list):
     from src.utils.resilience import log_pool_status
 
     while True:
+        record_heartbeat("transaction_cleanup")
         await asyncio.sleep(30)  # Run every 30 seconds
 
         # Log pool status for monitoring
@@ -271,6 +324,7 @@ async def media_sync_loop(
     last_error_notified = None
 
     while True:
+        record_heartbeat("media_sync")
         try:
             # Multi-tenant: sync each tenant with media_sync_enabled=True
             sync_enabled_chats = []

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Loop Liveness Tracking (#134)
+
+- **Heartbeat tracking for all background loops** — Each loop (scheduler, lock_cleanup, cloud_cleanup, media_sync, transaction_cleanup) records a timestamp on every tick. The health check reports loops as stale if they haven't ticked in 2x their expected interval. Visible via `check-health` CLI and `/status` health checks.
+
 ### Changed — Centralize API Base URL Constants (#119)
 
 - **Centralize Instagram Login API base URLs** — `IG_LOGIN_GRAPH_BASE` and `IG_LOGIN_API_BASE` constants added to `src/config/constants.py`. Eliminates hardcoded `graph.instagram.com` and `api.instagram.com` URLs in `instagram_login_oauth.py` and `token_refresh.py`. Meta Graph API base was already centralized via `settings.meta_graph_base`.
