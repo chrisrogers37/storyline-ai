@@ -347,3 +347,95 @@ class TestGetAnalytics:
         service.history_repo.get_daily_counts.assert_called_once_with(
             days=7, chat_settings_id="tenant-uuid-1"
         )
+
+
+@pytest.mark.unit
+class TestGetCategoryAnalytics:
+    """Tests for get_category_analytics with configured vs actual ratios."""
+
+    def _setup_service(self):
+        """Create DashboardService with mocked dependencies."""
+        with patch.object(DashboardService, "__init__", lambda self: None):
+            service = DashboardService()
+            service.settings_service = MagicMock()
+            service.queue_repo = MagicMock()
+            service.history_repo = MagicMock()
+            service.media_repo = MagicMock()
+            service.category_mix_repo = MagicMock()
+            service.service_run_repo = MagicMock()
+            service.service_name = "DashboardService"
+
+            mock_settings = Mock(id="tenant-uuid-1")
+            service.settings_service.get_settings.return_value = mock_settings
+            return service
+
+    def test_enriches_with_configured_ratios(self):
+        """Category analytics includes configured vs actual ratios."""
+        service = self._setup_service()
+
+        service.history_repo.get_stats_by_category.return_value = [
+            {
+                "category": "memes",
+                "posted": 70,
+                "skipped": 5,
+                "rejected": 3,
+                "total": 78,
+                "success_rate": 0.9,
+            },
+            {
+                "category": "merch",
+                "posted": 18,
+                "skipped": 2,
+                "rejected": 0,
+                "total": 20,
+                "success_rate": 0.9,
+            },
+        ]
+        from decimal import Decimal
+
+        service.category_mix_repo.get_current_mix_as_dict.return_value = {
+            "memes": Decimal("0.70"),
+            "merch": Decimal("0.30"),
+        }
+
+        result = service.get_category_analytics(telegram_chat_id=123, days=30)
+
+        assert result["total_posts"] == 98
+        assert len(result["categories"]) == 2
+
+        memes = next(c for c in result["categories"] if c["category"] == "memes")
+        assert memes["posted"] == 70
+        assert memes["skipped"] == 5
+        assert memes["rejected"] == 3
+        assert memes["success_rate"] == 0.9
+        assert memes["actual_ratio"] == 0.8  # 78/98
+        assert memes["configured_ratio"] == 0.7
+
+        merch = next(c for c in result["categories"] if c["category"] == "merch")
+        assert merch["actual_ratio"] == 0.2  # 20/98
+        assert merch["configured_ratio"] == 0.3
+
+    def test_handles_missing_configured_ratio(self):
+        """Categories without a configured ratio get None."""
+        service = self._setup_service()
+
+        service.history_repo.get_stats_by_category.return_value = [
+            {"category": "memes", "posted": 10, "total": 10, "success_rate": 1.0},
+        ]
+        service.category_mix_repo.get_current_mix_as_dict.return_value = {}
+
+        result = service.get_category_analytics(telegram_chat_id=123)
+
+        assert result["categories"][0]["configured_ratio"] is None
+
+    def test_handles_empty_history(self):
+        """Category analytics handles no posting history gracefully."""
+        service = self._setup_service()
+
+        service.history_repo.get_stats_by_category.return_value = []
+        service.category_mix_repo.get_current_mix_as_dict.return_value = {}
+
+        result = service.get_category_analytics(telegram_chat_id=123)
+
+        assert result["total_posts"] == 0
+        assert result["categories"] == []
