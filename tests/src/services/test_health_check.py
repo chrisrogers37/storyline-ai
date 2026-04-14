@@ -569,3 +569,142 @@ class TestHealthCheckService:
         result = pool_service.format_pool_alert(pool_info)
 
         assert result is None
+
+    # ==================== Google Drive Token Health Tests ====================
+
+    @pytest.fixture
+    def token_service(self):
+        """Create HealthCheckService with mocked token dependencies."""
+        service = HealthCheckService()
+        service.queue_repo = Mock()
+        service.history_repo = Mock()
+        service._settings_service = Mock()
+        service._token_service = Mock()
+        return service
+
+    def _gdrive_chat(self):
+        """Create a mock chat configured for Google Drive."""
+        chat = Mock()
+        chat.id = 1
+        chat.telegram_chat_id = -123
+        chat.media_sync_enabled = True
+        chat.media_source_type = "google_drive"
+        return chat
+
+    def test_gdrive_token_healthy(self, token_service):
+        """Returns healthy when token has plenty of time left."""
+        chat = self._gdrive_chat()
+        token_service._token_service.check_token_health_for_chat.return_value = {
+            "valid": True,
+            "exists": True,
+            "expires_in_hours": 30 * 24,  # 30 days
+            "needs_refresh": False,
+            "error": None,
+        }
+
+        result = token_service.check_gdrive_token_for_chat(-123, chat_settings=chat)
+
+        assert result["healthy"] is True
+        assert result["expires_in_days"] == 30.0
+
+    def test_gdrive_token_warning(self, token_service):
+        """Returns unhealthy when token expires within warning threshold."""
+        chat = self._gdrive_chat()
+        token_service._token_service.check_token_health_for_chat.return_value = {
+            "valid": True,
+            "exists": True,
+            "expires_in_hours": 3 * 24,  # 3 days
+            "needs_refresh": True,
+            "error": None,
+        }
+
+        result = token_service.check_gdrive_token_for_chat(-123, chat_settings=chat)
+
+        assert result["healthy"] is False
+        assert result["expires_in_days"] == 3.0
+        assert "3 days" in result["message"]
+
+    def test_gdrive_token_expired(self, token_service):
+        """Returns unhealthy when token is already expired."""
+        chat = self._gdrive_chat()
+        token_service._token_service.check_token_health_for_chat.return_value = {
+            "valid": False,
+            "exists": True,
+            "expires_in_hours": 0,
+            "needs_refresh": False,
+            "error": "Token expired",
+        }
+
+        result = token_service.check_gdrive_token_for_chat(-123, chat_settings=chat)
+
+        assert result["healthy"] is False
+        assert "expired" in result["message"]
+
+    def test_gdrive_token_not_found(self, token_service):
+        """Returns unhealthy when no token exists."""
+        chat = self._gdrive_chat()
+        token_service._token_service.check_token_health_for_chat.return_value = {
+            "valid": False,
+            "exists": False,
+            "expires_in_hours": None,
+            "needs_refresh": False,
+            "error": "No google_drive token found for this chat",
+        }
+
+        result = token_service.check_gdrive_token_for_chat(-123, chat_settings=chat)
+
+        assert result["healthy"] is False
+        assert "No Google Drive token" in result["message"]
+
+    def test_gdrive_token_sync_disabled(self, token_service):
+        """Returns healthy with enabled=False when sync is disabled."""
+        chat = Mock()
+        chat.media_sync_enabled = False
+
+        result = token_service.check_gdrive_token_for_chat(-123, chat_settings=chat)
+
+        assert result["healthy"] is True
+        assert result["enabled"] is False
+
+    def test_gdrive_token_local_source(self, token_service):
+        """Returns healthy with enabled=False when source is local."""
+        chat = Mock()
+        chat.media_sync_enabled = True
+        chat.media_source_type = "local"
+
+        result = token_service.check_gdrive_token_for_chat(-123, chat_settings=chat)
+
+        assert result["healthy"] is True
+        assert result["enabled"] is False
+
+    def test_format_token_alert_expiring(self, token_service):
+        """Format alert includes expiry countdown and re-auth link."""
+        token_info = {"healthy": False, "expires_in_days": 3}
+
+        with patch("src.services.core.health_check.settings") as mock_settings:
+            mock_settings.OAUTH_REDIRECT_BASE_URL = "https://example.com"
+            result = token_service.format_token_alert(token_info, -123)
+
+        assert result is not None
+        assert "3 day" in result
+        assert "/auth/google-drive/start?chat_id=-123" in result
+
+    def test_format_token_alert_expired(self, token_service):
+        """Format alert for already-expired token."""
+        token_info = {"healthy": False, "expires_in_days": 0}
+
+        with patch("src.services.core.health_check.settings") as mock_settings:
+            mock_settings.OAUTH_REDIRECT_BASE_URL = "https://example.com"
+            result = token_service.format_token_alert(token_info, -123)
+
+        assert result is not None
+        assert "expired" in result
+        assert "paused" in result
+
+    def test_format_token_alert_healthy(self, token_service):
+        """Format alert returns None for healthy token."""
+        token_info = {"healthy": True, "expires_in_days": 30}
+
+        result = token_service.format_token_alert(token_info, -123)
+
+        assert result is None

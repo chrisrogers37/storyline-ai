@@ -141,8 +141,8 @@ async def run_scheduler_loop(
     health_check_service = HealthCheckService()
     retention_tick_counter = 0
     pool_check_tick_counter = 0
-    # Track last pool alert time per chat_id to throttle to once per 24h
     pool_alert_last_sent: dict[int, float] = {}
+    token_alert_last_sent: dict[int, float] = {}
 
     while True:
         record_heartbeat("scheduler")
@@ -268,6 +268,41 @@ async def run_scheduler_loop(
                             )
             except Exception as e:
                 logger.warning(f"Pool depletion check failed: {e}")
+            finally:
+                health_check_service.cleanup_transactions()
+
+            # Token health check (same hourly cadence, separate 24h throttle)
+            try:
+                if active_chats and scheduler_service.telegram_service:
+                    now_t = time()
+                    bot = scheduler_service.telegram_service.application.bot
+                    active_ids = {c.telegram_chat_id for c in active_chats}
+                    for stale_id in set(token_alert_last_sent) - active_ids:
+                        del token_alert_last_sent[stale_id]
+
+                    for chat in active_chats:
+                        chat_id = chat.telegram_chat_id
+                        if (
+                            now_t - token_alert_last_sent.get(chat_id, 0)
+                            < POOL_ALERT_COOLDOWN_SECONDS
+                        ):
+                            continue
+
+                        token_info = health_check_service.check_gdrive_token_for_chat(
+                            chat_id, chat_settings=chat
+                        )
+                        alert_text = health_check_service.format_token_alert(
+                            token_info, chat_id
+                        )
+                        if alert_text:
+                            await bot.send_message(chat_id=chat_id, text=alert_text)
+                            token_alert_last_sent[chat_id] = now_t
+                            logger.info(
+                                f"[chat={chat_id}] Sent token health alert: "
+                                f"{token_info.get('message', '')}"
+                            )
+            except Exception as e:
+                logger.warning(f"Token health check failed: {e}")
             finally:
                 health_check_service.cleanup_transactions()
 

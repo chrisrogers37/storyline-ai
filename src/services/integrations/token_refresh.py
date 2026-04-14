@@ -449,6 +449,47 @@ class TokenRefreshService(BaseService):
             "error": "Token expired" if db_token.is_expired else None,
         }
 
+    def check_token_health_for_chat(self, service: str, chat_settings_id: str) -> dict:
+        """Check token status for a per-tenant service (e.g., google_drive).
+
+        Unlike check_token_health() which queries by instagram_account_id,
+        this queries by chat_settings_id for tenant-scoped tokens.
+
+        Returns same dict shape as check_token_health().
+        """
+        db_token = self.token_repo.get_token_for_chat(
+            service, "oauth_access", chat_settings_id
+        )
+
+        if not db_token:
+            return {
+                "valid": False,
+                "exists": False,
+                "source": None,
+                "expires_at": None,
+                "expires_in_hours": None,
+                "needs_refresh": False,
+                "last_refreshed": None,
+                "error": f"No {service} token found for this chat",
+            }
+
+        expires_in_hours = db_token.hours_until_expiry()
+        needs_refresh = (
+            expires_in_hours is not None
+            and expires_in_hours <= self.REFRESH_BUFFER_HOURS
+        )
+
+        return {
+            "valid": not db_token.is_expired,
+            "exists": True,
+            "source": "database",
+            "expires_at": db_token.expires_at,
+            "expires_in_hours": expires_in_hours,
+            "needs_refresh": needs_refresh,
+            "last_refreshed": db_token.last_refreshed_at,
+            "error": "Token expired" if db_token.is_expired else None,
+        }
+
     def get_tokens_needing_refresh(self) -> list:
         """Get all tokens that need to be refreshed soon."""
         return self.token_repo.get_expiring_tokens(
