@@ -15,6 +15,7 @@ from src.services.core.scheduler import SchedulerService
 from src.services.core.telegram_service import TelegramService
 from src.services.core.media_lock import MediaLockService
 from src.services.core.media_sync import MediaSyncService
+from src.services.core.health_check import HealthCheckService
 from src.repositories.queue_repository import QueueRepository
 from src.repositories.service_run_repository import ServiceRunRepository
 from src.exceptions.google_drive import GoogleDriveAuthError
@@ -28,6 +29,10 @@ shutdown_in_progress = False
 SERVICE_RUNS_RETENTION_DAYS = 7
 # Run retention once per hour (60 ticks at 1-minute intervals)
 RETENTION_INTERVAL_TICKS = 60
+# Pool depletion check interval (hourly, same cadence as retention)
+POOL_CHECK_INTERVAL_TICKS = 60
+# Throttle pool alerts to once per 24h per chat
+POOL_ALERT_COOLDOWN_SECONDS = 86400
 
 # Loop liveness tracking — each loop updates its timestamp on every tick.
 # Expected intervals (seconds) per loop, used to detect stalls.
@@ -133,7 +138,11 @@ async def run_scheduler_loop(
 
     queue_repo = QueueRepository()
     service_run_repo = ServiceRunRepository()
+    health_check_service = HealthCheckService()
     retention_tick_counter = 0
+    pool_check_tick_counter = 0
+    # Track last pool alert time per chat_id to throttle to once per 24h
+    pool_alert_last_sent: dict[int, float] = {}
 
     while True:
         record_heartbeat("scheduler")
@@ -206,6 +215,43 @@ async def run_scheduler_loop(
                 logger.warning(f"Service runs retention cleanup failed: {e}")
             finally:
                 service_run_repo.end_read_transaction()
+
+        # Hourly pool depletion check: alert when categories are running low
+        pool_check_tick_counter += 1
+        if pool_check_tick_counter >= POOL_CHECK_INTERVAL_TICKS:
+            pool_check_tick_counter = 0
+            try:
+                if active_chats and scheduler_service.telegram_service:
+                    now = time()
+                    bot = scheduler_service.telegram_service.application.bot
+                    # Prune stale entries for chats no longer active
+                    active_ids = {c.telegram_chat_id for c in active_chats}
+                    for stale_id in set(pool_alert_last_sent) - active_ids:
+                        del pool_alert_last_sent[stale_id]
+
+                    for chat in active_chats:
+                        chat_id = chat.telegram_chat_id
+                        if (
+                            now - pool_alert_last_sent.get(chat_id, 0)
+                            < POOL_ALERT_COOLDOWN_SECONDS
+                        ):
+                            continue
+
+                        pool_info = health_check_service.check_media_pool_for_chat(
+                            chat_id, chat_settings=chat
+                        )
+                        alert_text = health_check_service.format_pool_alert(pool_info)
+                        if alert_text:
+                            await bot.send_message(chat_id=chat_id, text=alert_text)
+                            pool_alert_last_sent[chat_id] = now
+                            logger.info(
+                                f"[chat={chat_id}] Sent pool depletion alert: "
+                                f"{len(pool_info['warnings'])} warning(s)"
+                            )
+            except Exception as e:
+                logger.warning(f"Pool depletion check failed: {e}")
+            finally:
+                health_check_service.cleanup_transactions()
 
         # Wait 1 minute before next check
         await asyncio.sleep(60)

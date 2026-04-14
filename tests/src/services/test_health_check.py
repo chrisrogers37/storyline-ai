@@ -166,10 +166,20 @@ class TestHealthCheckService:
         mock_post = Mock(success=True)
         health_service.history_repo.get_recent_posts.return_value = [mock_post]
 
+        # Mock media pool: no active chats → healthy
+        health_service._settings_service = Mock()
+        health_service._settings_service.get_all_active_chats.return_value = []
+
         # Mock loop liveness so all loops report alive
         all_alive = {
             name: {"alive": True, "message": "OK", "expected_interval_s": 60}
-            for name in ["scheduler", "lock_cleanup", "cloud_cleanup", "media_sync", "transaction_cleanup"]
+            for name in [
+                "scheduler",
+                "lock_cleanup",
+                "cloud_cleanup",
+                "media_sync",
+                "transaction_cleanup",
+            ]
         }
         with patch("src.main.get_loop_liveness", return_value=all_alive):
             result = health_service.check_all()
@@ -181,6 +191,7 @@ class TestHealthCheckService:
         assert "queue" in result["checks"]
         assert "recent_posts" in result["checks"]
         assert "media_sync" in result["checks"]
+        assert "media_pool" in result["checks"]
         assert "loop_liveness" in result["checks"]
         assert "timestamp" in result
 
@@ -398,3 +409,163 @@ class TestHealthCheckService:
         assert result["healthy"] is False
         assert "failed" in result["message"].lower()
         assert result["source_type"] == "local"
+
+    # ==================== Media Pool Health Check Tests ====================
+
+    @pytest.fixture
+    def pool_service(self):
+        """Create HealthCheckService with mocked pool dependencies."""
+        service = HealthCheckService()
+        service.queue_repo = Mock()
+        service.history_repo = Mock()
+        service._media_repo = Mock()
+        service._settings_service = Mock()
+        return service
+
+    @pytest.fixture
+    def mock_chat(self):
+        """Create a mock chat_settings for pool tests."""
+        chat = Mock()
+        chat.id = 1
+        chat.posts_per_day = 4
+        chat.telegram_chat_id = -123
+        return chat
+
+    def test_check_media_pool_for_chat_healthy(self, pool_service, mock_chat):
+        """Pool check returns healthy when all categories have plenty of runway."""
+        pool_service._media_repo.count_eligible_by_category.return_value = {
+            "memes": 50,
+            "merch": 30,
+        }
+
+        result = pool_service.check_media_pool_for_chat(-123, chat_settings=mock_chat)
+
+        assert result["total_eligible"] == 80
+        assert result["posts_per_day"] == 4
+        assert len(result["categories"]) == 2
+        assert result["warnings"] == []
+        # 2 categories, 4 posts/day -> 2 posts/day each
+        # memes: 50/2 = 25 days, merch: 30/2 = 15 days
+        memes_cat = next(c for c in result["categories"] if c["category"] == "memes")
+        assert memes_cat["runway_days"] == 25.0
+        assert memes_cat["eligible"] == 50
+
+    def test_check_media_pool_for_chat_warning(self, pool_service, mock_chat):
+        """Pool check returns warnings when a category is running low."""
+        pool_service._media_repo.count_eligible_by_category.return_value = {
+            "memes": 10,  # 10/2 = 5 days -> warning
+            "merch": 30,  # 30/2 = 15 days -> OK
+        }
+
+        result = pool_service.check_media_pool_for_chat(-123, chat_settings=mock_chat)
+
+        assert len(result["warnings"]) == 1
+        assert "memes" in result["warnings"][0]
+        assert "LOW" in result["warnings"][0]
+
+    def test_check_media_pool_for_chat_critical(self, pool_service, mock_chat):
+        """Pool check returns critical warning when category nearly empty."""
+        pool_service._media_repo.count_eligible_by_category.return_value = {
+            "memes": 2,  # 2/2 = 1 day -> critical
+            "merch": 30,
+        }
+
+        result = pool_service.check_media_pool_for_chat(-123, chat_settings=mock_chat)
+
+        assert len(result["warnings"]) == 1
+        assert "CRITICAL" in result["warnings"][0]
+        assert "memes" in result["warnings"][0]
+
+    def test_check_media_pool_for_chat_empty(self, pool_service, mock_chat):
+        """Pool check handles no eligible media gracefully."""
+        pool_service._media_repo.count_eligible_by_category.return_value = {}
+
+        result = pool_service.check_media_pool_for_chat(-123, chat_settings=mock_chat)
+
+        assert result["total_eligible"] == 0
+        assert len(result["categories"]) == 0
+        assert "No eligible media" in result["warnings"][0]
+
+    def test_check_media_pool_for_chat_single_category(self, pool_service):
+        """Pool check works with single category (full posts_per_day allocation)."""
+        mock_chat = Mock()
+        mock_chat.id = 1
+        mock_chat.posts_per_day = 3
+        mock_chat.telegram_chat_id = -123
+
+        pool_service._media_repo.count_eligible_by_category.return_value = {
+            "memes": 15,  # 15/3 = 5 days -> warning
+        }
+
+        result = pool_service.check_media_pool_for_chat(-123, chat_settings=mock_chat)
+
+        assert len(result["categories"]) == 1
+        cat = result["categories"][0]
+        assert cat["posts_per_day_share"] == 3.0
+        assert cat["runway_days"] == 5.0
+        assert len(result["warnings"]) == 1
+
+    def test_check_media_pool_aggregated_healthy(self, pool_service, mock_chat):
+        """Aggregated pool check returns healthy across all tenants."""
+        mock_chat.posts_per_day = 2
+        pool_service._settings_service.get_all_active_chats.return_value = [mock_chat]
+        pool_service._media_repo.count_eligible_by_category.return_value = {
+            "memes": 50,
+        }
+
+        result = pool_service._check_media_pool()
+
+        assert result["healthy"] is True
+        assert ">" in result["message"]
+
+    def test_check_media_pool_aggregated_warning(self, pool_service, mock_chat):
+        """Aggregated pool check returns unhealthy when worst category is low."""
+        pool_service._settings_service.get_all_active_chats.return_value = [mock_chat]
+        pool_service._media_repo.count_eligible_by_category.return_value = {
+            "memes": 5,  # 5/4 = 1.25 days -> critical
+        }
+
+        result = pool_service._check_media_pool()
+
+        assert result["healthy"] is False
+        assert "Critical" in result["message"]
+        assert result["worst_category"]["category"] == "memes"
+
+    def test_check_media_pool_no_active_chats(self, pool_service):
+        """Aggregated pool check handles no active chats."""
+        pool_service._settings_service.get_all_active_chats.return_value = []
+
+        result = pool_service._check_media_pool()
+
+        assert result["healthy"] is True
+        assert "No active chats" in result["message"]
+
+    def test_format_pool_alert_with_warnings(self, pool_service):
+        """Format alert returns text when categories are low."""
+        pool_info = {
+            "categories": [
+                {"category": "memes", "eligible": 3, "runway_days": 1.5},
+                {"category": "merch", "eligible": 50, "runway_days": 25.0},
+            ],
+            "warnings": ["LOW: 'memes'..."],
+        }
+
+        result = pool_service.format_pool_alert(pool_info)
+
+        assert result is not None
+        assert "memes" in result
+        assert "3 items left" in result
+        assert "merch" not in result  # merch is above threshold
+
+    def test_format_pool_alert_no_warnings(self, pool_service):
+        """Format alert returns None when all categories are healthy."""
+        pool_info = {
+            "categories": [
+                {"category": "memes", "eligible": 50, "runway_days": 25.0},
+            ],
+            "warnings": [],
+        }
+
+        result = pool_service.format_pool_alert(pool_info)
+
+        assert result is None

@@ -16,6 +16,8 @@ class HealthCheckService(BaseService):
     QUEUE_BACKLOG_THRESHOLD = 10  # JIT queue is 0-5 items; 10+ indicates a problem
     MAX_PENDING_AGE_HOURS = 4  # JIT items should be acted on within hours, not days
     RECENT_POSTS_WINDOW_HOURS = 48
+    POOL_WARNING_DAYS = 7  # Warn when category has < 7 days of runway
+    POOL_CRITICAL_DAYS = 2  # Critical when < 2 days of runway
 
     def __init__(self):
         super().__init__()
@@ -25,6 +27,9 @@ class HealthCheckService(BaseService):
         # Lazy-loaded services for Instagram checks
         self._token_service = None
         self._instagram_service = None
+
+        self._media_repo = None
+        self._settings_service = None
 
     @property
     def token_service(self):
@@ -44,6 +49,24 @@ class HealthCheckService(BaseService):
             self._instagram_service = InstagramAPIService()
         return self._instagram_service
 
+    @property
+    def media_repo(self):
+        """Lazy-load media repository."""
+        if self._media_repo is None:
+            from src.repositories.media_repository import MediaRepository
+
+            self._media_repo = MediaRepository()
+        return self._media_repo
+
+    @property
+    def settings_service(self):
+        """Lazy-load settings service."""
+        if self._settings_service is None:
+            from src.services.core.settings_service import SettingsService
+
+            self._settings_service = SettingsService()
+        return self._settings_service
+
     def check_all(self) -> dict:
         """
         Run all health checks.
@@ -58,6 +81,7 @@ class HealthCheckService(BaseService):
             "queue": self._check_queue(),
             "recent_posts": self._check_recent_posts(),
             "media_sync": self._check_media_sync(),
+            "media_pool": self._check_media_pool(),
             "loop_liveness": self._check_loop_liveness(),
         }
 
@@ -369,3 +393,153 @@ class HealthCheckService(BaseService):
             "message": f"All {len(liveness)} loops alive",
             "loops": liveness,
         }
+
+    def _check_media_pool(self) -> dict:
+        """Check media pool health across all active tenants.
+
+        Reports the lowest-runway category across all tenants.
+        For per-tenant detail, use check_media_pool_for_chat().
+        """
+        try:
+            active_chats = self.settings_service.get_all_active_chats()
+            if not active_chats:
+                return {"healthy": True, "message": "No active chats configured"}
+
+            worst_runway = float("inf")
+            worst_detail = None
+
+            for chat in active_chats:
+                pool_info = self.check_media_pool_for_chat(
+                    chat.telegram_chat_id, chat_settings=chat
+                )
+                for cat_info in pool_info.get("categories", []):
+                    if cat_info["runway_days"] < worst_runway:
+                        worst_runway = cat_info["runway_days"]
+                        worst_detail = cat_info
+
+            if worst_detail is None:
+                return {"healthy": True, "message": "No categories configured"}
+
+            if worst_runway <= self.POOL_CRITICAL_DAYS:
+                return {
+                    "healthy": False,
+                    "message": (
+                        f"Critical: '{worst_detail['category']}' has "
+                        f"{worst_detail['eligible']} items "
+                        f"({worst_detail['runway_days']:.0f} days remaining)"
+                    ),
+                    "worst_category": worst_detail,
+                }
+
+            if worst_runway <= self.POOL_WARNING_DAYS:
+                return {
+                    "healthy": False,
+                    "message": (
+                        f"Low pool: '{worst_detail['category']}' has "
+                        f"{worst_detail['eligible']} items "
+                        f"({worst_detail['runway_days']:.0f} days remaining)"
+                    ),
+                    "worst_category": worst_detail,
+                }
+
+            return {
+                "healthy": True,
+                "message": f"All categories have >{self.POOL_WARNING_DAYS} days of runway",
+            }
+
+        except Exception as e:
+            logger.error(f"Media pool check failed: {e}", exc_info=True)
+            return {"healthy": False, "message": f"Pool check error: {str(e)}"}
+
+    def check_media_pool_for_chat(
+        self, telegram_chat_id: int, *, chat_settings=None
+    ) -> dict:
+        """Check media pool health for a specific chat.
+
+        Returns per-category breakdown with eligible counts and runway estimates.
+
+        Args:
+            telegram_chat_id: The tenant's Telegram chat ID.
+            chat_settings: Pre-loaded ChatSettings (avoids extra DB lookup).
+
+        Returns:
+            Dict with categories list, each containing: category, eligible,
+            posts_per_day_share, runway_days.
+        """
+        if chat_settings is None:
+            chat_settings = self.settings_service.get_settings(telegram_chat_id)
+
+        chat_settings_id = str(chat_settings.id)
+        posts_per_day = chat_settings.posts_per_day or 1
+
+        eligible_by_category = self.media_repo.count_eligible_by_category(
+            chat_settings_id
+        )
+
+        if not eligible_by_category:
+            return {
+                "total_eligible": 0,
+                "posts_per_day": posts_per_day,
+                "categories": [],
+                "warnings": ["No eligible media in any category"],
+            }
+
+        num_categories = len(eligible_by_category)
+        categories = []
+        warnings = []
+
+        for category, eligible in sorted(eligible_by_category.items()):
+            posts_per_day_share = posts_per_day / num_categories
+            runway_days = (
+                eligible / posts_per_day_share if posts_per_day_share else float("inf")
+            )
+
+            cat_info = {
+                "category": category,
+                "eligible": eligible,
+                "posts_per_day_share": round(posts_per_day_share, 2),
+                "runway_days": round(runway_days, 1),
+            }
+            categories.append(cat_info)
+
+            if runway_days <= self.POOL_CRITICAL_DAYS:
+                warnings.append(
+                    f"CRITICAL: '{category}' has {eligible} items "
+                    f"(< {self.POOL_CRITICAL_DAYS} days remaining)"
+                )
+            elif runway_days <= self.POOL_WARNING_DAYS:
+                warnings.append(
+                    f"LOW: '{category}' has {eligible} items "
+                    f"({runway_days:.0f} days remaining)"
+                )
+
+        total_eligible = sum(eligible_by_category.values())
+        return {
+            "total_eligible": total_eligible,
+            "posts_per_day": posts_per_day,
+            "categories": categories,
+            "warnings": warnings,
+        }
+
+    def format_pool_alert(self, pool_info: dict) -> str | None:
+        """Format a Telegram alert message from pool check results.
+
+        Returns None if no categories are below the warning threshold.
+        """
+        low_categories = [
+            c
+            for c in pool_info.get("categories", [])
+            if c["runway_days"] <= self.POOL_WARNING_DAYS
+        ]
+        if not low_categories:
+            return None
+
+        lines = ["\u26a0\ufe0f Content pool alert:"]
+        for cat in low_categories:
+            lines.append(
+                f"  \u2022 {cat['category']}: "
+                f"{cat['eligible']} items left "
+                f"({cat['runway_days']:.0f} days remaining)"
+            )
+        lines.append("\nAdd more content to Google Drive to keep posting.")
+        return "\n".join(lines)
