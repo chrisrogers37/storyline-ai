@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Repository aggregation methods** — `get_stats_by_status()`, `get_stats_by_method()`, `get_daily_counts()`, `get_hourly_distribution()`, and `get_stats_by_category()` in HistoryRepository, all with multi-tenant scoping.
 - **DashboardService orchestration** — `get_analytics()` combines all aggregations into a single response with execution tracking.
 
+### Added — Pool Depletion Warnings (#156)
+
+- **Media pool health check** — New `_check_media_pool()` in HealthCheckService monitors content supply per category. Calculates days of runway (eligible items / posts per day share) and reports warnings at <7 days and critical at <2 days. Included in `check_all()` and the `/system-status` dashboard API.
+- **Per-chat pool detail** — `check_media_pool_for_chat()` provides per-category breakdown with eligible counts, post rate share, and runway estimates.
+- **Hourly Telegram alerts** — Scheduler loop checks pool health every hour and sends a Telegram alert when any category drops below the warning threshold. Alerts are throttled to once per 24 hours per chat to prevent spam.
+
 ### Added — Loop Liveness Tracking (#134)
 
 - **Heartbeat tracking for all background loops** — Each loop (scheduler, lock_cleanup, cloud_cleanup, media_sync, transaction_cleanup) records a timestamp on every tick. The health check reports loops as stale if they haven't ticked in 2x their expected interval. Visible via `check-health` CLI and `/status` health checks.
