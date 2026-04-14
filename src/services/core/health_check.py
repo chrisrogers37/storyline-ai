@@ -18,6 +18,8 @@ class HealthCheckService(BaseService):
     RECENT_POSTS_WINDOW_HOURS = 48
     POOL_WARNING_DAYS = 7  # Warn when category has < 7 days of runway
     POOL_CRITICAL_DAYS = 2  # Critical when < 2 days of runway
+    TOKEN_WARNING_DAYS = 7  # Warn when token expires in < 7 days
+    TOKEN_CRITICAL_DAYS = 1  # Critical when < 1 day
 
     def __init__(self):
         super().__init__()
@@ -543,3 +545,115 @@ class HealthCheckService(BaseService):
             )
         lines.append("\nAdd more content to Google Drive to keep posting.")
         return "\n".join(lines)
+
+    def check_gdrive_token_for_chat(
+        self, telegram_chat_id: int, *, chat_settings=None
+    ) -> dict:
+        """Check Google Drive token health for a specific chat.
+
+        Returns:
+            Dict with healthy, expires_in_days, needs_refresh, message.
+        """
+        if chat_settings is None:
+            chat_settings = self.settings_service.get_settings(telegram_chat_id)
+
+        chat_settings_id = str(chat_settings.id)
+
+        if not getattr(chat_settings, "media_sync_enabled", False):
+            return {"healthy": True, "message": "Media sync disabled", "enabled": False}
+
+        source_type = getattr(chat_settings, "media_source_type", None)
+        if source_type != "google_drive":
+            return {
+                "healthy": True,
+                "message": f"Source is '{source_type}', not Google Drive",
+                "enabled": False,
+            }
+
+        try:
+            token_health = self.token_service.check_token_health_for_chat(
+                "google_drive", chat_settings_id
+            )
+        except Exception as e:
+            return {"healthy": False, "message": f"Token check error: {str(e)}"}
+
+        if not token_health["exists"]:
+            return {
+                "healthy": False,
+                "message": "No Google Drive token found",
+                "expires_in_days": None,
+            }
+
+        if not token_health["valid"]:
+            return {
+                "healthy": False,
+                "message": "Google Drive token expired",
+                "expires_in_days": 0,
+            }
+
+        expires_in_hours = token_health.get("expires_in_hours")
+        expires_in_days = (
+            round(expires_in_hours / 24, 1) if expires_in_hours is not None else None
+        )
+
+        if expires_in_days is not None and expires_in_days <= self.TOKEN_CRITICAL_DAYS:
+            return {
+                "healthy": False,
+                "message": f"Google Drive token expires in {expires_in_days:.0f} day(s)",
+                "expires_in_days": expires_in_days,
+                "needs_refresh": token_health.get("needs_refresh", False),
+            }
+
+        if expires_in_days is not None and expires_in_days <= self.TOKEN_WARNING_DAYS:
+            return {
+                "healthy": False,
+                "message": f"Google Drive token expires in {expires_in_days:.0f} days",
+                "expires_in_days": expires_in_days,
+                "needs_refresh": token_health.get("needs_refresh", False),
+            }
+
+        return {
+            "healthy": True,
+            "message": (
+                "Google Drive token OK"
+                + (
+                    f" ({expires_in_days:.0f} days remaining)"
+                    if expires_in_days
+                    else ""
+                )
+            ),
+            "expires_in_days": expires_in_days,
+        }
+
+    def format_token_alert(self, token_info: dict, telegram_chat_id: int) -> str | None:
+        """Format a Telegram alert for expiring Google Drive token.
+
+        Returns None if no alert needed (healthy token).
+        """
+        if token_info.get("healthy", True):
+            return None
+
+        expires_in_days = token_info.get("expires_in_days")
+
+        if expires_in_days is not None and expires_in_days > 0:
+            text = f"\u26a0\ufe0f Google Drive token expiring in {expires_in_days:.0f} day(s)."
+        else:
+            text = "\u26a0\ufe0f Google Drive token has expired."
+
+        reconnect_url = None
+        if settings.OAUTH_REDIRECT_BASE_URL:
+            reconnect_url = (
+                f"{settings.OAUTH_REDIRECT_BASE_URL}"
+                f"/auth/google-drive/start?chat_id={telegram_chat_id}"
+            )
+            text += f"\n\nRe-authenticate: {reconnect_url}"
+
+        if expires_in_days is not None and expires_in_days > 0:
+            expiry_date = (
+                datetime.utcnow() + timedelta(days=expires_in_days)
+            ).strftime("%b %d")
+            text += f"\n\nIf ignored, media sync will stop on {expiry_date}."
+        else:
+            text += "\n\nMedia sync is paused until you reconnect."
+
+        return text

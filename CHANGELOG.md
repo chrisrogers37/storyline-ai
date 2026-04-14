@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Google Drive Token Health Alerts (#157)
+
+- **Token health check** — `check_gdrive_token_for_chat()` in HealthCheckService checks Google Drive OAuth token expiry per tenant. Warns at <7 days, critical at <1 day, reports expired tokens.
+- **Tenant-scoped token health** — `check_token_health_for_chat()` added to TokenRefreshService for querying tokens by `chat_settings_id` (Google Drive) instead of `instagram_account_id` (Instagram).
+- **Hourly Telegram alerts** — Scheduler loop checks token health hourly alongside pool depletion. Sends alert with expiry countdown, re-auth link, and projected stop date. Throttled to once per 24h per chat.
+- **Alert formatting** — `format_token_alert()` builds user-friendly alert with reconnect URL.
+
 ### Added — Category Performance Insights (#154)
 
 - **Category analytics API endpoint** — `GET /api/onboarding/analytics/categories?chat_id=X&days=30` returns per-category posting performance enriched with configured ratios from category_post_case_mix. Shows actual vs target ratio, skip/reject rates, and success rate per category.
