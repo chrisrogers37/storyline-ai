@@ -5,7 +5,14 @@ import asyncio
 import pytest
 from unittest.mock import AsyncMock, Mock, patch
 
-from src.main import _guarded, run_scheduler_loop, media_sync_loop
+from src.main import (
+    _guarded,
+    get_loop_liveness,
+    loop_heartbeats,
+    record_heartbeat,
+    run_scheduler_loop,
+    media_sync_loop,
+)
 
 
 @pytest.mark.unit
@@ -471,3 +478,54 @@ class TestGuarded:
 
         with pytest.raises(asyncio.CancelledError):
             await _guarded("test_task", cancelled_coro(), bot=AsyncMock())
+
+
+@pytest.mark.unit
+class TestLoopLiveness:
+    """Tests for loop heartbeat tracking and liveness detection."""
+
+    def setup_method(self):
+        """Clear heartbeats before each test."""
+        loop_heartbeats.clear()
+
+    def test_record_heartbeat_stores_timestamp(self):
+        """record_heartbeat() stores a float timestamp."""
+        record_heartbeat("scheduler")
+        assert "scheduler" in loop_heartbeats
+        assert isinstance(loop_heartbeats["scheduler"], float)
+
+    def test_unstarted_loop_reported_as_not_alive(self):
+        """Loops that never sent a heartbeat are reported as not started."""
+        result = get_loop_liveness()
+        assert "scheduler" in result
+        assert result["scheduler"]["alive"] is False
+        assert "Not started" in result["scheduler"]["message"]
+
+    def test_fresh_heartbeat_reported_as_alive(self):
+        """A loop with a recent heartbeat is reported as alive."""
+        record_heartbeat("scheduler")
+        result = get_loop_liveness()
+        assert result["scheduler"]["alive"] is True
+        assert result["scheduler"]["message"] == "OK"
+
+    def test_stale_heartbeat_reported_as_not_alive(self):
+        """A loop whose heartbeat is older than 2x its interval is stale."""
+        from time import time
+
+        # Set heartbeat to 200s ago (scheduler interval is 60s, threshold 120s)
+        loop_heartbeats["scheduler"] = time() - 200
+        result = get_loop_liveness()
+        assert result["scheduler"]["alive"] is False
+        assert "Stale" in result["scheduler"]["message"]
+
+    def test_all_registered_loops_included(self):
+        """get_loop_liveness() reports on all registered loops."""
+        result = get_loop_liveness()
+        expected = {
+            "scheduler",
+            "lock_cleanup",
+            "cloud_cleanup",
+            "media_sync",
+            "transaction_cleanup",
+        }
+        assert set(result.keys()) == expected
