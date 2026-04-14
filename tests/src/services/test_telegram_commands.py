@@ -1409,3 +1409,76 @@ class TestStartCommand:
         service.interaction_service.log_command.assert_called_once()
         call_kwargs = service.interaction_service.log_command.call_args[1]
         assert call_kwargs["command"] == "/start"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestApproveAllCommand:
+    """Tests for /approveall command - batch approve pending posts."""
+
+    async def test_approveall_shows_summary_and_confirm(self, mock_command_handlers):
+        """Test /approveall shows pending count and confirmation button."""
+        handlers = mock_command_handlers
+        service = handlers.service
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        service.user_repo.get_by_telegram_id.return_value = mock_user
+
+        mock_chat_settings = Mock()
+        mock_chat_settings.id = uuid4()
+        mock_chat_settings.enable_instagram_api = False
+        service.settings_service.get_settings.return_value = mock_chat_settings
+
+        mock_item1 = Mock(id=uuid4())
+        mock_item2 = Mock(id=uuid4())
+        service.queue_repo.get_all_with_media.side_effect = [
+            [(mock_item1, "meme.jpg", "memes"), (mock_item2, "merch.jpg", "merch")],
+            [],  # processing = empty
+        ]
+
+        mock_update = AsyncMock()
+        mock_update.effective_user.id = 123
+        mock_update.effective_user.first_name = "Test"
+        mock_update.effective_user.username = "test"
+        mock_update.effective_chat.id = -100123
+        mock_update.message.message_id = 1
+
+        await handlers.handle_approveall(mock_update, Mock())
+
+        mock_update.message.reply_text.assert_called_once()
+        call_args = mock_update.message.reply_text.call_args
+        text = call_args[0][0]
+        assert "2 pending posts" in text
+        assert "memes" in text
+        assert "merch" in text
+        # Check confirmation button exists
+        keyboard = call_args[1]["reply_markup"]
+        assert keyboard is not None
+
+    async def test_approveall_empty_queue(self, mock_command_handlers):
+        """Test /approveall with no pending items."""
+        handlers = mock_command_handlers
+        service = handlers.service
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        service.user_repo.get_by_telegram_id.return_value = mock_user
+
+        mock_chat_settings = Mock()
+        mock_chat_settings.id = uuid4()
+        service.settings_service.get_settings.return_value = mock_chat_settings
+
+        service.queue_repo.get_all_with_media.return_value = []
+
+        mock_update = AsyncMock()
+        mock_update.effective_user.id = 123
+        mock_update.effective_user.first_name = "Test"
+        mock_update.effective_user.username = "test"
+        mock_update.effective_chat.id = -100123
+        mock_update.message.message_id = 1
+
+        await handlers.handle_approveall(mock_update, Mock())
+
+        call_text = mock_update.message.reply_text.call_args[0][0]
+        assert "No Pending Posts" in call_text

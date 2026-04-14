@@ -684,8 +684,8 @@ class TestEarlyProcessingFeedback:
 
         # Track call order
         call_order = []
-        mock_query.edit_message_reply_markup.side_effect = (
-            lambda **kw: call_order.append("remove_keyboard")
+        mock_query.edit_message_reply_markup.side_effect = lambda **kw: (
+            call_order.append("remove_keyboard")
         )
         service.history_repo.create.side_effect = lambda *a, **kw: call_order.append(
             "history_create"
@@ -778,8 +778,8 @@ class TestEarlyProcessingFeedback:
         mock_query.message = Mock(chat_id=-100123, message_id=1)
 
         call_order = []
-        mock_query.edit_message_reply_markup.side_effect = (
-            lambda **kw: call_order.append("remove_keyboard")
+        mock_query.edit_message_reply_markup.side_effect = lambda **kw: (
+            call_order.append("remove_keyboard")
         )
         service.history_repo.create.side_effect = lambda *a, **kw: call_order.append(
             "history_create"
@@ -1549,3 +1549,121 @@ class TestSharedSessionAtomicity:
 
         # After exiting, commit should be restored
         assert mock_session.commit is original_commit
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestBatchApprove:
+    """Tests for batch approve callback handlers."""
+
+    async def test_batch_approve_processes_all_items(self, mock_callback_handlers):
+        """Batch approve marks all pending items as posted."""
+        handlers = mock_callback_handlers
+        service = handlers.service
+
+        cs_id = str(uuid4())
+        queue_id_1 = uuid4()
+        queue_id_2 = uuid4()
+
+        item1 = Mock(
+            id=queue_id_1,
+            media_item_id=uuid4(),
+            chat_settings_id=cs_id,
+            created_at=datetime.utcnow(),
+            scheduled_for=datetime.utcnow(),
+        )
+        item2 = Mock(
+            id=queue_id_2,
+            media_item_id=uuid4(),
+            chat_settings_id=cs_id,
+            created_at=datetime.utcnow(),
+            scheduled_for=datetime.utcnow(),
+        )
+
+        service.queue_repo.get_all_with_media.side_effect = [
+            [(item1, "meme.jpg", "memes")],
+            [(item2, "merch.jpg", "merch")],
+        ]
+        service.queue_repo.claim_for_processing.side_effect = [item1, item2]
+        service.media_repo.get_by_id.return_value = Mock()
+
+        mock_query = AsyncMock()
+        mock_query.message.chat_id = -100123
+        mock_query.message.message_id = 1
+        mock_user = Mock(id=uuid4(), telegram_username="test")
+
+        mock_session = Mock()
+        mock_session.commit = Mock()
+        mock_session.flush = Mock()
+        service.history_repo.db = mock_session
+        for repo in [
+            service.history_repo,
+            service.media_repo,
+            service.queue_repo,
+            service.user_repo,
+            service.lock_service.lock_repo,
+        ]:
+            repo._db = Mock()
+
+        await handlers.handle_batch_approve(cs_id, mock_user, mock_query)
+
+        assert service.queue_repo.claim_for_processing.call_count == 2
+        final_call = mock_query.edit_message_text.call_args_list[-1]
+        assert "2 items marked as posted" in final_call[0][0]
+
+    async def test_batch_approve_empty_queue(self, mock_callback_handlers):
+        """Batch approve with no pending items shows empty message."""
+        handlers = mock_callback_handlers
+        service = handlers.service
+
+        service.queue_repo.get_all_with_media.return_value = []
+
+        mock_query = AsyncMock()
+        mock_query.message.chat_id = -100123
+        mock_user = Mock(id=uuid4())
+
+        await handlers.handle_batch_approve("cs-id", mock_user, mock_query)
+
+        final_text = mock_query.edit_message_text.call_args[0][0]
+        assert "No pending items" in final_text
+
+    async def test_batch_approve_handles_claim_failure(self, mock_callback_handlers):
+        """Batch approve continues when individual items fail to claim."""
+        handlers = mock_callback_handlers
+        service = handlers.service
+
+        item1 = Mock(
+            id=uuid4(),
+            media_item_id=uuid4(),
+            chat_settings_id="cs",
+            created_at=datetime.utcnow(),
+            scheduled_for=datetime.utcnow(),
+        )
+
+        service.queue_repo.get_all_with_media.side_effect = [
+            [(item1, "file.jpg", "cat")],
+            [],
+        ]
+        service.queue_repo.claim_for_processing.return_value = None
+
+        mock_query = AsyncMock()
+        mock_query.message.chat_id = -100123
+        mock_query.message.message_id = 1
+        mock_user = Mock(id=uuid4())
+
+        await handlers.handle_batch_approve("cs-id", mock_user, mock_query)
+
+        final_text = mock_query.edit_message_text.call_args[0][0]
+        assert "0 items marked as posted" in final_text
+        assert "1 item failed" in final_text
+
+    async def test_batch_approve_cancel(self, mock_callback_handlers):
+        """Batch approve cancel shows cancelled message."""
+        handlers = mock_callback_handlers
+        mock_query = AsyncMock()
+        mock_user = Mock(id=uuid4())
+
+        await handlers.handle_batch_approve_cancel("", mock_user, mock_query)
+
+        final_text = mock_query.edit_message_text.call_args[0][0]
+        assert "cancelled" in final_text

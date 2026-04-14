@@ -152,6 +152,7 @@ class TelegramService(BaseService):
             "status": self.commands.handle_status,
             "next": self.commands.handle_next,
             "cleanup": self.commands.handle_cleanup,
+            "approveall": self.commands.handle_approveall,
             "help": self.commands.handle_help,
             "settings": self.settings_handler.handle_settings,
             "setup": self.settings_handler.handle_settings,
@@ -187,6 +188,7 @@ class TelegramService(BaseService):
             BotCommand("status", "System health & media overview"),
             BotCommand("setup", "Quick settings & toggles"),
             BotCommand("next", "Send next post now"),
+            BotCommand("approveall", "Approve all pending posts"),
             BotCommand("cleanup", "Delete recent bot messages"),
             BotCommand("help", "Show available commands"),
         ]
@@ -213,6 +215,8 @@ class TelegramService(BaseService):
             "cancel_reject": self.callbacks.handle_cancel_reject,
             "resume": self.callbacks.handle_resume_callback,
             "clear": self.callbacks.handle_reset_callback,  # Legacy name for reset
+            "batch_approve": self.callbacks.handle_batch_approve,
+            "batch_approve_cancel": self.callbacks.handle_batch_approve_cancel,
             # Auto-post (telegram_autopost.py)
             "autopost": self.autopost.handle_autopost,
             # Settings (telegram_settings.py)

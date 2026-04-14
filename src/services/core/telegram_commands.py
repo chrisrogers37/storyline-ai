@@ -373,6 +373,7 @@ class TelegramCommandHandlers:
             "/start - Open dashboard & settings\n"
             "/status - System health & overview\n"
             "/next - Send next post now\n"
+            "/approveall - Approve all pending posts\n"
             "/setup - Quick settings & toggles\n"
             "/cleanup - Delete recent bot messages\n"
             "/help - Show this help\n\n"
@@ -462,6 +463,81 @@ class TelegramCommandHandlers:
             await update.message.delete()  # Also delete the user's /cleanup command
         except Exception as e:
             logger.debug(f"Could not auto-delete cleanup messages: {e}")
+
+    async def handle_approveall(self, update, context):
+        """Handle /approveall command — batch approve all pending queue items.
+
+        Shows a summary of pending items and a confirmation button.
+        On confirmation, marks each item as posted with history and lock creation.
+        """
+        user = self.service._get_or_create_user(update.effective_user)
+        chat_id = update.effective_chat.id
+
+        chat_settings = self.service.settings_service.get_settings(chat_id)
+        cs_id = str(chat_settings.id)
+
+        # Get all pending queue items with media info
+        pending_rows = self.service.queue_repo.get_all_with_media(
+            status="pending", chat_settings_id=cs_id
+        )
+        processing_rows = self.service.queue_repo.get_all_with_media(
+            status="processing", chat_settings_id=cs_id
+        )
+        all_items = pending_rows + processing_rows
+
+        if not all_items:
+            await update.message.reply_text(
+                "📭 *No Pending Posts*\n\nThere are no items waiting for approval.",
+                parse_mode="Markdown",
+            )
+            return
+
+        # Build summary by category
+        category_counts: dict[str, int] = {}
+        for _item, _file_name, category in all_items:
+            cat = category or "uncategorized"
+            category_counts[cat] = category_counts.get(cat, 0) + 1
+
+        summary_parts = [
+            f"{count} {cat}" for cat, count in sorted(category_counts.items())
+        ]
+        summary = ", ".join(summary_parts)
+
+        text = (
+            f"📋 *Batch Approve — {len(all_items)} pending posts*\n\n"
+            f"Categories: {summary}\n"
+            f"Mode: mark as posted\n\n"
+            f"Approve all {len(all_items)} items?"
+        )
+
+        keyboard = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(
+                        f"✅ Approve All ({len(all_items)})",
+                        callback_data=f"batch_approve:{cs_id}",
+                    ),
+                    InlineKeyboardButton(
+                        "❌ Cancel", callback_data="batch_approve_cancel"
+                    ),
+                ],
+            ]
+        )
+
+        await update.message.reply_text(
+            text, parse_mode="Markdown", reply_markup=keyboard
+        )
+
+        self.service.interaction_service.log_command(
+            user_id=str(user.id),
+            command="/approveall",
+            context={
+                "pending_count": len(all_items),
+                "categories": category_counts,
+            },
+            telegram_chat_id=chat_id,
+            telegram_message_id=update.message.message_id,
+        )
 
     async def handle_removed_command(self, update, context):
         """Handle removed commands with a helpful redirect message."""

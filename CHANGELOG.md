@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Batch Approval in Telegram (#160)
+
+- **`/approveall` command** — Shows pending item count with category breakdown and a confirmation button. On confirm, marks all pending queue items as posted with history records and repost-prevention locks.
+- **Batch callback handlers** — `batch_approve` and `batch_approve_cancel` callbacks registered in dispatch table. Sequential per-item processing with continue-on-error pattern.
+- **Bot menu updated** — `/approveall` added to Telegram command autocomplete and `/help` text.
+
 ### Added — Smart Auto-Approval (#155)
 
 - **Auto-approve returning media** — When the scheduler selects a media item that has been posted before (`times_posted > 0`), it skips the Telegram approval step and directly records the item as posted. Uses existing `media_items.times_posted` field — no schema changes.
