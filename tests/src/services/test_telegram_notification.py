@@ -244,8 +244,8 @@ class TestBuildEnhancedCaption:
         assert "Click & hold image" in result
         assert "Open Instagram" in result
 
-    def test_workflow_instructions_always_shown(self, notification_service):
-        """Test workflow instructions are shown even when verbose=False."""
+    def test_verbose_off_hides_workflow_instructions(self, notification_service):
+        """Test verbose=False omits workflow instructions."""
         media = Mock(
             title="Test",
             caption=None,
@@ -257,8 +257,8 @@ class TestBuildEnhancedCaption:
             media, verbose=False, active_account=None
         )
 
-        assert "Click & hold image" in result
-        assert "Open Instagram" in result
+        assert "Click & hold image" not in result
+        assert "Open Instagram" not in result
 
     def test_verbose_on_shows_debug_info(self, notification_service):
         """Test verbose=True shows file name and ID in enhanced mode."""
