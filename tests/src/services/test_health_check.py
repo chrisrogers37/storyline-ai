@@ -166,7 +166,13 @@ class TestHealthCheckService:
         mock_post = Mock(success=True)
         health_service.history_repo.get_recent_posts.return_value = [mock_post]
 
-        result = health_service.check_all()
+        # Mock loop liveness so all loops report alive
+        all_alive = {
+            name: {"alive": True, "message": "OK", "expected_interval_s": 60}
+            for name in ["scheduler", "lock_cleanup", "cloud_cleanup", "media_sync", "transaction_cleanup"]
+        }
+        with patch("src.main.get_loop_liveness", return_value=all_alive):
+            result = health_service.check_all()
 
         assert result["status"] == "healthy"
         assert "database" in result["checks"]
@@ -175,6 +181,7 @@ class TestHealthCheckService:
         assert "queue" in result["checks"]
         assert "recent_posts" in result["checks"]
         assert "media_sync" in result["checks"]
+        assert "loop_liveness" in result["checks"]
         assert "timestamp" in result
 
     @patch("src.services.core.health_check.BaseRepository")
