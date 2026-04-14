@@ -12,6 +12,7 @@ from sqlalchemy.exc import OperationalError
 
 from src.config.settings import settings
 from src.repositories.history_repository import HistoryCreateParams
+from src.services.core.telegram_service import _escape_markdown
 from src.services.core.telegram_utils import (
     build_queue_action_keyboard,
     validate_queue_and_media,
@@ -311,7 +312,9 @@ class TelegramCallbackHandlers:
                 )
 
         # Update message (retry on transient Telegram failures)
-        await telegram_edit_with_retry(query.edit_message_caption, caption=caption)
+        await telegram_edit_with_retry(
+            query.edit_message_caption, caption=caption, parse_mode="Markdown"
+        )
 
         # Log interaction (fire-and-forget, already has its own error handling)
         self.service.interaction_service.log_callback(
@@ -407,7 +410,10 @@ class TelegramCallbackHandlers:
         )
 
         await telegram_edit_with_retry(
-            query.edit_message_caption, caption=caption, reply_markup=reply_markup
+            query.edit_message_caption,
+            caption=caption,
+            reply_markup=reply_markup,
+            parse_mode="Markdown",
         )
 
         logger.info(f"Returned to queue item by {self.service._get_display_name(user)}")
@@ -420,7 +426,7 @@ class TelegramCallbackHandlers:
 
         # Get media item for filename
         media_item = self.service.media_repo.get_by_id(str(queue_item.media_item_id))
-        file_name = media_item.file_name if media_item else "Unknown"
+        file_name = _escape_markdown(media_item.file_name) if media_item else "Unknown"
 
         # Build confirmation keyboard (short labels - details in message above)
         keyboard = [
@@ -492,7 +498,10 @@ class TelegramCallbackHandlers:
         )
 
         await telegram_edit_with_retry(
-            query.edit_message_caption, caption=caption, reply_markup=reply_markup
+            query.edit_message_caption,
+            caption=caption,
+            reply_markup=reply_markup,
+            parse_mode="Markdown",
         )
 
         # Log interaction
@@ -570,10 +579,13 @@ class TelegramCallbackHandlers:
         # Update message with clear feedback (respect verbose setting)
         verbose = self.service._is_verbose(query.message.chat_id)
         if verbose:
+            file_name = (
+                _escape_markdown(media_item.file_name) if media_item else "Unknown"
+            )
             caption = (
                 f"🚫 *Permanently Rejected*\n\n"
                 f"By: {self.service._get_display_name(user)}\n"
-                f"File: {media_item.file_name if media_item else 'Unknown'}\n\n"
+                f"File: {file_name}\n\n"
                 f"This media will never be queued again."
             )
         else:

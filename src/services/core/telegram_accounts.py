@@ -516,7 +516,9 @@ class TelegramAccountHandlers:
             account_count=account_count,
         )
 
-        await query.edit_message_caption(caption=caption, reply_markup=reply_markup)
+        await query.edit_message_caption(
+            caption=caption, reply_markup=reply_markup, parse_mode="Markdown"
+        )
 
     async def _batch_update_pending_captions(
         self,
@@ -577,6 +579,7 @@ class TelegramAccountHandlers:
                     message_id=queue_item.telegram_message_id,
                     caption=caption,
                     reply_markup=reply_markup,
+                    parse_mode="Markdown",
                 )
                 updated += 1
             except Exception as e:
