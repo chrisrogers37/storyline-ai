@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Smart Auto-Approval (#155)
+
+- **Auto-approve returning media** — When the scheduler selects a media item that has been posted before (`times_posted > 0`), it skips the Telegram approval step and directly records the item as posted. Uses existing `media_items.times_posted` field — no schema changes.
+- **Quiet Telegram notification** — Sends a brief "Auto-approved: filename [category]" message for visibility without requiring user action.
+- **Posting method tracking** — Auto-approved items recorded with `posting_method='auto_reapproval'` in posting_history for analytics distinction.
+- **Only applies to scheduler** — `/next` command and manual flows always go through Telegram approval regardless of prior history.
+
 ### Added — Google Drive Token Health Alerts (#157)
 
 - **Token health check** — `check_gdrive_token_for_chat()` in HealthCheckService checks Google Drive OAuth token expiry per tenant. Warns at <7 days, critical at <1 day, reports expired tokens.
