@@ -387,6 +387,11 @@ class TelegramAccountHandlers:
             # User can click "Back to Post" to return to posting workflow
             await self.handle_post_account_selector(str(queue_item.id), user, query)
 
+            # Batch-update all OTHER pending messages to show the new account
+            await self._batch_update_pending_captions(
+                chat_id, switched_account, exclude_message_id=query.message.message_id
+            )
+
             logger.info("Successfully rebuilt account selector menu")
 
         except ValueError as e:
@@ -409,7 +414,77 @@ class TelegramAccountHandlers:
 
         await self.rebuild_posting_workflow(str(queue_item.id), query)
 
-    async def rebuild_posting_workflow(self, queue_id: str, query):
+    async def handle_cycle_account(self, queue_id: str, user, query):
+        """Cycle to the next Instagram account with a single tap.
+
+        Used when there are 2-3 accounts — replaces the submenu with a
+        single-tap cycle button. Switches the active account to the next
+        one in the list and rebuilds the current message inline.
+        """
+        chat_id = query.message.chat_id
+
+        queue_item = await validate_queue_item(self.service, queue_id, query)
+        if not queue_item:
+            return
+
+        account_data = self.service.ig_account_service.get_accounts_for_display(chat_id)
+        accounts = account_data["accounts"]
+        active_id = account_data["active_account_id"]
+
+        if len(accounts) < 2:
+            await query.answer("Only one account configured", show_alert=False)
+            return
+
+        # Find current index and cycle to next
+        current_idx = next(
+            (i for i, a in enumerate(accounts) if a["id"] == active_id), 0
+        )
+        next_idx = (current_idx + 1) % len(accounts)
+        next_account_id = accounts[next_idx]["id"]
+
+        try:
+            switched = self.service.ig_account_service.switch_account(
+                chat_id, next_account_id, user
+            )
+
+            self.service.interaction_service.log_callback(
+                user_id=str(user.id),
+                callback_name="cycle_account",
+                context={
+                    "queue_item_id": str(queue_item.id),
+                    "account_id": next_account_id,
+                    "account_username": switched.instagram_username,
+                },
+                telegram_chat_id=chat_id,
+                telegram_message_id=query.message.message_id,
+            )
+
+            await query.answer(f"📸 {switched.display_name}")
+
+            account_count = len(accounts)
+
+            # Rebuild this message with updated account
+            await self.rebuild_posting_workflow(
+                str(queue_item.id), query, account_count=account_count
+            )
+
+            # Batch-update all other pending messages
+            await self._batch_update_pending_captions(
+                chat_id,
+                switched,
+                exclude_message_id=query.message.message_id,
+                account_count=account_count,
+            )
+
+        except ValueError as e:
+            await query.answer(f"Error: {e}", show_alert=True)
+        except Exception as e:
+            logger.error(f"Error cycling account: {e}", exc_info=True)
+            await query.answer(f"⚠️ Error: {str(e)[:50]}", show_alert=True)
+
+    async def rebuild_posting_workflow(
+        self, queue_id: str, query, *, account_count: int | None = None
+    ):
         """Rebuild the original posting workflow message.
 
         Used after account selection or when returning from submenu.
@@ -432,12 +507,89 @@ class TelegramAccountHandlers:
 
         # Rebuild keyboard with account selector
         chat_settings = self.service.settings_service.get_settings(chat_id)
+        if account_count is None:
+            account_count = self.service.ig_account_service.count_active_accounts()
         reply_markup = build_queue_action_keyboard(
             queue_id,
             enable_instagram_api=chat_settings.enable_instagram_api,
             active_account=active_account,
+            account_count=account_count,
         )
 
         await query.edit_message_caption(
             caption=caption, reply_markup=reply_markup, parse_mode="Markdown"
         )
+
+    async def _batch_update_pending_captions(
+        self,
+        chat_id: int,
+        new_account,
+        exclude_message_id: int | None = None,
+        account_count: int | None = None,
+    ):
+        """Update captions and keyboards on all pending messages after account switch.
+
+        Edits every active notification in the chat to reflect the new active
+        account, so users don't see stale account names on other pending posts.
+
+        Args:
+            chat_id: Telegram chat ID
+            new_account: The newly active InstagramAccount
+            exclude_message_id: Message ID to skip (already updated by caller)
+            account_count: Pre-fetched account count (avoids redundant DB query)
+        """
+        pending_items = self.service.queue_repo.get_pending_with_telegram_message(
+            chat_id
+        )
+        chat_settings = self.service.settings_service.get_settings(chat_id)
+        if account_count is None:
+            account_count = self.service.ig_account_service.count_active_accounts()
+        verbose = self.service._is_verbose(chat_id, chat_settings=chat_settings)
+        updated = 0
+
+        for queue_item in pending_items:
+            if (
+                exclude_message_id is not None
+                and queue_item.telegram_message_id == exclude_message_id
+            ):
+                continue
+
+            try:
+                media_item = self.service.media_repo.get_by_id(
+                    str(queue_item.media_item_id)
+                )
+                if not media_item:
+                    continue
+
+                caption = self.service._build_caption(
+                    media_item,
+                    queue_item,
+                    verbose=verbose,
+                    active_account=new_account,
+                )
+                reply_markup = build_queue_action_keyboard(
+                    str(queue_item.id),
+                    enable_instagram_api=chat_settings.enable_instagram_api,
+                    active_account=new_account,
+                    account_count=account_count,
+                )
+
+                await self.service.bot.edit_message_caption(
+                    chat_id=chat_id,
+                    message_id=queue_item.telegram_message_id,
+                    caption=caption,
+                    reply_markup=reply_markup,
+                    parse_mode="Markdown",
+                )
+                updated += 1
+            except Exception as e:
+                logger.debug(
+                    f"Could not update caption for queue item "
+                    f"{str(queue_item.id)[:8]}: {e}"
+                )
+
+        if updated:
+            logger.info(
+                f"Batch-updated {updated} pending message(s) with new account: "
+                f"{new_account.display_name}"
+            )

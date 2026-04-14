@@ -2,8 +2,6 @@
 
 import re
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-
 from src.config.settings import settings
 from src.exceptions.google_drive import GoogleDriveAuthError
 from src.utils.logger import logger
@@ -112,9 +110,17 @@ class TelegramNotificationService:
             active_account=active_account,
         )
 
+        # Get account count for keyboard cycle behavior
+        account_count = self.service.ig_account_service.count_active_accounts()
+
         # Build inline keyboard
-        reply_markup = self._build_keyboard(
-            queue_item_id, chat_settings, active_account
+        from src.services.core.telegram_utils import build_queue_action_keyboard
+
+        reply_markup = build_queue_action_keyboard(
+            queue_item_id,
+            enable_instagram_api=chat_settings.enable_instagram_api,
+            active_account=active_account,
+            account_count=account_count,
         )
 
         try:
@@ -169,66 +175,6 @@ class TelegramNotificationService:
                 ) from e
             logger.error(f"Failed to send Telegram notification: {e}")
             return False
-
-    def _build_keyboard(self, queue_item_id, chat_settings, active_account):
-        """Build inline keyboard buttons for the notification.
-
-        Layout: Auto Post (if enabled) -> Status actions -> Instagram actions
-        """
-        keyboard = []
-
-        # Add Auto Post button if Instagram API is enabled (from database settings)
-        if chat_settings.enable_instagram_api:
-            keyboard.append(
-                [
-                    InlineKeyboardButton(
-                        "🤖 Auto Post to Instagram",
-                        callback_data=f"autopost:{queue_item_id}",
-                    ),
-                ]
-            )
-
-        # Status action buttons (grouped together)
-        keyboard.extend(
-            [
-                [
-                    InlineKeyboardButton(
-                        "✅ Posted", callback_data=f"posted:{queue_item_id}"
-                    ),
-                    InlineKeyboardButton(
-                        "⏭️ Skip", callback_data=f"skip:{queue_item_id}"
-                    ),
-                ],
-                [
-                    InlineKeyboardButton(
-                        "🚫 Reject",
-                        callback_data=f"reject:{queue_item_id}",
-                    ),
-                ],
-            ]
-        )
-
-        # Instagram-related buttons (grouped together)
-        account_label = (
-            f"📸 {active_account.display_name}" if active_account else "📸 No Account"
-        )
-        keyboard.extend(
-            [
-                [
-                    InlineKeyboardButton(
-                        account_label,
-                        callback_data=f"select_account:{queue_item_id}",
-                    ),
-                ],
-                [
-                    InlineKeyboardButton(
-                        "📱 Open Instagram",
-                        url=settings.INSTAGRAM_DEEPLINK_URL,
-                    ),
-                ],
-            ]
-        )
-        return InlineKeyboardMarkup(keyboard)
 
     def _build_caption(
         self,

@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Standardize caption spacing** — Both caption modes now use consistent `"\n".join()` spacing and always show account status. (#139)
 - **Add `parse_mode="Markdown"` to callback edits** — Posted, skipped, back, cancel-reject, and dry-run messages now use Markdown consistently. (#142)
 
+### Changed — Multi-Account UX Improvements (#140, #141)
+
+- **Batch-update pending messages on account switch** — When switching Instagram accounts, all pending notification captions and button labels now update to reflect the new account. Previously only the message where you clicked updated, leaving other pending posts showing the old account name. (#140)
+- **Single-tap account cycle for 2-3 accounts** — The account selector button now cycles through accounts with one tap instead of opening a submenu. For users with 4+ accounts, the submenu is preserved. (#141)
+- **Consolidated keyboard builder** — `TelegramNotificationService._build_keyboard()` now delegates to the shared `build_queue_action_keyboard()` utility, eliminating a duplicate keyboard implementation. (#137 partial)
+
 ### Fixed — Worker Crash in Cloud Storage Cleanup
 
 - **Fix fatal AttributeError in cleanup loop** — `cleanup_cloud_storage_loop` called `cleanup_transactions()` on a `MediaRepository`, but that method only exists on `BaseService`. Replaced with the correct `end_read_transaction()` call. This crash killed the entire worker process after the first hourly cleanup cycle.

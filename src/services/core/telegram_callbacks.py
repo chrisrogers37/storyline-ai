@@ -394,11 +394,19 @@ class TelegramCallbackHandlers:
             return
 
         # Rebuild original caption
-        caption = self.service._build_caption(media_item, queue_item)
+        chat_id = query.message.chat_id
+        active_account = self.service.ig_account_service.get_active_account(chat_id)
+        caption = self.service._build_caption(
+            media_item, queue_item, active_account=active_account
+        )
 
         # Rebuild original keyboard
+        chat_settings = self.service.settings_service.get_settings(chat_id)
         reply_markup = build_queue_action_keyboard(
-            queue_id, enable_instagram_api=settings.ENABLE_INSTAGRAM_API
+            queue_id,
+            enable_instagram_api=chat_settings.enable_instagram_api,
+            active_account=active_account,
+            account_count=self.service.ig_account_service.count_active_accounts(),
         )
 
         await telegram_edit_with_retry(
@@ -486,6 +494,7 @@ class TelegramCallbackHandlers:
             queue_id,
             enable_instagram_api=chat_settings.enable_instagram_api,
             active_account=active_account,
+            account_count=self.service.ig_account_service.count_active_accounts(),
         )
 
         await telegram_edit_with_retry(

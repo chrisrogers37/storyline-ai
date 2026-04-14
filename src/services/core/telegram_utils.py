@@ -145,6 +145,7 @@ def build_queue_action_keyboard(
     queue_id: str,
     enable_instagram_api: bool = False,
     active_account=None,
+    account_count: int = 0,
 ) -> InlineKeyboardMarkup:
     """Build the standard action keyboard for a queue item notification.
 
@@ -152,7 +153,7 @@ def build_queue_action_keyboard(
     - Auto Post button (if Instagram API is enabled)
     - Posted / Skip buttons
     - Reject button
-    - Account selector button
+    - Account selector button (cycle for 2-3 accounts, submenu for 4+)
     - Open Instagram link
 
     Args:
@@ -160,6 +161,7 @@ def build_queue_action_keyboard(
         enable_instagram_api: Whether to show the Auto Post button
         active_account: The active InstagramAccount object (for account label),
                         or None to show "No Account"
+        account_count: Total number of active accounts (determines cycle vs submenu)
 
     Returns:
         InlineKeyboardMarkup with the complete action keyboard
@@ -190,16 +192,23 @@ def build_queue_action_keyboard(
         ]
     )
 
-    # Instagram-related buttons
+    # Account button: cycle (2-3 accounts) or submenu (4+)
     account_label = (
         f"📸 {active_account.display_name}" if active_account else "📸 No Account"
     )
+    if 2 <= account_count <= 3:
+        # Single-tap cycle: switches to next account inline
+        callback = f"cycle_account:{queue_id}"
+    else:
+        # Submenu: opens account selector list
+        callback = f"select_account:{queue_id}"
+
     keyboard.extend(
         [
             [
                 InlineKeyboardButton(
                     account_label,
-                    callback_data=f"select_account:{queue_id}",
+                    callback_data=callback,
                 ),
             ],
             [
