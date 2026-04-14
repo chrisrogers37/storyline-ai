@@ -84,6 +84,19 @@ async def onboarding_accounts(
         return {"accounts": items, "active_account_id": active_account_id}
 
 
+@router.get("/analytics")
+async def onboarding_analytics(
+    init_data: str,
+    chat_id: int,
+    days: int = Query(default=30, ge=1, le=365),
+):
+    """Return aggregated posting analytics for the dashboard."""
+    _validate_request(init_data, chat_id)
+
+    with DashboardService() as service:
+        return service.get_analytics(chat_id, days=days)
+
+
 @router.get("/system-status")
 async def onboarding_system_status(
     init_data: str,

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Posting Analytics Dashboard (#153)
+
+- **Analytics API endpoint** — `GET /api/onboarding/analytics?chat_id=X&days=30` returns aggregated posting statistics: total posts, success rate, avg per day, method breakdown, daily counts, hourly distribution, and category performance.
+- **Repository aggregation methods** — `get_stats_by_status()`, `get_stats_by_method()`, `get_daily_counts()`, `get_hourly_distribution()`, and `get_stats_by_category()` in HistoryRepository, all with multi-tenant scoping.
+- **DashboardService orchestration** — `get_analytics()` combines all aggregations into a single response with execution tracking.
+
 ### Added — Loop Liveness Tracking (#134)
 
 - **Heartbeat tracking for all background loops** — Each loop (scheduler, lock_cleanup, cloud_cleanup, media_sync, transaction_cleanup) records a timestamp on every tick. The health check reports loops as stale if they haven't ticked in 2x their expected interval. Visible via `check-health` CLI and `/status` health checks.

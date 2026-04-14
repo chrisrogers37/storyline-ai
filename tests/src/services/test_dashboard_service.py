@@ -244,3 +244,106 @@ class TestGetPendingQueueItems:
         result = dashboard_service.get_pending_queue_items()
 
         assert result == []
+
+
+@pytest.mark.unit
+class TestGetAnalytics:
+    """Tests for get_analytics aggregation."""
+
+    def _setup_analytics_service(self):
+        """Create DashboardService with mocked dependencies for analytics."""
+        with patch.object(DashboardService, "__init__", lambda self: None):
+            service = DashboardService()
+            service.settings_service = MagicMock()
+            service.queue_repo = MagicMock()
+            service.history_repo = MagicMock()
+            service.media_repo = MagicMock()
+            service.service_run_repo = MagicMock()
+            service.service_name = "DashboardService"
+
+            mock_settings = Mock(id="tenant-uuid-1")
+            service.settings_service.get_settings.return_value = mock_settings
+            return service
+
+    def test_returns_complete_analytics(self):
+        """get_analytics returns all expected sections."""
+        service = self._setup_analytics_service()
+
+        service.history_repo.get_stats_by_status.return_value = {
+            "posted": 80,
+            "skipped": 10,
+            "rejected": 5,
+            "failed": 5,
+        }
+        service.history_repo.get_stats_by_method.return_value = {
+            "instagram_api": 60,
+            "telegram_manual": 20,
+        }
+        service.history_repo.get_daily_counts.return_value = [
+            {"date": "2026-04-10", "posted": 4, "skipped": 1},
+            {"date": "2026-04-11", "posted": 5},
+        ]
+        service.history_repo.get_hourly_distribution.return_value = [
+            {"hour": 10, "count": 15},
+            {"hour": 14, "count": 20},
+        ]
+        service.history_repo.get_stats_by_category.return_value = [
+            {
+                "category": "memes",
+                "posted": 50,
+                "skipped": 8,
+                "total": 58,
+                "success_rate": 0.86,
+            },
+        ]
+
+        result = service.get_analytics(telegram_chat_id=123, days=30)
+
+        assert result["summary"]["total_posts"] == 100
+        assert result["summary"]["posted"] == 80
+        assert result["summary"]["success_rate"] == 0.8
+        assert result["summary"]["avg_per_day"] == 50.0  # 100 / 2 days
+        assert result["method_breakdown"]["instagram_api"] == 60
+        assert len(result["daily_counts"]) == 2
+        assert len(result["hourly_distribution"]) == 2
+        assert len(result["category_breakdown"]) == 1
+        assert result["days"] == 30
+
+    def test_handles_empty_history(self):
+        """get_analytics handles no posting history gracefully."""
+        service = self._setup_analytics_service()
+
+        service.history_repo.get_stats_by_status.return_value = {}
+        service.history_repo.get_stats_by_method.return_value = {}
+        service.history_repo.get_daily_counts.return_value = []
+        service.history_repo.get_hourly_distribution.return_value = []
+        service.history_repo.get_stats_by_category.return_value = []
+
+        result = service.get_analytics(telegram_chat_id=123)
+
+        assert result["summary"]["total_posts"] == 0
+        assert result["summary"]["success_rate"] == 0
+        assert result["summary"]["avg_per_day"] == 0
+        assert result["daily_counts"] == []
+
+    def test_passes_days_and_tenant(self):
+        """get_analytics passes days and chat_settings_id to all repo methods."""
+        service = self._setup_analytics_service()
+
+        service.history_repo.get_stats_by_status.return_value = {}
+        service.history_repo.get_stats_by_method.return_value = {}
+        service.history_repo.get_daily_counts.return_value = []
+        service.history_repo.get_hourly_distribution.return_value = []
+        service.history_repo.get_stats_by_category.return_value = []
+
+        service.get_analytics(telegram_chat_id=123, days=7)
+
+        service.history_repo.get_stats_by_status.assert_called_once_with(
+            days=7, chat_settings_id="tenant-uuid-1"
+        )
+        service.history_repo.get_stats_by_method.assert_called_once_with(
+            days=7, chat_settings_id="tenant-uuid-1"
+        )
+        service.history_repo.get_daily_counts.assert_called_once_with(
+            days=7, chat_settings_id="tenant-uuid-1"
+        )

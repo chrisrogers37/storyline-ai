@@ -195,3 +195,143 @@ class HistoryRepository(BaseRepository):
         )
         self.end_read_transaction()
         return result
+
+    # ------------------------------------------------------------------
+    # Analytics aggregations
+    # ------------------------------------------------------------------
+
+    def get_stats_by_status(
+        self, days: int = 30, chat_settings_id: Optional[str] = None
+    ) -> dict:
+        """Count posts grouped by status within the given time window.
+
+        Returns: {"posted": N, "skipped": N, "rejected": N, "failed": N}
+        """
+        since = datetime.utcnow() - timedelta(days=days)
+        rows = (
+            self._tenant_query(PostingHistory, chat_settings_id)
+            .with_entities(PostingHistory.status, func.count(PostingHistory.id))
+            .filter(PostingHistory.posted_at >= since)
+            .group_by(PostingHistory.status)
+            .all()
+        )
+        self.end_read_transaction()
+        return {status: count for status, count in rows}
+
+    def get_stats_by_method(
+        self, days: int = 30, chat_settings_id: Optional[str] = None
+    ) -> dict:
+        """Count successful posts grouped by posting method.
+
+        Returns: {"instagram_api": N, "telegram_manual": N}
+        """
+        since = datetime.utcnow() - timedelta(days=days)
+        rows = (
+            self._tenant_query(PostingHistory, chat_settings_id)
+            .with_entities(PostingHistory.posting_method, func.count(PostingHistory.id))
+            .filter(PostingHistory.posted_at >= since, PostingHistory.success)
+            .group_by(PostingHistory.posting_method)
+            .all()
+        )
+        self.end_read_transaction()
+        return {method or "unknown": count for method, count in rows}
+
+    def get_daily_counts(
+        self, days: int = 30, chat_settings_id: Optional[str] = None
+    ) -> list:
+        """Count posts per day grouped by status.
+
+        Returns list of {"date": "YYYY-MM-DD", "posted": N, "skipped": N, ...}
+        """
+        from sqlalchemy import cast, Date
+
+        since = datetime.utcnow() - timedelta(days=days)
+        rows = (
+            self._tenant_query(PostingHistory, chat_settings_id)
+            .with_entities(
+                cast(PostingHistory.posted_at, Date).label("day"),
+                PostingHistory.status,
+                func.count(PostingHistory.id),
+            )
+            .filter(PostingHistory.posted_at >= since)
+            .group_by("day", PostingHistory.status)
+            .order_by("day")
+            .all()
+        )
+        self.end_read_transaction()
+
+        # Pivot into {date: {status: count}} then flatten
+        by_day: dict = {}
+        for day, status, count in rows:
+            day_str = day.isoformat()
+            if day_str not in by_day:
+                by_day[day_str] = {"date": day_str}
+            by_day[day_str][status] = count
+
+        return list(by_day.values())
+
+    def get_hourly_distribution(
+        self, days: int = 30, chat_settings_id: Optional[str] = None
+    ) -> list:
+        """Count successful posts by hour of day.
+
+        Returns list of {"hour": 0-23, "count": N}
+        """
+        from sqlalchemy import extract
+
+        since = datetime.utcnow() - timedelta(days=days)
+        rows = (
+            self._tenant_query(PostingHistory, chat_settings_id)
+            .with_entities(
+                extract("hour", PostingHistory.posted_at).label("hour"),
+                func.count(PostingHistory.id),
+            )
+            .filter(PostingHistory.posted_at >= since, PostingHistory.success)
+            .group_by("hour")
+            .order_by("hour")
+            .all()
+        )
+        self.end_read_transaction()
+        return [{"hour": int(hour), "count": count} for hour, count in rows]
+
+    def get_stats_by_category(
+        self, days: int = 30, chat_settings_id: Optional[str] = None
+    ) -> list:
+        """Count posts grouped by media category and status.
+
+        Joins with media_items to get category.
+        Returns list of {"category": str, "posted": N, "skipped": N, ...}
+        """
+        from src.models.media_item import MediaItem
+
+        since = datetime.utcnow() - timedelta(days=days)
+        rows = (
+            self._tenant_query(PostingHistory, chat_settings_id)
+            .outerjoin(MediaItem, PostingHistory.media_item_id == MediaItem.id)
+            .with_entities(
+                func.coalesce(MediaItem.category, "uncategorized"),
+                PostingHistory.status,
+                func.count(PostingHistory.id),
+            )
+            .filter(PostingHistory.posted_at >= since)
+            .group_by(MediaItem.category, PostingHistory.status)
+            .order_by(MediaItem.category)
+            .all()
+        )
+        self.end_read_transaction()
+
+        # Pivot into {category: {status: count}}
+        by_category: dict = {}
+        for category, status, count in rows:
+            if category not in by_category:
+                by_category[category] = {"category": category}
+            by_category[category][status] = count
+
+        # Add total and success_rate
+        for cat_data in by_category.values():
+            total = sum(v for k, v in cat_data.items() if k != "category")
+            posted = cat_data.get("posted", 0)
+            cat_data["total"] = total
+            cat_data["success_rate"] = round(posted / total, 2) if total else 0
+
+        return list(by_category.values())

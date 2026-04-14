@@ -124,6 +124,59 @@ class DashboardService(BaseService):
             "categories": categories,
         }
 
+    def get_analytics(self, telegram_chat_id: int, days: int = 30) -> dict:
+        """Return aggregated posting analytics for the dashboard.
+
+        Combines status breakdown, method breakdown, daily counts,
+        hourly distribution, and category performance into a single
+        response.
+        """
+        with self.track_execution(
+            "get_analytics",
+            input_params={"telegram_chat_id": telegram_chat_id, "days": days},
+        ) as run_id:
+            chat_settings_id = self._resolve_chat_settings_id(telegram_chat_id)
+
+            status_counts = self.history_repo.get_stats_by_status(
+                days=days, chat_settings_id=chat_settings_id
+            )
+            method_counts = self.history_repo.get_stats_by_method(
+                days=days, chat_settings_id=chat_settings_id
+            )
+            daily_counts = self.history_repo.get_daily_counts(
+                days=days, chat_settings_id=chat_settings_id
+            )
+            hourly_dist = self.history_repo.get_hourly_distribution(
+                days=days, chat_settings_id=chat_settings_id
+            )
+            category_stats = self.history_repo.get_stats_by_category(
+                days=days, chat_settings_id=chat_settings_id
+            )
+
+            total = sum(status_counts.values())
+            posted = status_counts.get("posted", 0)
+            num_days = max(len(daily_counts), 1)
+
+            result = {
+                "summary": {
+                    "total_posts": total,
+                    "posted": posted,
+                    "skipped": status_counts.get("skipped", 0),
+                    "rejected": status_counts.get("rejected", 0),
+                    "failed": status_counts.get("failed", 0),
+                    "success_rate": round(posted / total, 2) if total else 0,
+                    "avg_per_day": round(total / num_days, 1),
+                },
+                "method_breakdown": method_counts,
+                "daily_counts": daily_counts,
+                "hourly_distribution": hourly_dist,
+                "category_breakdown": category_stats,
+                "days": days,
+            }
+
+            self.set_result_summary(run_id, {"total_posts": total, "days": days})
+            return result
+
     def get_pending_queue_items(self, chat_settings_id: Optional[str] = None) -> list:
         """Return pending queue items with media details.
 
