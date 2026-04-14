@@ -30,18 +30,34 @@ SERVICE_RUNS_RETENTION_DAYS = 7
 RETENTION_INTERVAL_TICKS = 60
 
 
-async def _guarded(name: str, coro: Coroutine) -> None:
+async def _guarded(name: str, coro: Coroutine, *, bot=None) -> None:
     """Run a coroutine and log (not propagate) unhandled exceptions.
 
     Prevents a crash in one background loop from killing the whole worker
-    via asyncio.gather().
+    via asyncio.gather(). When a bot instance is provided, sends a Telegram
+    alert to the admin chat so crashes aren't silent.
     """
     try:
         await coro
     except asyncio.CancelledError:
         raise  # let shutdown propagate
-    except Exception:
+    except Exception as exc:
         logger.critical(f"Background task '{name}' crashed", exc_info=True)
+
+        if bot:
+            try:
+                await bot.send_message(
+                    chat_id=settings.ADMIN_TELEGRAM_CHAT_ID,
+                    text=(
+                        f"⚠️ *Background task crashed*\n\n"
+                        f"Task: `{name}`\n"
+                        f"Error: `{type(exc).__name__}: {str(exc)[:200]}`\n\n"
+                        f"Worker is still running but this loop has stopped."
+                    ),
+                    parse_mode="Markdown",
+                )
+            except Exception:
+                logger.error(f"Failed to send crash alert for '{name}'", exc_info=True)
 
 
 async def run_scheduler_loop(
@@ -399,6 +415,8 @@ async def main_async():
         lock_service,
         settings_service,
     ]
+    bot = telegram_service.bot
+
     tasks = [
         asyncio.create_task(
             _guarded(
@@ -406,9 +424,12 @@ async def main_async():
                 run_scheduler_loop(
                     scheduler_service, posting_service, settings_service
                 ),
+                bot=bot,
             )
         ),
-        asyncio.create_task(_guarded("lock_cleanup", cleanup_locks_loop(lock_service))),
+        asyncio.create_task(
+            _guarded("lock_cleanup", cleanup_locks_loop(lock_service), bot=bot)
+        ),
         asyncio.create_task(telegram_service.start_polling()),
     ]
 
@@ -420,7 +441,11 @@ async def main_async():
         all_services.append(cloud_service)
         tasks.append(
             asyncio.create_task(
-                _guarded("cloud_cleanup", cleanup_cloud_storage_loop(cloud_service))
+                _guarded(
+                    "cloud_cleanup",
+                    cleanup_cloud_storage_loop(cloud_service),
+                    bot=bot,
+                )
             )
         )
 
@@ -436,13 +461,18 @@ async def main_async():
                         settings_service=settings_service,
                         telegram_service=telegram_service,
                     ),
+                    bot=bot,
                 )
             )
         )
 
     tasks.append(
         asyncio.create_task(
-            _guarded("transaction_cleanup", transaction_cleanup_loop(all_services))
+            _guarded(
+                "transaction_cleanup",
+                transaction_cleanup_loop(all_services),
+                bot=bot,
+            )
         )
     )
 

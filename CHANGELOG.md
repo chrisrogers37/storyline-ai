@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Telegram Crash Alerts (#132)
+
+- **Send Telegram alert when a background task crashes** — `_guarded()` now sends a message to the admin chat when any background loop (scheduler, lock cleanup, cloud cleanup, media sync, transaction cleanup) crashes. The worker stays alive but the user is immediately notified which loop stopped. Alert failures are caught separately so they never mask the original crash.
+
 ### Changed — Keyboard Builder Consolidation (#137)
 
 - **Merge `build_error_recovery_keyboard` into `build_queue_action_keyboard`** — The two near-identical keyboard builders are now one function with an `error_recovery` parameter. Error recovery mode shows "Retry Auto Post" instead of "Auto Post" and hides the account selector.
