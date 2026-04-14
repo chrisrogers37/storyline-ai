@@ -231,6 +231,127 @@ class DashboardService(BaseService):
                 "days": days,
             }
 
+    def get_schedule_recommendations(
+        self, telegram_chat_id: int, days: int = 90
+    ) -> dict:
+        """Analyze posting history to recommend optimal posting times.
+
+        Returns hourly approval rates, day-of-week patterns, and
+        human-readable recommendations based on when posts are most
+        frequently approved vs skipped/rejected.
+        """
+        MIN_DATA_POINTS = 10
+
+        with self.track_execution(
+            "get_schedule_recommendations",
+            input_params={"telegram_chat_id": telegram_chat_id, "days": days},
+        ) as run_id:
+            chat_settings_id = self._resolve_chat_settings_id(telegram_chat_id)
+
+            hourly = self.history_repo.get_hourly_approval_rates(
+                days=days, chat_settings_id=chat_settings_id
+            )
+            dow = self.history_repo.get_dow_approval_rates(
+                days=days, chat_settings_id=chat_settings_id
+            )
+
+            total_data_points = sum(h.get("total", 0) for h in hourly)
+
+            if total_data_points < MIN_DATA_POINTS:
+                self.set_result_summary(
+                    run_id,
+                    {"status": "insufficient_data", "data_points": total_data_points},
+                )
+                return {
+                    "status": "insufficient_data",
+                    "message": (
+                        f"Need at least {MIN_DATA_POINTS} posts to generate "
+                        f"recommendations (have {total_data_points})"
+                    ),
+                    "hourly_rates": [],
+                    "dow_rates": [],
+                    "recommendations": [],
+                    "days": days,
+                }
+
+            recommendations = self._generate_recommendations(hourly, dow)
+
+            self.set_result_summary(
+                run_id,
+                {
+                    "status": "ok",
+                    "data_points": total_data_points,
+                    "recommendation_count": len(recommendations),
+                },
+            )
+            return {
+                "status": "ok",
+                "hourly_rates": hourly,
+                "dow_rates": dow,
+                "recommendations": recommendations,
+                "days": days,
+                "data_points": total_data_points,
+            }
+
+    @staticmethod
+    def _generate_recommendations(hourly: list, dow: list) -> list:
+        """Generate human-readable schedule recommendations from patterns."""
+        recommendations = []
+
+        # Find best and worst hours (need at least some data per hour)
+        hours_with_data = [h for h in hourly if h.get("total", 0) >= 3]
+        if hours_with_data:
+            best_hour = max(hours_with_data, key=lambda h: h["approval_rate"])
+            worst_hour = min(hours_with_data, key=lambda h: h["approval_rate"])
+
+            if best_hour["approval_rate"] > worst_hour["approval_rate"] + 0.1:
+                recommendations.append(
+                    {
+                        "type": "best_hour",
+                        "message": (
+                            f"Posts at {best_hour['hour']}:00 have the highest "
+                            f"approval rate ({best_hour['approval_rate']:.0%})"
+                        ),
+                        "hour": best_hour["hour"],
+                        "approval_rate": best_hour["approval_rate"],
+                    }
+                )
+
+            if worst_hour["approval_rate"] < 0.7 and worst_hour["total"] >= 5:
+                recommendations.append(
+                    {
+                        "type": "worst_hour",
+                        "message": (
+                            f"Posts at {worst_hour['hour']}:00 have a low "
+                            f"approval rate ({worst_hour['approval_rate']:.0%}) — "
+                            f"consider avoiding this time"
+                        ),
+                        "hour": worst_hour["hour"],
+                        "approval_rate": worst_hour["approval_rate"],
+                    }
+                )
+
+        # Find best and worst days
+        days_with_data = [d for d in dow if d.get("total", 0) >= 3]
+        if days_with_data:
+            best_day = max(days_with_data, key=lambda d: d["approval_rate"])
+            worst_day = min(days_with_data, key=lambda d: d["approval_rate"])
+
+            if best_day["approval_rate"] > worst_day["approval_rate"] + 0.1:
+                recommendations.append(
+                    {
+                        "type": "best_day",
+                        "message": (
+                            f"{best_day['day_name']}s have the highest approval rate "
+                            f"({best_day['approval_rate']:.0%})"
+                        ),
+                        "day_name": best_day["day_name"],
+                        "approval_rate": best_day["approval_rate"],
+                    }
+                )
+
+        return recommendations
+
     def get_pending_queue_items(self, chat_settings_id: Optional[str] = None) -> list:
         """Return pending queue items with media details.
 

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Schedule Optimization Recommendations (#158)
+
+- **Schedule recommendations API** — `GET /api/onboarding/analytics/schedule-recommendations` analyzes posting history to identify optimal posting times. Returns hourly approval rates, day-of-week patterns, and human-readable recommendations (e.g., "Posts at 10:00 have the highest approval rate (94%)").
+- **Hourly approval rates** — `get_hourly_approval_rates()` in HistoryRepository groups posts by hour with full status breakdown and approval rate calculation.
+- **Day-of-week analysis** — `get_dow_approval_rates()` identifies which days have the highest/lowest approval rates over a 90-day window.
+- **Graceful degradation** — Returns "insufficient_data" status when fewer than 10 posts exist, preventing misleading recommendations from sparse data.
+
 ### Added — Batch Approval in Telegram (#160)
 
 - **`/approveall` command** — Shows pending item count with category breakdown and a confirmation button. On confirm, marks all pending queue items as posted with history records and repost-prevention locks.
