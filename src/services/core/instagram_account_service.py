@@ -490,6 +490,10 @@ class InstagramAccountService(BaseService):
 
             return account
 
+    def count_active_accounts(self) -> int:
+        """Count active Instagram accounts (lightweight, single COUNT query)."""
+        return self.account_repo.count_active()
+
     def get_accounts_for_display(self, telegram_chat_id: int) -> Dict[str, Any]:
         """
         Get account info formatted for /settings display.
