@@ -84,6 +84,19 @@ async def onboarding_accounts(
         return {"accounts": items, "active_account_id": active_account_id}
 
 
+@router.get("/analytics/schedule-recommendations")
+async def onboarding_schedule_recommendations(
+    init_data: str,
+    chat_id: int,
+    days: int = Query(default=90, ge=7, le=365),
+):
+    """Return posting time recommendations based on approval patterns."""
+    _validate_request(init_data, chat_id)
+
+    with DashboardService() as service:
+        return service.get_schedule_recommendations(chat_id, days=days)
+
+
 @router.get("/analytics/categories")
 async def onboarding_analytics_categories(
     init_data: str,

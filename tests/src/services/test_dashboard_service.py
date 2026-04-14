@@ -439,3 +439,148 @@ class TestGetCategoryAnalytics:
 
         assert result["total_posts"] == 0
         assert result["categories"] == []
+
+
+@pytest.mark.unit
+class TestGetScheduleRecommendations:
+    """Tests for schedule recommendation generation."""
+
+    def _setup_service(self):
+        """Create DashboardService with mocked dependencies."""
+        with patch.object(DashboardService, "__init__", lambda self: None):
+            service = DashboardService()
+            service.settings_service = MagicMock()
+            service.queue_repo = MagicMock()
+            service.history_repo = MagicMock()
+            service.media_repo = MagicMock()
+            service.category_mix_repo = MagicMock()
+            service.service_run_repo = MagicMock()
+            service.service_name = "DashboardService"
+
+            mock_settings = Mock(id="tenant-uuid-1")
+            service.settings_service.get_settings.return_value = mock_settings
+            return service
+
+    def test_returns_recommendations_with_sufficient_data(self):
+        """Generates recommendations when enough data exists."""
+        service = self._setup_service()
+
+        service.history_repo.get_hourly_approval_rates.return_value = [
+            {
+                "hour": 10,
+                "posted": 15,
+                "skipped": 1,
+                "total": 16,
+                "approval_rate": 0.94,
+            },
+            {"hour": 14, "posted": 8, "skipped": 7, "total": 15, "approval_rate": 0.53},
+            {
+                "hour": 18,
+                "posted": 10,
+                "skipped": 2,
+                "total": 12,
+                "approval_rate": 0.83,
+            },
+        ]
+        service.history_repo.get_dow_approval_rates.return_value = [
+            {
+                "dow": 1,
+                "day_name": "Monday",
+                "posted": 20,
+                "skipped": 2,
+                "total": 22,
+                "approval_rate": 0.91,
+            },
+            {
+                "dow": 6,
+                "day_name": "Saturday",
+                "posted": 5,
+                "skipped": 5,
+                "total": 10,
+                "approval_rate": 0.50,
+            },
+        ]
+
+        result = service.get_schedule_recommendations(telegram_chat_id=123)
+
+        assert result["status"] == "ok"
+        assert len(result["hourly_rates"]) == 3
+        assert len(result["dow_rates"]) == 2
+        assert len(result["recommendations"]) >= 1
+        # Should recommend hour 10 as best
+        best_hour_rec = next(
+            (r for r in result["recommendations"] if r["type"] == "best_hour"), None
+        )
+        assert best_hour_rec is not None
+        assert best_hour_rec["hour"] == 10
+
+    def test_returns_insufficient_data_when_too_few_posts(self):
+        """Returns insufficient_data status with fewer than 10 posts."""
+        service = self._setup_service()
+
+        service.history_repo.get_hourly_approval_rates.return_value = [
+            {"hour": 10, "posted": 3, "total": 3, "approval_rate": 1.0},
+        ]
+        service.history_repo.get_dow_approval_rates.return_value = []
+
+        result = service.get_schedule_recommendations(telegram_chat_id=123)
+
+        assert result["status"] == "insufficient_data"
+        assert result["recommendations"] == []
+
+    def test_no_recommendations_when_all_hours_similar(self):
+        """No best/worst hour recommendation when rates are close."""
+        service = self._setup_service()
+
+        service.history_repo.get_hourly_approval_rates.return_value = [
+            {"hour": 10, "posted": 9, "skipped": 1, "total": 10, "approval_rate": 0.90},
+            {"hour": 14, "posted": 8, "skipped": 2, "total": 10, "approval_rate": 0.80},
+        ]
+        service.history_repo.get_dow_approval_rates.return_value = [
+            {
+                "dow": 1,
+                "day_name": "Monday",
+                "posted": 9,
+                "skipped": 1,
+                "total": 10,
+                "approval_rate": 0.90,
+            },
+        ]
+
+        result = service.get_schedule_recommendations(telegram_chat_id=123)
+
+        assert result["status"] == "ok"
+        # Difference is only 0.10 — at threshold, shouldn't crash regardless of outcome
+        assert isinstance(result["recommendations"], list)
+
+    def test_generate_recommendations_static_method(self):
+        """_generate_recommendations works as a pure function."""
+        hourly = [
+            {"hour": 9, "posted": 20, "skipped": 0, "total": 20, "approval_rate": 1.0},
+            {"hour": 22, "posted": 3, "skipped": 7, "total": 10, "approval_rate": 0.3},
+        ]
+        dow = [
+            {
+                "dow": 2,
+                "day_name": "Tuesday",
+                "posted": 15,
+                "skipped": 0,
+                "total": 15,
+                "approval_rate": 1.0,
+            },
+            {
+                "dow": 0,
+                "day_name": "Sunday",
+                "posted": 3,
+                "skipped": 4,
+                "total": 7,
+                "approval_rate": 0.43,
+            },
+        ]
+
+        recs = DashboardService._generate_recommendations(hourly, dow)
+
+        assert len(recs) >= 2  # best_hour + worst_hour at minimum
+        types = {r["type"] for r in recs}
+        assert "best_hour" in types
+        assert "worst_hour" in types

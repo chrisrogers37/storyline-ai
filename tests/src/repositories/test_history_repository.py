@@ -472,3 +472,62 @@ class TestAnalyticsAggregations:
         result = history_repo.get_stats_by_category(days=30)
 
         assert result == []
+
+    def test_get_hourly_approval_rates(self, history_repo, mock_db):
+        """Returns hourly approval rates with status breakdown."""
+        q = self._make_chainable_query(mock_db)
+        q.all.return_value = [
+            (10, "posted", 8),
+            (10, "skipped", 2),
+            (14, "posted", 5),
+            (14, "skipped", 5),
+        ]
+
+        result = history_repo.get_hourly_approval_rates(days=30)
+
+        assert len(result) == 2
+        assert result[0]["hour"] == 10
+        assert result[0]["posted"] == 8
+        assert result[0]["skipped"] == 2
+        assert result[0]["total"] == 10
+        assert result[0]["approval_rate"] == 0.8
+        assert result[1]["hour"] == 14
+        assert result[1]["approval_rate"] == 0.5
+
+    def test_get_hourly_approval_rates_empty(self, history_repo, mock_db):
+        """Returns empty list when no data."""
+        q = self._make_chainable_query(mock_db)
+        q.all.return_value = []
+
+        result = history_repo.get_hourly_approval_rates(days=7)
+
+        assert result == []
+
+    def test_get_dow_approval_rates(self, history_repo, mock_db):
+        """Returns day-of-week approval rates with day names."""
+        q = self._make_chainable_query(mock_db)
+        q.all.return_value = [
+            (1, "posted", 20),  # Monday
+            (1, "skipped", 5),
+            (6, "posted", 10),  # Saturday
+            (6, "skipped", 10),
+        ]
+
+        result = history_repo.get_dow_approval_rates(days=90)
+
+        assert len(result) == 2
+        assert result[0]["dow"] == 1
+        assert result[0]["day_name"] == "Monday"
+        assert result[0]["approval_rate"] == 0.8
+        assert result[1]["dow"] == 6
+        assert result[1]["day_name"] == "Saturday"
+        assert result[1]["approval_rate"] == 0.5
+
+    def test_get_dow_approval_rates_empty(self, history_repo, mock_db):
+        """Returns empty list when no data."""
+        q = self._make_chainable_query(mock_db)
+        q.all.return_value = []
+
+        result = history_repo.get_dow_approval_rates(days=90)
+
+        assert result == []

@@ -336,3 +336,92 @@ class HistoryRepository(BaseRepository):
             cat_data["success_rate"] = round(posted / total, 2) if total else 0
 
         return list(by_category.values())
+
+    def get_hourly_approval_rates(
+        self, days: int = 30, chat_settings_id: Optional[str] = None
+    ) -> list:
+        """Count posts by hour of day grouped by status.
+
+        Returns list of {"hour": 0-23, "posted": N, "skipped": N, ..., "total": N, "approval_rate": float}
+        """
+        from sqlalchemy import extract
+
+        since = datetime.utcnow() - timedelta(days=days)
+        rows = (
+            self._tenant_query(PostingHistory, chat_settings_id)
+            .with_entities(
+                extract("hour", PostingHistory.posted_at).label("hour"),
+                PostingHistory.status,
+                func.count(PostingHistory.id),
+            )
+            .filter(PostingHistory.posted_at >= since)
+            .group_by("hour", PostingHistory.status)
+            .order_by("hour")
+            .all()
+        )
+        self.end_read_transaction()
+
+        by_hour: dict = {}
+        for hour, status, count in rows:
+            h = int(hour)
+            if h not in by_hour:
+                by_hour[h] = {"hour": h}
+            by_hour[h][status] = count
+
+        for hour_data in by_hour.values():
+            total = sum(v for k, v in hour_data.items() if k != "hour")
+            posted = hour_data.get("posted", 0)
+            hour_data["total"] = total
+            hour_data["approval_rate"] = round(posted / total, 2) if total else 0
+
+        return [by_hour[h] for h in sorted(by_hour)]
+
+    def get_dow_approval_rates(
+        self, days: int = 90, chat_settings_id: Optional[str] = None
+    ) -> list:
+        """Count posts by day of week grouped by status.
+
+        Uses extract('dow') which returns 0=Sunday through 6=Saturday.
+        Returns list of {"dow": 0-6, "day_name": str, "posted": N, ..., "approval_rate": float}
+        """
+        from sqlalchemy import extract
+
+        day_names = [
+            "Sunday",
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+        ]
+
+        since = datetime.utcnow() - timedelta(days=days)
+        rows = (
+            self._tenant_query(PostingHistory, chat_settings_id)
+            .with_entities(
+                extract("dow", PostingHistory.posted_at).label("dow"),
+                PostingHistory.status,
+                func.count(PostingHistory.id),
+            )
+            .filter(PostingHistory.posted_at >= since)
+            .group_by("dow", PostingHistory.status)
+            .order_by("dow")
+            .all()
+        )
+        self.end_read_transaction()
+
+        by_dow: dict = {}
+        for dow, status, count in rows:
+            d = int(dow)
+            if d not in by_dow:
+                by_dow[d] = {"dow": d, "day_name": day_names[d]}
+            by_dow[d][status] = count
+
+        for dow_data in by_dow.values():
+            total = sum(v for k, v in dow_data.items() if k not in ("dow", "day_name"))
+            posted = dow_data.get("posted", 0)
+            dow_data["total"] = total
+            dow_data["approval_rate"] = round(posted / total, 2) if total else 0
+
+        return [by_dow[d] for d in sorted(by_dow)]
