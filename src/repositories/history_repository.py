@@ -305,17 +305,18 @@ class HistoryRepository(BaseRepository):
         from src.models.media_item import MediaItem
 
         since = datetime.utcnow() - timedelta(days=days)
+        coalesced_category = func.coalesce(MediaItem.category, "uncategorized")
         rows = (
             self._tenant_query(PostingHistory, chat_settings_id)
             .outerjoin(MediaItem, PostingHistory.media_item_id == MediaItem.id)
             .with_entities(
-                func.coalesce(MediaItem.category, "uncategorized"),
+                coalesced_category,
                 PostingHistory.status,
                 func.count(PostingHistory.id),
             )
             .filter(PostingHistory.posted_at >= since)
-            .group_by(MediaItem.category, PostingHistory.status)
-            .order_by(MediaItem.category)
+            .group_by(coalesced_category, PostingHistory.status)
+            .order_by(coalesced_category)
             .all()
         )
         self.end_read_transaction()

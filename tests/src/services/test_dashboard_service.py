@@ -302,7 +302,7 @@ class TestGetAnalytics:
         assert result["summary"]["total_posts"] == 100
         assert result["summary"]["posted"] == 80
         assert result["summary"]["success_rate"] == 0.8
-        assert result["summary"]["avg_per_day"] == 50.0  # 100 / 2 days
+        assert result["summary"]["avg_per_day"] == 3.3  # 100 / 30 days
         assert result["method_breakdown"]["instagram_api"] == 60
         assert len(result["daily_counts"]) == 2
         assert len(result["hourly_distribution"]) == 2

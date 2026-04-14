@@ -157,7 +157,6 @@ class DashboardService(BaseService):
 
             total = sum(status_counts.values())
             posted = status_counts.get("posted", 0)
-            num_days = max(len(daily_counts), 1)
 
             result = {
                 "summary": {
@@ -167,7 +166,7 @@ class DashboardService(BaseService):
                     "rejected": status_counts.get("rejected", 0),
                     "failed": status_counts.get("failed", 0),
                     "success_rate": round(posted / total, 2) if total else 0,
-                    "avg_per_day": round(total / num_days, 1),
+                    "avg_per_day": round(total / days, 1),
                 },
                 "method_breakdown": method_counts,
                 "daily_counts": daily_counts,
