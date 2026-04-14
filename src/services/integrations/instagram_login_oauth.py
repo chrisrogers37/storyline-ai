@@ -13,6 +13,8 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 import httpx
+
+from src.config.constants import IG_LOGIN_API_BASE, IG_LOGIN_GRAPH_BASE
 from telegram import Bot
 
 from src.config.settings import settings
@@ -35,10 +37,10 @@ class InstagramLoginOAuthService(BaseService):
     - Notifying Telegram after success/failure
     """
 
-    INSTAGRAM_AUTH_URL = "https://api.instagram.com/oauth/authorize"
-    INSTAGRAM_TOKEN_URL = "https://api.instagram.com/oauth/access_token"
-    INSTAGRAM_LONG_LIVED_URL = "https://graph.instagram.com/access_token"
-    INSTAGRAM_USER_URL = "https://graph.instagram.com/me"
+    INSTAGRAM_AUTH_URL = f"{IG_LOGIN_API_BASE}/oauth/authorize"
+    INSTAGRAM_TOKEN_URL = f"{IG_LOGIN_API_BASE}/oauth/access_token"
+    INSTAGRAM_LONG_LIVED_URL = f"{IG_LOGIN_GRAPH_BASE}/access_token"
+    INSTAGRAM_USER_URL = f"{IG_LOGIN_GRAPH_BASE}/me"
     STATE_TTL_SECONDS = 600  # 10 minutes
 
     REQUIRED_SCOPES = [
