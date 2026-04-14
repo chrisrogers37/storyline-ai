@@ -51,16 +51,16 @@ class TelegramCommandHandlers:
             if onboarding_done:
                 button_text = "Open Storyline"
                 message_text = (
-                    "Welcome back to *Storyline AI*\\!\n\n"
+                    "Welcome back to *Storyline AI*!\n\n"
                     "Tap the button below to view your dashboard "
-                    "and manage your settings\\."
+                    "and manage your settings."
                 )
             else:
                 button_text = "Open Setup Wizard"
                 message_text = (
-                    "Welcome to *Storyline AI*\\!\n\n"
-                    "Let's get you set up\\. Tap the button below to "
-                    "connect your accounts and configure your posting schedule\\."
+                    "Welcome to *Storyline AI*!\n\n"
+                    "Let's get you set up. Tap the button below to "
+                    "connect your accounts and configure your posting schedule."
                 )
 
             button = build_webapp_button(
@@ -74,7 +74,7 @@ class TelegramCommandHandlers:
             keyboard = InlineKeyboardMarkup([[button]])
             await update.message.reply_text(
                 message_text,
-                parse_mode="MarkdownV2",
+                parse_mode="Markdown",
                 reply_markup=keyboard,
             )
         else:

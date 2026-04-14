@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Verbose flag now means the same thing in both caption modes** — `verbose=True` controls debug metadata (file name, ID) in both simple and enhanced modes. Enhanced mode's workflow instructions are now always shown regardless of verbose setting. Previously, verbose controlled different content per mode (debug info in simple, instructions in enhanced).
 
+### Fixed — Telegram Message Formatting Inconsistencies (#135, #136, #139, #142)
+
+- **Add `parse_mode="Markdown"` to photo captions** — Initial notifications now render Markdown formatting consistently with callback edits. (#135)
+- **Standardize on Markdown across all commands** — Convert `/start` from MarkdownV2 to Markdown, removing the only MarkdownV2 usage. (#136)
+- **Escape user-generated content in captions** — Apply Markdown escaping to media titles, captions, filenames, and account names. (#142)
+- **Standardize caption spacing** — Both caption modes now use consistent `"\n".join()` spacing and always show account status. (#139)
+- **Add `parse_mode="Markdown"` to callback edits** — Posted, skipped, back, cancel-reject, and dry-run messages now use Markdown consistently. (#142)
+
 ### Changed — Multi-Account UX Improvements (#140, #141)
 
 - **Batch-update pending messages on account switch** — When switching Instagram accounts, all pending notification captions and button labels now update to reflect the new account. Previously only the message where you clicked updated, leaving other pending posts showing the old account name. (#140)
