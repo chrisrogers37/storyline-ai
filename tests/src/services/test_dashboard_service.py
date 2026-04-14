@@ -580,7 +580,10 @@ class TestGetScheduleRecommendations:
 
         recs = DashboardService._generate_recommendations(hourly, dow)
 
-        assert len(recs) >= 2  # best_hour + worst_hour at minimum
         types = {r["type"] for r in recs}
         assert "best_hour" in types
         assert "worst_hour" in types
+        assert "best_day" in types
+        assert "worst_day" in types
+        worst_day_rec = next(r for r in recs if r["type"] == "worst_day")
+        assert worst_day_rec["day_name"] == "Sunday"

@@ -18,6 +18,8 @@ class DashboardService(BaseService):
     repository imports.
     """
 
+    MIN_RECOMMENDATION_DATA_POINTS = 10
+
     def __init__(self):
         super().__init__()
         self.settings_service = SettingsService()
@@ -240,8 +242,6 @@ class DashboardService(BaseService):
         human-readable recommendations based on when posts are most
         frequently approved vs skipped/rejected.
         """
-        MIN_DATA_POINTS = 10
-
         with self.track_execution(
             "get_schedule_recommendations",
             input_params={"telegram_chat_id": telegram_chat_id, "days": days},
@@ -257,7 +257,7 @@ class DashboardService(BaseService):
 
             total_data_points = sum(h.get("total", 0) for h in hourly)
 
-            if total_data_points < MIN_DATA_POINTS:
+            if total_data_points < self.MIN_RECOMMENDATION_DATA_POINTS:
                 self.set_result_summary(
                     run_id,
                     {"status": "insufficient_data", "data_points": total_data_points},
@@ -265,7 +265,7 @@ class DashboardService(BaseService):
                 return {
                     "status": "insufficient_data",
                     "message": (
-                        f"Need at least {MIN_DATA_POINTS} posts to generate "
+                        f"Need at least {self.MIN_RECOMMENDATION_DATA_POINTS} posts to generate "
                         f"recommendations (have {total_data_points})"
                     ),
                     "hourly_rates": [],
@@ -291,6 +291,7 @@ class DashboardService(BaseService):
                 "recommendations": recommendations,
                 "days": days,
                 "data_points": total_data_points,
+                "timezone": "UTC",
             }
 
     @staticmethod
@@ -309,7 +310,7 @@ class DashboardService(BaseService):
                     {
                         "type": "best_hour",
                         "message": (
-                            f"Posts at {best_hour['hour']}:00 have the highest "
+                            f"Posts at {best_hour['hour']}:00 UTC have the highest "
                             f"approval rate ({best_hour['approval_rate']:.0%})"
                         ),
                         "hour": best_hour["hour"],
@@ -322,7 +323,7 @@ class DashboardService(BaseService):
                     {
                         "type": "worst_hour",
                         "message": (
-                            f"Posts at {worst_hour['hour']}:00 have a low "
+                            f"Posts at {worst_hour['hour']}:00 UTC have a low "
                             f"approval rate ({worst_hour['approval_rate']:.0%}) — "
                             f"consider avoiding this time"
                         ),
@@ -347,6 +348,20 @@ class DashboardService(BaseService):
                         ),
                         "day_name": best_day["day_name"],
                         "approval_rate": best_day["approval_rate"],
+                    }
+                )
+
+            if worst_day["approval_rate"] < 0.7 and worst_day["total"] >= 5:
+                recommendations.append(
+                    {
+                        "type": "worst_day",
+                        "message": (
+                            f"{worst_day['day_name']}s have a low approval rate "
+                            f"({worst_day['approval_rate']:.0%}) — "
+                            f"consider reducing posts on this day"
+                        ),
+                        "day_name": worst_day["day_name"],
+                        "approval_rate": worst_day["approval_rate"],
                     }
                 )
 
