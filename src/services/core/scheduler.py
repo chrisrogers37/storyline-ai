@@ -9,6 +9,7 @@ from src.services.base_service import BaseService
 from src.services.core.settings_service import SettingsService
 from src.repositories.media_repository import MediaRepository
 from src.repositories.queue_repository import QueueRepository
+from src.repositories.history_repository import HistoryRepository
 from src.repositories.lock_repository import LockRepository
 from src.repositories.category_mix_repository import CategoryMixRepository
 from src.config.settings import settings
@@ -30,6 +31,7 @@ class SchedulerService(BaseService):
         super().__init__()
         self.media_repo = MediaRepository()
         self.queue_repo = QueueRepository()
+        self.history_repo = HistoryRepository()
         self.lock_repo = LockRepository()
         self.category_mix_repo = CategoryMixRepository()
         self.settings_service = SettingsService()
@@ -230,6 +232,20 @@ class SchedulerService(BaseService):
                 )
                 return result
 
+            # Auto-approve previously-approved media (skip Telegram)
+            if media_item.times_posted > 0 and triggered_by == "scheduler":
+                result = self._auto_approve(media_item, chat_settings)
+                self.set_result_summary(
+                    run_id,
+                    {
+                        "posted": True,
+                        "auto_approved": True,
+                        "media_file": media_item.file_name,
+                        "category": media_item.category,
+                    },
+                )
+                return result
+
             # Create in-flight queue item
             queue_item = self.queue_repo.create(
                 media_item_id=str(media_item.id),
@@ -308,6 +324,69 @@ class SchedulerService(BaseService):
             except Exception:
                 pass
             return False
+
+    def _auto_approve(self, media_item, chat_settings) -> dict:
+        """Auto-approve a previously-approved media item without Telegram interaction.
+
+        Creates a transient queue item, records history, applies a repost lock,
+        and increments times_posted. Sends a quiet log notification to Telegram.
+        """
+        from src.repositories.history_repository import HistoryCreateParams
+
+        now = datetime.utcnow()
+        media_id = str(media_item.id)
+        cs_id = str(chat_settings.id)
+
+        # Create + immediately delete queue item (needed for history record)
+        queue_item = self.queue_repo.create(
+            media_item_id=media_id,
+            scheduled_for=now,
+            chat_settings_id=cs_id,
+        )
+        queue_id = str(queue_item.id)
+
+        self.history_repo.create(
+            HistoryCreateParams(
+                media_item_id=media_id,
+                queue_item_id=queue_id,
+                queue_created_at=now,
+                queue_deleted_at=now,
+                scheduled_for=now,
+                posted_at=now,
+                status="posted",
+                success=True,
+                posting_method="auto_reapproval",
+                chat_settings_id=cs_id,
+            )
+        )
+
+        self.media_repo.increment_times_posted(media_id)
+
+        from src.services.core.media_lock import MediaLockService
+
+        lock_service = MediaLockService()
+        lock_service.create_lock(media_id)
+
+        self.queue_repo.delete(queue_id)
+
+        self.settings_service.update_last_post_sent_at(
+            chat_settings.telegram_chat_id, now
+        )
+
+        logger.info(
+            f"Auto-approved returning media: {media_item.file_name} "
+            f"[{media_item.category}] (posted {media_item.times_posted}x before)"
+        )
+
+        return {
+            "posted": True,
+            "auto_approved": True,
+            "queue_item_id": queue_id,
+            "media_item": media_item,
+            "media_file": media_item.file_name,
+            "category": media_item.category,
+            "error": None,
+        }
 
     # ------------------------------------------------------------------
     # Internal: slot timing

@@ -13,6 +13,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Batch callback handlers** — `batch_approve` and `batch_approve_cancel` callbacks registered in dispatch table. Sequential per-item processing with continue-on-error pattern.
 - **Bot menu updated** — `/approveall` added to Telegram command autocomplete and `/help` text.
 
+### Added — Smart Auto-Approval (#155)
+
+- **Auto-approve returning media** — When the scheduler selects a media item that has been posted before (`times_posted > 0`), it skips the Telegram approval step and directly records the item as posted. Uses existing `media_items.times_posted` field — no schema changes.
+- **Quiet Telegram notification** — Sends a brief "Auto-approved: filename [category]" message for visibility without requiring user action.
+- **Posting method tracking** — Auto-approved items recorded with `posting_method='auto_reapproval'` in posting_history for analytics distinction.
+- **Only applies to scheduler** — `/next` command and manual flows always go through Telegram approval regardless of prior history.
+
+### Added — Google Drive Token Health Alerts (#157)
+
+- **Token health check** — `check_gdrive_token_for_chat()` in HealthCheckService checks Google Drive OAuth token expiry per tenant. Warns at <7 days, critical at <1 day, reports expired tokens.
+- **Tenant-scoped token health** — `check_token_health_for_chat()` added to TokenRefreshService for querying tokens by `chat_settings_id` (Google Drive) instead of `instagram_account_id` (Instagram).
+- **Hourly Telegram alerts** — Scheduler loop checks token health hourly alongside pool depletion. Sends alert with expiry countdown, re-auth link, and projected stop date. Throttled to once per 24h per chat.
+- **Alert formatting** — `format_token_alert()` builds user-friendly alert with reconnect URL.
+
 ### Added — Category Performance Insights (#154)
 
 - **Category analytics API endpoint** — `GET /api/onboarding/analytics/categories?chat_id=X&days=30` returns per-category posting performance enriched with configured ratios from category_post_case_mix. Shows actual vs target ratio, skip/reject rates, and success rate per category.

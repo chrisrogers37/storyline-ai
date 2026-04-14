@@ -297,7 +297,9 @@ class TestForceSendNext:
         cs = _make_chat_settings()
         service.settings_service.get_settings.return_value = cs
 
-        mock_media = Mock(id=uuid4(), file_name="force.jpg", category="memes")
+        mock_media = Mock(
+            id=uuid4(), file_name="force.jpg", category="memes", times_posted=0
+        )
         service.media_repo.get_next_eligible_for_posting.return_value = mock_media
 
         mock_queue_item = Mock(id=uuid4())
@@ -332,7 +334,7 @@ class TestForceSendNext:
         cs = _make_chat_settings()
         service.settings_service.get_settings.return_value = cs
 
-        mock_media = Mock(id=uuid4(), file_name="f.jpg", category=None)
+        mock_media = Mock(id=uuid4(), file_name="f.jpg", category=None, times_posted=0)
         service.media_repo.get_next_eligible_for_posting.return_value = mock_media
 
         mock_queue_item = Mock(id=uuid4())
@@ -743,3 +745,117 @@ class TestSchedulerMediaPool:
             category=None, exclude_ids=None
         )
         assert result is None
+
+
+# ------------------------------------------------------------------
+# Auto-approval
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestAutoApproval:
+    """Tests for smart auto-approval of previously-approved media."""
+
+    @pytest.fixture
+    def scheduler_service(self):
+        with patch.object(SchedulerService, "__init__", lambda self: None):
+            service = SchedulerService()
+            service.media_repo = Mock()
+            service.queue_repo = Mock()
+            service.history_repo = Mock()
+            service.lock_repo = Mock()
+            service.category_mix_repo = Mock()
+            service.settings_service = Mock()
+            service.telegram_service = AsyncMock()
+            service.service_run_repo = Mock()
+            service.service_name = "SchedulerService"
+            service.SCHEDULE_JITTER_MINUTES = 30
+            service.track_execution = mock_track_execution
+            service.set_result_summary = Mock()
+            return service
+
+    async def test_auto_approves_previously_posted_media(self, scheduler_service):
+        """Media with times_posted > 0 is auto-approved without Telegram."""
+        media = Mock(id=uuid4(), file_name="meme.jpg", category="memes", times_posted=3)
+        scheduler_service.media_repo.get_next_eligible_for_posting.return_value = media
+
+        queue_item = Mock(id=uuid4())
+        scheduler_service.queue_repo.create.return_value = queue_item
+
+        cs = _make_chat_settings()
+
+        with patch("src.services.core.media_lock.MediaLockService"):
+            result = await scheduler_service._select_and_send(
+                cs, category=None, triggered_by="scheduler"
+            )
+
+        assert result["posted"] is True
+        assert result["auto_approved"] is True
+        assert result["media_file"] == "meme.jpg"
+        # History should be created with auto_reapproval method
+        scheduler_service.history_repo.create.assert_called_once()
+        params = scheduler_service.history_repo.create.call_args[0][0]
+        assert params.posting_method == "auto_reapproval"
+        assert params.status == "posted"
+        # Telegram notification should NOT have been sent
+        scheduler_service.telegram_service.send_notification.assert_not_called()
+
+    async def test_new_media_goes_to_telegram(self, scheduler_service):
+        """Media with times_posted == 0 goes through normal Telegram flow."""
+        media = Mock(id=uuid4(), file_name="new.jpg", category="memes", times_posted=0)
+        scheduler_service.media_repo.get_next_eligible_for_posting.return_value = media
+
+        queue_item = Mock(id=uuid4())
+        scheduler_service.queue_repo.create.return_value = queue_item
+        scheduler_service.telegram_service.send_notification = AsyncMock(
+            return_value=True
+        )
+
+        cs = _make_chat_settings()
+
+        result = await scheduler_service._select_and_send(
+            cs, category=None, triggered_by="scheduler"
+        )
+
+        assert result["posted"] is True
+        assert "auto_approved" not in result
+        scheduler_service.telegram_service.send_notification.assert_called_once()
+
+    async def test_force_next_skips_auto_approval(self, scheduler_service):
+        """Manual /next command always goes to Telegram, even for returning media."""
+        media = Mock(id=uuid4(), file_name="old.jpg", category="merch", times_posted=5)
+        scheduler_service.media_repo.get_next_eligible_for_posting.return_value = media
+
+        queue_item = Mock(id=uuid4())
+        scheduler_service.queue_repo.create.return_value = queue_item
+        scheduler_service.telegram_service.send_notification = AsyncMock(
+            return_value=True
+        )
+
+        cs = _make_chat_settings()
+
+        result = await scheduler_service._select_and_send(
+            cs, category=None, triggered_by="telegram"
+        )
+
+        assert result["posted"] is True
+        assert "auto_approved" not in result
+        scheduler_service.telegram_service.send_notification.assert_called_once()
+
+    async def test_auto_approve_creates_lock_and_history(self, scheduler_service):
+        """Auto-approve creates history record, lock, and increments times_posted."""
+        media = Mock(id=uuid4(), file_name="test.jpg", category="memes", times_posted=2)
+        queue_item = Mock(id=uuid4())
+        scheduler_service.queue_repo.create.return_value = queue_item
+        cs = _make_chat_settings()
+
+        with patch("src.services.core.media_lock.MediaLockService") as MockLock:
+            result = scheduler_service._auto_approve(media, cs)
+
+        assert result["posted"] is True
+        assert result["auto_approved"] is True
+        scheduler_service.history_repo.create.assert_called_once()
+        scheduler_service.media_repo.increment_times_posted.assert_called_once()
+        MockLock.return_value.create_lock.assert_called_once()
+        scheduler_service.queue_repo.delete.assert_called_once()
