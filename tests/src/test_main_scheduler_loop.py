@@ -1,9 +1,11 @@
-"""Tests for the per-tenant scheduler and media sync loops in main.py."""
+"""Tests for the per-tenant scheduler, media sync loops, and _guarded() in main.py."""
+
+import asyncio
 
 import pytest
 from unittest.mock import AsyncMock, Mock, patch
 
-from src.main import run_scheduler_loop, media_sync_loop
+from src.main import _guarded, run_scheduler_loop, media_sync_loop
 
 
 @pytest.mark.unit
@@ -390,3 +392,82 @@ class TestMediaSyncLoop:
 
         # Both should have been attempted
         assert sync_service.sync.call_count == 2
+
+
+@pytest.mark.unit
+class TestGuarded:
+    """Tests for _guarded() crash handling and Telegram alerts."""
+
+    @pytest.mark.asyncio
+    async def test_logs_critical_on_crash(self):
+        """Crashed coroutine is logged at CRITICAL level, not propagated."""
+
+        async def crashing_coro():
+            raise RuntimeError("boom")
+
+        with patch("src.main.logger") as mock_logger:
+            await _guarded("test_task", crashing_coro())
+
+        mock_logger.critical.assert_called_once()
+        assert "test_task" in mock_logger.critical.call_args[0][0]
+
+    @pytest.mark.asyncio
+    async def test_sends_telegram_alert_on_crash(self):
+        """When bot is provided, sends crash alert to admin chat."""
+        mock_bot = AsyncMock()
+
+        async def crashing_coro():
+            raise ValueError("something broke")
+
+        with patch("src.main.settings") as mock_settings:
+            mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100999
+            await _guarded("scheduler", crashing_coro(), bot=mock_bot)
+
+        mock_bot.send_message.assert_called_once()
+        call_kwargs = mock_bot.send_message.call_args.kwargs
+        assert call_kwargs["chat_id"] == -100999
+        assert "scheduler" in call_kwargs["text"]
+        assert "something broke" in call_kwargs["text"]
+
+    @pytest.mark.asyncio
+    async def test_no_alert_when_bot_is_none(self):
+        """When no bot provided, only logs — no Telegram alert."""
+
+        async def crashing_coro():
+            raise RuntimeError("boom")
+
+        with patch("src.main.logger"):
+            # Should not raise — just logs
+            await _guarded("test_task", crashing_coro(), bot=None)
+
+    @pytest.mark.asyncio
+    async def test_alert_failure_does_not_mask_crash_log(self):
+        """If Telegram alert fails, the original crash is still logged."""
+        mock_bot = AsyncMock()
+        mock_bot.send_message.side_effect = Exception("Telegram down")
+
+        async def crashing_coro():
+            raise RuntimeError("original error")
+
+        with (
+            patch("src.main.logger") as mock_logger,
+            patch("src.main.settings") as mock_settings,
+        ):
+            mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100999
+            await _guarded("scheduler", crashing_coro(), bot=mock_bot)
+
+        # Original crash still logged at CRITICAL
+        mock_logger.critical.assert_called_once()
+        assert "scheduler" in mock_logger.critical.call_args[0][0]
+        # Alert failure logged at ERROR
+        mock_logger.error.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_cancelled_error_propagates(self):
+        """CancelledError should propagate (for clean shutdown)."""
+
+        async def cancelled_coro():
+            raise asyncio.CancelledError()
+
+        with pytest.raises(asyncio.CancelledError):
+            await _guarded("test_task", cancelled_coro(), bot=AsyncMock())
