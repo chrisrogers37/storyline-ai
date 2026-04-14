@@ -763,3 +763,91 @@ class TelegramCallbackHandlers:
                 "❌ Error clearing queue. Please try again.",
                 parse_mode="Markdown",
             )
+
+    async def handle_batch_approve(self, data, user, query):
+        """Handle batch_approve:{chat_settings_id} callback — approve all pending items.
+
+        Marks each item as posted, creates history records, and applies
+        repost-prevention locks. Processes sequentially so one failure
+        doesn't affect others.
+        """
+        cs_id = data
+        chat_id = query.message.chat_id
+
+        try:
+            await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup([]))
+        except Exception:
+            pass
+
+        pending = self.service.queue_repo.get_all_with_media(
+            status="pending", chat_settings_id=cs_id
+        )
+        processing = self.service.queue_repo.get_all_with_media(
+            status="processing", chat_settings_id=cs_id
+        )
+        all_items = pending + processing
+
+        if not all_items:
+            await telegram_edit_with_retry(
+                query.edit_message_text,
+                "📭 No pending items to approve.",
+                parse_mode="Markdown",
+            )
+            return
+
+        await telegram_edit_with_retry(
+            query.edit_message_text,
+            f"⏳ *Batch approving {len(all_items)} items...*",
+            parse_mode="Markdown",
+        )
+
+        approved = 0
+        failed = 0
+
+        for queue_item, file_name, category in all_items:
+            queue_id = str(queue_item.id)
+            try:
+                claimed = self.service.queue_repo.claim_for_processing(queue_id)
+                if not claimed:
+                    failed += 1
+                    continue
+                self._execute_complete_db_ops(queue_id, claimed, user, "posted", True)
+                approved += 1
+            except Exception as e:
+                logger.error(
+                    f"Batch approve failed for {queue_id[:8]}: {type(e).__name__}: {e}"
+                )
+                failed += 1
+
+        result_text = (
+            f"✅ *Batch Approve Complete*\n\n📤 {approved} items marked as posted\n"
+        )
+        if failed > 0:
+            result_text += f"⚠️ {failed} items failed\n"
+
+        await telegram_edit_with_retry(
+            query.edit_message_text,
+            result_text,
+            parse_mode="Markdown",
+        )
+
+        self.service.interaction_service.log_callback(
+            user_id=str(user.id),
+            callback_name="batch_approve",
+            context={"approved": approved, "failed": failed},
+            telegram_chat_id=chat_id,
+            telegram_message_id=query.message.message_id,
+        )
+
+        logger.info(
+            f"Batch approve by {self.service._get_display_name(user)}: "
+            f"{approved} approved, {failed} failed"
+        )
+
+    async def handle_batch_approve_cancel(self, data, user, query):
+        """Handle batch_approve_cancel callback — cancel batch approval."""
+        await telegram_edit_with_retry(
+            query.edit_message_text,
+            "❌ *Batch approval cancelled.*",
+            parse_mode="Markdown",
+        )
