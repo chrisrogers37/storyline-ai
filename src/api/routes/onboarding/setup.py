@@ -30,7 +30,7 @@ router = APIRouter(tags=["onboarding"])
 
 
 @router.post("/init")
-async def onboarding_init(request: InitRequest):
+async def onboarding_init(request: InitRequest) -> dict:
     """Validate initData and return current setup state for this chat."""
     user_info = _validate_request(request.init_data, request.chat_id)
 
@@ -56,7 +56,7 @@ async def onboarding_oauth_url(
     provider: str,
     init_data: str,
     chat_id: int,
-):
+) -> dict:
     """Return OAuth authorization URL for a provider."""
     _validate_request(init_data, chat_id)
 
@@ -80,7 +80,7 @@ async def onboarding_oauth_url(
 
 
 @router.post("/media-folder")
-async def onboarding_media_folder(request: MediaFolderRequest):
+async def onboarding_media_folder(request: MediaFolderRequest) -> dict:
     """Set the Google Drive media folder for this chat."""
     _validate_request(request.init_data, request.chat_id)
 
@@ -133,7 +133,7 @@ async def onboarding_media_folder(request: MediaFolderRequest):
 
 
 @router.post("/start-indexing")
-async def onboarding_start_indexing(request: StartIndexingRequest):
+async def onboarding_start_indexing(request: StartIndexingRequest) -> dict:
     """Trigger media indexing for this chat's configured folder.
 
     Requires that media-folder has already been validated and saved.
@@ -191,7 +191,7 @@ async def onboarding_start_indexing(request: StartIndexingRequest):
 
 
 @router.post("/schedule")
-async def onboarding_schedule(request: ScheduleRequest):
+async def onboarding_schedule(request: ScheduleRequest) -> dict:
     """Save posting schedule configuration."""
     _validate_request(request.init_data, request.chat_id)
 
@@ -215,7 +215,7 @@ async def onboarding_schedule(request: ScheduleRequest):
 
 
 @router.post("/complete")
-async def onboarding_complete(request: CompleteRequest):
+async def onboarding_complete(request: CompleteRequest) -> dict:
     """Mark onboarding as finished, auto-configure dependent settings."""
     _validate_request(request.init_data, request.chat_id)
 

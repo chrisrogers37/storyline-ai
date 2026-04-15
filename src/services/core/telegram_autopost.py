@@ -29,6 +29,20 @@ if TYPE_CHECKING:
     from src.services.core.telegram_service import TelegramService
 
 
+async def _update_autopost_caption(query, caption: str, reply_markup=None):
+    """Update autopost message caption with standard formatting.
+
+    Wraps the common telegram_edit_with_retry + edit_message_caption pattern
+    used throughout the autopost flow.
+    """
+    await telegram_edit_with_retry(
+        query.edit_message_caption,
+        caption=caption,
+        reply_markup=reply_markup,
+        parse_mode="Markdown",
+    )
+
+
 @dataclass
 class AutopostContext:
     """Shared state passed through the autopost call chain.
@@ -358,11 +372,8 @@ class TelegramAutopostHandler:
                 f"📸 Account: {account_display}\n"
                 f"Tested by: {self.service._get_display_name(ctx.user)}"
             )
-        await telegram_edit_with_retry(
-            ctx.query.edit_message_caption,
-            caption=caption,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="Markdown",
+        await _update_autopost_caption(
+            ctx.query, caption, reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
         self.service.interaction_service.log_callback(
@@ -475,9 +486,7 @@ class TelegramAutopostHandler:
                 f"{self.service._get_display_name(ctx.user)}"
             )
 
-        await telegram_edit_with_retry(
-            ctx.query.edit_message_caption, caption=caption, parse_mode="Markdown"
-        )
+        await _update_autopost_caption(ctx.query, caption)
 
         self.service.interaction_service.log_callback(
             user_id=str(ctx.user.id),
@@ -558,12 +567,7 @@ class TelegramAutopostHandler:
             error_recovery=True,
         )
 
-        await telegram_edit_with_retry(
-            ctx.query.edit_message_caption,
-            caption=caption,
-            reply_markup=reply_markup,
-            parse_mode="Markdown",
-        )
+        await _update_autopost_caption(ctx.query, caption, reply_markup=reply_markup)
 
         self.service.interaction_service.log_callback(
             user_id=str(ctx.user.id),

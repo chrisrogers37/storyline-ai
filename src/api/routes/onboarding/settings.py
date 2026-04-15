@@ -28,7 +28,7 @@ router = APIRouter(tags=["onboarding"])
 
 
 @router.post("/toggle-setting")
-async def onboarding_toggle_setting(request: ToggleSettingRequest):
+async def onboarding_toggle_setting(request: ToggleSettingRequest) -> dict:
     """Toggle a boolean setting (is_paused, dry_run_mode) from dashboard."""
     _validate_request(request.init_data, request.chat_id)
 
@@ -57,7 +57,7 @@ async def onboarding_toggle_setting(request: ToggleSettingRequest):
 
 
 @router.post("/update-setting")
-async def onboarding_update_setting(request: UpdateSettingRequest):
+async def onboarding_update_setting(request: UpdateSettingRequest) -> dict:
     """Update a numeric setting (posts_per_day, posting hours) from dashboard."""
     _validate_request(request.init_data, request.chat_id)
 
@@ -80,7 +80,7 @@ async def onboarding_update_setting(request: UpdateSettingRequest):
 
 
 @router.post("/switch-account")
-async def onboarding_switch_account(request: SwitchAccountRequest):
+async def onboarding_switch_account(request: SwitchAccountRequest) -> dict:
     """Switch the active Instagram account for this chat."""
     _validate_request(request.init_data, request.chat_id)
 
@@ -97,7 +97,7 @@ async def onboarding_switch_account(request: SwitchAccountRequest):
 
 
 @router.post("/remove-account")
-async def onboarding_remove_account(request: RemoveAccountRequest):
+async def onboarding_remove_account(request: RemoveAccountRequest) -> dict:
     """Deactivate (soft-delete) an Instagram account."""
     _validate_request(request.init_data, request.chat_id)
 
@@ -113,7 +113,7 @@ async def onboarding_remove_account(request: RemoveAccountRequest):
 
 
 @router.post("/disconnect-gdrive")
-async def onboarding_disconnect_gdrive(request: InitRequest):
+async def onboarding_disconnect_gdrive(request: InitRequest) -> dict:
     """Disconnect Google Drive for this chat.
 
     Deletes OAuth tokens, clears the media folder config, and disables
@@ -127,7 +127,7 @@ async def onboarding_disconnect_gdrive(request: InitRequest):
 
 
 @router.post("/sync-media")
-async def onboarding_sync_media(request: InitRequest):
+async def onboarding_sync_media(request: InitRequest) -> dict:
     """Trigger media sync from the dashboard.
 
     Calls MediaSyncService.sync() with the chat's per-tenant config.
@@ -180,7 +180,7 @@ async def onboarding_sync_media(request: InitRequest):
 
 
 @router.post("/queue-preview")
-async def onboarding_queue_preview(request: InitRequest):
+async def onboarding_queue_preview(request: InitRequest) -> dict:
     """Preview the next N media items that would be selected.
 
     Computes JIT selections without persisting — shows what the
@@ -196,7 +196,7 @@ async def onboarding_queue_preview(request: InitRequest):
 
 
 @router.post("/add-account")
-async def onboarding_add_account(request: AddAccountRequest):
+async def onboarding_add_account(request: AddAccountRequest) -> dict:
     """Add an Instagram account via secure Mini App form.
 
     Validates credentials against Instagram Graph API, then creates

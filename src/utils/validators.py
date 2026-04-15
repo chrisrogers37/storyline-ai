@@ -109,7 +109,7 @@ class ConfigValidator:
                     text("SELECT MAX(version) FROM schema_version")
                 ).scalar()
                 db_version = int(row) if row is not None else 0
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — schema check is advisory, swallow all errors
             logger.warning(f"Schema version check failed: {exc}")
             return
 
