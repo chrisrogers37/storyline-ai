@@ -25,7 +25,9 @@ export interface TelegramLoginData {
   hash: string;
 }
 
-const TELEGRAM_LOGIN_TTL = 86400;
+// 5 minutes — Telegram recommends verifying auth_date is recent to prevent replay.
+// This is the login callback window, not the JWT session lifetime.
+const TELEGRAM_LOGIN_TTL = 300;
 
 // Lazy-cached derived keys (bot token doesn't change at runtime)
 let _telegramLoginKey: Buffer | null = null;
@@ -93,6 +95,10 @@ export function verifyTelegramLogin(data: TelegramLoginData): boolean {
  *
  * Format: {chat_id}:{user_id}:{timestamp}:{signature}
  * Secret: HMAC-SHA256("UrlToken", TELEGRAM_BOT_TOKEN)
+ *
+ * FastAPI enforces a 1-hour TTL on URL tokens via the embedded timestamp
+ * (see src/utils/webapp_auth.py:URL_TOKEN_TTL). Tokens are not replayable
+ * beyond that window.
  */
 export function generateUrlToken(chatId: number, userId: number): string {
   const timestamp = Math.floor(Date.now() / 1000);

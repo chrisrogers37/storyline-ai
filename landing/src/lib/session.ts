@@ -19,9 +19,11 @@ export interface SessionPayload {
 
 export const SESSION_COOKIE = "storyline_session";
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "storyline-ai-jwt-secret-change-me"
-);
+const rawSecret = process.env.JWT_SECRET;
+if (!rawSecret || rawSecret.length < 32) {
+  throw new Error("JWT_SECRET must be set to a random 32+ character string");
+}
+const JWT_SECRET = new TextEncoder().encode(rawSecret);
 const JWT_EXPIRY = "24h";
 
 export async function createSessionToken(

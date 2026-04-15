@@ -6,6 +6,7 @@ import { BarChart3, LayoutDashboard, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { siteConfig } from "@/config/site";
 
+// TODO: /dashboard/analytics and /dashboard/settings pages are Phase 2+
 const navItems = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },

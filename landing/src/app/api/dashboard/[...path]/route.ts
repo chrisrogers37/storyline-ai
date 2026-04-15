@@ -12,6 +12,23 @@ import { verifySessionToken, SESSION_COOKIE } from "@/lib/auth";
 import { generateUrlToken } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/backend";
 
+// Allowlisted backend path prefixes the proxy can forward to.
+// Prevents path traversal to arbitrary FastAPI endpoints.
+const ALLOWED_PATHS = [
+  "analytics",
+  "accounts",
+  "history-detail",
+  "media-stats",
+  "queue-detail",
+  "queue-preview",
+  "system-status",
+  "toggle-setting",
+  "update-setting",
+  "switch-account",
+  "sync-media",
+  "oauth-url",
+];
+
 async function proxyRequest(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
@@ -28,7 +45,19 @@ async function proxyRequest(
 
   const { path } = await params;
   const backendPath = path.join("/");
+
+  // Validate path against allowlist
+  const topSegment = path[0];
+  if (!topSegment || !ALLOWED_PATHS.includes(topSegment)) {
+    return NextResponse.json({ error: "Invalid path" }, { status: 400 });
+  }
+
   const url = new URL(`/api/onboarding/${backendPath}`, BACKEND_URL);
+
+  // Belt-and-suspenders: verify resolved URL stays within /api/onboarding/
+  if (!url.pathname.startsWith("/api/onboarding/")) {
+    return NextResponse.json({ error: "Invalid path" }, { status: 400 });
+  }
 
   // Forward query params and inject auth
   const searchParams = new URL(request.url).searchParams;
@@ -62,6 +91,15 @@ async function proxyRequest(
 
   try {
     const backendResponse = await fetch(url.toString(), fetchOptions);
+
+    // Don't leak backend 5xx details to the client
+    if (backendResponse.status >= 500) {
+      console.error("Backend 5xx:", backendResponse.status, url.pathname);
+      return NextResponse.json(
+        { error: "Backend unavailable" },
+        { status: 502 }
+      );
+    }
 
     const contentType = backendResponse.headers.get("content-type") || "";
     if (contentType.includes("application/json")) {
