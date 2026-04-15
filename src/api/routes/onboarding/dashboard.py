@@ -134,6 +134,30 @@ async def onboarding_dead_content(
 
     with DashboardService() as service:
         return service.get_dead_content_report(chat_id, min_age_days=min_age_days)
+@router.get("/analytics/approval-latency")
+async def onboarding_approval_latency(
+    init_data: str,
+    chat_id: int,
+    days: int = Query(default=30, ge=1, le=365),
+):
+    """Return approval latency statistics — time from queue to decision."""
+    _validate_request(init_data, chat_id)
+
+    with DashboardService() as service:
+        return service.get_approval_latency(chat_id, days=days)
+
+
+@router.get("/analytics/team-performance")
+async def onboarding_team_performance(
+    init_data: str,
+    chat_id: int,
+    days: int = Query(default=30, ge=1, le=365),
+):
+    """Return per-user approval rates and response times."""
+    _validate_request(init_data, chat_id)
+
+    with DashboardService() as service:
+        return service.get_team_performance(chat_id, days=days)
 
 
 @router.get("/analytics")

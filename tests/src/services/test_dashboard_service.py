@@ -592,6 +592,8 @@ class TestGetScheduleRecommendations:
 @pytest.mark.unit
 class TestGetCategoryMixDrift:
     """Tests for get_category_mix_drift."""
+class TestGetApprovalLatency:
+    """Tests for get_approval_latency."""
 
     def _setup_service(self):
         with patch.object(DashboardService, "__init__", lambda self: None):
@@ -666,12 +668,58 @@ class TestGetCategoryMixDrift:
 @pytest.mark.unit
 class TestGetDeadContentReport:
     """Tests for get_dead_content_report."""
+    def test_returns_latency_stats(self):
+        """get_approval_latency returns overall + breakdowns from repo."""
+        service = self._setup_service()
+        service.history_repo.get_approval_latency.return_value = {
+            "overall": {
+                "count": 50,
+                "avg_minutes": 5.0,
+                "min_minutes": 1.0,
+                "max_minutes": 30.0,
+            },
+            "by_hour": [{"hour": 14, "count": 20, "avg_minutes": 4.0}],
+            "by_category": [{"category": "memes", "count": 30, "avg_minutes": 3.0}],
+        }
+
+        result = service.get_approval_latency(telegram_chat_id=123, days=30)
+
+        assert result["overall"]["count"] == 50
+        assert result["overall"]["avg_minutes"] == 5.0
+        assert result["days"] == 30
+        assert len(result["by_hour"]) == 1
+        assert len(result["by_category"]) == 1
+
+    def test_empty_latency(self):
+        """Returns zero stats when no posting history."""
+        service = self._setup_service()
+        service.history_repo.get_approval_latency.return_value = {
+            "overall": {
+                "count": 0,
+                "avg_minutes": 0,
+                "min_minutes": 0,
+                "max_minutes": 0,
+            },
+            "by_hour": [],
+            "by_category": [],
+        }
+
+        result = service.get_approval_latency(telegram_chat_id=123)
+
+        assert result["overall"]["count"] == 0
+        assert result["days"] == 30
+
+
+@pytest.mark.unit
+class TestGetTeamPerformance:
+    """Tests for get_team_performance."""
 
     def _setup_service(self):
         with patch.object(DashboardService, "__init__", lambda self: None):
             service = DashboardService()
             service.settings_service = MagicMock()
             service.media_repo = MagicMock()
+            service.history_repo = MagicMock()
             service.service_run_repo = MagicMock()
             service.service_name = "DashboardService"
             mock_settings = Mock(id="tenant-uuid-1")
@@ -704,3 +752,35 @@ class TestGetDeadContentReport:
 
         assert result["total_dead"] == 0
         assert result["dead_percentage"] == 0
+    def test_returns_user_stats(self):
+        """get_team_performance returns per-user data from repo."""
+        service = self._setup_service()
+        service.history_repo.get_user_approval_stats.return_value = [
+            {
+                "user_id": "u1",
+                "username": "alice",
+                "posted": 40,
+                "skipped": 5,
+                "rejected": 5,
+                "total": 50,
+                "approval_rate": 0.8,
+                "avg_latency_minutes": 3.0,
+            },
+        ]
+
+        result = service.get_team_performance(telegram_chat_id=123, days=30)
+
+        assert len(result["users"]) == 1
+        assert result["users"][0]["username"] == "alice"
+        assert result["users"][0]["approval_rate"] == 0.8
+        assert result["days"] == 30
+
+    def test_empty_users(self):
+        """Returns empty user list when no data."""
+        service = self._setup_service()
+        service.history_repo.get_user_approval_stats.return_value = []
+
+        result = service.get_team_performance(telegram_chat_id=123)
+
+        assert result["users"] == []
+        assert result["days"] == 30

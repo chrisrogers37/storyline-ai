@@ -473,6 +473,46 @@ class DashboardService(BaseService):
 
         return recommendations
 
+    def get_approval_latency(self, telegram_chat_id: int, days: int = 30) -> dict:
+        """Return approval latency statistics — time from queue to decision.
+
+        Shows overall avg/min/max and breakdowns by hour and category.
+        """
+        with self.track_execution(
+            "get_approval_latency",
+            input_params={"telegram_chat_id": telegram_chat_id, "days": days},
+        ) as run_id:
+            chat_settings_id = self._resolve_chat_settings_id(telegram_chat_id)
+            result = self.history_repo.get_approval_latency(
+                days=days, chat_settings_id=chat_settings_id
+            )
+            result["days"] = days
+            self.set_result_summary(
+                run_id,
+                {
+                    "count": result["overall"]["count"],
+                    "avg_minutes": result["overall"]["avg_minutes"],
+                },
+            )
+            return result
+
+    def get_team_performance(self, telegram_chat_id: int, days: int = 30) -> dict:
+        """Return per-user approval rates and response times.
+
+        Shows each team member's posted/skipped/rejected counts,
+        approval rate, and average response latency.
+        """
+        with self.track_execution(
+            "get_team_performance",
+            input_params={"telegram_chat_id": telegram_chat_id, "days": days},
+        ) as run_id:
+            chat_settings_id = self._resolve_chat_settings_id(telegram_chat_id)
+            users = self.history_repo.get_user_approval_stats(
+                days=days, chat_settings_id=chat_settings_id
+            )
+            self.set_result_summary(run_id, {"user_count": len(users), "days": days})
+            return {"users": users, "days": days}
+
     def get_pending_queue_items(self, chat_settings_id: Optional[str] = None) -> list:
         """Return pending queue items with media details.
 

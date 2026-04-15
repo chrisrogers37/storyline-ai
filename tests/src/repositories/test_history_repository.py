@@ -531,3 +531,125 @@ class TestAnalyticsAggregations:
         result = history_repo.get_dow_approval_rates(days=90)
 
         assert result == []
+
+
+@pytest.mark.unit
+class TestApprovalLatency:
+    """Tests for get_approval_latency."""
+
+    def _make_chainable_query(self, mock_db):
+        q = mock_db.query.return_value
+        q.with_entities.return_value = q
+        q.filter.return_value = q
+        q.group_by.return_value = q
+        q.order_by.return_value = q
+        q.outerjoin.return_value = q
+        return q
+
+    def test_returns_overall_and_breakdowns(self, history_repo, mock_db):
+        """Returns overall stats with hourly and category breakdowns."""
+        q = self._make_chainable_query(mock_db)
+
+        # Overall stats (first call)
+        overall_row = MagicMock()
+        overall_row.count = 50
+        overall_row.avg = 300.0  # 5 minutes in seconds
+        overall_row.min = 60.0
+        overall_row.max = 1800.0
+        q.first.return_value = overall_row
+
+        # Hourly (second call to all)
+        hourly_row = MagicMock()
+        hourly_row.hour = 14
+        hourly_row.count = 20
+        hourly_row.avg = 240.0
+
+        # Category (third call to all)
+        cat_row = MagicMock()
+        cat_row.category = "memes"
+        cat_row.count = 30
+        cat_row.avg = 180.0
+
+        q.all.side_effect = [[hourly_row], [cat_row]]
+
+        result = history_repo.get_approval_latency(days=30)
+
+        assert result["overall"]["count"] == 50
+        assert result["overall"]["avg_minutes"] == 5.0
+        assert result["overall"]["min_minutes"] == 1.0
+        assert result["overall"]["max_minutes"] == 30.0
+        assert len(result["by_hour"]) == 1
+        assert result["by_hour"][0]["hour"] == 14
+        assert result["by_hour"][0]["avg_minutes"] == 4.0
+        assert len(result["by_category"]) == 1
+        assert result["by_category"][0]["category"] == "memes"
+
+    def test_empty_history(self, history_repo, mock_db):
+        """Returns zeros when no posting history."""
+        q = self._make_chainable_query(mock_db)
+
+        overall_row = MagicMock()
+        overall_row.count = 0
+        overall_row.avg = None
+        overall_row.min = None
+        overall_row.max = None
+        q.first.return_value = overall_row
+        q.all.side_effect = [[], []]
+
+        result = history_repo.get_approval_latency(days=30)
+
+        assert result["overall"]["count"] == 0
+        assert result["overall"]["avg_minutes"] == 0
+        assert result["by_hour"] == []
+        assert result["by_category"] == []
+
+
+@pytest.mark.unit
+class TestUserApprovalStats:
+    """Tests for get_user_approval_stats."""
+
+    def _make_chainable_query(self, mock_db):
+        q = mock_db.query.return_value
+        q.with_entities.return_value = q
+        q.filter.return_value = q
+        q.group_by.return_value = q
+        q.order_by.return_value = q
+        q.outerjoin.return_value = q
+        return q
+
+    def test_returns_per_user_breakdown(self, history_repo, mock_db):
+        """Returns per-user stats with approval rates."""
+        q = self._make_chainable_query(mock_db)
+        q.all.return_value = [
+            ("user-1", "alice", "Alice", "posted", 40, 180.0),
+            ("user-1", "alice", "Alice", "skipped", 5, None),
+            ("user-1", "alice", "Alice", "rejected", 5, None),
+            ("user-2", "bob", "Bob", "posted", 20, 360.0),
+        ]
+
+        result = history_repo.get_user_approval_stats(days=30)
+
+        assert len(result) == 2
+        alice = result[0]  # sorted by total desc
+        assert alice["username"] == "alice"
+        assert alice["posted"] == 40
+        assert alice["skipped"] == 5
+        assert alice["rejected"] == 5
+        assert alice["total"] == 50
+        assert alice["approval_rate"] == 0.8
+        assert alice["avg_latency_minutes"] == 3.0  # 180s = 3min
+
+        bob = result[1]
+        assert bob["posted"] == 20
+        assert bob["total"] == 20
+        assert bob["approval_rate"] == 1.0
+        assert bob["avg_latency_minutes"] == 6.0  # 360s = 6min
+
+    def test_empty_history(self, history_repo, mock_db):
+        """Returns empty list when no user data."""
+        q = self._make_chainable_query(mock_db)
+        q.all.return_value = []
+
+        result = history_repo.get_user_approval_stats(days=30)
+
+        assert result == []
