@@ -376,6 +376,186 @@ class HistoryRepository(BaseRepository):
 
         return [by_hour[h] for h in sorted(by_hour)]
 
+    def get_approval_latency(
+        self, days: int = 30, chat_settings_id: Optional[str] = None
+    ) -> dict:
+        """Compute approval latency statistics (time from queue to decision).
+
+        Returns overall stats and per-hour/per-category breakdowns.
+        Latency = posted_at - queue_created_at, in seconds.
+        Only includes items with status 'posted' (approvals).
+        """
+        from sqlalchemy import extract
+
+        since = datetime.now(timezone.utc) - timedelta(days=days)
+        latency_expr = func.extract(
+            "epoch", PostingHistory.posted_at - PostingHistory.queue_created_at
+        )
+
+        # Overall stats
+        overall = (
+            self._tenant_query(PostingHistory, chat_settings_id)
+            .with_entities(
+                func.count(PostingHistory.id).label("count"),
+                func.avg(latency_expr).label("avg"),
+                func.min(latency_expr).label("min"),
+                func.max(latency_expr).label("max"),
+            )
+            .filter(
+                PostingHistory.posted_at >= since,
+                PostingHistory.status == "posted",
+                PostingHistory.queue_created_at.isnot(None),
+            )
+            .first()
+        )
+
+        # Per-hour breakdown
+        hourly_rows = (
+            self._tenant_query(PostingHistory, chat_settings_id)
+            .with_entities(
+                extract("hour", PostingHistory.posted_at).label("hour"),
+                func.count(PostingHistory.id).label("count"),
+                func.avg(latency_expr).label("avg"),
+            )
+            .filter(
+                PostingHistory.posted_at >= since,
+                PostingHistory.status == "posted",
+                PostingHistory.queue_created_at.isnot(None),
+            )
+            .group_by("hour")
+            .order_by("hour")
+            .all()
+        )
+
+        # Per-category breakdown
+        from src.models.media_item import MediaItem
+
+        coalesced_category = func.coalesce(MediaItem.category, "uncategorized")
+        category_rows = (
+            self._tenant_query(PostingHistory, chat_settings_id)
+            .outerjoin(MediaItem, PostingHistory.media_item_id == MediaItem.id)
+            .with_entities(
+                coalesced_category.label("category"),
+                func.count(PostingHistory.id).label("count"),
+                func.avg(latency_expr).label("avg"),
+            )
+            .filter(
+                PostingHistory.posted_at >= since,
+                PostingHistory.status == "posted",
+                PostingHistory.queue_created_at.isnot(None),
+            )
+            .group_by(coalesced_category)
+            .order_by(coalesced_category)
+            .all()
+        )
+        self.end_read_transaction()
+
+        def _seconds_to_minutes(val):
+            return round(val / 60, 1) if val else 0
+
+        return {
+            "overall": {
+                "count": overall.count if overall else 0,
+                "avg_minutes": _seconds_to_minutes(overall.avg if overall else 0),
+                "min_minutes": _seconds_to_minutes(overall.min if overall else 0),
+                "max_minutes": _seconds_to_minutes(overall.max if overall else 0),
+            },
+            "by_hour": [
+                {
+                    "hour": int(h.hour),
+                    "count": h.count,
+                    "avg_minutes": _seconds_to_minutes(h.avg),
+                }
+                for h in hourly_rows
+            ],
+            "by_category": [
+                {
+                    "category": c.category,
+                    "count": c.count,
+                    "avg_minutes": _seconds_to_minutes(c.avg),
+                }
+                for c in category_rows
+            ],
+        }
+
+    def get_user_approval_stats(
+        self, days: int = 30, chat_settings_id: Optional[str] = None
+    ) -> list:
+        """Per-user breakdown of approval decisions and response time.
+
+        Returns list of per-user dicts: posted, skipped, rejected counts,
+        approval_rate, and avg_latency_minutes.
+        """
+        from src.models.user import User
+
+        since = datetime.now(timezone.utc) - timedelta(days=days)
+        latency_expr = func.extract(
+            "epoch", PostingHistory.posted_at - PostingHistory.queue_created_at
+        )
+
+        rows = (
+            self._tenant_query(PostingHistory, chat_settings_id)
+            .outerjoin(User, PostingHistory.posted_by_user_id == User.id)
+            .with_entities(
+                PostingHistory.posted_by_user_id,
+                User.telegram_username,
+                User.telegram_first_name,
+                PostingHistory.status,
+                func.count(PostingHistory.id).label("count"),
+                func.avg(latency_expr).label("avg_latency"),
+            )
+            .filter(
+                PostingHistory.posted_at >= since,
+                PostingHistory.posted_by_user_id.isnot(None),
+            )
+            .group_by(
+                PostingHistory.posted_by_user_id,
+                User.telegram_username,
+                User.telegram_first_name,
+                PostingHistory.status,
+            )
+            .all()
+        )
+        self.end_read_transaction()
+
+        # Pivot into per-user dicts
+        users: dict = {}
+        for user_id, username, first_name, status, count, avg_lat in rows:
+            uid = str(user_id) if user_id else "unknown"
+            if uid not in users:
+                users[uid] = {
+                    "user_id": uid,
+                    "username": username or first_name or "Unknown",
+                    "posted": 0,
+                    "skipped": 0,
+                    "rejected": 0,
+                    "total": 0,
+                    "avg_latency_minutes": 0,
+                    "_latency_sum": 0,
+                    "_latency_count": 0,
+                }
+            users[uid][status] = users[uid].get(status, 0) + count
+            users[uid]["total"] += count
+            if avg_lat and status == "posted":
+                users[uid]["_latency_sum"] += avg_lat * count
+                users[uid]["_latency_count"] += count
+
+        result = []
+        for user_data in users.values():
+            total = user_data["total"]
+            posted = user_data.get("posted", 0)
+            user_data["approval_rate"] = round(posted / total, 2) if total else 0
+            if user_data["_latency_count"] > 0:
+                avg_sec = user_data["_latency_sum"] / user_data["_latency_count"]
+                user_data["avg_latency_minutes"] = round(avg_sec / 60, 1)
+            del user_data["_latency_sum"]
+            del user_data["_latency_count"]
+            result.append(user_data)
+
+        # Sort by total actions descending
+        result.sort(key=lambda x: x["total"], reverse=True)
+        return result
+
     def get_dow_approval_rates(
         self, days: int = 90, chat_settings_id: Optional[str] = None
     ) -> list:
