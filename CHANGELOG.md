@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Refactored `src/main.py` scheduler loop** — extracted four focused tick functions (`_scheduler_tick`, `_retention_cleanup_tick`, `_pool_health_tick`, `_token_health_tick`) from the 193-line `run_scheduler_loop()`, reducing it to a clean orchestration loop. Extracted `_validate_and_log_startup()` and `_log_service_summary()` from `main_async()`. No behavior changes. (#206)
 ### Changed — Code Quality (#205, #207, #208, #209)
 
 - **Extract duplicated eligibility filters** (#205) — Consolidated repeated lock/queue/hash-duplicate exclusion logic in `MediaRepository` into a single `_apply_eligibility_filters()` helper used by `get_next_eligible_for_posting()`, `count_eligible()`, and `count_eligible_by_category()`.
