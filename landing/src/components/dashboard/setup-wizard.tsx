@@ -27,7 +27,9 @@ import { postApi, getApi } from "@/lib/dashboard-api";
 
 interface SetupState {
   instagram_connected: boolean;
+  instagram_username?: string | null;
   gdrive_connected: boolean;
+  gdrive_email?: string | null;
   media_folder_configured: boolean;
   media_indexed: boolean;
   media_count: number;
@@ -60,29 +62,35 @@ export function SetupWizard({ initialState }: SetupWizardProps) {
   const [state, setState] = useState<SetupState>(initialState);
   const [step, setStep] = useState(() => inferStep(initialState));
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [folderUrl, setFolderUrl] = useState("");
   const [folderResult, setFolderResult] = useState<{ file_count: number; categories: string[] } | null>(null);
   const [indexResult, setIndexResult] = useState<{ new: number; updated: number; errors: number } | null>(null);
-  const [postsPerDay, setPostsPerDay] = useState(String(state.posts_per_day));
+  const [postsPerDay, setPostsPerDay] = useState<number>(state.posts_per_day);
   const [hoursStart, setHoursStart] = useState(String(state.posting_hours_start));
   const [hoursEnd, setHoursEnd] = useState(String(state.posting_hours_end));
 
   async function refreshState() {
+    setError(null);
     try {
       const data = await postApi("init");
       if (data?.setup_state) setState(data.setup_state);
       return data?.setup_state as SetupState | undefined;
-    } catch {
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Operation failed");
       return undefined;
     }
   }
 
   async function handleOAuth(provider: "instagram" | "google-drive") {
+    setError(null);
     setLoading(true);
     try {
       const data = await getApi(`oauth-url/${provider}`);
-      if (data?.auth_url) window.open(data.auth_url, "_blank");
+      if (data?.auth_url) window.open(data.auth_url, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Operation failed");
     } finally {
       setLoading(false);
     }
@@ -98,47 +106,59 @@ export function SetupWizard({ initialState }: SetupWizardProps) {
   }
 
   async function handleConfigureFolder() {
+    setError(null);
     setLoading(true);
     try {
       const data = await postApi("media-folder", { folder_url: folderUrl });
       setFolderResult(data);
       await refreshState();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Operation failed");
     } finally {
       setLoading(false);
     }
   }
 
   async function handleStartIndexing() {
+    setError(null);
     setLoading(true);
     try {
       const data = await postApi("start-indexing");
       setIndexResult(data);
       await refreshState();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Operation failed");
     } finally {
       setLoading(false);
     }
   }
 
   async function handleSaveSchedule() {
+    setError(null);
     setLoading(true);
     try {
       await postApi("schedule", {
-        posts_per_day: Number(postsPerDay),
+        posts_per_day: postsPerDay,
         posting_hours_start: Number(hoursStart),
         posting_hours_end: Number(hoursEnd),
       });
       await refreshState();
       setStep(5);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Operation failed");
     } finally {
       setLoading(false);
     }
   }
 
   async function handleComplete() {
+    setError(null);
     setLoading(true);
     try {
       await postApi("complete");
       router.push("/dashboard");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Operation failed");
     } finally {
       setLoading(false);
     }
@@ -209,54 +229,35 @@ export function SetupWizard({ initialState }: SetupWizardProps) {
         </CardHeader>
 
         <CardContent>
-          {step === 0 && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">Status:</span>
-                {state.instagram_connected ? (
-                  <Badge className="bg-green-500/15 text-green-600 border-green-500/25">Connected</Badge>
-                ) : (
-                  <Badge variant="secondary">Not connected</Badge>
-                )}
-              </div>
-              {!state.instagram_connected && (
-                <div className="flex gap-2">
-                  <Button onClick={() => handleOAuth("instagram")} disabled={loading}>
-                    {loading ? <Loader2 className="size-4 animate-spin" /> : <ExternalLink className="size-4" />}
-                    Connect Instagram
-                  </Button>
-                  <Button variant="outline" onClick={handleRefreshConnection} disabled={loading}>
-                    {loading ? <Loader2 className="size-4 animate-spin" /> : null}
-                    Refresh
-                  </Button>
-                </div>
-              )}
+          {error && (
+            <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800 flex items-center justify-between">
+              <span>{error}</span>
+              <button onClick={() => setError(null)} className="ml-2 text-red-600 hover:text-red-800 font-medium">Dismiss</button>
             </div>
           )}
 
+          {step === 0 && (
+            <OAuthStep
+              provider="instagram"
+              label="Instagram"
+              connected={state.instagram_connected}
+              username={state.instagram_username}
+              loading={loading}
+              onConnect={() => handleOAuth("instagram")}
+              onRefresh={handleRefreshConnection}
+            />
+          )}
+
           {step === 1 && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">Status:</span>
-                {state.gdrive_connected ? (
-                  <Badge className="bg-green-500/15 text-green-600 border-green-500/25">Connected</Badge>
-                ) : (
-                  <Badge variant="secondary">Not connected</Badge>
-                )}
-              </div>
-              {!state.gdrive_connected && (
-                <div className="flex gap-2">
-                  <Button onClick={() => handleOAuth("google-drive")} disabled={loading}>
-                    {loading ? <Loader2 className="size-4 animate-spin" /> : <ExternalLink className="size-4" />}
-                    Connect Google Drive
-                  </Button>
-                  <Button variant="outline" onClick={handleRefreshConnection} disabled={loading}>
-                    {loading ? <Loader2 className="size-4 animate-spin" /> : null}
-                    Refresh
-                  </Button>
-                </div>
-              )}
-            </div>
+            <OAuthStep
+              provider="google-drive"
+              label="Google Drive"
+              connected={state.gdrive_connected}
+              username={state.gdrive_email}
+              loading={loading}
+              onConnect={() => handleOAuth("google-drive")}
+              onRefresh={handleRefreshConnection}
+            />
           )}
 
           {step === 2 && (
@@ -278,7 +279,7 @@ export function SetupWizard({ initialState }: SetupWizardProps) {
               </div>
               <Button
                 onClick={handleConfigureFolder}
-                disabled={loading || !folderUrl.includes("drive.google.com/drive/folders/")}
+                disabled={loading || !/^https:\/\/drive\.google\.com\/drive\/folders\/[a-zA-Z0-9_-]+/.test(folderUrl)}
               >
                 {loading ? <Loader2 className="size-4 animate-spin" /> : null}
                 Configure Folder
@@ -332,7 +333,7 @@ export function SetupWizard({ initialState }: SetupWizardProps) {
                   min={1}
                   max={50}
                   value={postsPerDay}
-                  onChange={(e) => setPostsPerDay(e.target.value)}
+                  onChange={(e) => setPostsPerDay(parseInt(e.target.value, 10) || 0)}
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -363,7 +364,7 @@ export function SetupWizard({ initialState }: SetupWizardProps) {
                   </Select>
                 </div>
               </div>
-              <Button onClick={handleSaveSchedule} disabled={loading || Number(postsPerDay) < 1}>
+              <Button onClick={handleSaveSchedule} disabled={loading || postsPerDay < 1}>
                 {loading ? <Loader2 className="size-4 animate-spin" /> : null}
                 Save Schedule
               </Button>
@@ -420,6 +421,51 @@ export function SetupWizard({ initialState }: SetupWizardProps) {
   );
 }
 
+function OAuthStep({
+  label,
+  connected,
+  username,
+  loading,
+  onConnect,
+  onRefresh,
+}: {
+  label: string;
+  connected: boolean;
+  username?: string | null;
+  loading: boolean;
+  onConnect: () => void;
+  onRefresh: () => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-medium">Status:</span>
+        {connected ? (
+          <>
+            <Badge className="bg-green-500/15 text-green-600 border-green-500/25">Connected</Badge>
+            {username && <span className="text-sm text-muted-foreground">{username}</span>}
+          </>
+        ) : (
+          <Badge variant="secondary">Not connected</Badge>
+        )}
+      </div>
+      {/* TODO: Add polling (setInterval + refreshState every 3s, capped at 60s) to auto-detect OAuth completion */}
+      {!connected && (
+        <div className="flex gap-2">
+          <Button onClick={onConnect} disabled={loading}>
+            {loading ? <Loader2 className="size-4 animate-spin" /> : <ExternalLink className="size-4" />}
+            Connect {label}
+          </Button>
+          <Button variant="outline" onClick={onRefresh} disabled={loading}>
+            {loading ? <Loader2 className="size-4 animate-spin" /> : null}
+            Refresh
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SummaryRow({ label, connected, detail }: { label: string; connected: boolean; detail?: string }) {
   return (
     <div className="flex items-center justify-between text-sm">
@@ -447,5 +493,6 @@ function inferStep(state: SetupState): number {
   if (!state.gdrive_connected) return 1;
   if (!state.media_folder_configured) return 2;
   if (!state.media_indexed) return 3;
-  return 4;
+  if (!state.onboarding_completed) return 4;
+  return 5;
 }

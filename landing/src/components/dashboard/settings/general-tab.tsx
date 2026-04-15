@@ -55,6 +55,7 @@ export function GeneralTab({ settings }: { settings: GeneralSettings }) {
   });
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [togglingKey, setTogglingKey] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const scheduleChanged =
     postsPerDay !== settings.posts_per_day ||
@@ -62,6 +63,7 @@ export function GeneralTab({ settings }: { settings: GeneralSettings }) {
     Number(hoursEnd) !== settings.posting_hours_end;
 
   async function saveSchedule() {
+    setError(null);
     setSavingSchedule(true);
     try {
       await postApi("schedule", {
@@ -70,6 +72,8 @@ export function GeneralTab({ settings }: { settings: GeneralSettings }) {
         posting_hours_end: Number(hoursEnd),
       });
       router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save schedule");
     } finally {
       setSavingSchedule(false);
     }
@@ -82,8 +86,9 @@ export function GeneralTab({ settings }: { settings: GeneralSettings }) {
 
     try {
       await postApi("toggle-setting", { setting_name: key });
-    } catch {
+    } catch (e) {
       setToggleState((prev) => ({ ...prev, [key]: previous }));
+      setError(e instanceof Error ? e.message : "Failed to toggle setting");
     } finally {
       setTogglingKey(null);
     }
@@ -91,6 +96,12 @@ export function GeneralTab({ settings }: { settings: GeneralSettings }) {
 
   return (
     <div className="space-y-6 pt-4">
+      {error && (
+        <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800 flex items-center justify-between">
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="ml-2 text-red-600 hover:text-red-800 font-medium">Dismiss</button>
+        </div>
+      )}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Posting Schedule</CardTitle>
@@ -141,7 +152,7 @@ export function GeneralTab({ settings }: { settings: GeneralSettings }) {
           </div>
           <Button
             onClick={saveSchedule}
-            disabled={!scheduleChanged || savingSchedule}
+            disabled={!scheduleChanged || savingSchedule || hoursStart === hoursEnd}
           >
             {savingSchedule ? "Saving..." : "Save Schedule"}
           </Button>

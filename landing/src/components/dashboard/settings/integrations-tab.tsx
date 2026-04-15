@@ -24,40 +24,44 @@ export function IntegrationsTab({
   const [syncing, setSyncing] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function connectGdrive() {
+    setError(null);
     setConnecting(true);
     try {
       const data = await getApi("oauth-url/google-drive");
       if (data.auth_url) {
-        window.open(data.auth_url, "_blank");
+        window.open(data.auth_url, "_blank", "noopener,noreferrer");
       }
-    } catch {
-      // ignore
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to connect Google Drive");
     } finally {
       setConnecting(false);
     }
   }
 
   async function disconnectGdrive() {
+    setError(null);
     setDisconnecting(true);
     try {
       await postApi("disconnect-gdrive");
       router.refresh();
-    } catch {
-      // ignore
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to disconnect Google Drive");
     } finally {
       setDisconnecting(false);
     }
   }
 
   async function syncMedia() {
+    setError(null);
     setSyncing(true);
     try {
       await postApi("sync-media");
       router.refresh();
-    } catch {
-      // ignore
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to sync media");
     } finally {
       setSyncing(false);
     }
@@ -65,6 +69,12 @@ export function IntegrationsTab({
 
   return (
     <div className="space-y-6 pt-4">
+      {error && (
+        <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800 flex items-center justify-between">
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="ml-2 text-red-600 hover:text-red-800 font-medium">Dismiss</button>
+        </div>
+      )}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Google Drive</CardTitle>

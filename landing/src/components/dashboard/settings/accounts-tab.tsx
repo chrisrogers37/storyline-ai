@@ -32,40 +32,46 @@ export function AccountsTab({ accounts }: AccountsTabProps) {
   const router = useRouter();
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [removingDialogOpen, setRemovingDialogOpen] = useState<string | null>(null);
 
   async function switchAccount(accountId: string) {
+    setError(null);
     setLoadingAction(`switch-${accountId}`);
     try {
       await postApi("switch-account", { account_id: accountId });
       router.refresh();
-    } catch {
-      // ignore
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to switch account");
     } finally {
       setLoadingAction(null);
     }
   }
 
   async function removeAccount(accountId: string) {
+    setError(null);
     setLoadingAction(`remove-${accountId}`);
     try {
       await postApi("remove-account", { account_id: accountId });
+      setRemovingDialogOpen(null);
       router.refresh();
-    } catch {
-      // ignore
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to remove account");
     } finally {
       setLoadingAction(null);
     }
   }
 
   async function connectInstagram() {
+    setError(null);
     setConnecting(true);
     try {
       const data = await getApi("oauth-url/instagram");
       if (data.auth_url) {
-        window.open(data.auth_url, "_blank");
+        window.open(data.auth_url, "_blank", "noopener,noreferrer");
       }
-    } catch {
-      // ignore
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to connect Instagram");
     } finally {
       setConnecting(false);
     }
@@ -73,6 +79,12 @@ export function AccountsTab({ accounts }: AccountsTabProps) {
 
   return (
     <div className="space-y-6 pt-4">
+      {error && (
+        <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800 flex items-center justify-between">
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="ml-2 text-red-600 hover:text-red-800 font-medium">Dismiss</button>
+        </div>
+      )}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Instagram Accounts</CardTitle>
@@ -117,7 +129,7 @@ export function AccountsTab({ accounts }: AccountsTabProps) {
                           : "Switch"}
                       </Button>
                     )}
-                    <Dialog>
+                    <Dialog open={removingDialogOpen === account.id} onOpenChange={(open) => setRemovingDialogOpen(open ? account.id : null)}>
                       <DialogTrigger asChild>
                         <Button variant="destructive" size="sm">
                           Remove

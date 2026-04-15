@@ -52,6 +52,12 @@ async function proxyRequest(
   }
 
   const { path } = await params;
+
+  // Reject path traversal attempts
+  if (path.some(segment => segment === ".." || segment === ".")) {
+    return NextResponse.json({ error: "Invalid path" }, { status: 400 });
+  }
+
   const backendPath = path.join("/");
 
   // Validate path against allowlist

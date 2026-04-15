@@ -34,7 +34,10 @@ export async function backendFetchJson(
   options?: { revalidate?: number }
 ) {
   const res = await backendFetch(path, chatId, userId, options);
-  if (!res.ok) return null;
+  if (!res.ok) {
+    console.error("backendFetchJson failed:", path, res.status);
+    return null;
+  }
   return res.json();
 }
 
