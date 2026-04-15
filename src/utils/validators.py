@@ -1,9 +1,26 @@
 """Input validation and configuration validation."""
 
-from typing import List, Tuple
+import re
 from pathlib import Path
+from typing import List, Optional, Tuple
 
 from src.config.settings import settings
+from src.utils.logger import logger
+
+# Derive expected schema version from migration filenames (NNN_description.sql).
+MIGRATIONS_DIR = Path(__file__).resolve().parents[2] / "scripts" / "migrations"
+
+
+def _latest_migration_version() -> Optional[int]:
+    """Return the highest migration version number from scripts/migrations/."""
+    if not MIGRATIONS_DIR.is_dir():
+        return None
+    versions = []
+    for f in MIGRATIONS_DIR.iterdir():
+        m = re.match(r"^(\d+)_", f.name)
+        if m:
+            versions.append(int(m.group(1)))
+    return max(versions) if versions else None
 
 
 class ConfigValidator:
@@ -68,3 +85,45 @@ class ConfigValidator:
 
         is_valid = len(errors) == 0
         return is_valid, errors
+
+    @staticmethod
+    def check_schema_version() -> None:
+        """Check that the database schema matches the latest migration.
+
+        Queries the schema_version table and compares against migration files
+        in scripts/migrations/. Logs a warning on mismatch but does not block
+        startup — the operator is expected to apply migrations manually.
+        """
+        from sqlalchemy import text
+
+        from src.config.database import engine
+
+        expected = _latest_migration_version()
+        if expected is None:
+            logger.warning("Schema version check skipped — no migration files found")
+            return
+
+        try:
+            with engine.connect() as conn:
+                row = conn.execute(
+                    text("SELECT MAX(version) FROM schema_version")
+                ).scalar()
+                db_version = int(row) if row is not None else 0
+        except Exception as exc:
+            logger.warning(f"Schema version check failed: {exc}")
+            return
+
+        if db_version < expected:
+            logger.warning(
+                f"Database schema is behind: DB at version {db_version}, "
+                f"latest migration is {expected}. "
+                f"Run pending migrations ({db_version + 1}–{expected}) before "
+                f"relying on new features."
+            )
+        elif db_version > expected:
+            logger.warning(
+                f"Database schema ({db_version}) is ahead of migration files "
+                f"({expected}) — are migration files missing from this deploy?"
+            )
+        else:
+            logger.info(f"✓ Database schema is up to date (version {db_version})")
