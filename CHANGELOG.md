@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Category Mix Drift Alerts (#176)
+
+- **Category drift analytics** — `GET /api/onboarding/analytics/category-drift` compares configured posting ratios against actual ratios over a time window. Flags categories as ok/warning/critical based on drift thresholds (10%/25%).
+- **`get_category_mix_drift()`** in DashboardService — combines `category_post_case_mix` targets with `posting_history` actuals to compute per-category drift.
+
+### Added — Dead Content Report (#177)
+
+- **Dead content analytics** — `GET /api/onboarding/analytics/dead-content` surfaces active media items that have never been posted and are older than a configurable age threshold (default 30 days). Returns per-category breakdown and dead percentage of total pool.
+- **`count_dead_content_by_category()`** in MediaRepository — filters `is_active=True, times_posted=0, created_at <= cutoff` grouped by category.
+
 ### Added — Schedule Optimization Recommendations (#158)
 
 - **Schedule recommendations API** — `GET /api/onboarding/analytics/schedule-recommendations` analyzes posting history to identify optimal posting times. Returns hourly approval rates, day-of-week patterns, and human-readable recommendations (e.g., "Posts at 10:00 have the highest approval rate (94%)").

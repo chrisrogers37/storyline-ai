@@ -587,3 +587,120 @@ class TestGetScheduleRecommendations:
         assert "worst_day" in types
         worst_day_rec = next(r for r in recs if r["type"] == "worst_day")
         assert worst_day_rec["day_name"] == "Sunday"
+
+
+@pytest.mark.unit
+class TestGetCategoryMixDrift:
+    """Tests for get_category_mix_drift."""
+
+    def _setup_service(self):
+        with patch.object(DashboardService, "__init__", lambda self: None):
+            service = DashboardService()
+            service.settings_service = MagicMock()
+            service.history_repo = MagicMock()
+            service.category_mix_repo = MagicMock()
+            service.service_run_repo = MagicMock()
+            service.service_name = "DashboardService"
+            mock_settings = Mock(id="tenant-uuid-1")
+            service.settings_service.get_settings.return_value = mock_settings
+            return service
+
+    def test_detects_drift(self):
+        """Flags categories with significant drift as warning/critical."""
+        from decimal import Decimal
+
+        service = self._setup_service()
+        service.category_mix_repo.get_current_mix_as_dict.return_value = {
+            "memes": Decimal("0.60"),
+            "merch": Decimal("0.40"),
+        }
+        service.history_repo.get_stats_by_category.return_value = [
+            {"category": "memes", "posted": 30},
+            {"category": "merch", "posted": 70},
+        ]
+
+        result = service.get_category_mix_drift(telegram_chat_id=123, days=7)
+
+        assert not result["healthy"]
+        memes = next(c for c in result["categories"] if c["category"] == "memes")
+        assert memes["configured_ratio"] == 0.60
+        assert memes["actual_ratio"] == 0.30
+        assert memes["drift"] == 0.30
+        assert memes["status"] == "critical"
+
+    def test_healthy_when_no_drift(self):
+        """Reports healthy when actual matches configured."""
+        from decimal import Decimal
+
+        service = self._setup_service()
+        service.category_mix_repo.get_current_mix_as_dict.return_value = {
+            "memes": Decimal("0.50"),
+            "merch": Decimal("0.50"),
+        }
+        service.history_repo.get_stats_by_category.return_value = [
+            {"category": "memes", "posted": 50},
+            {"category": "merch", "posted": 50},
+        ]
+
+        result = service.get_category_mix_drift(telegram_chat_id=123)
+
+        assert result["healthy"]
+        assert result["max_drift"] == 0.0
+
+    def test_handles_no_posts(self):
+        """Returns zeros when no posting history."""
+        from decimal import Decimal
+
+        service = self._setup_service()
+        service.category_mix_repo.get_current_mix_as_dict.return_value = {
+            "memes": Decimal("1.0"),
+        }
+        service.history_repo.get_stats_by_category.return_value = []
+
+        result = service.get_category_mix_drift(telegram_chat_id=123)
+
+        assert result["total_posted"] == 0
+        assert result["categories"][0]["actual_ratio"] == 0
+
+
+@pytest.mark.unit
+class TestGetDeadContentReport:
+    """Tests for get_dead_content_report."""
+
+    def _setup_service(self):
+        with patch.object(DashboardService, "__init__", lambda self: None):
+            service = DashboardService()
+            service.settings_service = MagicMock()
+            service.media_repo = MagicMock()
+            service.service_run_repo = MagicMock()
+            service.service_name = "DashboardService"
+            mock_settings = Mock(id="tenant-uuid-1")
+            service.settings_service.get_settings.return_value = mock_settings
+            return service
+
+    def test_returns_dead_content_breakdown(self):
+        """Returns total dead, percentage, and per-category data."""
+        service = self._setup_service()
+        service.media_repo.count_active.return_value = 100
+        service.media_repo.count_dead_content_by_category.return_value = [
+            {"category": "memes", "dead_count": 15},
+            {"category": "merch", "dead_count": 5},
+        ]
+
+        result = service.get_dead_content_report(telegram_chat_id=123)
+
+        assert result["total_active"] == 100
+        assert result["total_dead"] == 20
+        assert result["dead_percentage"] == 0.20
+        assert len(result["by_category"]) == 2
+
+    def test_handles_empty_pool(self):
+        """Returns zeros when no active media."""
+        service = self._setup_service()
+        service.media_repo.count_active.return_value = 0
+        service.media_repo.count_dead_content_by_category.return_value = []
+
+        result = service.get_dead_content_report(telegram_chat_id=123)
+
+        assert result["total_dead"] == 0
+        assert result["dead_percentage"] == 0

@@ -233,6 +233,112 @@ class DashboardService(BaseService):
                 "days": days,
             }
 
+    def get_category_mix_drift(self, telegram_chat_id: int, days: int = 7) -> dict:
+        """Compare actual posting ratios against configured targets.
+
+        Returns per-category drift (absolute difference between actual
+        and configured ratios) with warning/critical thresholds.
+        """
+        with self.track_execution(
+            "get_category_mix_drift",
+            input_params={"telegram_chat_id": telegram_chat_id, "days": days},
+        ) as run_id:
+            chat_settings_id = self._resolve_chat_settings_id(telegram_chat_id)
+
+            configured = self.category_mix_repo.get_current_mix_as_dict(
+                chat_settings_id=chat_settings_id
+            )
+            actual_stats = self.history_repo.get_stats_by_category(
+                days=days, chat_settings_id=chat_settings_id
+            )
+
+            total_posted = sum(c.get("posted", 0) for c in actual_stats)
+
+            categories = []
+            max_drift = 0.0
+            for name, target_ratio in configured.items():
+                actual_posted = 0
+                for c in actual_stats:
+                    if c["category"] == name:
+                        actual_posted = c.get("posted", 0)
+                        break
+                actual_ratio = (
+                    round(actual_posted / total_posted, 2) if total_posted else 0
+                )
+                drift = round(abs(actual_ratio - float(target_ratio)), 2)
+                max_drift = max(max_drift, drift)
+
+                status = "ok"
+                if drift >= 0.25:
+                    status = "critical"
+                elif drift >= 0.10:
+                    status = "warning"
+
+                categories.append(
+                    {
+                        "category": name,
+                        "configured_ratio": float(target_ratio),
+                        "actual_ratio": actual_ratio,
+                        "drift": drift,
+                        "status": status,
+                    }
+                )
+
+            healthy = max_drift < 0.10
+            self.set_result_summary(
+                run_id,
+                {
+                    "healthy": healthy,
+                    "max_drift": max_drift,
+                    "categories": len(categories),
+                },
+            )
+            return {
+                "healthy": healthy,
+                "max_drift": max_drift,
+                "categories": categories,
+                "total_posted": total_posted,
+                "days": days,
+            }
+
+    def get_dead_content_report(
+        self, telegram_chat_id: int, min_age_days: int = 30
+    ) -> dict:
+        """Surface media items that have never been posted.
+
+        Returns dead content count and per-category breakdown,
+        alongside total pool stats for context.
+        """
+        with self.track_execution(
+            "get_dead_content_report",
+            input_params={
+                "telegram_chat_id": telegram_chat_id,
+                "min_age_days": min_age_days,
+            },
+        ) as run_id:
+            chat_settings_id = self._resolve_chat_settings_id(telegram_chat_id)
+
+            total_active = self.media_repo.count_active(
+                chat_settings_id=chat_settings_id
+            )
+            dead_by_category = self.media_repo.count_dead_content_by_category(
+                min_age_days=min_age_days, chat_settings_id=chat_settings_id
+            )
+            total_dead = sum(c["dead_count"] for c in dead_by_category)
+            dead_pct = round(total_dead / total_active, 2) if total_active else 0
+
+            self.set_result_summary(
+                run_id,
+                {"total_dead": total_dead, "dead_pct": dead_pct},
+            )
+            return {
+                "total_active": total_active,
+                "total_dead": total_dead,
+                "dead_percentage": dead_pct,
+                "by_category": dead_by_category,
+                "min_age_days": min_age_days,
+            }
+
     def get_schedule_recommendations(
         self, telegram_chat_id: int, days: int = 90
     ) -> dict:
