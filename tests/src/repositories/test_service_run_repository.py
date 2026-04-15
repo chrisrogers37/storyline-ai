@@ -167,3 +167,43 @@ class TestServiceRunRepository:
         assert mock_run.result_summary == {"processed": 5}
         # commit called twice: once by get_by_id's end_read_transaction, once by the write
         assert mock_db.commit.call_count == 2
+
+
+@pytest.mark.unit
+class TestGetHealthStats:
+    """Tests for get_health_stats aggregation."""
+
+    def test_returns_per_service_aggregation(self, run_repo, mock_db):
+        """Returns per-service call counts, error rates, avg duration."""
+        mock_query = mock_db.query.return_value
+        mock_query.filter.return_value = mock_query
+        mock_query.group_by.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+
+        row = MagicMock()
+        row.service_name = "PostingService"
+        row.call_count = 100
+        row.success_count = 95
+        row.failure_count = 5
+        row.avg_duration_ms = 150.5
+        mock_query.all.return_value = [row]
+
+        result = run_repo.get_health_stats(hours=24)
+
+        assert len(result) == 1
+        assert result[0]["service_name"] == "PostingService"
+        assert result[0]["call_count"] == 100
+        assert result[0]["error_rate"] == 0.05
+        assert result[0]["avg_duration_ms"] == 150  # round(150.5) = 150 (banker's)
+
+    def test_returns_empty_when_no_runs(self, run_repo, mock_db):
+        """Returns empty list when no runs in window."""
+        mock_query = mock_db.query.return_value
+        mock_query.filter.return_value = mock_query
+        mock_query.group_by.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.all.return_value = []
+
+        result = run_repo.get_health_stats(hours=24)
+
+        assert result == []

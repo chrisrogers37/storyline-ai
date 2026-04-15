@@ -110,6 +110,48 @@ async def onboarding_analytics_categories(
         return service.get_category_analytics(chat_id, days=days)
 
 
+@router.get("/analytics/schedule-preview")
+async def onboarding_schedule_preview(
+    init_data: str,
+    chat_id: int,
+    slots: int = Query(default=10, ge=1, le=50),
+):
+    """Return upcoming scheduled slots with predicted categories."""
+    _validate_request(init_data, chat_id)
+
+    with DashboardService() as service:
+        return service.get_schedule_preview(chat_id, slots=slots)
+
+
+@router.get("/analytics/content-reuse")
+async def onboarding_content_reuse(
+    init_data: str,
+    chat_id: int,
+):
+    """Return content reuse insights — evergreen vs one-shot media."""
+    _validate_request(init_data, chat_id)
+
+    with DashboardService() as service:
+        return service.get_content_reuse_insights(chat_id)
+
+
+@router.get("/analytics/service-health")
+async def onboarding_service_health(
+    init_data: str,
+    hours: int = Query(default=24, ge=1, le=168),
+):
+    """Return service execution telemetry from service_runs table.
+
+    Global view — service_runs are system-level, not per-tenant.
+    Requires valid init_data for authentication but does not scope by chat.
+    """
+    # Auth-only validation (no chat_id scoping — service runs are global)
+    from src.utils.webapp_auth import validate_init_data
+
+    validate_init_data(init_data)
+
+    with DashboardService() as service:
+        return service.get_service_health_stats(hours=hours)
 @router.get("/analytics/category-drift")
 async def onboarding_category_drift(
     init_data: str,

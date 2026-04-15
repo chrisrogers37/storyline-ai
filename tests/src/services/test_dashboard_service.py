@@ -590,6 +590,8 @@ class TestGetScheduleRecommendations:
 
 
 @pytest.mark.unit
+class TestGetSchedulePreview:
+    """Tests for get_schedule_preview."""
 class TestGetCategoryMixDrift:
     """Tests for get_category_mix_drift."""
 class TestGetApprovalLatency:
@@ -599,6 +601,90 @@ class TestGetApprovalLatency:
         with patch.object(DashboardService, "__init__", lambda self: None):
             service = DashboardService()
             service.settings_service = MagicMock()
+            service.category_mix_repo = MagicMock()
+            service.service_run_repo = MagicMock()
+            service.service_name = "DashboardService"
+            return service
+
+    def test_returns_slot_times(self):
+        """Preview returns correct number of slots with interval."""
+        from decimal import Decimal
+
+        service = self._setup_service()
+        mock_settings = Mock(
+            id="t1",
+            is_paused=False,
+            posts_per_day=3,
+            posting_hours_start=14,
+            posting_hours_end=2,
+            last_post_sent_at=None,
+        )
+        service.settings_service.get_settings.return_value = mock_settings
+        service.category_mix_repo.get_current_mix_as_dict.return_value = {
+            "memes": Decimal("0.50"),
+            "merch": Decimal("0.50"),
+        }
+
+        result = service.get_schedule_preview(telegram_chat_id=123, slots=5)
+
+        assert result["status"] == "ok"
+        assert len(result["slots"]) == 5
+        assert result["posts_per_day"] == 3
+        assert all(
+            s["predicted_category"] in ("memes", "merch") for s in result["slots"]
+        )
+
+    def test_returns_paused_when_paused(self):
+        """Preview returns paused status when posting is paused."""
+        service = self._setup_service()
+        mock_settings = Mock(is_paused=True)
+        service.settings_service.get_settings.return_value = mock_settings
+
+        result = service.get_schedule_preview(telegram_chat_id=123)
+
+        assert result["status"] == "paused"
+        assert result["slots"] == []
+
+    def test_uses_last_post_sent_at(self):
+        """Slots start from last_post_sent_at + interval when set."""
+        from datetime import datetime, timezone
+        from decimal import Decimal
+
+        service = self._setup_service()
+        last_post = datetime(2026, 4, 15, 15, 0, 0, tzinfo=timezone.utc)
+        mock_settings = Mock(
+            id="t1",
+            is_paused=False,
+            posts_per_day=3,
+            posting_hours_start=14,
+            posting_hours_end=2,
+            last_post_sent_at=last_post,
+        )
+        service.settings_service.get_settings.return_value = mock_settings
+        service.category_mix_repo.get_current_mix_as_dict.return_value = {
+            "memes": Decimal("1.0"),
+        }
+
+        result = service.get_schedule_preview(telegram_chat_id=123, slots=2)
+
+        assert result["status"] == "ok"
+        assert len(result["slots"]) == 2
+        # First slot should be after last_post + interval
+        first_slot = result["slots"][0]["slot_time"]
+        assert first_slot > last_post.isoformat()
+
+
+@pytest.mark.unit
+class TestGetContentReuseInsights:
+    """Tests for get_content_reuse_insights."""
+
+    def _setup_service(self):
+        with patch.object(DashboardService, "__init__", lambda self: None):
+            service = DashboardService()
+            service.settings_service = MagicMock()
+            service.media_repo = MagicMock()
+            service.service_run_repo = MagicMock()
+            service.service_name = "DashboardService"
             service.history_repo = MagicMock()
             service.category_mix_repo = MagicMock()
             service.service_run_repo = MagicMock()
@@ -607,6 +693,27 @@ class TestGetApprovalLatency:
             service.settings_service.get_settings.return_value = mock_settings
             return service
 
+    def test_returns_reuse_tiers(self):
+        """Returns posting status breakdown and reuse rate."""
+        service = self._setup_service()
+        service.media_repo.count_by_posting_status.return_value = {
+            "never_posted": 30,
+            "posted_once": 50,
+            "posted_multiple": 20,
+        }
+        service.media_repo.count_dead_content_by_category.return_value = [
+            {"category": "memes", "dead_count": 20},
+            {"category": "merch", "dead_count": 10},
+        ]
+
+        result = service.get_content_reuse_insights(telegram_chat_id=123)
+
+        assert result["total_active"] == 100
+        assert result["never_posted"] == 30
+        assert result["posted_once"] == 50
+        assert result["posted_multiple"] == 20
+        assert result["reuse_rate"] == 0.2
+        assert len(result["never_posted_by_category"]) == 2
     def test_detects_drift(self):
         """Flags categories with significant drift as warning/critical."""
         from decimal import Decimal
@@ -745,6 +852,58 @@ class TestGetTeamPerformance:
     def test_handles_empty_pool(self):
         """Returns zeros when no active media."""
         service = self._setup_service()
+        service.media_repo.count_by_posting_status.return_value = {
+            "never_posted": 0,
+            "posted_once": 0,
+            "posted_multiple": 0,
+        }
+        service.media_repo.count_dead_content_by_category.return_value = []
+
+        result = service.get_content_reuse_insights(telegram_chat_id=123)
+
+        assert result["total_active"] == 0
+        assert result["reuse_rate"] == 0
+        assert result["never_posted_by_category"] == []
+
+
+@pytest.mark.unit
+class TestGetServiceHealthStats:
+    """Tests for get_service_health_stats."""
+
+    def test_returns_per_service_stats(self):
+        """Returns aggregated service run telemetry."""
+        with patch.object(DashboardService, "__init__", lambda self: None):
+            service = DashboardService()
+            service.service_run_repo = MagicMock()
+            service.service_run_repo.get_health_stats.return_value = [
+                {
+                    "service_name": "PostingService",
+                    "call_count": 100,
+                    "success_count": 95,
+                    "failure_count": 5,
+                    "error_rate": 0.05,
+                    "avg_duration_ms": 150,
+                },
+            ]
+
+            result = service.get_service_health_stats(hours=24)
+
+            assert result["total_calls"] == 100
+            assert result["total_failures"] == 5
+            assert result["overall_error_rate"] == 0.05
+            assert len(result["services"]) == 1
+
+    def test_handles_no_runs(self):
+        """Returns zeros when no service runs in window."""
+        with patch.object(DashboardService, "__init__", lambda self: None):
+            service = DashboardService()
+            service.service_run_repo = MagicMock()
+            service.service_run_repo.get_health_stats.return_value = []
+
+            result = service.get_service_health_stats()
+
+            assert result["total_calls"] == 0
+            assert result["overall_error_rate"] == 0
         service.media_repo.count_active.return_value = 0
         service.media_repo.count_dead_content_by_category.return_value = []
 
