@@ -111,12 +111,17 @@ class MediaSourceFactory:
         """Get the appropriate provider for an existing media item.
         Falls back to 'local' if source_type is not set.
 
+        For 'upload' source type, creates a local provider since uploaded
+        files are stored on the local filesystem.
+
         Args:
             media_item: MediaItem with source_type and source_identifier.
             telegram_chat_id: Telegram chat ID for per-tenant OAuth lookup
                 (required for Google Drive sources using user OAuth).
         """
         source_type = media_item.source_type or "local"
+        if source_type == "upload":
+            source_type = "local"
         return cls.create(source_type, telegram_chat_id=telegram_chat_id)
 
     @classmethod

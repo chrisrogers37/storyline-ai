@@ -247,6 +247,54 @@ class MediaRepository(BaseRepository):
         self.end_read_transaction()
         return result
 
+    def get_paginated(
+        self,
+        page: int = 1,
+        page_size: int = 20,
+        category: Optional[str] = None,
+        posting_status: Optional[str] = None,
+        is_active: bool = True,
+        chat_settings_id: Optional[str] = None,
+    ) -> tuple[List[MediaItem], int]:
+        """Get paginated media items with filters.
+
+        Args:
+            page: 1-indexed page number
+            page_size: Items per page
+            category: Filter by category name
+            posting_status: Filter by posting tier: "never_posted", "posted_once", "posted_multiple"
+            is_active: Filter by active status (default True)
+            chat_settings_id: Tenant filter
+
+        Returns:
+            Tuple of (items list, total count matching filters)
+        """
+        query = self._tenant_query(MediaItem, chat_settings_id).filter(
+            MediaItem.is_active == is_active
+        )
+
+        if category is not None:
+            query = query.filter(MediaItem.category == category)
+
+        if posting_status == "never_posted":
+            query = query.filter(MediaItem.times_posted == 0)
+        elif posting_status == "posted_once":
+            query = query.filter(MediaItem.times_posted == 1)
+        elif posting_status == "posted_multiple":
+            query = query.filter(MediaItem.times_posted > 1)
+
+        total = query.with_entities(func.count(MediaItem.id)).scalar() or 0
+
+        items = (
+            query.order_by(MediaItem.created_at.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+            .all()
+        )
+
+        self.end_read_transaction()
+        return items, total
+
     def get_categories(self, chat_settings_id: Optional[str] = None) -> List[str]:
         """Get all unique categories."""
         result = (

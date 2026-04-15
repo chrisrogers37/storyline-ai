@@ -18,6 +18,7 @@ const ALLOWED_PATHS = [
   "analytics",
   "accounts",
   "history-detail",
+  "media-library",
   "media-stats",
   "queue-detail",
   "queue-preview",
