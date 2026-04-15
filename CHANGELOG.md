@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`get_approval_latency()`** in HistoryRepository — uses `EXTRACT(EPOCH FROM posted_at - queue_created_at)` with per-hour and per-category groupings.
 - **`get_user_approval_stats()`** in HistoryRepository — joins `posting_history` with `users` table, groups by user with status pivot and latency.
 
+### Added — Startup Migration Version Check (#118)
+
+- **Schema version validation on startup** — Worker (`main.py`) now queries the `schema_version` table at boot and compares against migration files in `scripts/migrations/`. Logs a clear warning if the database is behind (with the exact migration range to apply) or ahead of the deployed code.
+- **Non-blocking** — Mismatches produce warnings, not fatal errors, so the worker can still start while the operator applies pending migrations.
+
 ### Added — Schedule Optimization Recommendations (#158)
 
 - **Schedule recommendations API** — `GET /api/onboarding/analytics/schedule-recommendations` analyzes posting history to identify optimal posting times. Returns hourly approval rates, day-of-week patterns, and human-readable recommendations (e.g., "Posts at 10:00 have the highest approval rate (94%)").

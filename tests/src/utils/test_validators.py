@@ -333,3 +333,108 @@ class TestConfigValidator:
 
         assert is_valid is False
         assert len(errors) >= 3  # At least 3 errors
+
+
+@pytest.mark.unit
+class TestLatestMigrationVersion:
+    """Tests for _latest_migration_version helper."""
+
+    def test_reads_real_migrations_dir(self):
+        """Sanity check: finds migrations from the actual scripts/ directory."""
+        from src.utils.validators import _latest_migration_version
+
+        version = _latest_migration_version()
+        assert version is not None
+        assert version >= 22  # current count at time of writing
+
+    @patch("src.utils.validators.MIGRATIONS_DIR")
+    def test_returns_none_when_dir_missing(self, mock_dir):
+        """Returns None when migrations directory doesn't exist."""
+        from src.utils.validators import _latest_migration_version
+
+        mock_dir.is_dir.return_value = False
+        assert _latest_migration_version() is None
+
+    @patch("src.utils.validators.MIGRATIONS_DIR")
+    def test_returns_none_when_no_sql_files(self, mock_dir):
+        """Returns None when directory has no migration files."""
+        from src.utils.validators import _latest_migration_version
+
+        mock_dir.is_dir.return_value = True
+        mock_dir.iterdir.return_value = []
+        assert _latest_migration_version() is None
+
+
+@pytest.mark.unit
+class TestCheckSchemaVersion:
+    """Tests for ConfigValidator.check_schema_version."""
+
+    @patch("src.utils.validators.logger")
+    @patch("src.utils.validators._latest_migration_version", return_value=22)
+    @patch("src.config.database.engine")
+    def test_logs_success_when_versions_match(
+        self, mock_engine, mock_latest, mock_logger
+    ):
+        """Logs success when DB version matches migration files."""
+        mock_conn = MagicMock()
+        mock_conn.execute.return_value.scalar.return_value = 22
+        mock_engine.connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
+        mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
+
+        ConfigValidator.check_schema_version()
+
+        mock_logger.info.assert_called_once()
+        assert "up to date (version 22)" in mock_logger.info.call_args[0][0]
+
+    @patch("src.utils.validators.logger")
+    @patch("src.utils.validators._latest_migration_version", return_value=22)
+    @patch("src.config.database.engine")
+    def test_warns_when_db_behind(self, mock_engine, mock_latest, mock_logger):
+        """Warns when DB version is behind migration files."""
+        mock_conn = MagicMock()
+        mock_conn.execute.return_value.scalar.return_value = 18
+        mock_engine.connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
+        mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
+
+        ConfigValidator.check_schema_version()
+
+        mock_logger.warning.assert_called_once()
+        msg = mock_logger.warning.call_args[0][0]
+        assert "DB at version 18" in msg
+        assert "latest migration is 22" in msg
+
+    @patch("src.utils.validators.logger")
+    @patch("src.utils.validators._latest_migration_version", return_value=20)
+    @patch("src.config.database.engine")
+    def test_warns_when_db_ahead(self, mock_engine, mock_latest, mock_logger):
+        """Warns when DB version is ahead of migration files."""
+        mock_conn = MagicMock()
+        mock_conn.execute.return_value.scalar.return_value = 25
+        mock_engine.connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
+        mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
+
+        ConfigValidator.check_schema_version()
+
+        mock_logger.warning.assert_called_once()
+        assert "ahead of migration files" in mock_logger.warning.call_args[0][0]
+
+    @patch("src.utils.validators.logger")
+    @patch("src.utils.validators._latest_migration_version", return_value=None)
+    def test_skips_when_no_migrations(self, mock_latest, mock_logger):
+        """Skips check when no migration files found."""
+        ConfigValidator.check_schema_version()
+
+        mock_logger.warning.assert_called_once()
+        assert "no migration files found" in mock_logger.warning.call_args[0][0]
+
+    @patch("src.utils.validators.logger")
+    @patch("src.utils.validators._latest_migration_version", return_value=22)
+    @patch("src.config.database.engine")
+    def test_handles_db_error_gracefully(self, mock_engine, mock_latest, mock_logger):
+        """Handles database connection errors without crashing."""
+        mock_engine.connect.side_effect = Exception("Connection refused")
+
+        ConfigValidator.check_schema_version()
+
+        mock_logger.warning.assert_called_once()
+        assert "Schema version check failed" in mock_logger.warning.call_args[0][0]
