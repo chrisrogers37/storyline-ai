@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Approval Latency Dashboard (#174) & Per-User Approval Rates (#175)
+
+- **Approval latency analytics** — `GET /api/onboarding/analytics/approval-latency` computes time from queue creation to user decision. Returns overall avg/min/max (in minutes) plus breakdowns by hour-of-day and category.
+- **Team performance analytics** — `GET /api/onboarding/analytics/team-performance` shows per-user breakdown: posted/skipped/rejected counts, approval rate, and average response latency in minutes.
+- **`get_approval_latency()`** in HistoryRepository — uses `EXTRACT(EPOCH FROM posted_at - queue_created_at)` with per-hour and per-category groupings.
+- **`get_user_approval_stats()`** in HistoryRepository — joins `posting_history` with `users` table, groups by user with status pivot and latency.
+
 ### Added — Schedule Optimization Recommendations (#158)
 
 - **Schedule recommendations API** — `GET /api/onboarding/analytics/schedule-recommendations` analyzes posting history to identify optimal posting times. Returns hourly approval rates, day-of-week patterns, and human-readable recommendations (e.g., "Posts at 10:00 have the highest approval rate (94%)").
