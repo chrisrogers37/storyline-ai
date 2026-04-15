@@ -19,12 +19,24 @@ export interface SessionPayload {
 
 export const SESSION_COOKIE = "storyline_session";
 
-const rawSecret = process.env.JWT_SECRET;
-if (!rawSecret || rawSecret.length < 32) {
-  throw new Error("JWT_SECRET must be set to a random 32+ character string");
-}
-const JWT_SECRET = new TextEncoder().encode(rawSecret);
 const JWT_EXPIRY = "24h";
+
+// Lazy-initialized: Next.js evaluates modules at build time during page data
+// collection, but env vars aren't available then. Validate on first use.
+let _jwtSecret: Uint8Array | null = null;
+
+function getJwtSecret(): Uint8Array {
+  if (!_jwtSecret) {
+    const raw = process.env.JWT_SECRET;
+    if (!raw || raw.length < 32) {
+      throw new Error(
+        "JWT_SECRET must be set to a random 32+ character string"
+      );
+    }
+    _jwtSecret = new TextEncoder().encode(raw);
+  }
+  return _jwtSecret;
+}
 
 export async function createSessionToken(
   payload: SessionPayload
@@ -39,14 +51,14 @@ export async function createSessionToken(
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(JWT_EXPIRY)
-    .sign(JWT_SECRET);
+    .sign(getJwtSecret());
 }
 
 export async function verifySessionToken(
   token: string
 ): Promise<SessionPayload | null> {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJwtSecret());
     return {
       userId: payload.userId as number,
       chatId: payload.chatId as number,
