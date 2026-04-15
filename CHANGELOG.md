@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Refactored telegram_callbacks.py into focused modules** (#203) — Split the 854-line monolithic `TelegramCallbackHandlers` class into three focused modules (`telegram_callbacks_core.py`, `telegram_callbacks_queue.py`, `telegram_callbacks_admin.py`) behind a thin facade that preserves the original public API. No behavior changes.
+
 ### Added — Web Dashboard Phase 3: Media Management
 
 - **Content library browser** (`/dashboard/media`) — paginated grid view of all media items with category filtering, pool health stats (total active, eligible for posting, never posted, reuse rate), and per-category counts.
