@@ -110,6 +110,30 @@ async def onboarding_analytics_categories(
         return service.get_category_analytics(chat_id, days=days)
 
 
+@router.get("/analytics/category-drift")
+async def onboarding_category_drift(
+    init_data: str,
+    chat_id: int,
+    days: int = Query(default=7, ge=1, le=90),
+):
+    """Return category mix drift — configured vs actual posting ratios."""
+    _validate_request(init_data, chat_id)
+
+    with DashboardService() as service:
+        return service.get_category_mix_drift(chat_id, days=days)
+
+
+@router.get("/analytics/dead-content")
+async def onboarding_dead_content(
+    init_data: str,
+    chat_id: int,
+    min_age_days: int = Query(default=30, ge=1, le=365),
+):
+    """Return dead content report — never-posted media items."""
+    _validate_request(init_data, chat_id)
+
+    with DashboardService() as service:
+        return service.get_dead_content_report(chat_id, min_age_days=min_age_days)
 @router.get("/analytics/approval-latency")
 async def onboarding_approval_latency(
     init_data: str,
