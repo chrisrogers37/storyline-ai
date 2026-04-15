@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Replace bare `except Exception` with specific types** (#207) — Narrowed exception catches where the exception type is identifiable: `OSError`/`ValueError` for image validation, `binascii.Error` for encryption init, `SQLAlchemyError` for DB queries, `httpx.HTTPError` for HTTP calls, and `telegram.error.TelegramError` for Telegram API notifications. Background loop and resilience catches remain intentionally broad.
 - **Add return type hints to API route handlers** (#208) — Added `-> dict` annotations to all route handlers in `dashboard.py`, `settings.py`, and `setup.py`.
 - **Extract telegram message update helper** (#209) — Extracted `_update_autopost_caption()` helper to replace repeated `telegram_edit_with_retry(query.edit_message_caption, ...)` calls in the autopost flow.
+### Changed
+
+- **Refactored telegram_callbacks.py into focused modules** (#203) — Split the 854-line monolithic `TelegramCallbackHandlers` class into three focused modules (`telegram_callbacks_core.py`, `telegram_callbacks_queue.py`, `telegram_callbacks_admin.py`) behind a thin facade that preserves the original public API. No behavior changes.
 
 ### Added — Web Dashboard Phase 3: Media Management
 
