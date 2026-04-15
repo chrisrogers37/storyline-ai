@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Web Dashboard Phase 2: Onboarding & Settings
+
+- **Settings page** (`/dashboard/settings`) — tabbed interface (General, Accounts, Integrations) for managing posting schedule, boolean toggles (pause, dry run, Instagram API, verbose notifications, media sync), Instagram account switching/removal, and Google Drive connection.
+- **Setup wizard** (`/dashboard/setup`) — guided 6-step onboarding flow: Connect Instagram → Connect Google Drive → Configure Media Folder → Index Media → Set Schedule → Complete. Auto-advances to first incomplete step, tracks progress with visual step indicators.
+- **Client-side API helpers** (`dashboard-api.ts`) — shared `postApi`/`getApi` with error throwing, replacing inline fetch calls across all dashboard components.
+- **Server-side backend helpers** — `backendFetchJson` and `backendPost` in `backend.ts` for cleaner server component data fetching.
+- **Analytics placeholder** (`/dashboard/analytics`) — Phase 3 placeholder page.
+- **New shadcn components** — Tabs, Switch, Label, Dialog, Select, Slider, Progress for settings and wizard UI.
+
 ### Added — Web Dashboard Phase 1: Auth, BFF, Dashboard Shell
 
 - **Telegram Login Widget auth** — users authenticate via Telegram Login Widget on `/login`. Backend verifies the widget signature, issues a JWT stored in an httpOnly cookie. Sessions last 24 hours.

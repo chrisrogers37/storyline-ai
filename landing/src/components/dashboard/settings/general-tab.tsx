@@ -1,0 +1,178 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { postApi } from "@/lib/dashboard-api";
+
+interface GeneralSettings {
+  posts_per_day: number;
+  posting_hours_start: number;
+  posting_hours_end: number;
+  is_paused: boolean;
+  dry_run_mode: boolean;
+  enable_instagram_api: boolean;
+  show_verbose_notifications: boolean;
+  media_sync_enabled: boolean;
+}
+
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => ({
+  value: String(i),
+  label: i === 0 ? "12 AM" : i < 12 ? `${i} AM` : i === 12 ? "12 PM" : `${i - 12} PM`,
+}));
+
+const TOGGLES: { key: keyof GeneralSettings; label: string; description: string }[] = [
+  { key: "is_paused", label: "Pause Posting", description: "Temporarily stop all scheduled posts" },
+  { key: "dry_run_mode", label: "Dry Run Mode", description: "Simulate posting without publishing" },
+  { key: "enable_instagram_api", label: "Instagram API", description: "Use Instagram API for direct posting" },
+  { key: "show_verbose_notifications", label: "Verbose Notifications", description: "Show detailed Telegram notifications" },
+  { key: "media_sync_enabled", label: "Media Sync", description: "Auto-sync media from connected sources" },
+];
+
+export function GeneralTab({ settings }: { settings: GeneralSettings }) {
+  const router = useRouter();
+  const [postsPerDay, setPostsPerDay] = useState(settings.posts_per_day);
+  const [hoursStart, setHoursStart] = useState(String(settings.posting_hours_start));
+  const [hoursEnd, setHoursEnd] = useState(String(settings.posting_hours_end));
+  const [toggleState, setToggleState] = useState<Record<string, boolean>>(() => {
+    const state: Record<string, boolean> = {};
+    for (const t of TOGGLES) {
+      state[t.key] = settings[t.key] as boolean;
+    }
+    return state;
+  });
+  const [savingSchedule, setSavingSchedule] = useState(false);
+  const [togglingKey, setTogglingKey] = useState<string | null>(null);
+
+  const scheduleChanged =
+    postsPerDay !== settings.posts_per_day ||
+    Number(hoursStart) !== settings.posting_hours_start ||
+    Number(hoursEnd) !== settings.posting_hours_end;
+
+  async function saveSchedule() {
+    setSavingSchedule(true);
+    try {
+      await postApi("schedule", {
+        posts_per_day: postsPerDay,
+        posting_hours_start: Number(hoursStart),
+        posting_hours_end: Number(hoursEnd),
+      });
+      router.refresh();
+    } finally {
+      setSavingSchedule(false);
+    }
+  }
+
+  async function handleToggle(key: string) {
+    setTogglingKey(key);
+    const previous = toggleState[key];
+    setToggleState((prev) => ({ ...prev, [key]: !prev[key] }));
+
+    try {
+      await postApi("toggle-setting", { setting_name: key });
+    } catch {
+      setToggleState((prev) => ({ ...prev, [key]: previous }));
+    } finally {
+      setTogglingKey(null);
+    }
+  }
+
+  return (
+    <div className="space-y-6 pt-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Posting Schedule</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="space-y-2">
+              <Label htmlFor="posts-per-day">Posts per day</Label>
+              <Input
+                id="posts-per-day"
+                type="number"
+                min={1}
+                max={50}
+                value={postsPerDay}
+                onChange={(e) => setPostsPerDay(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Start hour</Label>
+              <Select value={hoursStart} onValueChange={setHoursStart}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {HOUR_OPTIONS.map((h) => (
+                    <SelectItem key={h.value} value={h.value}>
+                      {h.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>End hour</Label>
+              <Select value={hoursEnd} onValueChange={setHoursEnd}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {HOUR_OPTIONS.map((h) => (
+                    <SelectItem key={h.value} value={h.value}>
+                      {h.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <Button
+            onClick={saveSchedule}
+            disabled={!scheduleChanged || savingSchedule}
+          >
+            {savingSchedule ? "Saving..." : "Save Schedule"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Toggles</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {TOGGLES.map((toggle, i) => (
+            <div key={toggle.key}>
+              {i > 0 && <Separator className="mb-4" />}
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>{toggle.label}</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {toggle.description}
+                  </p>
+                </div>
+                <Switch
+                  checked={toggleState[toggle.key]}
+                  onCheckedChange={() => handleToggle(toggle.key)}
+                  disabled={togglingKey === toggle.key}
+                />
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

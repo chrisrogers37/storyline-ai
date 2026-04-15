@@ -27,6 +27,14 @@ const ALLOWED_PATHS = [
   "switch-account",
   "sync-media",
   "oauth-url",
+  "init",
+  "schedule",
+  "complete",
+  "media-folder",
+  "start-indexing",
+  "add-account",
+  "remove-account",
+  "disconnect-gdrive",
 ];
 
 async function proxyRequest(
