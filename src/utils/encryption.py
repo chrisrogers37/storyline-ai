@@ -1,5 +1,6 @@
 """Token encryption utility for secure database storage."""
 
+import binascii
 from typing import Optional
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -50,7 +51,7 @@ class TokenEncryption:
 
         try:
             self._cipher = Fernet(key.encode())
-        except Exception as e:
+        except (ValueError, binascii.Error) as e:
             raise ValueError(f"Invalid ENCRYPTION_KEY format: {e}")
 
     def encrypt(self, plaintext: str) -> str:

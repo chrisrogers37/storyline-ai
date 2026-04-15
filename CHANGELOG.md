@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Refactored `src/main.py` scheduler loop** — extracted four focused tick functions (`_scheduler_tick`, `_retention_cleanup_tick`, `_pool_health_tick`, `_token_health_tick`) from the 193-line `run_scheduler_loop()`, reducing it to a clean orchestration loop. Extracted `_validate_and_log_startup()` and `_log_service_summary()` from `main_async()`. No behavior changes. (#206)
+### Changed — Code Quality (#205, #207, #208, #209)
+
+- **Extract duplicated eligibility filters** (#205) — Consolidated repeated lock/queue/hash-duplicate exclusion logic in `MediaRepository` into a single `_apply_eligibility_filters()` helper used by `get_next_eligible_for_posting()`, `count_eligible()`, and `count_eligible_by_category()`.
+- **Replace bare `except Exception` with specific types** (#207) — Narrowed exception catches where the exception type is identifiable: `OSError`/`ValueError` for image validation, `binascii.Error` for encryption init, `SQLAlchemyError` for DB queries, `httpx.HTTPError` for HTTP calls, and `telegram.error.TelegramError` for Telegram API notifications. Background loop and resilience catches remain intentionally broad.
+- **Add return type hints to API route handlers** (#208) — Added `-> dict` annotations to all route handlers in `dashboard.py`, `settings.py`, and `setup.py`.
+- **Extract telegram message update helper** (#209) — Extracted `_update_autopost_caption()` helper to replace repeated `telegram_edit_with_retry(query.edit_message_caption, ...)` calls in the autopost flow.
+### Changed
+
+- **Refactored telegram_callbacks.py into focused modules** (#203) — Split the 854-line monolithic `TelegramCallbackHandlers` class into three focused modules (`telegram_callbacks_core.py`, `telegram_callbacks_queue.py`, `telegram_callbacks_admin.py`) behind a thin facade that preserves the original public API. No behavior changes.
 
 ### Added — Web Dashboard Phase 3: Media Management
 

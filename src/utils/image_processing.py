@@ -94,7 +94,7 @@ class ImageProcessor:
                 format=img_format,
             )
 
-        except Exception as e:
+        except (OSError, ValueError) as e:
             return ValidationResult(
                 is_valid=False,
                 warnings=[],

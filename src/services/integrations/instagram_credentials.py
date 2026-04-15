@@ -236,7 +236,7 @@ class InstagramCredentialManager:
                         "id": account_id,
                     }
 
-        except Exception as e:
+        except httpx.HTTPError as e:
             logger.error(f"Error fetching account info: {e}")
             return {"error": str(e), "id": account_id}
 
