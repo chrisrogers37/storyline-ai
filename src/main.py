@@ -114,6 +114,180 @@ async def _guarded(name: str, coro: Coroutine, *, bot=None) -> None:
                 logger.error(f"Failed to send crash alert for '{name}'", exc_info=True)
 
 
+async def _scheduler_tick(
+    scheduler_service: SchedulerService,
+    posting_service: PostingService,
+    settings_service,
+    queue_repo: QueueRepository,
+) -> list:
+    """Process one scheduler tick: discard stale queue items, process due slots.
+
+    Returns the list of active chats discovered this tick (used by health checks).
+    """
+    global session_posts_sent
+
+    # Discard queue items abandoned in 'processing' for over 24h.
+    # Items enter 'processing' when sent to Telegram — they stay
+    # there until a user clicks a button. Items older than 24h
+    # are stale notifications that will never be acted on.
+    discarded = queue_repo.discard_abandoned_processing()
+    if discarded > 0:
+        logger.warning(f"Discarded {discarded} abandoned processing item(s) (>24h old)")
+
+    if settings_service:
+        active_chats = settings_service.get_all_active_chats()
+    else:
+        active_chats = []
+
+    if active_chats:
+        for chat in active_chats:
+            chat_id = chat.telegram_chat_id
+            try:
+                result = await scheduler_service.process_slot(telegram_chat_id=chat_id)
+
+                if result.get("posted"):
+                    session_posts_sent += 1
+                    logger.info(
+                        f"[chat={chat_id}] "
+                        f"Posted: {result.get('media_file', '?')} "
+                        f"[{result.get('category', '?')}]"
+                    )
+
+                    # Send quiet notification for auto-approved items
+                    if (
+                        result.get("auto_approved")
+                        and scheduler_service.telegram_service
+                    ):
+                        try:
+                            bot = scheduler_service.telegram_service.application.bot
+                            await bot.send_message(
+                                chat_id=chat_id,
+                                text=(
+                                    f"\u2705 Auto-approved: "
+                                    f"{result.get('media_file', '?')} "
+                                    f"[{result.get('category', '?')}]"
+                                ),
+                            )
+                        except Exception:
+                            pass
+
+            except GoogleDriveAuthError:
+                logger.error(
+                    f"Google Drive auth error for chat {chat_id}",
+                    exc_info=True,
+                )
+                await posting_service.send_gdrive_auth_alert(chat_id)
+
+            except Exception as e:
+                logger.error(
+                    f"Error processing chat {chat_id}: {e}",
+                    exc_info=True,
+                )
+        # No paused-chat reschedule needed — JIT skips paused tenants
+
+    return active_chats
+
+
+async def _retention_cleanup_tick(
+    service_run_repo: ServiceRunRepository,
+) -> None:
+    """Purge old service_runs to prevent table bloat."""
+    try:
+        deleted = service_run_repo.delete_older_than(SERVICE_RUNS_RETENTION_DAYS)
+        if deleted > 0:
+            logger.info(
+                f"Retention: deleted {deleted} service_runs older than "
+                f"{SERVICE_RUNS_RETENTION_DAYS} days"
+            )
+    except Exception as e:
+        logger.warning(f"Service runs retention cleanup failed: {e}")
+    finally:
+        service_run_repo.end_read_transaction()
+
+
+async def _pool_health_tick(
+    active_chats: list,
+    scheduler_service: SchedulerService,
+    health_check_service: HealthCheckService,
+    pool_alert_last_sent: dict[int, float],
+) -> None:
+    """Check media pool depletion and send alerts for low categories."""
+    try:
+        if active_chats and scheduler_service.telegram_service:
+            now = time()
+            bot = scheduler_service.telegram_service.application.bot
+            # Prune stale entries for chats no longer active
+            active_ids = {c.telegram_chat_id for c in active_chats}
+            for stale_id in set(pool_alert_last_sent) - active_ids:
+                del pool_alert_last_sent[stale_id]
+
+            for chat in active_chats:
+                chat_id = chat.telegram_chat_id
+                if (
+                    now - pool_alert_last_sent.get(chat_id, 0)
+                    < POOL_ALERT_COOLDOWN_SECONDS
+                ):
+                    continue
+
+                pool_info = health_check_service.check_media_pool_for_chat(
+                    chat_id, chat_settings=chat
+                )
+                alert_text = health_check_service.format_pool_alert(pool_info)
+                if alert_text:
+                    await bot.send_message(chat_id=chat_id, text=alert_text)
+                    pool_alert_last_sent[chat_id] = now
+                    logger.info(
+                        f"[chat={chat_id}] Sent pool depletion alert: "
+                        f"{len(pool_info['warnings'])} warning(s)"
+                    )
+    except Exception as e:
+        logger.warning(f"Pool depletion check failed: {e}")
+    finally:
+        health_check_service.cleanup_transactions()
+
+
+async def _token_health_tick(
+    active_chats: list,
+    scheduler_service: SchedulerService,
+    health_check_service: HealthCheckService,
+    token_alert_last_sent: dict[int, float],
+) -> None:
+    """Check Google Drive token health and send alerts for expiring tokens."""
+    try:
+        if active_chats and scheduler_service.telegram_service:
+            now_t = time()
+            bot = scheduler_service.telegram_service.application.bot
+            active_ids = {c.telegram_chat_id for c in active_chats}
+            for stale_id in set(token_alert_last_sent) - active_ids:
+                del token_alert_last_sent[stale_id]
+
+            for chat in active_chats:
+                chat_id = chat.telegram_chat_id
+                if (
+                    now_t - token_alert_last_sent.get(chat_id, 0)
+                    < POOL_ALERT_COOLDOWN_SECONDS
+                ):
+                    continue
+
+                token_info = health_check_service.check_gdrive_token_for_chat(
+                    chat_id, chat_settings=chat
+                )
+                alert_text = health_check_service.format_token_alert(
+                    token_info, chat_id
+                )
+                if alert_text:
+                    await bot.send_message(chat_id=chat_id, text=alert_text)
+                    token_alert_last_sent[chat_id] = now_t
+                    logger.info(
+                        f"[chat={chat_id}] Sent token health alert: "
+                        f"{token_info.get('message', '')}"
+                    )
+    except Exception as e:
+        logger.warning(f"Token health check failed: {e}")
+    finally:
+        health_check_service.cleanup_transactions()
+
+
 async def run_scheduler_loop(
     scheduler_service: SchedulerService,
     posting_service: PostingService,
@@ -125,7 +299,8 @@ async def run_scheduler_loop(
     checks is_slot_due() and, if a slot is due, selects media and sends
     to Telegram.  No service_run is created for no-op ticks.
 
-    Also runs hourly retention cleanup on the service_runs table.
+    Also runs hourly retention cleanup, pool health checks, and token
+    health checks.
 
     Args:
         scheduler_service: SchedulerService instance (handles JIT logic)
@@ -133,7 +308,6 @@ async def run_scheduler_loop(
         settings_service: SettingsService for tenant discovery.
             If None, falls back to global single-tenant behavior.
     """
-    global session_posts_sent
     logger.info("Starting JIT scheduler loop...")
 
     queue_repo = QueueRepository()
@@ -146,165 +320,41 @@ async def run_scheduler_loop(
 
     while True:
         record_heartbeat("scheduler")
+
+        # --- Scheduler tick: process due slots ---
+        active_chats = []
         try:
-            # Discard queue items abandoned in 'processing' for over 24h.
-            # Items enter 'processing' when sent to Telegram — they stay
-            # there until a user clicks a button. Items older than 24h
-            # are stale notifications that will never be acted on.
-            discarded = queue_repo.discard_abandoned_processing()
-            if discarded > 0:
-                logger.warning(
-                    f"Discarded {discarded} abandoned processing item(s) (>24h old)"
-                )
-
-            if settings_service:
-                active_chats = settings_service.get_all_active_chats()
-            else:
-                active_chats = []
-
-            if active_chats:
-                for chat in active_chats:
-                    chat_id = chat.telegram_chat_id
-                    try:
-                        result = await scheduler_service.process_slot(
-                            telegram_chat_id=chat_id
-                        )
-
-                        if result.get("posted"):
-                            session_posts_sent += 1
-                            logger.info(
-                                f"[chat={chat_id}] "
-                                f"Posted: {result.get('media_file', '?')} "
-                                f"[{result.get('category', '?')}]"
-                            )
-
-                            # Send quiet notification for auto-approved items
-                            if (
-                                result.get("auto_approved")
-                                and scheduler_service.telegram_service
-                            ):
-                                try:
-                                    bot = scheduler_service.telegram_service.application.bot
-                                    await bot.send_message(
-                                        chat_id=chat_id,
-                                        text=(
-                                            f"\u2705 Auto-approved: "
-                                            f"{result.get('media_file', '?')} "
-                                            f"[{result.get('category', '?')}]"
-                                        ),
-                                    )
-                                except Exception:
-                                    pass
-
-                    except GoogleDriveAuthError:
-                        logger.error(
-                            f"Google Drive auth error for chat {chat_id}",
-                            exc_info=True,
-                        )
-                        await posting_service.send_gdrive_auth_alert(chat_id)
-
-                    except Exception as e:
-                        logger.error(
-                            f"Error processing chat {chat_id}: {e}",
-                            exc_info=True,
-                        )
-                # No paused-chat reschedule needed — JIT skips paused tenants
-
+            active_chats = await _scheduler_tick(
+                scheduler_service, posting_service, settings_service, queue_repo
+            )
         except Exception as e:
             logger.error(f"Error in scheduler loop: {e}", exc_info=True)
         finally:
             scheduler_service.cleanup_transactions()
             posting_service.cleanup_transactions()
 
-        # Hourly retention: purge old service_runs to prevent table bloat
+        # --- Hourly retention: purge old service_runs ---
         retention_tick_counter += 1
         if retention_tick_counter >= RETENTION_INTERVAL_TICKS:
             retention_tick_counter = 0
-            try:
-                deleted = service_run_repo.delete_older_than(
-                    SERVICE_RUNS_RETENTION_DAYS
-                )
-                if deleted > 0:
-                    logger.info(
-                        f"Retention: deleted {deleted} service_runs older than "
-                        f"{SERVICE_RUNS_RETENTION_DAYS} days"
-                    )
-            except Exception as e:
-                logger.warning(f"Service runs retention cleanup failed: {e}")
-            finally:
-                service_run_repo.end_read_transaction()
+            await _retention_cleanup_tick(service_run_repo)
 
-        # Hourly pool depletion check: alert when categories are running low
+        # --- Hourly health checks: pool depletion + token health ---
         pool_check_tick_counter += 1
         if pool_check_tick_counter >= POOL_CHECK_INTERVAL_TICKS:
             pool_check_tick_counter = 0
-            try:
-                if active_chats and scheduler_service.telegram_service:
-                    now = time()
-                    bot = scheduler_service.telegram_service.application.bot
-                    # Prune stale entries for chats no longer active
-                    active_ids = {c.telegram_chat_id for c in active_chats}
-                    for stale_id in set(pool_alert_last_sent) - active_ids:
-                        del pool_alert_last_sent[stale_id]
-
-                    for chat in active_chats:
-                        chat_id = chat.telegram_chat_id
-                        if (
-                            now - pool_alert_last_sent.get(chat_id, 0)
-                            < POOL_ALERT_COOLDOWN_SECONDS
-                        ):
-                            continue
-
-                        pool_info = health_check_service.check_media_pool_for_chat(
-                            chat_id, chat_settings=chat
-                        )
-                        alert_text = health_check_service.format_pool_alert(pool_info)
-                        if alert_text:
-                            await bot.send_message(chat_id=chat_id, text=alert_text)
-                            pool_alert_last_sent[chat_id] = now
-                            logger.info(
-                                f"[chat={chat_id}] Sent pool depletion alert: "
-                                f"{len(pool_info['warnings'])} warning(s)"
-                            )
-            except Exception as e:
-                logger.warning(f"Pool depletion check failed: {e}")
-            finally:
-                health_check_service.cleanup_transactions()
-
-            # Token health check (same hourly cadence, separate 24h throttle)
-            try:
-                if active_chats and scheduler_service.telegram_service:
-                    now_t = time()
-                    bot = scheduler_service.telegram_service.application.bot
-                    active_ids = {c.telegram_chat_id for c in active_chats}
-                    for stale_id in set(token_alert_last_sent) - active_ids:
-                        del token_alert_last_sent[stale_id]
-
-                    for chat in active_chats:
-                        chat_id = chat.telegram_chat_id
-                        if (
-                            now_t - token_alert_last_sent.get(chat_id, 0)
-                            < POOL_ALERT_COOLDOWN_SECONDS
-                        ):
-                            continue
-
-                        token_info = health_check_service.check_gdrive_token_for_chat(
-                            chat_id, chat_settings=chat
-                        )
-                        alert_text = health_check_service.format_token_alert(
-                            token_info, chat_id
-                        )
-                        if alert_text:
-                            await bot.send_message(chat_id=chat_id, text=alert_text)
-                            token_alert_last_sent[chat_id] = now_t
-                            logger.info(
-                                f"[chat={chat_id}] Sent token health alert: "
-                                f"{token_info.get('message', '')}"
-                            )
-            except Exception as e:
-                logger.warning(f"Token health check failed: {e}")
-            finally:
-                health_check_service.cleanup_transactions()
+            await _pool_health_tick(
+                active_chats,
+                scheduler_service,
+                health_check_service,
+                pool_alert_last_sent,
+            )
+            await _token_health_tick(
+                active_chats,
+                scheduler_service,
+                health_check_service,
+                token_alert_last_sent,
+            )
 
         # Wait 1 minute before next check
         await asyncio.sleep(60)
@@ -517,15 +567,15 @@ async def _notify_sync_error(telegram_service, message: str):
         logger.warning(f"Failed to send sync error notification: {e}")
 
 
-async def main_async():
-    """Main async application entry point."""
-    global session_start_time
+def _validate_and_log_startup() -> None:
+    """Validate configuration and check database schema version.
 
+    Exits the process if configuration is invalid.
+    """
     logger.info("=" * 60)
     logger.info("Storyline AI - Instagram Story Automation System")
     logger.info("=" * 60)
 
-    # Validate configuration
     is_valid, errors = ConfigValidator.validate_all()
 
     if not is_valid:
@@ -535,9 +585,35 @@ async def main_async():
         sys.exit(1)
 
     logger.info("✓ Configuration validated successfully")
-
-    # Check database schema version
     ConfigValidator.check_schema_version()
+
+
+def _log_service_summary() -> None:
+    """Log a summary of active services and configuration after startup."""
+    logger.info("✓ All services started (JIT scheduler)")
+    logger.info(
+        f"✓ Phase: {'Hybrid (API + Telegram)' if settings.ENABLE_INSTAGRAM_API else 'Telegram-Only'}"
+    )
+    logger.info(f"✓ Dry run mode: {settings.DRY_RUN_MODE}")
+    if settings.MEDIA_SYNC_ENABLED:
+        logger.info(
+            f"✓ Media sync: {settings.MEDIA_SOURCE_TYPE} "
+            f"(every {settings.MEDIA_SYNC_INTERVAL_SECONDS}s)"
+        )
+    else:
+        logger.info("✓ Media sync: disabled")
+    logger.info(f"✓ Posts per day: {settings.POSTS_PER_DAY}")
+    logger.info(
+        f"✓ Posting hours: {settings.POSTING_HOURS_START}-{settings.POSTING_HOURS_END} UTC"
+    )
+    logger.info("=" * 60)
+
+
+async def main_async():
+    """Main async application entry point."""
+    global session_start_time
+
+    _validate_and_log_startup()
 
     # Initialize services
     from src.services.core.settings_service import SettingsService
@@ -632,23 +708,7 @@ async def main_async():
         )
     )
 
-    logger.info("✓ All services started (JIT scheduler)")
-    logger.info(
-        f"✓ Phase: {'Hybrid (API + Telegram)' if settings.ENABLE_INSTAGRAM_API else 'Telegram-Only'}"
-    )
-    logger.info(f"✓ Dry run mode: {settings.DRY_RUN_MODE}")
-    if settings.MEDIA_SYNC_ENABLED:
-        logger.info(
-            f"✓ Media sync: {settings.MEDIA_SOURCE_TYPE} "
-            f"(every {settings.MEDIA_SYNC_INTERVAL_SECONDS}s)"
-        )
-    else:
-        logger.info("✓ Media sync: disabled")
-    logger.info(f"✓ Posts per day: {settings.POSTS_PER_DAY}")
-    logger.info(
-        f"✓ Posting hours: {settings.POSTING_HOURS_START}-{settings.POSTING_HOURS_END} UTC"
-    )
-    logger.info("=" * 60)
+    _log_service_summary()
 
     # Setup signal handlers for graceful shutdown
     async def shutdown_handler(sig):

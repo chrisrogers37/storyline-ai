@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Refactored `src/main.py` scheduler loop** — extracted four focused tick functions (`_scheduler_tick`, `_retention_cleanup_tick`, `_pool_health_tick`, `_token_health_tick`) from the 193-line `run_scheduler_loop()`, reducing it to a clean orchestration loop. Extracted `_validate_and_log_startup()` and `_log_service_summary()` from `main_async()`. No behavior changes. (#206)
+
 ### Added — Web Dashboard Phase 3: Media Management
 
 - **Content library browser** (`/dashboard/media`) — paginated grid view of all media items with category filtering, pool health stats (total active, eligible for posting, never posted, reuse rate), and per-category counts.
