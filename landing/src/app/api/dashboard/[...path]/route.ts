@@ -27,6 +27,14 @@ const ALLOWED_PATHS = [
   "switch-account",
   "sync-media",
   "oauth-url",
+  "init",
+  "schedule",
+  "complete",
+  "media-folder",
+  "start-indexing",
+  "add-account",
+  "remove-account",
+  "disconnect-gdrive",
 ];
 
 async function proxyRequest(
@@ -44,6 +52,12 @@ async function proxyRequest(
   }
 
   const { path } = await params;
+
+  // Reject path traversal attempts
+  if (path.some(segment => segment === ".." || segment === ".")) {
+    return NextResponse.json({ error: "Invalid path" }, { status: 400 });
+  }
+
   const backendPath = path.join("/");
 
   // Validate path against allowlist

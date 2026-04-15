@@ -1,16 +1,10 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
-import { backendFetch } from "@/lib/backend";
+import { backendFetchJson } from "@/lib/backend";
 import { AnalyticsCards } from "@/components/dashboard/analytics-cards";
 import { PostingChart } from "@/components/dashboard/posting-chart";
 import { CategoryBreakdown } from "@/components/dashboard/category-breakdown";
 import { RecentActivity } from "@/components/dashboard/recent-activity";
-
-async function fetchJson(path: string, chatId: number, userId: number) {
-  const res = await backendFetch(path, chatId, userId, { revalidate: 60 });
-  if (!res.ok) return null;
-  return res.json();
-}
 
 export default async function DashboardPage() {
   // Deduped with layout via React cache() — no extra JWT verification
@@ -20,9 +14,9 @@ export default async function DashboardPage() {
   const { chatId, userId } = session;
 
   const [analytics, categories, history] = await Promise.all([
-    fetchJson("analytics", chatId, userId),
-    fetchJson("analytics/categories?days=30", chatId, userId),
-    fetchJson("history-detail?limit=10", chatId, userId),
+    backendFetchJson("analytics", chatId, userId, { revalidate: 60 }),
+    backendFetchJson("analytics/categories?days=30", chatId, userId, { revalidate: 60 }),
+    backendFetchJson("history-detail?limit=10", chatId, userId, { revalidate: 60 }),
   ]);
 
   const summary = analytics?.summary ?? {

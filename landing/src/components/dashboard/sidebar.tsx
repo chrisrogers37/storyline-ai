@@ -2,15 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, LayoutDashboard, Settings } from "lucide-react";
+import { BarChart3, LayoutDashboard, Rocket, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { siteConfig } from "@/config/site";
 
-// TODO: /dashboard/analytics and /dashboard/settings pages are Phase 2+
 const navItems = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
-  { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
+  { href: "/dashboard/setup", label: "Setup Wizard", icon: Rocket },
+  // TODO: /dashboard/analytics — detailed analytics page is Phase 3
+  { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
 ];
 
 export function Sidebar() {
