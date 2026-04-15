@@ -617,6 +617,7 @@ class DashboardService(BaseService):
             else 0,
             "hours": hours,
         }
+
     def get_approval_latency(self, telegram_chat_id: int, days: int = 30) -> dict:
         """Return approval latency statistics — time from queue to decision.
 
