@@ -1,7 +1,12 @@
 """Dashboard detail endpoints for onboarding Mini App."""
 
-from fastapi import APIRouter, Query
+import hashlib
+import mimetypes
+from pathlib import Path
 
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+
+from src.repositories.media_repository import MediaRepository
 from src.services.core.dashboard_service import DashboardService
 from src.services.core.health_check import HealthCheckService
 from src.services.core.instagram_account_service import InstagramAccountService
@@ -229,3 +234,128 @@ async def onboarding_system_status(
 
     with HealthCheckService() as health_service:
         return health_service.check_all()
+
+
+@router.get("/media-library")
+async def onboarding_media_library(
+    init_data: str,
+    chat_id: int,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    category: str | None = Query(default=None),
+    posting_status: str | None = Query(default=None),
+):
+    """Return paginated media library with pool health stats."""
+    _validate_request(init_data, chat_id)
+
+    with DashboardService() as service:
+        return service.get_media_library(
+            chat_id,
+            page=page,
+            page_size=page_size,
+            category=category,
+            posting_status=posting_status,
+        )
+
+
+UPLOAD_DIR = "/tmp/media/uploads"
+ALLOWED_MIME_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "video/mp4",
+    "video/quicktime",
+}
+MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
+
+
+@router.post("/upload-media")
+async def onboarding_upload_media(
+    init_data: str = Query(...),
+    chat_id: int = Query(...),
+    file: UploadFile = File(...),
+    category: str | None = Form(default=None),
+):
+    """Upload a media file and create a media_item record.
+
+    Files are stored locally and indexed for posting.
+    """
+
+    _validate_request(init_data, chat_id)
+
+    # Validate MIME type
+    mime_type = (
+        file.content_type
+        or mimetypes.guess_type(file.filename or "")[0]
+        or "application/octet-stream"
+    )
+    if mime_type not in ALLOWED_MIME_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type: {mime_type}. Allowed: {', '.join(sorted(ALLOWED_MIME_TYPES))}",
+        )
+
+    # Read file content
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=400, detail="File exceeds 50 MB limit")
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    file_hash = hashlib.sha256(content).hexdigest()
+
+    # Resolve tenant
+    with SettingsService() as settings_service:
+        chat_settings = settings_service.get_settings(chat_id)
+        chat_settings_id = str(chat_settings.id)
+
+    # Check for duplicate content
+    with MediaRepository() as media_repo:
+        existing = media_repo.get_active_by_hash(
+            file_hash, chat_settings_id=chat_settings_id
+        )
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Duplicate content — matches existing file: {existing.file_name}",
+            )
+
+    # Save to disk
+    folder = category or "uncategorized"
+    save_dir = Path(UPLOAD_DIR) / chat_settings_id / folder
+    save_dir.mkdir(parents=True, exist_ok=True)
+    save_path = save_dir / (file.filename or "upload")
+
+    # Handle filename collisions
+    if save_path.exists():
+        stem = save_path.stem
+        suffix = save_path.suffix
+        counter = 1
+        while save_path.exists():
+            save_path = save_dir / f"{stem}_{counter}{suffix}"
+            counter += 1
+
+    save_path.write_bytes(content)
+
+    # Create media_item record
+    with MediaRepository() as media_repo:
+        media_item = media_repo.create(
+            file_path=str(save_path),
+            file_name=file.filename or "upload",
+            file_hash=file_hash,
+            file_size_bytes=len(content),
+            mime_type=mime_type,
+            category=category,
+            source_type="upload",
+            source_identifier=str(save_path),
+            chat_settings_id=chat_settings_id,
+        )
+
+    return {
+        "id": str(media_item.id),
+        "file_name": media_item.file_name,
+        "category": media_item.category or "uncategorized",
+        "file_size": media_item.file_size,
+        "mime_type": media_item.mime_type,
+        "created_at": media_item.created_at.isoformat(),
+    }

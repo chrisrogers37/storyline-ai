@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Web Dashboard Phase 3: Media Management
+
+- **Content library browser** (`/dashboard/media`) — paginated grid view of all media items with category filtering, pool health stats (total active, eligible for posting, never posted, reuse rate), and per-category counts.
+- **Media upload** — drag-and-drop or file picker for uploading new media directly through the dashboard, bypassing the Google Drive sync requirement. Validates MIME type, enforces 50 MB limit, and deduplicates by content hash (SHA256).
+- **Content calendar** (`/dashboard/media/calendar`) — visual monthly calendar showing past posts (green), in-queue items (blue), and predicted future slots (gray). Includes posting rate stats and queue summary.
+- **Dead content view** (`/dashboard/media/dead-content`) — surfaces media items 30+ days old that have never been posted, with category-level bar chart breakdown and percentage metrics.
+- **Content reuse view** (`/dashboard/media/reuse`) — donut chart visualization of evergreen (2+ posts) vs one-shot vs never-posted content, with per-category never-posted breakdown table.
+- **New backend endpoints** — `GET /api/onboarding/media-library` (paginated listing with category/posting-status filters and pool health aggregation), `POST /api/onboarding/upload-media` (multipart file upload with hash-based dedup).
+- **Dedicated upload proxy** — separate BFF route (`/api/dashboard/upload`) for multipart form data forwarding, since the generic JSON proxy cannot handle file uploads.
+- **Media tab navigation** — shared layout with tab bar (Library, Calendar, Dead Content, Content Reuse) across all media sub-pages.
+- **Sidebar navigation** — added Media Library and Calendar entries to dashboard sidebar.
+
 ### Added — Web Dashboard Phase 2: Onboarding & Settings
 
 - **Settings page** (`/dashboard/settings`) — tabbed interface (General, Accounts, Integrations) for managing posting schedule, boolean toggles (pause, dry run, Instagram API, verbose notifications, media sync), Instagram account switching/removal, and Google Drive connection.

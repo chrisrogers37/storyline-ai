@@ -2,15 +2,23 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, LayoutDashboard, Rocket, Settings } from "lucide-react";
+import {
+  BarChart3,
+  CalendarDays,
+  ImageIcon,
+  LayoutDashboard,
+  Rocket,
+  Settings,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { siteConfig } from "@/config/site";
 
 const navItems = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+  { href: "/dashboard/media", label: "Media Library", icon: ImageIcon },
+  { href: "/dashboard/media/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
   { href: "/dashboard/setup", label: "Setup Wizard", icon: Rocket },
-  // TODO: /dashboard/analytics — detailed analytics page is Phase 3
   { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
 ];
 
@@ -29,7 +37,7 @@ export function Sidebar() {
           const active =
             item.href === "/dashboard"
               ? pathname === "/dashboard"
-              : pathname.startsWith(item.href);
+              : pathname === item.href || pathname.startsWith(item.href + "/");
 
           return (
             <Link

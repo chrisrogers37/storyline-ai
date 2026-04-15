@@ -107,6 +107,99 @@ class DashboardService(BaseService):
 
         return {"items": items}
 
+    def get_media_library(
+        self,
+        telegram_chat_id: int,
+        page: int = 1,
+        page_size: int = 20,
+        category: Optional[str] = None,
+        posting_status: Optional[str] = None,
+    ) -> dict:
+        """Return paginated media items with pool health stats.
+
+        Combines item listing with aggregate stats for the media library view.
+        """
+        with self.track_execution(
+            "get_media_library",
+            input_params={
+                "telegram_chat_id": telegram_chat_id,
+                "page": page,
+                "category": category,
+            },
+        ) as run_id:
+            chat_settings_id = self._resolve_chat_settings_id(telegram_chat_id)
+
+            items, total = self.media_repo.get_paginated(
+                page=page,
+                page_size=page_size,
+                category=category,
+                posting_status=posting_status,
+                chat_settings_id=chat_settings_id,
+            )
+
+            serialized = []
+            for item in items:
+                serialized.append(
+                    {
+                        "id": str(item.id),
+                        "file_name": item.file_name,
+                        "category": item.category or "uncategorized",
+                        "mime_type": item.mime_type,
+                        "file_size": item.file_size,
+                        "times_posted": item.times_posted,
+                        "last_posted_at": (
+                            item.last_posted_at.isoformat()
+                            if item.last_posted_at
+                            else None
+                        ),
+                        "source_type": item.source_type,
+                        "created_at": item.created_at.isoformat(),
+                    }
+                )
+
+            # Only compute expensive pool health stats on page 1
+            pool_health = None
+            categories: list[str] = []
+            if page == 1:
+                posting_status_counts = self.media_repo.count_by_posting_status(
+                    chat_settings_id=chat_settings_id
+                )
+                category_counts = self.media_repo.count_by_category(
+                    chat_settings_id=chat_settings_id
+                )
+                eligible_count = self.media_repo.count_eligible(
+                    chat_settings_id=chat_settings_id
+                )
+                categories = sorted(category_counts.keys())
+                pool_health = {
+                    "total_active": sum(posting_status_counts.values()),
+                    "never_posted": posting_status_counts.get("never_posted", 0),
+                    "posted_once": posting_status_counts.get("posted_once", 0),
+                    "posted_multiple": posting_status_counts.get("posted_multiple", 0),
+                    "eligible_for_posting": eligible_count,
+                    "by_category": [
+                        {"name": name, "count": count}
+                        for name, count in sorted(
+                            category_counts.items(),
+                            key=lambda x: x[1],
+                            reverse=True,
+                        )
+                    ],
+                }
+
+            self.set_result_summary(
+                run_id, {"total": total, "page": page, "returned": len(serialized)}
+            )
+
+            return {
+                "items": serialized,
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "categories": categories,
+                "pool_health": pool_health,
+            }
+
     def get_media_stats(self, telegram_chat_id: int) -> dict:
         """Return media library breakdown by category."""
         chat_settings_id = self._resolve_chat_settings_id(telegram_chat_id)
