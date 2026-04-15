@@ -21,6 +21,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid session" }, { status: 401 });
   }
 
+  // Reject oversized uploads before buffering
+  const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50 MB
+  const contentLength = parseInt(request.headers.get("content-length") || "0", 10);
+  if (contentLength > MAX_UPLOAD_BYTES) {
+    return NextResponse.json(
+      { error: "File exceeds 50 MB limit" },
+      { status: 413 }
+    );
+  }
+
   const urlToken = generateUrlToken(session.chatId, session.userId);
   const url = new URL("/api/onboarding/upload-media", BACKEND_URL);
   url.searchParams.set("init_data", urlToken);
@@ -29,6 +39,14 @@ export async function POST(request: NextRequest) {
   // Forward the raw multipart body to FastAPI
   const contentType = request.headers.get("content-type") || "";
   const body = await request.arrayBuffer();
+
+  // Double-check actual size after buffering
+  if (body.byteLength > MAX_UPLOAD_BYTES) {
+    return NextResponse.json(
+      { error: "File exceeds 50 MB limit" },
+      { status: 413 }
+    );
+  }
 
   try {
     const backendResponse = await fetch(url.toString(), {
