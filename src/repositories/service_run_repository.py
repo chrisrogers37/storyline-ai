@@ -3,6 +3,7 @@
 from typing import Optional, List
 from datetime import datetime, timedelta
 
+
 from src.repositories.base_repository import BaseRepository
 from src.models.service_run import ServiceRun
 
@@ -135,3 +136,45 @@ class ServiceRunRepository(BaseRepository):
         )
         self.end_read_transaction()
         return result
+
+    def get_health_stats(self, hours: int = 24) -> list:
+        """Aggregate service run stats per service over a time window.
+
+        Returns per-service: call_count, success_count, failure_count,
+        error_rate, avg_duration_ms.
+        """
+        from sqlalchemy import case, func
+
+        since = datetime.utcnow() - timedelta(hours=hours)
+        rows = (
+            self.db.query(
+                ServiceRun.service_name,
+                func.count(ServiceRun.id).label("call_count"),
+                func.sum(case((ServiceRun.status == "completed", 1), else_=0)).label(
+                    "success_count"
+                ),
+                func.sum(case((ServiceRun.status == "failed", 1), else_=0)).label(
+                    "failure_count"
+                ),
+                func.avg(ServiceRun.duration_ms).label("avg_duration_ms"),
+            )
+            .filter(ServiceRun.started_at >= since)
+            .group_by(ServiceRun.service_name)
+            .order_by(func.count(ServiceRun.id).desc())
+            .all()
+        )
+        self.end_read_transaction()
+
+        return [
+            {
+                "service_name": r.service_name,
+                "call_count": r.call_count,
+                "success_count": r.success_count or 0,
+                "failure_count": r.failure_count or 0,
+                "error_rate": round((r.failure_count or 0) / r.call_count, 2)
+                if r.call_count
+                else 0,
+                "avg_duration_ms": round(r.avg_duration_ms) if r.avg_duration_ms else 0,
+            }
+            for r in rows
+        ]

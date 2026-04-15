@@ -587,3 +587,128 @@ class TestGetScheduleRecommendations:
         assert "worst_day" in types
         worst_day_rec = next(r for r in recs if r["type"] == "worst_day")
         assert worst_day_rec["day_name"] == "Sunday"
+
+
+@pytest.mark.unit
+class TestGetSchedulePreview:
+    """Tests for get_schedule_preview."""
+
+    def test_returns_slot_times(self):
+        """Preview returns correct number of slots with interval."""
+        with patch.object(DashboardService, "__init__", lambda self: None):
+            service = DashboardService()
+            service.settings_service = MagicMock()
+            service.category_mix_repo = MagicMock()
+
+            from decimal import Decimal
+
+            mock_settings = Mock(
+                id="t1",
+                is_paused=False,
+                posts_per_day=3,
+                posting_hours_start=14,
+                posting_hours_end=2,
+                last_post_sent_at=None,
+            )
+            service.settings_service.get_settings.return_value = mock_settings
+            service.category_mix_repo.get_current_mix_as_dict.return_value = {
+                "memes": Decimal("0.50"),
+                "merch": Decimal("0.50"),
+            }
+
+            result = service.get_schedule_preview(telegram_chat_id=123, slots=5)
+
+            assert result["status"] == "ok"
+            assert len(result["slots"]) == 5
+            assert result["posts_per_day"] == 3
+            assert all(
+                s["predicted_category"] in ("memes", "merch") for s in result["slots"]
+            )
+
+    def test_returns_paused_when_paused(self):
+        """Preview returns paused status when posting is paused."""
+        with patch.object(DashboardService, "__init__", lambda self: None):
+            service = DashboardService()
+            service.settings_service = MagicMock()
+
+            mock_settings = Mock(is_paused=True)
+            service.settings_service.get_settings.return_value = mock_settings
+
+            result = service.get_schedule_preview(telegram_chat_id=123)
+
+            assert result["status"] == "paused"
+            assert result["slots"] == []
+
+
+@pytest.mark.unit
+class TestGetContentReuseInsights:
+    """Tests for get_content_reuse_insights."""
+
+    def _setup_service(self):
+        with patch.object(DashboardService, "__init__", lambda self: None):
+            service = DashboardService()
+            service.settings_service = MagicMock()
+            service.media_repo = MagicMock()
+            service.service_run_repo = MagicMock()
+            service.service_name = "DashboardService"
+            mock_settings = Mock(id="tenant-uuid-1")
+            service.settings_service.get_settings.return_value = mock_settings
+            return service
+
+    def test_returns_reuse_tiers(self):
+        """Returns posting status breakdown and reuse rate."""
+        service = self._setup_service()
+        service.media_repo.count_by_posting_status.return_value = {
+            "never_posted": 30,
+            "posted_once": 50,
+            "posted_multiple": 20,
+        }
+        service.media_repo.count_by_category.return_value = {"memes": 60, "merch": 40}
+
+        result = service.get_content_reuse_insights(telegram_chat_id=123)
+
+        assert result["total_active"] == 100
+        assert result["never_posted"] == 30
+        assert result["posted_once"] == 50
+        assert result["posted_multiple"] == 20
+        assert result["reuse_rate"] == 0.2
+
+
+@pytest.mark.unit
+class TestGetServiceHealthStats:
+    """Tests for get_service_health_stats."""
+
+    def test_returns_per_service_stats(self):
+        """Returns aggregated service run telemetry."""
+        with patch.object(DashboardService, "__init__", lambda self: None):
+            service = DashboardService()
+            service.service_run_repo = MagicMock()
+            service.service_run_repo.get_health_stats.return_value = [
+                {
+                    "service_name": "PostingService",
+                    "call_count": 100,
+                    "success_count": 95,
+                    "failure_count": 5,
+                    "error_rate": 0.05,
+                    "avg_duration_ms": 150,
+                },
+            ]
+
+            result = service.get_service_health_stats(hours=24)
+
+            assert result["total_calls"] == 100
+            assert result["total_failures"] == 5
+            assert result["overall_error_rate"] == 0.05
+            assert len(result["services"]) == 1
+
+    def test_handles_no_runs(self):
+        """Returns zeros when no service runs in window."""
+        with patch.object(DashboardService, "__init__", lambda self: None):
+            service = DashboardService()
+            service.service_run_repo = MagicMock()
+            service.service_run_repo.get_health_stats.return_value = []
+
+            result = service.get_service_health_stats()
+
+            assert result["total_calls"] == 0
+            assert result["overall_error_rate"] == 0

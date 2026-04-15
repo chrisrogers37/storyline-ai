@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Post Preview Window (#178)
+
+- **Schedule preview** — `GET /api/onboarding/analytics/schedule-preview` shows upcoming N slots with predicted times and categories. Uses the same interval and category weighting logic as the scheduler. Informational only — does not pre-select media.
+
+### Added — Content Reuse Insights (#179)
+
+- **Content reuse analytics** — `GET /api/onboarding/analytics/content-reuse` classifies the media pool into never_posted, posted_once, and posted_multiple tiers. Includes per-category breakdown and overall reuse rate.
+
+### Added — Service Health Dashboard (#180)
+
+- **Service telemetry** — `GET /api/onboarding/analytics/service-health` aggregates service_runs table into per-service call counts, error rates, and avg execution duration over a configurable time window.
+- **`get_health_stats()`** in ServiceRunRepository — groups completed/failed runs by service name with aggregation.
+
 ### Added — Schedule Optimization Recommendations (#158)
 
 - **Schedule recommendations API** — `GET /api/onboarding/analytics/schedule-recommendations` analyzes posting history to identify optimal posting times. Returns hourly approval rates, day-of-week patterns, and human-readable recommendations (e.g., "Posts at 10:00 have the highest approval rate (94%)").

@@ -367,6 +367,119 @@ class DashboardService(BaseService):
 
         return recommendations
 
+    def get_schedule_preview(self, telegram_chat_id: int, slots: int = 10) -> dict:
+        """Show upcoming scheduled slots with predicted categories.
+
+        Computes future slot times from the posting interval and
+        assigns categories using weighted random (same logic as the
+        scheduler).  Does NOT select specific media items.
+        """
+        import random
+        from datetime import datetime, timedelta
+
+        chat_settings = self.settings_service.get_settings(telegram_chat_id)
+
+        if chat_settings.is_paused:
+            return {"status": "paused", "slots": []}
+
+        ppd = chat_settings.posts_per_day
+        start_h = chat_settings.posting_hours_start
+        end_h = chat_settings.posting_hours_end
+        window_hours = (24 - start_h + end_h) if end_h < start_h else (end_h - start_h)
+        interval_seconds = (window_hours * 3600) / ppd if ppd else 3600
+
+        # Start from last_post or now
+        now = datetime.utcnow()
+        last = chat_settings.last_post_sent_at
+        if last and last.tzinfo:
+            last = last.replace(tzinfo=None)
+        next_time = last + timedelta(seconds=interval_seconds) if last else now
+
+        # Get category weights
+        configured = self.category_mix_repo.get_current_mix_as_dict(
+            chat_settings_id=str(chat_settings.id)
+        )
+        categories = list(configured.keys()) if configured else []
+        weights = [float(r) for r in configured.values()] if configured else []
+
+        result_slots = []
+        for _ in range(slots):
+            if next_time < now:
+                next_time = now
+
+            predicted_cat = (
+                random.choices(categories, weights=weights, k=1)[0]
+                if categories
+                else None
+            )
+            result_slots.append(
+                {
+                    "slot_time": next_time.isoformat() + "Z",
+                    "predicted_category": predicted_cat,
+                }
+            )
+            next_time += timedelta(seconds=interval_seconds)
+
+        return {
+            "status": "ok",
+            "slots": result_slots,
+            "interval_minutes": round(interval_seconds / 60, 1),
+            "posts_per_day": ppd,
+            "timezone": "UTC",
+        }
+
+    def get_content_reuse_insights(self, telegram_chat_id: int) -> dict:
+        """Classify media pool into reuse tiers.
+
+        Uses existing count_by_posting_status() which buckets items
+        into never_posted / posted_once / posted_multiple.  Adds
+        per-category breakdown of never-posted items.
+        """
+        with self.track_execution(
+            "get_content_reuse_insights",
+            input_params={"telegram_chat_id": telegram_chat_id},
+        ) as run_id:
+            chat_settings_id = self._resolve_chat_settings_id(telegram_chat_id)
+
+            posting_status = self.media_repo.count_by_posting_status(
+                chat_settings_id=chat_settings_id
+            )
+            total = sum(posting_status.values())
+            category_counts = self.media_repo.count_by_category(
+                chat_settings_id=chat_settings_id
+            )
+
+            self.set_result_summary(run_id, {"total": total, **posting_status})
+            return {
+                "total_active": total,
+                "never_posted": posting_status["never_posted"],
+                "posted_once": posting_status["posted_once"],
+                "posted_multiple": posting_status["posted_multiple"],
+                "reuse_rate": round(posting_status["posted_multiple"] / total, 2)
+                if total
+                else 0,
+                "categories": category_counts,
+            }
+
+    def get_service_health_stats(self, hours: int = 24) -> dict:
+        """Aggregate service_runs telemetry for an ops dashboard.
+
+        Returns per-service call counts, error rates, and avg duration.
+        """
+        stats = self.service_run_repo.get_health_stats(hours=hours)
+        total_calls = sum(s["call_count"] for s in stats)
+        total_failures = sum(s["failure_count"] for s in stats)
+
+        return {
+            "services": stats,
+            "total_calls": total_calls,
+            "total_failures": total_failures,
+            "overall_error_rate": round(total_failures / total_calls, 2)
+            if total_calls
+            else 0,
+            "hours": hours,
+        }
+
     def get_pending_queue_items(self, chat_settings_id: Optional[str] = None) -> list:
         """Return pending queue items with media details.
 
