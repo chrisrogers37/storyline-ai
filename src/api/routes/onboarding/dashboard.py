@@ -22,7 +22,7 @@ async def onboarding_queue_detail(
     init_data: str,
     chat_id: int,
     limit: int = Query(default=10, ge=1, le=50),
-):
+) -> dict:
     """Return detailed queue items with schedule summary for dashboard."""
     _validate_request(init_data, chat_id)
 
@@ -35,7 +35,7 @@ async def onboarding_history_detail(
     init_data: str,
     chat_id: int,
     limit: int = Query(default=10, ge=1, le=50),
-):
+) -> dict:
     """Return recent posting history with media info for dashboard."""
     _validate_request(init_data, chat_id)
 
@@ -47,7 +47,7 @@ async def onboarding_history_detail(
 async def onboarding_media_stats(
     init_data: str,
     chat_id: int,
-):
+) -> dict:
     """Return media library breakdown by category for dashboard."""
     _validate_request(init_data, chat_id)
 
@@ -59,7 +59,7 @@ async def onboarding_media_stats(
 async def onboarding_accounts(
     init_data: str,
     chat_id: int,
-):
+) -> dict:
     """List all active Instagram accounts with active account for this chat marked."""
     _validate_request(init_data, chat_id)
 
@@ -94,7 +94,7 @@ async def onboarding_schedule_recommendations(
     init_data: str,
     chat_id: int,
     days: int = Query(default=90, ge=7, le=365),
-):
+) -> dict:
     """Return posting time recommendations based on approval patterns."""
     _validate_request(init_data, chat_id)
 
@@ -107,7 +107,7 @@ async def onboarding_analytics_categories(
     init_data: str,
     chat_id: int,
     days: int = Query(default=30, ge=1, le=365),
-):
+) -> dict:
     """Return per-category performance with configured vs actual ratios."""
     _validate_request(init_data, chat_id)
 
@@ -120,7 +120,7 @@ async def onboarding_schedule_preview(
     init_data: str,
     chat_id: int,
     slots: int = Query(default=10, ge=1, le=50),
-):
+) -> dict:
     """Return upcoming scheduled slots with predicted categories."""
     _validate_request(init_data, chat_id)
 
@@ -132,7 +132,7 @@ async def onboarding_schedule_preview(
 async def onboarding_content_reuse(
     init_data: str,
     chat_id: int,
-):
+) -> dict:
     """Return content reuse insights — evergreen vs one-shot media."""
     _validate_request(init_data, chat_id)
 
@@ -144,7 +144,7 @@ async def onboarding_content_reuse(
 async def onboarding_service_health(
     init_data: str,
     hours: int = Query(default=24, ge=1, le=168),
-):
+) -> dict:
     """Return service execution telemetry from service_runs table.
 
     Global view — service_runs are system-level, not per-tenant.
@@ -164,7 +164,7 @@ async def onboarding_category_drift(
     init_data: str,
     chat_id: int,
     days: int = Query(default=7, ge=1, le=90),
-):
+) -> dict:
     """Return category mix drift — configured vs actual posting ratios."""
     _validate_request(init_data, chat_id)
 
@@ -177,7 +177,7 @@ async def onboarding_dead_content(
     init_data: str,
     chat_id: int,
     min_age_days: int = Query(default=30, ge=1, le=365),
-):
+) -> dict:
     """Return dead content report — never-posted media items."""
     _validate_request(init_data, chat_id)
 
@@ -190,7 +190,7 @@ async def onboarding_approval_latency(
     init_data: str,
     chat_id: int,
     days: int = Query(default=30, ge=1, le=365),
-):
+) -> dict:
     """Return approval latency statistics — time from queue to decision."""
     _validate_request(init_data, chat_id)
 
@@ -203,7 +203,7 @@ async def onboarding_team_performance(
     init_data: str,
     chat_id: int,
     days: int = Query(default=30, ge=1, le=365),
-):
+) -> dict:
     """Return per-user approval rates and response times."""
     _validate_request(init_data, chat_id)
 
@@ -216,7 +216,7 @@ async def onboarding_analytics(
     init_data: str,
     chat_id: int,
     days: int = Query(default=30, ge=1, le=365),
-):
+) -> dict:
     """Return aggregated posting analytics for the dashboard."""
     _validate_request(init_data, chat_id)
 
@@ -228,7 +228,7 @@ async def onboarding_analytics(
 async def onboarding_system_status(
     init_data: str,
     chat_id: int,
-):
+) -> dict:
     """Return system health checks for the dashboard status card."""
     _validate_request(init_data, chat_id)
 
@@ -244,7 +244,7 @@ async def onboarding_media_library(
     page_size: int = Query(default=20, ge=1, le=100),
     category: str | None = Query(default=None),
     posting_status: str | None = Query(default=None),
-):
+) -> dict:
     """Return paginated media library with pool health stats."""
     _validate_request(init_data, chat_id)
 
@@ -298,7 +298,7 @@ async def onboarding_upload_media(
     chat_id: int = Query(...),
     file: UploadFile = File(...),
     category: str | None = Form(default=None),
-):
+) -> dict:
     """Upload a media file and create a media_item record.
 
     Files are stored locally and indexed for posting.

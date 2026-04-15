@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — Code Quality (#205, #207, #208, #209)
+
+- **Extract duplicated eligibility filters** (#205) — Consolidated repeated lock/queue/hash-duplicate exclusion logic in `MediaRepository` into a single `_apply_eligibility_filters()` helper used by `get_next_eligible_for_posting()`, `count_eligible()`, and `count_eligible_by_category()`.
+- **Replace bare `except Exception` with specific types** (#207) — Narrowed exception catches where the exception type is identifiable: `OSError`/`ValueError` for image validation, `binascii.Error` for encryption init, `SQLAlchemyError` for DB queries, `httpx.HTTPError` for HTTP calls, and `telegram.error.TelegramError` for Telegram API notifications. Background loop and resilience catches remain intentionally broad.
+- **Add return type hints to API route handlers** (#208) — Added `-> dict` annotations to all route handlers in `dashboard.py`, `settings.py`, and `setup.py`.
+- **Extract telegram message update helper** (#209) — Extracted `_update_autopost_caption()` helper to replace repeated `telegram_edit_with_retry(query.edit_message_caption, ...)` calls in the autopost flow.
+
 ### Added — Web Dashboard Phase 3: Media Management
 
 - **Content library browser** (`/dashboard/media`) — paginated grid view of all media items with category filtering, pool health stats (total active, eligible for posting, never posted, reuse rate), and per-category counts.
