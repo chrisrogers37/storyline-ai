@@ -588,6 +588,59 @@ class MediaRepository(BaseRepository):
         self.end_read_transaction()
         return {(cat or "uncategorized"): count for cat, count in rows}
 
+    def _apply_eligibility_filters(self, query, chat_settings_id=None):
+        """Apply standard eligibility exclusion filters to a query.
+
+        Excludes items that are:
+        1. Already in the posting queue
+        2. Currently locked (permanent or unexpired TTL locks)
+        3. Hash-duplicates of currently locked items
+
+        Args:
+            query: SQLAlchemy query to filter
+            chat_settings_id: Optional tenant filter for subqueries
+
+        Returns:
+            Filtered query with all three exclusion filters applied
+        """
+        now = datetime.utcnow()
+
+        # Exclude already queued items (tenant-scoped subquery)
+        queued_where = [PostingQueue.media_item_id == MediaItem.id]
+        if chat_settings_id:
+            queued_where.append(PostingQueue.chat_settings_id == chat_settings_id)
+        queued_subquery = exists(select(PostingQueue.id).where(and_(*queued_where)))
+        query = query.filter(~queued_subquery)
+
+        # Exclude locked items (both permanent and TTL locks, tenant-scoped subquery)
+        lock_where = [
+            MediaPostingLock.media_item_id == MediaItem.id,
+            (MediaPostingLock.locked_until.is_(None))
+            | (MediaPostingLock.locked_until > now),
+        ]
+        if chat_settings_id:
+            lock_where.append(MediaPostingLock.chat_settings_id == chat_settings_id)
+        locked_subquery = exists(select(MediaPostingLock.id).where(and_(*lock_where)))
+        query = query.filter(~locked_subquery)
+
+        # Exclude items whose file_hash matches any currently-locked item's hash
+        # (prevents posting duplicate files stored under different filenames)
+        locked_hashes_subquery = (
+            select(MediaItem.file_hash)
+            .join(MediaPostingLock, MediaPostingLock.media_item_id == MediaItem.id)
+            .where(
+                (MediaPostingLock.locked_until.is_(None))
+                | (MediaPostingLock.locked_until > now)
+            )
+            .where(MediaItem.file_hash.isnot(None))
+        )
+        query = query.filter(
+            (MediaItem.file_hash.is_(None))
+            | (~MediaItem.file_hash.in_(locked_hashes_subquery))
+        )
+
+        return query
+
     def get_next_eligible_for_posting(
         self,
         category: Optional[str] = None,
@@ -620,40 +673,7 @@ class MediaRepository(BaseRepository):
         if exclude_ids:
             query = query.filter(~MediaItem.id.in_(exclude_ids))
 
-        # Exclude already queued items (tenant-scoped subquery)
-        queued_where = [PostingQueue.media_item_id == MediaItem.id]
-        if chat_settings_id:
-            queued_where.append(PostingQueue.chat_settings_id == chat_settings_id)
-        queued_subquery = exists(select(PostingQueue.id).where(and_(*queued_where)))
-        query = query.filter(~queued_subquery)
-
-        # Exclude locked items (both permanent and TTL locks, tenant-scoped subquery)
-        now = datetime.utcnow()
-        lock_where = [
-            MediaPostingLock.media_item_id == MediaItem.id,
-            (MediaPostingLock.locked_until.is_(None))
-            | (MediaPostingLock.locked_until > now),
-        ]
-        if chat_settings_id:
-            lock_where.append(MediaPostingLock.chat_settings_id == chat_settings_id)
-        locked_subquery = exists(select(MediaPostingLock.id).where(and_(*lock_where)))
-        query = query.filter(~locked_subquery)
-
-        # Exclude items whose file_hash matches any currently-locked item's hash
-        # (prevents posting duplicate files stored under different filenames)
-        locked_hashes_subquery = (
-            select(MediaItem.file_hash)
-            .join(MediaPostingLock, MediaPostingLock.media_item_id == MediaItem.id)
-            .where(
-                (MediaPostingLock.locked_until.is_(None))
-                | (MediaPostingLock.locked_until > now)
-            )
-            .where(MediaItem.file_hash.isnot(None))
-        )
-        query = query.filter(
-            (MediaItem.file_hash.is_(None))
-            | (~MediaItem.file_hash.in_(locked_hashes_subquery))
-        )
+        query = self._apply_eligibility_filters(query, chat_settings_id)
 
         # Sort by priority:
         # 1. Never posted first (NULLS FIRST)
@@ -687,47 +707,13 @@ class MediaRepository(BaseRepository):
 
         Excludes inactive, locked, queued, and hash-duplicates of locked items.
         """
-        now = datetime.utcnow()
         query = (
             self._tenant_query(MediaItem, chat_settings_id)
             .with_entities(func.count(MediaItem.id))
             .filter(MediaItem.is_active.is_(True))
         )
 
-        # Exclude queued
-        queued_where = [PostingQueue.media_item_id == MediaItem.id]
-        if chat_settings_id:
-            queued_where.append(PostingQueue.chat_settings_id == chat_settings_id)
-        query = query.filter(
-            ~exists(select(PostingQueue.id).where(and_(*queued_where)))
-        )
-
-        # Exclude locked
-        lock_where = [
-            MediaPostingLock.media_item_id == MediaItem.id,
-            (MediaPostingLock.locked_until.is_(None))
-            | (MediaPostingLock.locked_until > now),
-        ]
-        if chat_settings_id:
-            lock_where.append(MediaPostingLock.chat_settings_id == chat_settings_id)
-        query = query.filter(
-            ~exists(select(MediaPostingLock.id).where(and_(*lock_where)))
-        )
-
-        # Exclude hash-duplicates of locked items
-        locked_hashes_subquery = (
-            select(MediaItem.file_hash)
-            .join(MediaPostingLock, MediaPostingLock.media_item_id == MediaItem.id)
-            .where(
-                (MediaPostingLock.locked_until.is_(None))
-                | (MediaPostingLock.locked_until > now)
-            )
-            .where(MediaItem.file_hash.isnot(None))
-        )
-        query = query.filter(
-            (MediaItem.file_hash.is_(None))
-            | (~MediaItem.file_hash.in_(locked_hashes_subquery))
-        )
+        query = self._apply_eligibility_filters(query, chat_settings_id)
 
         result = query.scalar()
         self.end_read_transaction()
@@ -737,44 +723,13 @@ class MediaRepository(BaseRepository):
         self, chat_settings_id: Optional[str] = None
     ) -> dict:
         """Count eligible media per category (not locked, not queued, not hash-duped)."""
-        now = datetime.utcnow()
         query = (
             self._tenant_query(MediaItem, chat_settings_id)
             .with_entities(MediaItem.category, func.count(MediaItem.id))
             .filter(MediaItem.is_active.is_(True))
         )
 
-        queued_where = [PostingQueue.media_item_id == MediaItem.id]
-        if chat_settings_id:
-            queued_where.append(PostingQueue.chat_settings_id == chat_settings_id)
-        query = query.filter(
-            ~exists(select(PostingQueue.id).where(and_(*queued_where)))
-        )
-
-        lock_where = [
-            MediaPostingLock.media_item_id == MediaItem.id,
-            (MediaPostingLock.locked_until.is_(None))
-            | (MediaPostingLock.locked_until > now),
-        ]
-        if chat_settings_id:
-            lock_where.append(MediaPostingLock.chat_settings_id == chat_settings_id)
-        query = query.filter(
-            ~exists(select(MediaPostingLock.id).where(and_(*lock_where)))
-        )
-
-        locked_hashes_subquery = (
-            select(MediaItem.file_hash)
-            .join(MediaPostingLock, MediaPostingLock.media_item_id == MediaItem.id)
-            .where(
-                (MediaPostingLock.locked_until.is_(None))
-                | (MediaPostingLock.locked_until > now)
-            )
-            .where(MediaItem.file_hash.isnot(None))
-        )
-        query = query.filter(
-            (MediaItem.file_hash.is_(None))
-            | (~MediaItem.file_hash.in_(locked_hashes_subquery))
-        )
+        query = self._apply_eligibility_filters(query, chat_settings_id)
 
         rows = query.group_by(MediaItem.category).all()
         self.end_read_transaction()

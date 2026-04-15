@@ -295,7 +295,7 @@ class InstagramLoginOAuthService(BaseService):
                 )
                 if response.status_code == 200:
                     return response.json().get("username")
-        except Exception as e:
+        except httpx.HTTPError as e:
             logger.warning(f"Failed to fetch Instagram username: {e}")
         return None
 
@@ -312,7 +312,7 @@ class InstagramLoginOAuthService(BaseService):
                 text=full_message,
                 parse_mode="Markdown",
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — best-effort notification, swallow all errors
             logger.error(
                 f"Failed to send Instagram Login notification to chat {chat_id}: {e}"
             )

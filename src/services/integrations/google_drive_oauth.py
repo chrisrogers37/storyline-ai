@@ -242,7 +242,7 @@ class GoogleDriveOAuthService(BaseService):
                 )
                 if response.status_code == 200:
                     return response.json().get("email")
-        except Exception as e:
+        except httpx.HTTPError as e:
             logger.warning(f"Failed to fetch Google user email: {e}")
         return None
 
@@ -259,7 +259,7 @@ class GoogleDriveOAuthService(BaseService):
                 text=full_message,
                 parse_mode="Markdown",
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — best-effort notification, swallow all errors
             logger.error(
                 f"Failed to send GDrive OAuth notification to chat {chat_id}: {e}"
             )
