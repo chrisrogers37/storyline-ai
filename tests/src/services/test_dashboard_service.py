@@ -592,8 +592,12 @@ class TestGetScheduleRecommendations:
 @pytest.mark.unit
 class TestGetSchedulePreview:
     """Tests for get_schedule_preview."""
+
+
 class TestGetCategoryMixDrift:
     """Tests for get_category_mix_drift."""
+
+
 class TestGetApprovalLatency:
     """Tests for get_approval_latency."""
 
@@ -714,6 +718,7 @@ class TestGetContentReuseInsights:
         assert result["posted_multiple"] == 20
         assert result["reuse_rate"] == 0.2
         assert len(result["never_posted_by_category"]) == 2
+
     def test_detects_drift(self):
         """Flags categories with significant drift as warning/critical."""
         from decimal import Decimal
@@ -775,46 +780,46 @@ class TestGetContentReuseInsights:
 @pytest.mark.unit
 class TestGetDeadContentReport:
     """Tests for get_dead_content_report."""
-    def test_returns_latency_stats(self):
-        """get_approval_latency returns overall + breakdowns from repo."""
+
+    def _setup_service(self):
+        with patch.object(DashboardService, "__init__", lambda self: None):
+            service = DashboardService()
+            service.settings_service = MagicMock()
+            service.media_repo = MagicMock()
+            service.history_repo = MagicMock()
+            service.category_mix_repo = MagicMock()
+            service.service_run_repo = MagicMock()
+            service.service_name = "DashboardService"
+            mock_settings = Mock(id="tenant-uuid-1")
+            service.settings_service.get_settings.return_value = mock_settings
+            return service
+
+    def test_returns_dead_content(self):
+        """get_dead_content_report returns per-category dead content stats."""
         service = self._setup_service()
-        service.history_repo.get_approval_latency.return_value = {
-            "overall": {
-                "count": 50,
-                "avg_minutes": 5.0,
-                "min_minutes": 1.0,
-                "max_minutes": 30.0,
-            },
-            "by_hour": [{"hour": 14, "count": 20, "avg_minutes": 4.0}],
-            "by_category": [{"category": "memes", "count": 30, "avg_minutes": 3.0}],
-        }
+        service.media_repo.count_active.return_value = 100
+        service.media_repo.count_dead_content_by_category.return_value = [
+            {"category": "memes", "dead_count": 10},
+            {"category": "merch", "dead_count": 5},
+        ]
 
-        result = service.get_approval_latency(telegram_chat_id=123, days=30)
+        result = service.get_dead_content_report(telegram_chat_id=123)
 
-        assert result["overall"]["count"] == 50
-        assert result["overall"]["avg_minutes"] == 5.0
-        assert result["days"] == 30
-        assert len(result["by_hour"]) == 1
-        assert len(result["by_category"]) == 1
+        assert result["total_active"] == 100
+        assert result["total_dead"] == 15
+        assert result["dead_percentage"] == 0.15
+        assert len(result["by_category"]) == 2
 
-    def test_empty_latency(self):
-        """Returns zero stats when no posting history."""
+    def test_empty_dead_content(self):
+        """Returns zero stats when no dead content."""
         service = self._setup_service()
-        service.history_repo.get_approval_latency.return_value = {
-            "overall": {
-                "count": 0,
-                "avg_minutes": 0,
-                "min_minutes": 0,
-                "max_minutes": 0,
-            },
-            "by_hour": [],
-            "by_category": [],
-        }
+        service.media_repo.count_active.return_value = 50
+        service.media_repo.count_dead_content_by_category.return_value = []
 
-        result = service.get_approval_latency(telegram_chat_id=123)
+        result = service.get_dead_content_report(telegram_chat_id=123)
 
-        assert result["overall"]["count"] == 0
-        assert result["days"] == 30
+        assert result["total_dead"] == 0
+        assert result["dead_percentage"] == 0
 
 
 @pytest.mark.unit
@@ -911,6 +916,7 @@ class TestGetServiceHealthStats:
 
         assert result["total_dead"] == 0
         assert result["dead_percentage"] == 0
+
     def test_returns_user_stats(self):
         """get_team_performance returns per-user data from repo."""
         service = self._setup_service()
