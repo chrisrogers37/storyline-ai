@@ -536,6 +536,9 @@ async def main_async():
 
     logger.info("✓ Configuration validated successfully")
 
+    # Check database schema version
+    ConfigValidator.check_schema_version()
+
     # Initialize services
     from src.services.core.settings_service import SettingsService
 
