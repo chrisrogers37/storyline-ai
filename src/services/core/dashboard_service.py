@@ -372,68 +372,95 @@ class DashboardService(BaseService):
 
         Computes future slot times from the posting interval and
         assigns categories using weighted random (same logic as the
-        scheduler).  Does NOT select specific media items.
+        scheduler).  Does NOT select specific media items.  Slot times
+        are clamped to the configured posting window — if a computed
+        slot falls outside the window, it advances to the next open.
         """
         import random
         from datetime import datetime, timedelta
 
-        chat_settings = self.settings_service.get_settings(telegram_chat_id)
+        with self.track_execution(
+            "get_schedule_preview",
+            input_params={"telegram_chat_id": telegram_chat_id, "slots": slots},
+        ) as run_id:
+            chat_settings = self.settings_service.get_settings(telegram_chat_id)
 
-        if chat_settings.is_paused:
-            return {"status": "paused", "slots": []}
+            if chat_settings.is_paused:
+                self.set_result_summary(run_id, {"status": "paused"})
+                return {"status": "paused", "slots": []}
 
-        ppd = chat_settings.posts_per_day
-        start_h = chat_settings.posting_hours_start
-        end_h = chat_settings.posting_hours_end
-        window_hours = (24 - start_h + end_h) if end_h < start_h else (end_h - start_h)
-        interval_seconds = (window_hours * 3600) / ppd if ppd else 3600
-
-        # Start from last_post or now
-        now = datetime.utcnow()
-        last = chat_settings.last_post_sent_at
-        if last and last.tzinfo:
-            last = last.replace(tzinfo=None)
-        next_time = last + timedelta(seconds=interval_seconds) if last else now
-
-        # Get category weights
-        configured = self.category_mix_repo.get_current_mix_as_dict(
-            chat_settings_id=str(chat_settings.id)
-        )
-        categories = list(configured.keys()) if configured else []
-        weights = [float(r) for r in configured.values()] if configured else []
-
-        result_slots = []
-        for _ in range(slots):
-            if next_time < now:
-                next_time = now
-
-            predicted_cat = (
-                random.choices(categories, weights=weights, k=1)[0]
-                if categories
-                else None
+            ppd = chat_settings.posts_per_day
+            start_h = chat_settings.posting_hours_start
+            end_h = chat_settings.posting_hours_end
+            window_hours = (
+                (24 - start_h + end_h) if end_h < start_h else (end_h - start_h)
             )
-            result_slots.append(
-                {
-                    "slot_time": next_time.isoformat() + "Z",
-                    "predicted_category": predicted_cat,
-                }
-            )
-            next_time += timedelta(seconds=interval_seconds)
+            interval_seconds = (window_hours * 3600) / ppd if ppd else 3600
 
-        return {
-            "status": "ok",
-            "slots": result_slots,
-            "interval_minutes": round(interval_seconds / 60, 1),
-            "posts_per_day": ppd,
-            "timezone": "UTC",
-        }
+            now = datetime.utcnow()
+            last = chat_settings.last_post_sent_at
+            if last and last.tzinfo:
+                last = last.replace(tzinfo=None)
+            next_time = last + timedelta(seconds=interval_seconds) if last else now
+
+            configured = self.category_mix_repo.get_current_mix_as_dict(
+                chat_settings_id=str(chat_settings.id)
+            )
+            categories = list(configured.keys()) if configured else []
+            weights = [float(r) for r in configured.values()] if configured else []
+
+            def _clamp_to_window(dt: datetime) -> datetime:
+                """Advance dt to the next posting window open if outside."""
+                hour = dt.hour + dt.minute / 60.0
+                if end_h < start_h:
+                    in_window = hour >= start_h or hour < end_h
+                else:
+                    in_window = start_h <= hour < end_h
+                if in_window:
+                    return dt
+                # Advance to start_h today or tomorrow
+                candidate = dt.replace(hour=start_h, minute=0, second=0, microsecond=0)
+                if candidate <= dt:
+                    candidate += timedelta(days=1)
+                return candidate
+
+            result_slots = []
+            for _ in range(slots):
+                if next_time < now:
+                    next_time = now
+                next_time = _clamp_to_window(next_time)
+
+                predicted_cat = (
+                    random.choices(categories, weights=weights, k=1)[0]
+                    if categories
+                    else None
+                )
+                result_slots.append(
+                    {
+                        "slot_time": next_time.isoformat() + "Z",
+                        "predicted_category": predicted_cat,
+                    }
+                )
+                next_time += timedelta(seconds=interval_seconds)
+
+            self.set_result_summary(
+                run_id, {"slots": len(result_slots), "status": "ok"}
+            )
+            return {
+                "status": "ok",
+                "slots": result_slots,
+                "interval_minutes": round(interval_seconds / 60, 1),
+                "posts_per_day": ppd,
+                "timezone": "UTC",
+            }
 
     def get_content_reuse_insights(self, telegram_chat_id: int) -> dict:
         """Classify media pool into reuse tiers.
 
         Uses existing count_by_posting_status() which buckets items
-        into never_posted / posted_once / posted_multiple.  Adds
-        per-category breakdown of never-posted items.
+        into never_posted / posted_once / posted_multiple.  Includes
+        per-category breakdown of never-posted items so users can
+        identify which categories have the most stagnant content.
         """
         with self.track_execution(
             "get_content_reuse_insights",
@@ -445,8 +472,8 @@ class DashboardService(BaseService):
                 chat_settings_id=chat_settings_id
             )
             total = sum(posting_status.values())
-            category_counts = self.media_repo.count_by_category(
-                chat_settings_id=chat_settings_id
+            never_posted_by_category = self.media_repo.count_dead_content_by_category(
+                min_age_days=0, chat_settings_id=chat_settings_id
             )
 
             self.set_result_summary(run_id, {"total": total, **posting_status})
@@ -458,13 +485,18 @@ class DashboardService(BaseService):
                 "reuse_rate": round(posting_status["posted_multiple"] / total, 2)
                 if total
                 else 0,
-                "categories": category_counts,
+                "never_posted_by_category": never_posted_by_category,
             }
 
     def get_service_health_stats(self, hours: int = 24) -> dict:
         """Aggregate service_runs telemetry for an ops dashboard.
 
         Returns per-service call counts, error rates, and avg duration.
+
+        NOTE: This is intentionally a global (system-level) view.
+        service_runs are not tenant-scoped — they track internal service
+        executions that span tenants. The API endpoint requires valid
+        auth but does not filter by chat_id.
         """
         stats = self.service_run_repo.get_health_stats(hours=hours)
         total_calls = sum(s["call_count"] for s in stats)

@@ -1,8 +1,9 @@
 """Service run repository - CRUD operations for service runs."""
 
 from typing import Optional, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import case, func
 
 from src.repositories.base_repository import BaseRepository
 from src.models.service_run import ServiceRun
@@ -143,9 +144,7 @@ class ServiceRunRepository(BaseRepository):
         Returns per-service: call_count, success_count, failure_count,
         error_rate, avg_duration_ms.
         """
-        from sqlalchemy import case, func
-
-        since = datetime.utcnow() - timedelta(hours=hours)
+        since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=hours)
         rows = (
             self.db.query(
                 ServiceRun.service_name,

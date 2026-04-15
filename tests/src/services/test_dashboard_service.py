@@ -593,51 +593,81 @@ class TestGetScheduleRecommendations:
 class TestGetSchedulePreview:
     """Tests for get_schedule_preview."""
 
-    def test_returns_slot_times(self):
-        """Preview returns correct number of slots with interval."""
+    def _setup_service(self):
         with patch.object(DashboardService, "__init__", lambda self: None):
             service = DashboardService()
             service.settings_service = MagicMock()
             service.category_mix_repo = MagicMock()
+            service.service_run_repo = MagicMock()
+            service.service_name = "DashboardService"
+            return service
 
-            from decimal import Decimal
+    def test_returns_slot_times(self):
+        """Preview returns correct number of slots with interval."""
+        from decimal import Decimal
 
-            mock_settings = Mock(
-                id="t1",
-                is_paused=False,
-                posts_per_day=3,
-                posting_hours_start=14,
-                posting_hours_end=2,
-                last_post_sent_at=None,
-            )
-            service.settings_service.get_settings.return_value = mock_settings
-            service.category_mix_repo.get_current_mix_as_dict.return_value = {
-                "memes": Decimal("0.50"),
-                "merch": Decimal("0.50"),
-            }
+        service = self._setup_service()
+        mock_settings = Mock(
+            id="t1",
+            is_paused=False,
+            posts_per_day=3,
+            posting_hours_start=14,
+            posting_hours_end=2,
+            last_post_sent_at=None,
+        )
+        service.settings_service.get_settings.return_value = mock_settings
+        service.category_mix_repo.get_current_mix_as_dict.return_value = {
+            "memes": Decimal("0.50"),
+            "merch": Decimal("0.50"),
+        }
 
-            result = service.get_schedule_preview(telegram_chat_id=123, slots=5)
+        result = service.get_schedule_preview(telegram_chat_id=123, slots=5)
 
-            assert result["status"] == "ok"
-            assert len(result["slots"]) == 5
-            assert result["posts_per_day"] == 3
-            assert all(
-                s["predicted_category"] in ("memes", "merch") for s in result["slots"]
-            )
+        assert result["status"] == "ok"
+        assert len(result["slots"]) == 5
+        assert result["posts_per_day"] == 3
+        assert all(
+            s["predicted_category"] in ("memes", "merch") for s in result["slots"]
+        )
 
     def test_returns_paused_when_paused(self):
         """Preview returns paused status when posting is paused."""
-        with patch.object(DashboardService, "__init__", lambda self: None):
-            service = DashboardService()
-            service.settings_service = MagicMock()
+        service = self._setup_service()
+        mock_settings = Mock(is_paused=True)
+        service.settings_service.get_settings.return_value = mock_settings
 
-            mock_settings = Mock(is_paused=True)
-            service.settings_service.get_settings.return_value = mock_settings
+        result = service.get_schedule_preview(telegram_chat_id=123)
 
-            result = service.get_schedule_preview(telegram_chat_id=123)
+        assert result["status"] == "paused"
+        assert result["slots"] == []
 
-            assert result["status"] == "paused"
-            assert result["slots"] == []
+    def test_uses_last_post_sent_at(self):
+        """Slots start from last_post_sent_at + interval when set."""
+        from datetime import datetime, timezone
+        from decimal import Decimal
+
+        service = self._setup_service()
+        last_post = datetime(2026, 4, 15, 15, 0, 0, tzinfo=timezone.utc)
+        mock_settings = Mock(
+            id="t1",
+            is_paused=False,
+            posts_per_day=3,
+            posting_hours_start=14,
+            posting_hours_end=2,
+            last_post_sent_at=last_post,
+        )
+        service.settings_service.get_settings.return_value = mock_settings
+        service.category_mix_repo.get_current_mix_as_dict.return_value = {
+            "memes": Decimal("1.0"),
+        }
+
+        result = service.get_schedule_preview(telegram_chat_id=123, slots=2)
+
+        assert result["status"] == "ok"
+        assert len(result["slots"]) == 2
+        # First slot should be after last_post + interval
+        first_slot = result["slots"][0]["slot_time"]
+        assert first_slot > last_post.isoformat()
 
 
 @pytest.mark.unit
@@ -663,7 +693,10 @@ class TestGetContentReuseInsights:
             "posted_once": 50,
             "posted_multiple": 20,
         }
-        service.media_repo.count_by_category.return_value = {"memes": 60, "merch": 40}
+        service.media_repo.count_dead_content_by_category.return_value = [
+            {"category": "memes", "dead_count": 20},
+            {"category": "merch", "dead_count": 10},
+        ]
 
         result = service.get_content_reuse_insights(telegram_chat_id=123)
 
@@ -672,6 +705,23 @@ class TestGetContentReuseInsights:
         assert result["posted_once"] == 50
         assert result["posted_multiple"] == 20
         assert result["reuse_rate"] == 0.2
+        assert len(result["never_posted_by_category"]) == 2
+
+    def test_handles_empty_pool(self):
+        """Returns zeros when no active media."""
+        service = self._setup_service()
+        service.media_repo.count_by_posting_status.return_value = {
+            "never_posted": 0,
+            "posted_once": 0,
+            "posted_multiple": 0,
+        }
+        service.media_repo.count_dead_content_by_category.return_value = []
+
+        result = service.get_content_reuse_insights(telegram_chat_id=123)
+
+        assert result["total_active"] == 0
+        assert result["reuse_rate"] == 0
+        assert result["never_posted_by_category"] == []
 
 
 @pytest.mark.unit

@@ -138,11 +138,17 @@ async def onboarding_content_reuse(
 @router.get("/analytics/service-health")
 async def onboarding_service_health(
     init_data: str,
-    chat_id: int,
     hours: int = Query(default=24, ge=1, le=168),
 ):
-    """Return service execution telemetry from service_runs table."""
-    _validate_request(init_data, chat_id)
+    """Return service execution telemetry from service_runs table.
+
+    Global view — service_runs are system-level, not per-tenant.
+    Requires valid init_data for authentication but does not scope by chat.
+    """
+    # Auth-only validation (no chat_id scoping — service runs are global)
+    from src.utils.webapp_auth import validate_init_data
+
+    validate_init_data(init_data)
 
     with DashboardService() as service:
         return service.get_service_health_stats(hours=hours)
