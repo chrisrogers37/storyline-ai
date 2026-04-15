@@ -611,3 +611,36 @@ class TestClearStaleCloudInfo:
         media_repo.clear_stale_cloud_info(retention_hours=24)
 
         mock_db.query.assert_called_with(MediaItem)
+
+
+@pytest.mark.unit
+class TestCountDeadContentByCategory:
+    """Tests for count_dead_content_by_category."""
+
+    def test_returns_per_category_dead_count(self, media_repo, mock_db):
+        """Returns dead content grouped by category."""
+        q = mock_db.query.return_value
+        q.with_entities.return_value = q
+        q.filter.return_value = q
+        q.group_by.return_value = q
+        q.order_by.return_value = q
+        q.all.return_value = [("memes", 15), ("merch", 5)]
+
+        result = media_repo.count_dead_content_by_category(min_age_days=30)
+
+        assert len(result) == 2
+        assert result[0] == {"category": "memes", "dead_count": 15}
+        assert result[1] == {"category": "merch", "dead_count": 5}
+
+    def test_returns_empty_when_no_dead_content(self, media_repo, mock_db):
+        """Returns empty list when all content has been posted."""
+        q = mock_db.query.return_value
+        q.with_entities.return_value = q
+        q.filter.return_value = q
+        q.group_by.return_value = q
+        q.order_by.return_value = q
+        q.all.return_value = []
+
+        result = media_repo.count_dead_content_by_category()
+
+        assert result == []

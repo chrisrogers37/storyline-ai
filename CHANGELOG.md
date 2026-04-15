@@ -19,6 +19,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Service telemetry** — `GET /api/onboarding/analytics/service-health` aggregates service_runs table into per-service call counts, error rates, and avg execution duration over a configurable time window.
 - **`get_health_stats()`** in ServiceRunRepository — groups completed/failed runs by service name with aggregation.
+### Added — Category Mix Drift Alerts (#176)
+
+- **Category drift analytics** — `GET /api/onboarding/analytics/category-drift` compares configured posting ratios against actual ratios over a time window. Flags categories as ok/warning/critical based on drift thresholds (10%/25%).
+- **`get_category_mix_drift()`** in DashboardService — combines `category_post_case_mix` targets with `posting_history` actuals to compute per-category drift.
+
+### Added — Dead Content Report (#177)
+
+- **Dead content analytics** — `GET /api/onboarding/analytics/dead-content` surfaces active media items that have never been posted and are older than a configurable age threshold (default 30 days). Returns per-category breakdown and dead percentage of total pool.
+- **`count_dead_content_by_category()`** in MediaRepository — filters `is_active=True, times_posted=0, created_at <= cutoff` grouped by category.
+### Added — Approval Latency Dashboard (#174) & Per-User Approval Rates (#175)
+
+- **Approval latency analytics** — `GET /api/onboarding/analytics/approval-latency` computes time from queue creation to user decision. Returns overall avg/min/max (in minutes) plus breakdowns by hour-of-day and category.
+- **Team performance analytics** — `GET /api/onboarding/analytics/team-performance` shows per-user breakdown: posted/skipped/rejected counts, approval rate, and average response latency in minutes.
+- **`get_approval_latency()`** in HistoryRepository — uses `EXTRACT(EPOCH FROM posted_at - queue_created_at)` with per-hour and per-category groupings.
+- **`get_user_approval_stats()`** in HistoryRepository — joins `posting_history` with `users` table, groups by user with status pivot and latency.
+
+### Added — Startup Migration Version Check (#118)
+
+- **Schema version validation on startup** — Worker (`main.py`) now queries the `schema_version` table at boot and compares against migration files in `scripts/migrations/`. Logs a clear warning if the database is behind (with the exact migration range to apply) or ahead of the deployed code.
+- **Non-blocking** — Mismatches produce warnings, not fatal errors, so the worker can still start while the operator applies pending migrations.
 
 ### Added — Schedule Optimization Recommendations (#158)
 

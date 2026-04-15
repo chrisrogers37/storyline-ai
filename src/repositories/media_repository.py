@@ -501,6 +501,33 @@ class MediaRepository(BaseRepository):
             "posted_multiple": buckets.get(2, 0),
         }
 
+    def count_dead_content_by_category(
+        self, min_age_days: int = 30, chat_settings_id: Optional[str] = None
+    ) -> list:
+        """Count active items that have never been posted, grouped by category.
+
+        "Dead content" = is_active=True, times_posted=0, and older than min_age_days.
+        Returns list of {"category": str, "dead_count": int}.
+        """
+        from datetime import timezone
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=min_age_days)
+        coalesced = func.coalesce(MediaItem.category, "uncategorized")
+        rows = (
+            self._tenant_query(MediaItem, chat_settings_id)
+            .with_entities(coalesced.label("category"), func.count(MediaItem.id))
+            .filter(
+                MediaItem.is_active.is_(True),
+                MediaItem.times_posted == 0,
+                MediaItem.created_at <= cutoff,
+            )
+            .group_by(coalesced)
+            .order_by(coalesced)
+            .all()
+        )
+        self.end_read_transaction()
+        return [{"category": cat, "dead_count": count} for cat, count in rows]
+
     def count_by_category(self, chat_settings_id: Optional[str] = None) -> dict:
         """Count active media grouped by category."""
         rows = (
