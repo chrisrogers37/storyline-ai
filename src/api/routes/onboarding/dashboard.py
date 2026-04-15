@@ -152,6 +152,8 @@ async def onboarding_service_health(
 
     with DashboardService() as service:
         return service.get_service_health_stats(hours=hours)
+
+
 @router.get("/analytics/category-drift")
 async def onboarding_category_drift(
     init_data: str,
@@ -176,6 +178,8 @@ async def onboarding_dead_content(
 
     with DashboardService() as service:
         return service.get_dead_content_report(chat_id, min_age_days=min_age_days)
+
+
 @router.get("/analytics/approval-latency")
 async def onboarding_approval_latency(
     init_data: str,
