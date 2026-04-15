@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Web Dashboard Phase 1: Auth, BFF, Dashboard Shell
+
+- **Telegram Login Widget auth** — users authenticate via Telegram Login Widget on `/login`. Backend verifies the widget signature, issues a JWT stored in an httpOnly cookie. Sessions last 24 hours.
+- **Protected `/dashboard` route group** — Next.js middleware redirects unauthenticated users to `/login`. Dashboard layout provides sidebar navigation and user header.
+- **BFF proxy layer** — `/api/dashboard/[...path]` catch-all route proxies requests to the FastAPI backend, injecting signed URL tokens for auth. No backend changes required.
+- **Dashboard overview page** — wires up existing analytics endpoints (posting stats, category performance, recent activity) with server-side data fetching via `Promise.all`.
+- **Route group restructure** — landing/setup pages moved into `(marketing)` route group; dashboard pages in `(dashboard)` group. Each has its own layout. Root layout is now shared chrome only.
+- **Edge-safe session module** — JWT/session logic split into `session.ts` (Edge Runtime compatible for middleware) and `auth.ts` (Node crypto for Telegram verification + URL token generation).
+
 ### Added — Post Preview Window (#178)
 
 - **Schedule preview** — `GET /api/onboarding/analytics/schedule-preview` shows upcoming N slots with predicted times and categories. Uses the same interval and category weighting logic as the scheduler. Informational only — does not pre-select media.
