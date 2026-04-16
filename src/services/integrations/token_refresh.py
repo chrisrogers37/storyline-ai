@@ -455,7 +455,9 @@ class TokenRefreshService(BaseService):
         Unlike check_token_health() which queries by instagram_account_id,
         this queries by chat_settings_id for tenant-scoped tokens.
 
-        Returns same dict shape as check_token_health().
+        For services with refresh tokens (e.g., Google Drive), an expired
+        access token is normal — the OAuth library auto-refreshes it. Only
+        report unhealthy when the refresh token is missing or expired.
         """
         db_token = self.token_repo.get_token_for_chat(
             service, "oauth_access", chat_settings_id
@@ -469,9 +471,17 @@ class TokenRefreshService(BaseService):
                 "expires_at": None,
                 "expires_in_hours": None,
                 "needs_refresh": False,
+                "auto_refreshable": False,
+                "refresh_token_exists": False,
                 "last_refreshed": None,
                 "error": f"No {service} token found for this chat",
             }
+
+        refresh_token = self.token_repo.get_token_for_chat(
+            service, "oauth_refresh", chat_settings_id
+        )
+        refresh_token_exists = refresh_token is not None
+        auto_refreshable = refresh_token_exists and not refresh_token.is_expired
 
         expires_in_hours = db_token.hours_until_expiry()
         needs_refresh = (
@@ -479,15 +489,25 @@ class TokenRefreshService(BaseService):
             and expires_in_hours <= self.REFRESH_BUFFER_HOURS
         )
 
+        access_expired = db_token.is_expired
+        valid = not access_expired or auto_refreshable
+        error = (
+            "Token expired and no valid refresh token"
+            if access_expired and not auto_refreshable
+            else None
+        )
+
         return {
-            "valid": not db_token.is_expired,
+            "valid": valid,
             "exists": True,
             "source": "database",
             "expires_at": db_token.expires_at,
             "expires_in_hours": expires_in_hours,
             "needs_refresh": needs_refresh,
+            "auto_refreshable": auto_refreshable,
+            "refresh_token_exists": refresh_token_exists,
             "last_refreshed": db_token.last_refreshed_at,
-            "error": "Token expired" if db_token.is_expired else None,
+            "error": error,
         }
 
     def get_tokens_needing_refresh(self) -> list:

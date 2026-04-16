@@ -599,6 +599,7 @@ class TestHealthCheckService:
             "exists": True,
             "expires_in_hours": 30 * 24,  # 30 days
             "needs_refresh": False,
+            "auto_refreshable": False,
             "error": None,
         }
 
@@ -607,14 +608,32 @@ class TestHealthCheckService:
         assert result["healthy"] is True
         assert result["expires_in_days"] == 30.0
 
-    def test_gdrive_token_warning(self, token_service):
-        """Returns unhealthy when token expires within warning threshold."""
+    def test_gdrive_token_healthy_auto_refreshable(self, token_service):
+        """Access token expired but refresh token exists — healthy."""
+        chat = self._gdrive_chat()
+        token_service._token_service.check_token_health_for_chat.return_value = {
+            "valid": True,
+            "exists": True,
+            "expires_in_hours": 0,
+            "needs_refresh": True,
+            "auto_refreshable": True,
+            "error": None,
+        }
+
+        result = token_service.check_gdrive_token_for_chat(-123, chat_settings=chat)
+
+        assert result["healthy"] is True
+        assert "auto-refresh" in result["message"]
+
+    def test_gdrive_token_warning_no_refresh(self, token_service):
+        """Returns unhealthy when token expires soon and no refresh token."""
         chat = self._gdrive_chat()
         token_service._token_service.check_token_health_for_chat.return_value = {
             "valid": True,
             "exists": True,
             "expires_in_hours": 3 * 24,  # 3 days
             "needs_refresh": True,
+            "auto_refreshable": False,
             "error": None,
         }
 
@@ -624,15 +643,32 @@ class TestHealthCheckService:
         assert result["expires_in_days"] == 3.0
         assert "3 days" in result["message"]
 
-    def test_gdrive_token_expired(self, token_service):
-        """Returns unhealthy when token is already expired."""
+    def test_gdrive_token_warning_with_refresh(self, token_service):
+        """Access token expiring soon but refresh token exists — healthy."""
+        chat = self._gdrive_chat()
+        token_service._token_service.check_token_health_for_chat.return_value = {
+            "valid": True,
+            "exists": True,
+            "expires_in_hours": 3 * 24,
+            "needs_refresh": True,
+            "auto_refreshable": True,
+            "error": None,
+        }
+
+        result = token_service.check_gdrive_token_for_chat(-123, chat_settings=chat)
+
+        assert result["healthy"] is True
+
+    def test_gdrive_token_expired_no_refresh(self, token_service):
+        """Expired access token with no refresh token — unhealthy."""
         chat = self._gdrive_chat()
         token_service._token_service.check_token_health_for_chat.return_value = {
             "valid": False,
             "exists": True,
             "expires_in_hours": 0,
             "needs_refresh": False,
-            "error": "Token expired",
+            "auto_refreshable": False,
+            "error": "Token expired and no valid refresh token",
         }
 
         result = token_service.check_gdrive_token_for_chat(-123, chat_settings=chat)
@@ -648,6 +684,7 @@ class TestHealthCheckService:
             "exists": False,
             "expires_in_hours": None,
             "needs_refresh": False,
+            "auto_refreshable": False,
             "error": "No google_drive token found for this chat",
         }
 
@@ -699,7 +736,7 @@ class TestHealthCheckService:
 
         assert result is not None
         assert "expired" in result
-        assert "paused" in result
+        assert "reconnect required" in result
 
     def test_format_token_alert_healthy(self, token_service):
         """Format alert returns None for healthy token."""

@@ -246,6 +246,85 @@ class TestTokenRefreshService:
         assert result["exists"] is False
         assert "No token found" in result["error"]
 
+    # ==================== check_token_health_for_chat Tests ====================
+
+    def test_check_token_health_for_chat_access_expired_refresh_valid(
+        self, token_service, mock_db_token
+    ):
+        """Access token expired + valid refresh token = healthy (auto-refreshable)."""
+        mock_db_token.is_expired = True
+        mock_db_token.expires_at = datetime.utcnow() - timedelta(hours=1)
+
+        refresh_token = Mock()
+        refresh_token.expires_at = None  # Refresh tokens don't expire
+        refresh_token.is_expired = False
+
+        token_service.token_repo.get_token_for_chat.side_effect = (
+            lambda svc, token_type, cid: (
+                mock_db_token if token_type == "oauth_access" else refresh_token
+            )
+        )
+
+        result = token_service.check_token_health_for_chat("google_drive", "chat-1")
+
+        assert result["valid"] is True
+        assert result["auto_refreshable"] is True
+        assert result["refresh_token_exists"] is True
+        assert result["error"] is None
+
+    def test_check_token_health_for_chat_access_expired_no_refresh(
+        self, token_service, mock_db_token
+    ):
+        """Access token expired + no refresh token = unhealthy."""
+        mock_db_token.is_expired = True
+        mock_db_token.expires_at = datetime.utcnow() - timedelta(hours=1)
+
+        token_service.token_repo.get_token_for_chat.side_effect = (
+            lambda svc, token_type, cid: (
+                mock_db_token if token_type == "oauth_access" else None
+            )
+        )
+
+        result = token_service.check_token_health_for_chat("google_drive", "chat-1")
+
+        assert result["valid"] is False
+        assert result["auto_refreshable"] is False
+        assert result["refresh_token_exists"] is False
+        assert "no valid refresh token" in result["error"]
+
+    def test_check_token_health_for_chat_both_expired(
+        self, token_service, mock_db_token
+    ):
+        """Both access and refresh tokens expired = unhealthy."""
+        mock_db_token.is_expired = True
+        mock_db_token.expires_at = datetime.utcnow() - timedelta(hours=1)
+
+        refresh_token = Mock()
+        refresh_token.expires_at = datetime.utcnow() - timedelta(days=1)
+        refresh_token.is_expired = True
+
+        token_service.token_repo.get_token_for_chat.side_effect = (
+            lambda svc, token_type, cid: (
+                mock_db_token if token_type == "oauth_access" else refresh_token
+            )
+        )
+
+        result = token_service.check_token_health_for_chat("google_drive", "chat-1")
+
+        assert result["valid"] is False
+        assert result["auto_refreshable"] is False
+        assert result["refresh_token_exists"] is True
+
+    def test_check_token_health_for_chat_no_tokens(self, token_service):
+        """No tokens at all = unhealthy."""
+        token_service.token_repo.get_token_for_chat.return_value = None
+
+        result = token_service.check_token_health_for_chat("google_drive", "chat-1")
+
+        assert result["valid"] is False
+        assert result["exists"] is False
+        assert result["auto_refreshable"] is False
+
     # ==================== refresh_instagram_token Tests ====================
 
     @pytest.mark.asyncio
