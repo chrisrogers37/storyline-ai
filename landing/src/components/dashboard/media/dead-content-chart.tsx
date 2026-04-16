@@ -57,7 +57,7 @@ export function DeadContentChart({ data }: { data: CategoryDead[] }) {
             <Tooltip />
             <Bar
               dataKey="dead_count"
-              fill="hsl(0, 84%, 60%)"
+              fill="var(--destructive)"
               name="Never Posted"
               radius={[0, 4, 4, 0]}
             />

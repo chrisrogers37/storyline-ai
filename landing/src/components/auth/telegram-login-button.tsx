@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 
 interface TelegramUser {
   id: number;
@@ -16,6 +17,7 @@ interface TelegramUser {
 export function TelegramLoginButton() {
   const containerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const [loaded, setLoaded] = useState(false);
 
   const handleAuth = useCallback(
     async (user: TelegramUser) => {
@@ -38,6 +40,7 @@ export function TelegramLoginButton() {
     const botName = process.env.NEXT_PUBLIC_TELEGRAM_BOT_NAME;
     if (!botName || !containerRef.current) return;
 
+    setLoaded(false);
     // Expose callback globally for the Telegram widget
     (window as unknown as Record<string, unknown>).__telegram_login_callback = handleAuth;
 
@@ -49,6 +52,7 @@ export function TelegramLoginButton() {
     script.setAttribute("data-radius", "8");
     script.setAttribute("data-onauth", "__telegram_login_callback(user)");
     script.setAttribute("data-request-access", "write");
+    script.onload = () => setLoaded(true);
 
     const container = containerRef.current;
     container.appendChild(script);
@@ -59,5 +63,15 @@ export function TelegramLoginButton() {
     };
   }, [handleAuth]);
 
-  return <div ref={containerRef} className="flex justify-center" />;
+  return (
+    <div className="relative min-h-[56px] flex items-center justify-center">
+      {!loaded && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading Telegram login...
+        </div>
+      )}
+      <div ref={containerRef} className={loaded ? "flex justify-center" : "absolute inset-0 flex justify-center"} />
+    </div>
+  );
 }
