@@ -8,7 +8,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+
+const UNCATEGORIZED = "__uncategorized__";
 
 const ACCEPTED_TYPES = [
   "image/jpeg",
@@ -36,7 +45,7 @@ export function MediaUpload({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const [selectedCategory, setSelectedCategory] = useState<string>(UNCATEGORIZED);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const uploadFile = useCallback(
@@ -57,7 +66,7 @@ export function MediaUpload({
       try {
         const formData = new FormData();
         formData.append("file", file);
-        if (selectedCategory) {
+        if (selectedCategory && selectedCategory !== UNCATEGORIZED) {
           formData.append("category", selectedCategory);
         }
 
@@ -111,18 +120,19 @@ export function MediaUpload({
         {/* Category selector */}
         <div className="flex items-center gap-2">
           <label className="text-sm text-muted-foreground">Category:</label>
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="rounded-md border bg-background px-2 py-1 text-sm"
-          >
-            <option value="">Uncategorized</option>
-            {categories.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
-          </select>
+          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+            <SelectTrigger className="w-40">
+              <SelectValue placeholder="Uncategorized" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={UNCATEGORIZED}>Uncategorized</SelectItem>
+              {categories.map((cat) => (
+                <SelectItem key={cat} value={cat}>
+                  {cat}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Drop zone */}
@@ -164,10 +174,10 @@ export function MediaUpload({
         </div>
 
         {error && (
-          <p className="text-sm text-red-500">{error}</p>
+          <p className="text-sm text-destructive">{error}</p>
         )}
         {success && (
-          <p className="text-sm text-green-600">{success}</p>
+          <p className="text-sm text-success">{success}</p>
         )}
       </CardContent>
     </Card>

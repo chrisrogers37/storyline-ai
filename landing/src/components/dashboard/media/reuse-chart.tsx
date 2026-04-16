@@ -26,9 +26,9 @@ interface ReuseData {
 }
 
 const COLORS = [
-  "hsl(0, 84%, 60%)",    // never posted — red
-  "hsl(48, 96%, 53%)",   // posted once — yellow
-  "hsl(142, 76%, 36%)",  // posted multiple — green
+  "var(--destructive)",  // never posted — red
+  "var(--warning)",      // posted once — yellow
+  "var(--success)",      // posted multiple — green
 ];
 
 export function ReuseChart({ data }: { data: ReuseData }) {

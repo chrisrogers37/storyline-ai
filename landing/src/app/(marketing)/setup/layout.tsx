@@ -18,9 +18,9 @@ export default function SetupLayout({
         Back to home
       </Link>
 
-      {/* Mobile nav */}
-      <div className="mt-6 overflow-x-auto md:hidden">
-        <SetupNav className="flex-row gap-1" />
+      {/* Mobile nav — scrollable horizontal tabs */}
+      <div className="mt-6 -mx-4 px-4 overflow-x-auto md:hidden">
+        <SetupNav className="flex-row gap-1 w-max" />
       </div>
 
       <div className="mt-8 flex gap-12">

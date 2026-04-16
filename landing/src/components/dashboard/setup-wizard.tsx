@@ -36,6 +36,7 @@ interface SetupState {
   posts_per_day: number;
   posting_hours_start: number;
   posting_hours_end: number;
+  schedule_configured?: boolean;
   onboarding_completed: boolean;
 }
 
@@ -142,7 +143,13 @@ export function SetupWizard({ initialState }: SetupWizardProps) {
         posting_hours_start: Number(hoursStart),
         posting_hours_end: Number(hoursEnd),
       });
-      await refreshState();
+      setState((prev) => ({
+        ...prev,
+        posts_per_day: postsPerDay,
+        posting_hours_start: Number(hoursStart),
+        posting_hours_end: Number(hoursEnd),
+        schedule_configured: true,
+      }));
       setStep(5);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Operation failed");
@@ -182,7 +189,7 @@ export function SetupWizard({ initialState }: SetupWizardProps) {
       case 1: return state.gdrive_connected;
       case 2: return state.media_folder_configured;
       case 3: return state.media_indexed;
-      case 4: return state.posting_hours_end > 0;
+      case 4: return state.schedule_configured === true;
       case 5: return state.onboarding_completed;
       default: return false;
     }
@@ -238,7 +245,6 @@ export function SetupWizard({ initialState }: SetupWizardProps) {
 
           {step === 0 && (
             <OAuthStep
-              provider="instagram"
               label="Instagram"
               connected={state.instagram_connected}
               username={state.instagram_username}
@@ -250,7 +256,6 @@ export function SetupWizard({ initialState }: SetupWizardProps) {
 
           {step === 1 && (
             <OAuthStep
-              provider="google-drive"
               label="Google Drive"
               connected={state.gdrive_connected}
               username={state.gdrive_email}

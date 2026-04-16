@@ -22,11 +22,11 @@ const navItems = [
   { href: "/dashboard/analytics", label: "Analytics", icon: BarChart3 },
 ];
 
-export function Sidebar() {
+export function Sidebar({ mobile }: { mobile?: boolean }) {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden w-56 shrink-0 border-r bg-card md:block">
+    <aside className={mobile ? "w-56 bg-card" : "hidden w-56 shrink-0 border-r bg-card md:block"}>
       <div className="flex h-14 items-center border-b px-4">
         <Link href="/dashboard" className="text-lg font-semibold tracking-tight">
           {siteConfig.name}

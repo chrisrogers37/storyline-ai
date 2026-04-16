@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — Design Issues (#214–#219)
+
+- **Mobile dashboard navigation** (#214) — Added hamburger menu (Sheet drawer) to dashboard header so sidebar nav is accessible on mobile viewports.
+- **Setup guide mobile overflow** (#215) — Fixed horizontal scroll on `/setup/*` pages at 375px by constraining the tab nav scroll container.
+- **Setup wizard false-complete** (#216) — "Set Schedule" step no longer shows a green checkmark for new users; was triggered by default `posting_hours_end: 22` always passing `> 0`. Now tracks explicit `schedule_configured` flag.
+- **Telegram login loading state** (#217) — Added spinner and placeholder text to Telegram widget container on `/login` (was a blank white box while script loaded).
+- **Styled category select** (#218) — Replaced native `<select>` with shadcn `Select` component in media upload for visual consistency.
+- **Theme token colors** (#219) — Added `--warning` and `--success` CSS custom properties (light + dark). Replaced hardcoded `text-red-500`/`text-yellow-500`/`text-green-500` and HSL chart fills with design tokens across content reuse page, reuse chart, dead-content chart, and media upload.
+
 ### Changed — Dependency Updates
 
 - **Python**: pydantic 2.12.5→2.13.0, python-telegram-bot 22.6→22.7, click 8.3.1→8.3.2, rich 14.3.2→15.0.0, fastapi ≥0.109→≥0.135, uvicorn ≥0.27→≥0.44, pytest 9.0.2→9.0.3, pytest-cov 7.0.0→7.1.0

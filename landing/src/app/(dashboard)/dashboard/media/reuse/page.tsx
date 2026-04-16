@@ -57,7 +57,7 @@ export default async function ContentReusePage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-500">{neverPosted}</div>
+            <div className="text-2xl font-bold text-destructive">{neverPosted}</div>
             <p className="text-xs text-muted-foreground mt-1">
               {totalActive > 0
                 ? `${Math.round((neverPosted / totalActive) * 100)}% of library`
@@ -73,7 +73,7 @@ export default async function ContentReusePage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-500">
+            <div className="text-2xl font-bold text-warning">
               {postedOnce}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
@@ -89,7 +89,7 @@ export default async function ContentReusePage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-500">
+            <div className="text-2xl font-bold text-success">
               {postedMultiple}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
