@@ -584,10 +584,12 @@ class HealthCheckService(BaseService):
                 "expires_in_days": None,
             }
 
+        auto_refreshable = token_health.get("auto_refreshable", False)
+
         if not token_health["valid"]:
             return {
                 "healthy": False,
-                "message": "Google Drive token expired",
+                "message": "Google Drive token expired — reconnect required",
                 "expires_in_days": 0,
             }
 
@@ -596,29 +598,38 @@ class HealthCheckService(BaseService):
             round(expires_in_hours / 24, 1) if expires_in_hours is not None else None
         )
 
-        if expires_in_days is not None and expires_in_days <= self.TOKEN_CRITICAL_DAYS:
-            return {
-                "healthy": False,
-                "message": f"Google Drive token expires in {expires_in_days:.0f} day(s)",
-                "expires_in_days": expires_in_days,
-                "needs_refresh": token_health.get("needs_refresh", False),
-            }
+        # Access token expiry warnings don't apply when auto-refresh is available
+        if not auto_refreshable:
+            if (
+                expires_in_days is not None
+                and expires_in_days <= self.TOKEN_CRITICAL_DAYS
+            ):
+                return {
+                    "healthy": False,
+                    "message": f"Google Drive token expires in {expires_in_days:.0f} day(s)",
+                    "expires_in_days": expires_in_days,
+                    "needs_refresh": token_health.get("needs_refresh", False),
+                }
 
-        if expires_in_days is not None and expires_in_days <= self.TOKEN_WARNING_DAYS:
-            return {
-                "healthy": False,
-                "message": f"Google Drive token expires in {expires_in_days:.0f} days",
-                "expires_in_days": expires_in_days,
-                "needs_refresh": token_health.get("needs_refresh", False),
-            }
+            if (
+                expires_in_days is not None
+                and expires_in_days <= self.TOKEN_WARNING_DAYS
+            ):
+                return {
+                    "healthy": False,
+                    "message": f"Google Drive token expires in {expires_in_days:.0f} days",
+                    "expires_in_days": expires_in_days,
+                    "needs_refresh": token_health.get("needs_refresh", False),
+                }
 
         return {
             "healthy": True,
             "message": (
                 "Google Drive token OK"
+                + (" (auto-refresh active)" if auto_refreshable else "")
                 + (
                     f" ({expires_in_days:.0f} days remaining)"
-                    if expires_in_days
+                    if expires_in_days and not auto_refreshable
                     else ""
                 )
             ),
@@ -626,7 +637,7 @@ class HealthCheckService(BaseService):
         }
 
     def format_token_alert(self, token_info: dict, telegram_chat_id: int) -> str | None:
-        """Format a Telegram alert for expiring Google Drive token.
+        """Format a Telegram alert for expiring/expired Google Drive token.
 
         Returns None if no alert needed (healthy token).
         """
@@ -638,7 +649,7 @@ class HealthCheckService(BaseService):
         if expires_in_days is not None and expires_in_days > 0:
             text = f"\u26a0\ufe0f Google Drive token expiring in {expires_in_days:.0f} day(s)."
         else:
-            text = "\u26a0\ufe0f Google Drive token has expired."
+            text = "\u26a0\ufe0f Google Drive token has expired — reconnect required."
 
         reconnect_url = None
         if settings.OAUTH_REDIRECT_BASE_URL:
