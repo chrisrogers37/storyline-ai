@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
+const UNCATEGORIZED = "__uncategorized__";
+
 const ACCEPTED_TYPES = [
   "image/jpeg",
   "image/png",
@@ -43,7 +45,7 @@ export function MediaUpload({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const [selectedCategory, setSelectedCategory] = useState<string>(UNCATEGORIZED);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const uploadFile = useCallback(
@@ -64,7 +66,7 @@ export function MediaUpload({
       try {
         const formData = new FormData();
         formData.append("file", file);
-        if (selectedCategory) {
+        if (selectedCategory && selectedCategory !== UNCATEGORIZED) {
           formData.append("category", selectedCategory);
         }
 
@@ -123,7 +125,7 @@ export function MediaUpload({
               <SelectValue placeholder="Uncategorized" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Uncategorized</SelectItem>
+              <SelectItem value={UNCATEGORIZED}>Uncategorized</SelectItem>
               {categories.map((cat) => (
                 <SelectItem key={cat} value={cat}>
                   {cat}
