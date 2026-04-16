@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Sign-in link in landing page footer** — Subtle "Sign in" link for existing users to access `/login` without a prominent CTA.
+
 ### Fixed — Design Issues (#214–#219)
 
 - **Mobile dashboard navigation** (#214) — Added hamburger menu (Sheet drawer) to dashboard header so sidebar nav is accessible on mobile viewports.
