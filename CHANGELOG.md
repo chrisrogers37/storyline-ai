@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Vercel deployment guide** — Documented all required env vars for `landing/` Vercel deployment in `documentation/guides/landing-vercel-deployment.md`.
+
+### Fixed
+
+- **Telegram login widget missing env var fallback** — `/login` now shows a helpful error message when `NEXT_PUBLIC_TELEGRAM_BOT_NAME` is not configured, instead of an infinite loading spinner.
+
 ### Fixed — Design Issues (#214–#219)
 
 - **Mobile dashboard navigation** (#214) — Added hamburger menu (Sheet drawer) to dashboard header so sidebar nav is accessible on mobile viewports.

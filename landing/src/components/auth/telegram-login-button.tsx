@@ -18,6 +18,7 @@ export function TelegramLoginButton() {
   const containerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const [loaded, setLoaded] = useState(false);
+  const botName = process.env.NEXT_PUBLIC_TELEGRAM_BOT_NAME;
 
   const handleAuth = useCallback(
     async (user: TelegramUser) => {
@@ -37,7 +38,6 @@ export function TelegramLoginButton() {
   );
 
   useEffect(() => {
-    const botName = process.env.NEXT_PUBLIC_TELEGRAM_BOT_NAME;
     if (!botName || !containerRef.current) return;
 
     setLoaded(false);
@@ -61,7 +61,19 @@ export function TelegramLoginButton() {
       delete (window as unknown as Record<string, unknown>).__telegram_login_callback;
       container.innerHTML = "";
     };
-  }, [handleAuth]);
+  }, [botName, handleAuth]);
+
+  if (!botName) {
+    return (
+      <div className="min-h-[56px] flex items-center justify-center">
+        <p className="text-sm text-muted-foreground">
+          Telegram login is not configured. Set{" "}
+          <code className="rounded bg-muted px-1 py-0.5 text-xs">NEXT_PUBLIC_TELEGRAM_BOT_NAME</code>{" "}
+          to enable sign-in.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="relative min-h-[56px] flex items-center justify-center">
