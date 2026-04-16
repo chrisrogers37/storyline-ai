@@ -71,12 +71,20 @@ export function SetupWizard({ initialState }: SetupWizardProps) {
   const [postsPerDay, setPostsPerDay] = useState<number>(state.posts_per_day);
   const [hoursStart, setHoursStart] = useState(String(state.posting_hours_start));
   const [hoursEnd, setHoursEnd] = useState(String(state.posting_hours_end));
+  const [scheduleSaved, setScheduleSaved] = useState(
+    initialState.schedule_configured === true && initialState.onboarding_completed
+  );
 
   async function refreshState() {
     setError(null);
     try {
       const data = await postApi("init");
-      if (data?.setup_state) setState(data.setup_state);
+      if (data?.setup_state) {
+        setState(data.setup_state);
+        if (data.setup_state.schedule_configured && data.setup_state.onboarding_completed) {
+          setScheduleSaved(true);
+        }
+      }
       return data?.setup_state as SetupState | undefined;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Operation failed");
@@ -150,6 +158,7 @@ export function SetupWizard({ initialState }: SetupWizardProps) {
         posting_hours_end: Number(hoursEnd),
         schedule_configured: true,
       }));
+      setScheduleSaved(true);
       setStep(5);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Operation failed");
@@ -177,7 +186,7 @@ export function SetupWizard({ initialState }: SetupWizardProps) {
       case 1: return state.gdrive_connected;
       case 2: return state.media_folder_configured;
       case 3: return state.media_indexed;
-      case 4: return true;
+      case 4: return scheduleSaved;
       case 5: return true;
       default: return false;
     }
@@ -189,7 +198,7 @@ export function SetupWizard({ initialState }: SetupWizardProps) {
       case 1: return state.gdrive_connected;
       case 2: return state.media_folder_configured;
       case 3: return state.media_indexed;
-      case 4: return state.schedule_configured === true;
+      case 4: return scheduleSaved;
       case 5: return state.onboarding_completed;
       default: return false;
     }
