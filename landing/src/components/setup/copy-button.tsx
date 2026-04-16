@@ -21,11 +21,11 @@ export function CopyButton({ value, className }: CopyButtonProps) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-2 rounded-md bg-muted px-3 py-1.5 font-mono text-sm",
+        "inline-flex max-w-full items-center gap-2 rounded-md bg-muted px-3 py-1.5 font-mono text-sm",
         className
       )}
     >
-      <span className="truncate">{value}</span>
+      <span className="min-w-0 truncate">{value}</span>
       <button
         onClick={handleCopy}
         className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
