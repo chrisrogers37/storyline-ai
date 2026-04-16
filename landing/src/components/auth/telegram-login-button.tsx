@@ -116,7 +116,7 @@ export function TelegramLoginButton() {
           </a>
         </div>
       )}
-      <div ref={containerRef} className={status === "ready" ? "flex justify-center" : "absolute inset-0 flex justify-center opacity-0"} />
+      <div ref={containerRef} className={status === "ready" ? "flex justify-center" : "pointer-events-none absolute inset-0 flex justify-center opacity-0"} />
     </div>
   );
 }
