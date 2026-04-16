@@ -9,64 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Analytics and conversion tracking** (#279) — Integrated Plausible Analytics for privacy-friendly page views, referrer tracking, and custom events. Tracks waitlist signups, form errors, FAQ expansions, and comparison table views. Captures UTM parameters (source, medium, campaign) with waitlist submissions for attribution. Controlled via `NEXT_PUBLIC_PLAUSIBLE_DOMAIN` env var — omit to disable.
-
-- **Post-signup experience** (#260) — Replaced dead-end "We'll be in touch" confirmation with enriched post-signup block: sets timeline expectations (within a week), gives a micro-task (prepare Google Drive folder), and adds Telegram community link to move signups from "registered" to "engaged."
-- **Social proof stats bar and trust badges** (#258) — Added stats bar (stories posted, content managed, active creators) between Hero and How It Works sections. Added trust badges below hero CTA with lock/Instagram/key icons addressing top 3 signup objections (content stays in Drive, official API, no password required).
-- **Competitive positioning section** (#259) — Added "Why not just use Buffer?" comparison table between Features and Pricing, contrasting Storyline vs Buffer/Later across 5 dimensions. Added positioning line to hero: "The Instagram Story tool that lives in Telegram — not another dashboard."
-
-### Fixed
-
-- **Google Drive OAuth "valid for 0 hours" message** — Removed misleading token expiry detail from Telegram notification since tokens auto-refresh. Cleaned up unused `expires_in_hours` from OAuth return dict.
-
-### Changed
-
-- **Update outdated dependencies** (#274) — Bumped 12 direct dependencies to latest: pydantic 2.13.0→2.13.3, pydantic-settings 2.12.0→2.14.0, SQLAlchemy 2.0.46→2.0.49, psycopg2-binary 2.9.11→2.9.12, Pillow 12.1.1→12.2.0, click 8.3.2→8.3.3, python-dotenv 1.2.1→1.2.2, certifi→2026.4.22 (security certs), uvicorn 0.44→0.46, fastapi 0.136.0→0.136.1, anthropic 0.96→0.97, cryptography ≥46.0. Updated lower bounds for all `>=` specifiers to reflect tested versions.
-
-- **Break up oversized functions** (#272) — Refactored 5 functions exceeding 90 lines into smaller, focused methods: `refresh_instagram_token()` (128→65 lines), `handle_settings_edit_message()` (130→20 lines), `onboarding_upload_media()` (131→40 lines), `sync()` (132→60 lines), and `_process_provider_file()` (7 params→2 via `SyncContext` dataclass).
-
-- **Extract background loops from main.py** (#271) — Moved 5 background loops (scheduler, lock cleanup, cloud cleanup, transaction cleanup, media sync), heartbeat tracking, crash guard, and lifecycle helpers into dedicated modules under `src/services/core/loops/`. Reduced main.py from 851 lines to ~170 lines of pure service wiring.
-
-- **Landing page hero copy — 3-second test** (#256) — Replaced vague headline "Keep Your Stories Alive" with "Instagram Stories on Autopilot" for instant clarity. Rewrote subheadline to lead with pain point ("Stop manually posting") and close with trust hook ("hands-free but always in control"). Added social proof line under hero CTA.
-- **Unified CTA copy across landing page** (#257) — Changed all CTA labels from "Join the Waitlist" / "Join Waitlist" to "Get Early Access" for consistent, action-oriented messaging. Updated hero form, header nav button, and submitting state text.
-
-### Changed
-
-- **Multi-instance DM view for /status and startup** (#267) — DM `/status` now shows user-level instance list with manage buttons instead of single-instance status dump. Startup notification uses `DashboardService.get_user_instances()` for the same multi-instance overview. Group `/status` unchanged. Consolidated `escape_markdownv2` and `format_last_post` into `telegram_utils.py` as shared helpers. Added Core Mental Model section to `PROJECT_MISSION.md`.
-
-### Added
-
-- **Test coverage for 7 untested service modules** (#252) — 110 unit tests covering `telegram_callbacks_core`, `telegram_callbacks_queue`, `telegram_callbacks_admin`, `conversation_service`, `start_command_router`, `user_service`, and `backfill_downloader`. Shared test helpers (`make_query`, `make_user`, `noop_context_manager`) added to `conftest.py`.
-
-### Changed
-
-- **DashboardService god class refactor** (#253) — Broke 816-line `DashboardService` into thin facade (145 lines) plus 4 focused query classes: `QueueDashboardQueries`, `MediaDashboardQueries`, `HistoryDashboardQueries`, `InstanceDashboardQueries`. Pushed query limits to repo layer, added `count_by_status` to `QueueRepository`.
-- **TelegramService god class refactor** (#251) — Broke 804-line `TelegramService` into thin orchestrator (496 lines) plus 4 focused handler classes: `OperationStateManager`, `TelegramUserManager`, `TelegramMembershipHandler`, `TelegramLifecycleHandler`. Consolidated duplicate `_escape_markdown` into `telegram_utils.py`.
-
-### Fixed
-
-- **Scheduler silent failure — no posts since Apr 19** (#266) — `get_or_create()` bootstrapped `chat_settings` rows with `onboarding_completed=False`, but `get_all_active()` requires `True`. The scheduler loop ran (heartbeat ticked, cleanup tasks fired) but found zero eligible chats every tick. Fixed by setting `onboarding_completed=True` on bootstrap, adding `settings_service` to scheduler cleanup, adding throttled warning when no active chats found, and migration 027 to repair existing rows.
-- **Guard `cleanup_transactions()` in background loop finally blocks** (#264) — Wrapped 7 unguarded `cleanup_transactions()` / `end_read_transaction()` calls in `try/except` across all background loops (scheduler, retention tick, pool/token health ticks, lock cleanup, cloud storage cleanup, media sync). An unhandled exception in a `finally` block could crash the loop via `_guarded()` while the worker process stayed alive — causing the scheduler to silently stop posting.
-- **Narrow broad `except Exception` catches** (#250) — Audited 88 `except Exception` catches across `src/services/`. Narrowed catches to specific types (`TelegramError`, `SQLAlchemyError`, `InvalidToken`, etc.) where failure modes are known. Added `noqa: BLE001` annotations with justification comments to intentionally broad catches (best-effort logging, cleanup, health checks). Added `exc_info=True` to health check error handlers.
-- **Replace deprecated `datetime.utcnow()` calls** (#249) — Replaced 30+ `datetime.utcnow()` calls across `src/services/` with timezone-aware `datetime.now(timezone.utc)`, eliminating Python 3.12 deprecation warnings. Inverted `.replace(tzinfo=None)` patterns to ensure consistent aware-to-aware datetime comparisons.
-
-### Added
-
-- **Test coverage for 7 untested service modules** (#252) — 110 unit tests covering `telegram_callbacks_core`, `telegram_callbacks_queue`, `telegram_callbacks_admin`, `conversation_service`, `start_command_router`, `user_service`, and `backfill_downloader`. Shared test helpers added to `conftest.py`.
-- **AI caption generation** (#182) — New `CaptionService` generates Instagram Story captions using Claude API at queue time. Controlled by per-instance `enable_ai_captions` toggle. Generated captions are stored separately from manual captions on `media_items.generated_caption`, shown with a robot indicator in Telegram review, and include a "Regenerate Caption" button. Skips generation when a manual caption exists or ANTHROPIC_API_KEY is not configured. Non-blocking — API failures never prevent posting. Migration 026 adds the new columns.
-- **Settings & membership audit trail** (#244) — New `audit_log` table tracks settings changes, membership lifecycle, and media lock create/delete with entity type, field-level old/new values, and who made the change. Instrumented `SettingsService`, `MediaLockService`, and `MembershipRepository`. New `GET /audit-log` endpoint for per-instance activity log.
-- **Onboarding drop-off tracking** (#245) — Expired onboarding sessions are now logged to `user_interactions` with `interaction_type='onboarding_dropout'` before deletion, capturing the step and duration for funnel analysis.
-- **BFF proxy per-request membership validation** (#246) — Proxied dashboard API requests now validate that the user's `activeChatId` corresponds to an active membership before forwarding. Stale JWTs (e.g. user removed from a group mid-session) get reissued without `activeChatId`, forcing redirect to instance picker. Extracted shared `fetchUserInstances()` helper into `@/lib/backend`.
-- **Multi-account Phase 3+4 — API auth, instance picker, dashboard switcher** (#235, #236) — Session `chatId` renamed to `activeChatId: number | null`. Login starts with null; user selects an instance on `/instances` page. New `GET /api/instances` and `POST /api/instances/:id/select` endpoints with server-side membership validation. BFF proxy and middleware guard on null `activeChatId`. Instance picker page handles 0/1/N instances (CTA, auto-redirect, card picker). Dashboard header shows instance switcher dropdown for multi-instance users. Mini App `/webapp/instances` entry point for Telegram WebView.
-- **Multi-account Phase 2b — group linking + instance management** (#240) — `/start` deep links, `/link`, `/name`, `/instances`, `/new` bot commands. `ChatMemberHandler` for group add/kick detection.
-- **Multi-account /start refactor + get_settings() split** (#233) — `get_settings()` now accepts `create_if_missing` parameter to prevent phantom DM `chat_settings` rows. 8 group callback call sites flipped. New `StartCommandRouter` with 5-branch `/start` handler. `ConversationService` wraps DM onboarding state machine. Migration 024 cleans up existing phantom rows.
-- **Multi-account backfill script** (#232) — `scripts/backfill_memberships.py` backfills `user_chat_memberships` from historical `user_interactions`, promotes group admins/owners via Telegram API, and runs a verification gate for Phase 2 deploy readiness. Supports dry run, `--apply`, `--promote`, and `--verify` modes.
-- **Multi-account data layer** (#231) — Foundation for multi-account dashboard support. Users can now belong to multiple chat instances via `user_chat_memberships` join table. Memberships are auto-created on group chat interactions. New `DashboardService.get_user_instances()` returns all instances a user belongs to with per-instance stats. Also adds `onboarding_sessions` table for future DM onboarding flow and `display_name` column on `chat_settings`.
-- **Vercel deployment guide** — Documented all required env vars for `landing/` Vercel deployment in `documentation/guides/landing-vercel-deployment.md`.
-
-### Fixed
-
-- **Telegram login widget missing env var fallback** — `/login` now shows a helpful error message when `NEXT_PUBLIC_TELEGRAM_BOT_NAME` is not configured, instead of an infinite loading spinner.
+- **Sign-in link in landing page footer** — Subtle "Sign in" link for existing users to access `/login` without a prominent CTA.
 
 ### Fixed — Design Issues (#214–#219)
 
