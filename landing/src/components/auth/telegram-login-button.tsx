@@ -17,7 +17,7 @@ interface TelegramUser {
 export function TelegramLoginButton() {
   const containerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const [loaded, setLoaded] = useState(false);
+  const [status, setStatus] = useState<"loading" | "ready" | "failed">("loading");
   const botName = process.env.NEXT_PUBLIC_TELEGRAM_BOT_NAME;
 
   const handleAuth = useCallback(
@@ -40,8 +40,7 @@ export function TelegramLoginButton() {
   useEffect(() => {
     if (!botName || !containerRef.current) return;
 
-    setLoaded(false);
-    // Expose callback globally for the Telegram widget
+    setStatus("loading");
     (window as unknown as Record<string, unknown>).__telegram_login_callback = handleAuth;
 
     const script = document.createElement("script");
@@ -52,12 +51,31 @@ export function TelegramLoginButton() {
     script.setAttribute("data-radius", "8");
     script.setAttribute("data-onauth", "__telegram_login_callback(user)");
     script.setAttribute("data-request-access", "write");
-    script.onload = () => setLoaded(true);
 
     const container = containerRef.current;
+    let pollTimer: ReturnType<typeof setInterval>;
+
+    script.onload = () => {
+      // Script loaded, but the widget iframe may still not render.
+      // Poll until the iframe appears or give up after 5s.
+      let elapsed = 0;
+      pollTimer = setInterval(() => {
+        elapsed += 500;
+        if (container.querySelector("iframe")) {
+          clearInterval(pollTimer);
+          setStatus("ready");
+        } else if (elapsed >= 5000) {
+          clearInterval(pollTimer);
+          setStatus("failed");
+        }
+      }, 500);
+    };
+    script.onerror = () => setStatus("failed");
+
     container.appendChild(script);
 
     return () => {
+      clearInterval(pollTimer);
       delete (window as unknown as Record<string, unknown>).__telegram_login_callback;
       container.innerHTML = "";
     };
@@ -77,13 +95,28 @@ export function TelegramLoginButton() {
 
   return (
     <div className="relative min-h-[56px] flex items-center justify-center">
-      {!loaded && (
+      {status === "loading" && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading Telegram login...
         </div>
       )}
-      <div ref={containerRef} className={loaded ? "flex justify-center" : "absolute inset-0 flex justify-center"} />
+      {status === "failed" && (
+        <div className="space-y-3 text-center">
+          <p className="text-sm text-muted-foreground">
+            Telegram widget didn&apos;t load. You can sign in directly:
+          </p>
+          <a
+            href={`https://t.me/${botName}?start=login`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-md bg-[#2AABEE] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#229ED9]"
+          >
+            Open in Telegram
+          </a>
+        </div>
+      )}
+      <div ref={containerRef} className={status === "ready" ? "flex justify-center" : "absolute inset-0 flex justify-center opacity-0"} />
     </div>
   );
 }
