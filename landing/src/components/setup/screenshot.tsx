@@ -1,3 +1,4 @@
+import { Monitor } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface ScreenshotProps {
@@ -8,14 +9,12 @@ interface ScreenshotProps {
 export function Screenshot({ caption, className }: ScreenshotProps) {
   return (
     <figure className={cn("my-4", className)}>
-      <div className="flex h-48 items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted/50">
+      <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3">
+        <Monitor className="h-5 w-5 shrink-0 text-muted-foreground" />
         <span className="text-sm text-muted-foreground">
-          Screenshot: {caption}
+          You should see: <span className="font-medium text-foreground">{caption}</span>
         </span>
       </div>
-      <figcaption className="mt-2 text-center text-xs text-muted-foreground">
-        {caption}
-      </figcaption>
     </figure>
   )
 }
