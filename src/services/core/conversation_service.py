@@ -119,23 +119,21 @@ class ConversationService(BaseService):
                 InteractionRepository,
             )
 
-            interaction_repo = InteractionRepository()
             try:
                 now = datetime.utcnow()
-                for session in expired:
-                    duration_minutes = int(
-                        (now - session.created_at).total_seconds() / 60
-                    )
-                    interaction_repo.create(
-                        user_id=str(session.user_id),
-                        interaction_type="onboarding_dropout",
-                        interaction_name=session.step,
-                        context={"duration_minutes": duration_minutes},
-                    )
+                with InteractionRepository() as interaction_repo:
+                    for session in expired:
+                        duration_minutes = int(
+                            (now - session.created_at).total_seconds() / 60
+                        )
+                        interaction_repo.create(
+                            user_id=str(session.user_id),
+                            interaction_type="onboarding_dropout",
+                            interaction_name=session.step,
+                            context={"duration_minutes": duration_minutes},
+                        )
             except Exception:
                 logger.warning("Failed to log onboarding dropouts", exc_info=True)
-            finally:
-                interaction_repo.close()
 
         count = self.onboarding_repo.delete_expired()
         if count > 0:
