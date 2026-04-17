@@ -29,14 +29,11 @@ class UserChatMembership(Base):
     __tablename__ = "user_chat_memberships"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(
-        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
-    )
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     chat_settings_id = Column(
         UUID(as_uuid=True),
         ForeignKey("chat_settings.id"),
         nullable=False,
-        index=True,
     )
 
     # Distinct from users.role which is a system-level concept

@@ -55,7 +55,7 @@ class DashboardService(BaseService):
 
             last_post_at = None
             recent = self.history_repo.get_recent_posts(
-                hours=720, chat_settings_id=cs_id
+                hours=720, chat_settings_id=cs_id, limit=1
             )
             if recent:
                 last_post_at = recent[0].posted_at.isoformat()

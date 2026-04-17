@@ -61,7 +61,9 @@ class MembershipRepository(BaseRepository):
         chat_settings_id: str,
         instance_role: str = "member",
     ) -> UserChatMembership:
-        """Create a new membership. No-op if one already exists."""
+        """Idempotent upsert. Returns existing membership if active; reactivates if inactive."""
+        from sqlalchemy.exc import IntegrityError
+
         existing = self.get_membership(user_id, chat_settings_id)
         if existing:
             if not existing.is_active:
@@ -76,7 +78,11 @@ class MembershipRepository(BaseRepository):
             instance_role=instance_role,
         )
         self.db.add(membership)
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError:
+            self.db.rollback()
+            return self.get_membership(user_id, chat_settings_id)
         self.db.refresh(membership)
         return membership
 

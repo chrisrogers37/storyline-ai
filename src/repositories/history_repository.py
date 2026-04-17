@@ -136,16 +136,21 @@ class HistoryRepository(BaseRepository):
         return history
 
     def get_recent_posts(
-        self, hours: int = 24, chat_settings_id: Optional[str] = None
+        self,
+        hours: int = 24,
+        chat_settings_id: Optional[str] = None,
+        limit: Optional[int] = None,
     ) -> List[PostingHistory]:
         """Get posts from the last N hours."""
         since = datetime.now(timezone.utc) - timedelta(hours=hours)
-        result = (
+        query = (
             self._tenant_query(PostingHistory, chat_settings_id)
             .filter(PostingHistory.posted_at >= since)
             .order_by(PostingHistory.posted_at.desc())
-            .all()
         )
+        if limit is not None:
+            query = query.limit(limit)
+        result = query.all()
         self.end_read_transaction()
         return result
 

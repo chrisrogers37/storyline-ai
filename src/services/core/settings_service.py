@@ -55,6 +55,15 @@ class SettingsService(BaseService):
         """
         return self.settings_repo.get_or_create(telegram_chat_id)
 
+    def get_settings_if_exists(self, telegram_chat_id: int) -> Optional[ChatSettings]:
+        """Look up settings for a chat without creating a row.
+
+        Returns None if no chat_settings record exists for this chat_id.
+        Use this when you need a read-only lookup that must not create
+        phantom rows (e.g. checking group membership eligibility).
+        """
+        return self.settings_repo.get_by_chat_id(telegram_chat_id)
+
     def toggle_setting(
         self, telegram_chat_id: int, setting_name: str, user: Optional[User] = None
     ) -> bool:

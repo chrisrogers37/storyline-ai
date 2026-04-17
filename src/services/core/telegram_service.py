@@ -436,13 +436,17 @@ class TelegramService(BaseService):
 
         Uses a process-local cache to avoid DB queries on repeated
         interactions from the same user in the same group.
+
+        NOTE: _known_memberships is never invalidated in this process.
+        Phase 2b's my_chat_member kicked handler must evict entries for
+        the affected chat_id when the bot is removed from a group.
         """
         cache_key = (str(user.id), telegram_chat_id)
         if cache_key in self._known_memberships:
             return
 
         try:
-            chat_settings = self.settings_service.settings_repo.get_by_chat_id(
+            chat_settings = self.settings_service.get_settings_if_exists(
                 telegram_chat_id
             )
             if not chat_settings:
@@ -453,7 +457,7 @@ class TelegramService(BaseService):
             )
             self._known_memberships.add(cache_key)
         except Exception as e:
-            logger.debug(f"Membership auto-create failed: {e}")
+            logger.warning(f"Membership auto-create failed: {e}")
 
     def _is_verbose(self, chat_id, chat_settings=None) -> bool:
         """Check if verbose notifications are enabled for a chat.
