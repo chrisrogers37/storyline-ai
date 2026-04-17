@@ -107,7 +107,36 @@ class ConversationService(BaseService):
         return chat_settings
 
     def cleanup_expired(self) -> int:
-        """Delete expired onboarding sessions. Call from scheduler loop."""
+        """Delete expired onboarding sessions. Call from scheduler loop.
+
+        Logs each expired session as an onboarding_dropout interaction
+        before deleting, so we can track where users drop off.
+        """
+        expired = self.onboarding_repo.get_expired()
+
+        if expired:
+            from src.repositories.interaction_repository import (
+                InteractionRepository,
+            )
+
+            interaction_repo = InteractionRepository()
+            try:
+                now = datetime.utcnow()
+                for session in expired:
+                    duration_minutes = int(
+                        (now - session.created_at).total_seconds() / 60
+                    )
+                    interaction_repo.create(
+                        user_id=str(session.user_id),
+                        interaction_type="onboarding_dropout",
+                        interaction_name=session.step,
+                        context={"duration_minutes": duration_minutes},
+                    )
+            except Exception:
+                logger.warning("Failed to log onboarding dropouts", exc_info=True)
+            finally:
+                interaction_repo.close()
+
         count = self.onboarding_repo.delete_expired()
         if count > 0:
             logger.info(f"Cleaned up {count} expired onboarding session(s)")
