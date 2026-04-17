@@ -433,6 +433,13 @@ class TelegramService(BaseService):
         new_status = member_update.new_chat_member.status
         from_user = member_update.from_user
 
+        if from_user is None:
+            logger.info(
+                f"Bot membership changed in group {chat.id} by anonymous admin "
+                f"— skipping auto-link (use /link)"
+            )
+            return
+
         try:
             if new_status in ("member", "administrator") and old_status in (
                 "left",

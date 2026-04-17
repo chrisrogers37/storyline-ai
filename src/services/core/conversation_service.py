@@ -72,6 +72,10 @@ class ConversationService(BaseService):
 
         Used by startgroup deep link, my_chat_member, and /link command.
         Returns the chat_settings record.
+
+        Idempotent: MembershipRepository.create_membership handles duplicates
+        via upsert, so partial failures (e.g. update_step fails after
+        create_membership succeeds) are safe to retry.
         """
         from src.services.core.settings_service import SettingsService
 
@@ -82,6 +86,7 @@ class ConversationService(BaseService):
                     chat_id, "display_name", session.pending_instance_name
                 )
 
+        # Idempotent: returns existing membership if already created
         membership_repo.create_membership(
             user_id=user_id,
             chat_settings_id=str(chat_settings.id),

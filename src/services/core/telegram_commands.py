@@ -510,6 +510,9 @@ class TelegramCommandHandlers:
 
         Used when the bot is already in the group (so startgroup/my_chat_member
         won't fire). Links the current group to the user's pending onboarding session.
+
+        Note: Does not accept a <session_id> argument (intentional deviation from spec).
+        Session lookup is always scoped to the calling user.
         """
         chat_id = update.effective_chat.id
         is_group = update.effective_chat.type in ("group", "supergroup")
@@ -526,7 +529,13 @@ class TelegramCommandHandlers:
 
         # Verify bot is actually a member of this group
         try:
-            await context.bot.get_chat(chat_id)
+            bot_member = await context.bot.get_chat_member(chat_id, context.bot.id)
+            if bot_member.status in ("left", "kicked"):
+                await update.message.reply_text(
+                    "⚠️ I'm not a member of this group. "
+                    "Add me first, then run /link again."
+                )
+                return
         except Exception:
             await update.message.reply_text(
                 "⚠️ I can't verify my membership in this group. "
