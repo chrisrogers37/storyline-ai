@@ -200,7 +200,14 @@ class TelegramAutopostHandler:
         Orchestrates: safety check → upload → dry-run check → post → record.
         """
         chat_id = query.message.chat_id
-        chat_settings = self.service.settings_service.get_settings(chat_id)
+        chat_settings = self.service.settings_service.get_settings(
+            chat_id, create_if_missing=False
+        )
+        if not chat_settings:
+            await query.edit_message_caption(
+                caption="⚠️ Chat settings not found.",
+            )
+            return
 
         # Run comprehensive safety check
         safety_result = instagram_service.safety_check_before_post(

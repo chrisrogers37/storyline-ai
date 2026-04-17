@@ -506,7 +506,11 @@ class TelegramAccountHandlers:
         )
 
         # Rebuild keyboard with account selector
-        chat_settings = self.service.settings_service.get_settings(chat_id)
+        chat_settings = self.service.settings_service.get_settings(
+            chat_id, create_if_missing=False
+        )
+        if not chat_settings:
+            return
         if account_count is None:
             account_count = self.service.ig_account_service.count_active_accounts()
         reply_markup = build_queue_action_keyboard(
@@ -541,7 +545,11 @@ class TelegramAccountHandlers:
         pending_items = self.service.queue_repo.get_pending_with_telegram_message(
             chat_id
         )
-        chat_settings = self.service.settings_service.get_settings(chat_id)
+        chat_settings = self.service.settings_service.get_settings(
+            chat_id, create_if_missing=False
+        )
+        if not chat_settings:
+            return
         if account_count is None:
             account_count = self.service.ig_account_service.count_active_accounts()
         verbose = self.service._is_verbose(chat_id, chat_settings=chat_settings)

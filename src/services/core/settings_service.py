@@ -43,17 +43,25 @@ class SettingsService(BaseService):
         super().__init__()
         self.settings_repo = ChatSettingsRepository()
 
-    def get_settings(self, telegram_chat_id: int) -> ChatSettings:
+    def get_settings(
+        self, telegram_chat_id: int, create_if_missing: bool = True
+    ) -> Optional[ChatSettings]:
         """
-        Get or create settings for a chat.
+        Get settings for a chat.
 
         Args:
             telegram_chat_id: Telegram chat/channel ID
+            create_if_missing: If True (default), create from .env defaults
+                on first access. If False, return None when no record exists.
+                Use False in contexts where creating a phantom row is wrong
+                (e.g. group callbacks that may reference an uninitialized chat).
 
         Returns:
-            ChatSettings record (created from .env if first access)
+            ChatSettings record, or None if create_if_missing=False and not found
         """
-        return self.settings_repo.get_or_create(telegram_chat_id)
+        if create_if_missing:
+            return self.settings_repo.get_or_create(telegram_chat_id)
+        return self.settings_repo.get_by_chat_id(telegram_chat_id)
 
     def get_settings_if_exists(self, telegram_chat_id: int) -> Optional[ChatSettings]:
         """Look up settings for a chat without creating a row.

@@ -27,77 +27,8 @@ class TelegramCommandHandlers:
         self.service = service
 
     async def handle_start(self, update, context):
-        """Handle /start command.
-
-        New users: show onboarding Mini App button.
-        Returning users: show dashboard summary.
-        """
-        chat_id = update.effective_chat.id
-        user = self.service._get_or_create_user(
-            update.effective_user, telegram_chat_id=chat_id
-        )
-
-        # Check onboarding status
-        from src.services.core.settings_service import SettingsService
-
-        with SettingsService() as settings_service:
-            chat_settings = settings_service.get_settings(chat_id)
-            onboarding_done = chat_settings.onboarding_completed
-
-        if settings.OAUTH_REDIRECT_BASE_URL:
-            webapp_url = (
-                f"{settings.OAUTH_REDIRECT_BASE_URL}/webapp/onboarding"
-                f"?chat_id={chat_id}"
-            )
-
-            if onboarding_done:
-                button_text = "Open Storyline"
-                message_text = (
-                    "Welcome back to *Storyline AI*!\n\n"
-                    "Tap the button below to view your dashboard "
-                    "and manage your settings."
-                )
-            else:
-                button_text = "Open Setup Wizard"
-                message_text = (
-                    "Welcome to *Storyline AI*!\n\n"
-                    "Let's get you set up. Tap the button below to "
-                    "connect your accounts and configure your posting schedule."
-                )
-
-            button = build_webapp_button(
-                text=button_text,
-                webapp_url=webapp_url,
-                chat_type=update.effective_chat.type,
-                chat_id=chat_id,
-                user_id=update.effective_user.id,
-            )
-
-            keyboard = InlineKeyboardMarkup([[button]])
-            await update.message.reply_text(
-                message_text,
-                parse_mode="Markdown",
-                reply_markup=keyboard,
-            )
-        else:
-            # Fallback when OAUTH_REDIRECT_BASE_URL not configured
-            await update.message.reply_text(
-                "👋 *Storyline AI Bot*\n\n"
-                "Commands:\n"
-                "/status - System health & overview\n"
-                "/next - Force send next post\n"
-                "/setup - Quick settings & toggles\n"
-                "/help - Show all commands",
-                parse_mode="Markdown",
-            )
-
-        # Log interaction
-        self.service.interaction_service.log_command(
-            user_id=str(user.id),
-            command="/start",
-            telegram_chat_id=chat_id,
-            telegram_message_id=update.message.message_id,
-        )
+        """Handle /start — delegates to StartCommandRouter."""
+        await self.service.start_router.handle_start(update, context)
 
     async def handle_status(self, update, context):
         """Handle /status command.

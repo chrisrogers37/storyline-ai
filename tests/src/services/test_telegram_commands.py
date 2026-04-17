@@ -1270,7 +1270,7 @@ class TestStartCommand:
     """Tests for the /start command with onboarding Mini App support."""
 
     async def test_start_new_user_shows_webapp_button(self, mock_command_handlers):
-        """New user (onboarding not completed) sees the setup wizard button."""
+        """New user (onboarding not completed) sees the setup wizard button in group."""
         handlers = mock_command_handlers
         service = handlers.service
 
@@ -1284,7 +1284,10 @@ class TestStartCommand:
         mock_update.effective_user.first_name = "Test"
         mock_update.effective_user.username = "testuser"
         mock_update.effective_chat.id = -100123
+        mock_update.effective_chat.type = "group"
         mock_update.message.message_id = 1
+        mock_context = Mock()
+        mock_context.args = []
 
         with patch(
             "src.services.core.settings_service.SettingsService"
@@ -1296,11 +1299,11 @@ class TestStartCommand:
             mock_settings_instance.get_settings.return_value = mock_chat_settings
 
             with patch(
-                "src.services.core.telegram_commands.settings"
+                "src.services.core.start_command_router.settings"  # app settings
             ) as mock_app_settings:
                 mock_app_settings.OAUTH_REDIRECT_BASE_URL = "https://example.com"
 
-                await handlers.handle_start(mock_update, Mock())
+                await handlers.handle_start(mock_update, mock_context)
 
         call_args = mock_update.message.reply_text.call_args
         assert "Setup Wizard" in str(call_args)
@@ -1308,7 +1311,7 @@ class TestStartCommand:
     async def test_start_returning_user_shows_webapp_button(
         self, mock_command_handlers
     ):
-        """Returning user (onboarding completed) sees 'Open Storyline' Mini App button."""
+        """Returning user (onboarding completed) sees 'Open Storyline' button in group."""
         handlers = mock_command_handlers
         service = handlers.service
 
@@ -1321,7 +1324,10 @@ class TestStartCommand:
         mock_update.effective_user.first_name = "Test"
         mock_update.effective_user.username = "testuser"
         mock_update.effective_chat.id = -100123
+        mock_update.effective_chat.type = "group"
         mock_update.message.message_id = 1
+        mock_context = Mock()
+        mock_context.args = []
 
         with patch(
             "src.services.core.settings_service.SettingsService"
@@ -1333,18 +1339,18 @@ class TestStartCommand:
             mock_settings_instance.get_settings.return_value = mock_chat_settings
 
             with patch(
-                "src.services.core.telegram_commands.settings"
+                "src.services.core.start_command_router.settings"  # app settings
             ) as mock_app_settings:
                 mock_app_settings.OAUTH_REDIRECT_BASE_URL = "https://example.com"
 
-                await handlers.handle_start(mock_update, Mock())
+                await handlers.handle_start(mock_update, mock_context)
 
         call_args = mock_update.message.reply_text.call_args
         assert "Open Storyline" in str(call_args)
         assert "Welcome back" in str(call_args)
 
     async def test_start_no_oauth_url_shows_text_fallback(self, mock_command_handlers):
-        """When OAUTH_REDIRECT_BASE_URL is not set, show text command list."""
+        """When OAUTH_REDIRECT_BASE_URL is not set, show text command list in group."""
         handlers = mock_command_handlers
         service = handlers.service
 
@@ -1357,7 +1363,10 @@ class TestStartCommand:
         mock_update.effective_user.first_name = "Test"
         mock_update.effective_user.username = "testuser"
         mock_update.effective_chat.id = -100123
+        mock_update.effective_chat.type = "group"
         mock_update.message.message_id = 1
+        mock_context = Mock()
+        mock_context.args = []
 
         with patch(
             "src.services.core.settings_service.SettingsService"
@@ -1369,11 +1378,11 @@ class TestStartCommand:
             mock_settings_instance.get_settings.return_value = mock_chat_settings
 
             with patch(
-                "src.services.core.telegram_commands.settings"
+                "src.services.core.start_command_router.settings"  # app settings
             ) as mock_app_settings:
                 mock_app_settings.OAUTH_REDIRECT_BASE_URL = None
 
-                await handlers.handle_start(mock_update, Mock())
+                await handlers.handle_start(mock_update, mock_context)
 
         call_text = mock_update.message.reply_text.call_args[0][0]
         assert "/status" in call_text
@@ -1393,7 +1402,10 @@ class TestStartCommand:
         mock_update.effective_user.first_name = "Test"
         mock_update.effective_user.username = "testuser"
         mock_update.effective_chat.id = -100123
+        mock_update.effective_chat.type = "group"
         mock_update.message.message_id = 1
+        mock_context = Mock()
+        mock_context.args = []
 
         with patch(
             "src.services.core.settings_service.SettingsService"
@@ -1404,7 +1416,11 @@ class TestStartCommand:
             mock_chat_settings = Mock(onboarding_completed=True)
             mock_settings_instance.get_settings.return_value = mock_chat_settings
 
-            await handlers.handle_start(mock_update, Mock())
+            with patch(
+                "src.services.core.start_command_router.settings"  # app settings
+            ) as mock_app_settings:
+                mock_app_settings.OAUTH_REDIRECT_BASE_URL = "https://example.com"
+                await handlers.handle_start(mock_update, mock_context)
 
         service.interaction_service.log_command.assert_called_once()
         call_kwargs = service.interaction_service.log_command.call_args[1]

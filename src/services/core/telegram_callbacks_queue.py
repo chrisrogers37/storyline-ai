@@ -212,7 +212,11 @@ class TelegramCallbackQueueHandlers:
         )
 
         # Rebuild original keyboard
-        chat_settings = self.service.settings_service.get_settings(chat_id)
+        chat_settings = self.service.settings_service.get_settings(
+            chat_id, create_if_missing=False
+        )
+        if not chat_settings:
+            return
         reply_markup = build_queue_action_keyboard(
             queue_id,
             enable_instagram_api=chat_settings.enable_instagram_api,
@@ -298,7 +302,11 @@ class TelegramCallbackQueueHandlers:
         )
 
         # Get chat settings for enable_instagram_api check (use DB, not env var)
-        chat_settings = self.service.settings_service.get_settings(chat_id)
+        chat_settings = self.service.settings_service.get_settings(
+            chat_id, create_if_missing=False
+        )
+        if not chat_settings:
+            return
 
         # Rebuild original keyboard
         reply_markup = build_queue_action_keyboard(

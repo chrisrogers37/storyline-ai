@@ -138,12 +138,14 @@ class TelegramService(BaseService):
         from src.services.core.telegram_autopost import TelegramAutopostHandler
         from src.services.core.telegram_settings import TelegramSettingsHandlers
         from src.services.core.telegram_accounts import TelegramAccountHandlers
+        from src.services.core.start_command_router import StartCommandRouter
 
         self.commands = TelegramCommandHandlers(self)
         self.callbacks = TelegramCallbackHandlers(self)
         self.autopost = TelegramAutopostHandler(self)
         self.settings_handler = TelegramSettingsHandlers(self)
         self.accounts = TelegramAccountHandlers(self)
+        self.start_router = StartCommandRouter(self)
 
         # Build callback dispatch table (must be after handlers are initialized)
         self._callback_dispatch = self._build_callback_dispatch_table()
@@ -332,7 +334,62 @@ class TelegramService(BaseService):
             if handled:
                 return
 
+        # Check for DM onboarding conversation
+        if (
+            update.effective_chat.type == "private"
+            and "onboarding_session_id" in context.user_data
+        ):
+            await self._handle_onboarding_message(update, context)
+            return
+
         # Message not part of any conversation - ignore silently
+
+    async def _handle_onboarding_message(self, update, context):
+        """Handle text input during DM onboarding (naming step)."""
+        from src.services.core.conversation_service import ConversationService
+
+        session_id = context.user_data.get("onboarding_session_id")
+        if not session_id:
+            return
+
+        with ConversationService() as conv_service:
+            session = conv_service.get_session_by_id(session_id)
+
+        if not session or session.step == "complete":
+            context.user_data.pop("onboarding_session_id", None)
+            return
+
+        if session.step == "naming":
+            instance_name = update.message.text.strip()[:100]
+            if not instance_name:
+                await update.message.reply_text(
+                    "Please enter a name for your instance."
+                )
+                return
+
+            with ConversationService() as conv_service:
+                conv_service.set_instance_name(str(session.id), instance_name)
+
+            # Show add-to-group step
+            bot_username = (await self.bot.get_me()).username
+            startgroup_url = (
+                f"https://t.me/{bot_username}?startgroup=setup_{session.id}"
+            )
+
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+            keyboard = InlineKeyboardMarkup(
+                [
+                    [InlineKeyboardButton("Add to Group Chat", url=startgroup_url)],
+                ]
+            )
+            await update.message.reply_text(
+                f"Great! *{instance_name}* it is.\n\n"
+                "Now add me to the group chat where your team will review posts.\n\n"
+                "Bot already in your group? Run `/link` in that group.",
+                parse_mode="Markdown",
+                reply_markup=keyboard,
+            )
 
     async def _handle_callback(self, update, context):
         """Handle inline button callbacks.

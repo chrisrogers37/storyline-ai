@@ -4,6 +4,7 @@ import pytest
 from contextlib import contextmanager
 from unittest.mock import patch
 
+from src.services.core.start_command_router import StartCommandRouter  # noqa: F401
 from src.services.core.telegram_service import TelegramService
 
 
@@ -59,6 +60,9 @@ def mock_telegram_service():
         patch(
             "src.services.core.telegram_service.InstagramAccountService"
         ) as mock_ig_account_service_class,
+        patch(
+            "src.services.core.telegram_service.MembershipRepository"
+        ) as mock_membership_repo_class,
     ):
         mock_settings.TELEGRAM_BOT_TOKEN = "123456:ABC-DEF1234ghIkl"
         mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
@@ -78,5 +82,7 @@ def mock_telegram_service():
         service.settings_service = mock_settings_service_class.return_value
         service.ig_account_service = mock_ig_account_service_class.return_value
         service.ig_account_service.count_active_accounts.return_value = 1
+        service.membership_repo = mock_membership_repo_class.return_value
+        service.start_router = StartCommandRouter(service)
 
         yield service
