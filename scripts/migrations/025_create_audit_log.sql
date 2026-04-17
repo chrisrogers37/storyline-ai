@@ -27,6 +27,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_log_entity_id ON audit_log(entity_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_chat_settings_id ON audit_log(chat_settings_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_changed_by ON audit_log(changed_by_user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_log_instance_time ON audit_log(chat_settings_id, created_at DESC);
 
 INSERT INTO schema_version (version, description, applied_at)
 VALUES ('025', 'Create audit_log table for settings/membership/lock changes', NOW());

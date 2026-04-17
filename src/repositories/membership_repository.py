@@ -97,7 +97,11 @@ class MembershipRepository(BaseRepository):
                         chat_settings_id=chat_settings_id,
                     )
                 except Exception:
-                    pass
+                    from src.utils.logger import logger
+
+                    logger.warning(
+                        "Audit log failed for membership change", exc_info=True
+                    )
             return existing
 
         membership = UserChatMembership(
@@ -122,13 +126,18 @@ class MembershipRepository(BaseRepository):
                 chat_settings_id=chat_settings_id,
             )
         except Exception:
-            pass
+            from src.utils.logger import logger
+
+            logger.warning("Audit log failed for membership change", exc_info=True)
         return membership
 
     def deactivate_for_chat(self, chat_settings_id: str) -> int:
         """Deactivate all memberships for a chat (e.g. bot kicked from group).
 
         Returns number of memberships deactivated.
+
+        No per-row audit logging — this is a system-triggered bulk operation
+        (Telegram ChatMemberHandler). The event is tracked via service_runs.
         """
         count = (
             self.db.query(UserChatMembership)

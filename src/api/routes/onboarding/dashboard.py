@@ -6,7 +6,11 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
 
+from src.repositories.audit_repository import AuditRepository
+from src.repositories.chat_settings_repository import ChatSettingsRepository
 from src.repositories.media_repository import MediaRepository
+from src.repositories.membership_repository import MembershipRepository
+from src.repositories.user_repository import UserRepository
 from src.services.core.dashboard_service import DashboardService
 from src.services.core.health_check import HealthCheckService
 from src.services.core.instagram_account_service import InstagramAccountService
@@ -451,16 +455,23 @@ async def onboarding_audit_log(
     offset: int = Query(default=0, ge=0),
 ) -> dict:
     """Return audit log entries for a chat instance."""
-    _validate_request(init_data, chat_id)
-
-    from src.repositories.audit_repository import AuditRepository
-    from src.repositories.chat_settings_repository import ChatSettingsRepository
+    user_info = _validate_request(init_data, chat_id)
 
     with ChatSettingsRepository() as cs_repo:
         cs = cs_repo.get_by_chat_id(chat_id)
         if not cs:
             raise HTTPException(status_code=404, detail="Instance not found")
         chat_settings_id = str(cs.id)
+
+    # Verify caller has active membership for this instance
+    user_id = user_info.get("user_id")
+    with UserRepository() as user_repo:
+        user = user_repo.get_by_telegram_id(user_id) if user_id else None
+    if user:
+        with MembershipRepository() as membership_repo:
+            membership = membership_repo.get_membership(str(user.id), chat_settings_id)
+        if not membership or not membership.is_active:
+            raise HTTPException(status_code=403, detail="Not a member of this instance")
 
     with AuditRepository() as audit_repo:
         entries = audit_repo.get_for_instance(

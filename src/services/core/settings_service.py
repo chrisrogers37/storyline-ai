@@ -199,16 +199,19 @@ class SettingsService(BaseService):
                 telegram_chat_id, **{setting_name: value}
             )
 
-            self.audit_repo.log(
-                entity_type="setting",
-                entity_id=str(settings.id),
-                action="update",
-                field_changed=setting_name,
-                old_value=old_value,
-                new_value=value,
-                changed_by_user_id=str(user.id) if user else None,
-                chat_settings_id=str(settings.id),
-            )
+            try:
+                self.audit_repo.log(
+                    entity_type="setting",
+                    entity_id=str(settings.id),
+                    action="update",
+                    field_changed=setting_name,
+                    old_value=old_value,
+                    new_value=value,
+                    changed_by_user_id=str(user.id) if user else None,
+                    chat_settings_id=str(settings.id),
+                )
+            except Exception:
+                logger.warning("Audit log failed for setting change", exc_info=True)
 
             self.set_result_summary(
                 run_id,
