@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Multi-account backfill script** (#232) — `scripts/backfill_memberships.py` backfills `user_chat_memberships` from historical `user_interactions`, promotes group admins/owners via Telegram API, and runs a verification gate for Phase 2 deploy readiness. Supports dry run, `--apply`, `--promote`, and `--verify` modes.
 - **Multi-account data layer** (#231) — Foundation for multi-account dashboard support. Users can now belong to multiple chat instances via `user_chat_memberships` join table. Memberships are auto-created on group chat interactions. New `DashboardService.get_user_instances()` returns all instances a user belongs to with per-instance stats. Also adds `onboarding_sessions` table for future DM onboarding flow and `display_name` column on `chat_settings`.
 - **Vercel deployment guide** — Documented all required env vars for `landing/` Vercel deployment in `documentation/guides/landing-vercel-deployment.md`.
 
