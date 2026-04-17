@@ -3,6 +3,7 @@ import {
   verifyTelegramLogin,
   createSessionToken,
   SESSION_COOKIE,
+  SESSION_COOKIE_OPTIONS,
   type TelegramLoginData,
 } from "@/lib/auth";
 
@@ -25,13 +26,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // For personal bot chats, the chat_id equals the user's Telegram ID.
-  // Multi-chat selection can be added in a later phase.
-  const chatId = body.id;
-
+  // Multi-account: start with no instance selected. The user picks one
+  // on the /instances page, which reissues the JWT with activeChatId set.
   const token = await createSessionToken({
     userId: body.id,
-    chatId,
+    activeChatId: null,
     firstName: body.first_name,
     username: body.username,
     photoUrl: body.photo_url,
@@ -48,13 +47,7 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  response.cookies.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 86400, // 24 hours
-  });
+  response.cookies.set(SESSION_COOKIE, token, SESSION_COOKIE_OPTIONS);
 
   return response;
 }

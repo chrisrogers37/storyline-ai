@@ -8,11 +8,11 @@ import { MediaUploadWrapper } from "@/components/dashboard/media/media-upload-wr
 export default async function MediaLibraryPage() {
   const session = await getSession();
   if (!session) redirect("/login");
-  const { chatId, userId } = session;
+  const { activeChatId, userId } = session;
 
   const library = await backendFetchJson(
     "media-library?page=1&page_size=20",
-    chatId,
+    activeChatId!,
     userId,
     { revalidate: 30 }
   );

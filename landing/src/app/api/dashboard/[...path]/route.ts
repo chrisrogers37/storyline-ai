@@ -2,9 +2,10 @@
  * BFF Proxy — forwards /api/dashboard/* requests to FastAPI backend.
  *
  * Auth flow:
- *  1. Verify JWT session cookie -> extract chatId + userId
- *  2. Generate a signed URL token (same format FastAPI expects)
- *  3. Forward the request to FastAPI's /api/onboarding/* endpoints
+ *  1. Verify JWT session cookie -> extract activeChatId + userId
+ *  2. Reject if activeChatId is null (no instance selected)
+ *  3. Generate a signed URL token (same format FastAPI expects)
+ *  4. Forward the request to FastAPI's /api/onboarding/* endpoints
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -52,6 +53,14 @@ async function proxyRequest(
     return NextResponse.json({ error: "Invalid session" }, { status: 401 });
   }
 
+  // Require an active instance selection
+  if (session.activeChatId === null) {
+    return NextResponse.json(
+      { error: "No instance selected" },
+      { status: 422 }
+    );
+  }
+
   const { path } = await params;
 
   // Reject path traversal attempts
@@ -80,9 +89,9 @@ async function proxyRequest(
     url.searchParams.set(key, value);
   });
 
-  const urlToken = generateUrlToken(session.chatId, session.userId);
+  const urlToken = generateUrlToken(session.activeChatId, session.userId);
   url.searchParams.set("init_data", urlToken);
-  url.searchParams.set("chat_id", String(session.chatId));
+  url.searchParams.set("chat_id", String(session.activeChatId));
 
   const fetchOptions: RequestInit = {
     method: request.method,
@@ -100,7 +109,7 @@ async function proxyRequest(
     fetchOptions.body = JSON.stringify({
       ...body,
       init_data: urlToken,
-      chat_id: session.chatId,
+      chat_id: session.activeChatId,
     });
   }
 

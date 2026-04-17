@@ -12,16 +12,16 @@ import {
 export default async function CalendarPage() {
   const session = await getSession();
   if (!session) redirect("/login");
-  const { chatId, userId } = session;
+  const { activeChatId, userId } = session;
 
   const [history, queue, schedule] = await Promise.all([
-    backendFetchJson("history-detail?limit=15", chatId, userId, {
+    backendFetchJson("history-detail?limit=15", activeChatId!, userId, {
       revalidate: 60,
     }),
-    backendFetchJson("queue-detail?limit=10", chatId, userId, {
+    backendFetchJson("queue-detail?limit=10", activeChatId!, userId, {
       revalidate: 30,
     }),
-    backendFetchJson("analytics/schedule-preview?slots=15", chatId, userId, {
+    backendFetchJson("analytics/schedule-preview?slots=15", activeChatId!, userId, {
       revalidate: 60,
     }),
   ]);

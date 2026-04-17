@@ -21,6 +21,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid session" }, { status: 401 });
   }
 
+  if (session.activeChatId === null) {
+    return NextResponse.json(
+      { error: "No instance selected" },
+      { status: 422 }
+    );
+  }
+
   // Reject oversized uploads before buffering
   const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50 MB
   const contentLength = parseInt(request.headers.get("content-length") || "0", 10);
@@ -31,10 +38,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const urlToken = generateUrlToken(session.chatId, session.userId);
+  const urlToken = generateUrlToken(session.activeChatId, session.userId);
   const url = new URL("/api/onboarding/upload-media", BACKEND_URL);
   url.searchParams.set("init_data", urlToken);
-  url.searchParams.set("chat_id", String(session.chatId));
+  url.searchParams.set("chat_id", String(session.activeChatId));
 
   // Forward the raw multipart body to FastAPI
   const contentType = request.headers.get("content-type") || "";

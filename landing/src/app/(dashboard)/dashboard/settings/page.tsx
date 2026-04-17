@@ -10,11 +10,11 @@ export default async function SettingsPage() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const { chatId, userId } = session;
+  const { activeChatId, userId } = session;
 
   const [initData, accountsData] = await Promise.all([
-    backendFetchJson("init", chatId, userId, { revalidate: 60 }),
-    backendFetchJson("accounts", chatId, userId, { revalidate: 60 }),
+    backendFetchJson("init", activeChatId!, userId, { revalidate: 60 }),
+    backendFetchJson("accounts", activeChatId!, userId, { revalidate: 60 }),
   ]);
 
   const setup = initData?.setup_state ?? {};

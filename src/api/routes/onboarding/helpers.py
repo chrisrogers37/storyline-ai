@@ -15,24 +15,29 @@ GDRIVE_FOLDER_RE = re.compile(
 )
 
 
+def _validate_auth(init_data: str) -> dict:
+    """Validate initData or URL token — auth only, no chat_id check.
+
+    Accepts either Telegram WebApp initData (from Mini App) or a signed
+    URL token (from browser links). Returns user info dict on success.
+
+    Raises HTTPException(401) on auth failure.
+    """
+    try:
+        return validate_init_data(init_data)
+    except ValueError:
+        try:
+            return validate_url_token(init_data)
+        except ValueError as e:
+            raise HTTPException(status_code=401, detail=str(e))
+
+
 def _validate_request(init_data: str, chat_id: int) -> dict:
     """Validate initData or URL token, and verify chat_id matches.
 
-    Accepts either Telegram WebApp initData (from Mini App) or a signed
-    URL token (from group chat browser links). The init_data field carries
-    whichever credential the frontend provides.
-
     Raises HTTPException on auth failure or chat_id mismatch.
     """
-    # Try Telegram initData first, fall back to URL token
-    try:
-        user_info = validate_init_data(init_data)
-    except ValueError:
-        # Not valid initData — try URL token format
-        try:
-            user_info = validate_url_token(init_data)
-        except ValueError as e:
-            raise HTTPException(status_code=401, detail=str(e))
+    user_info = _validate_auth(init_data)
 
     # If auth contains a chat_id, verify it matches the request
     signed_chat_id = user_info.get("chat_id")

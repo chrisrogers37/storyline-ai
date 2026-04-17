@@ -11,9 +11,9 @@ export default async function SetupPage() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const { chatId, userId } = session;
+  const { activeChatId, userId } = session;
 
-  const res = await backendPost("init", chatId, userId);
+  const res = await backendPost("init", activeChatId!, userId);
   const data = res.ok ? await res.json() : null;
 
   const setupState = data?.setup_state ?? {

@@ -11,12 +11,12 @@ export default async function DashboardPage() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const { chatId, userId } = session;
+  const { activeChatId, userId } = session;
 
   const [analytics, categories, history] = await Promise.all([
-    backendFetchJson("analytics", chatId, userId, { revalidate: 60 }),
-    backendFetchJson("analytics/categories?days=30", chatId, userId, { revalidate: 60 }),
-    backendFetchJson("history-detail?limit=10", chatId, userId, { revalidate: 60 }),
+    backendFetchJson("analytics", activeChatId!, userId, { revalidate: 60 }),
+    backendFetchJson("analytics/categories?days=30", activeChatId!, userId, { revalidate: 60 }),
+    backendFetchJson("history-detail?limit=10", activeChatId!, userId, { revalidate: 60 }),
   ]);
 
   const summary = analytics?.summary ?? {
