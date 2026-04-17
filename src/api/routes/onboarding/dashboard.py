@@ -441,3 +441,46 @@ async def onboarding_upload_media(
         "mime_type": media_item.mime_type,
         "created_at": media_item.created_at.isoformat(),
     }
+
+
+@router.get("/audit-log")
+async def onboarding_audit_log(
+    init_data: str,
+    chat_id: int,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> dict:
+    """Return audit log entries for a chat instance."""
+    _validate_request(init_data, chat_id)
+
+    from src.repositories.audit_repository import AuditRepository
+    from src.repositories.chat_settings_repository import ChatSettingsRepository
+
+    with ChatSettingsRepository() as cs_repo:
+        cs = cs_repo.get_by_chat_id(chat_id)
+        if not cs:
+            raise HTTPException(status_code=404, detail="Instance not found")
+        chat_settings_id = str(cs.id)
+
+    with AuditRepository() as audit_repo:
+        entries = audit_repo.get_for_instance(
+            chat_settings_id, limit=limit, offset=offset
+        )
+        return {
+            "entries": [
+                {
+                    "id": str(e.id),
+                    "entity_type": e.entity_type,
+                    "entity_id": str(e.entity_id) if e.entity_id else None,
+                    "action": e.action,
+                    "field_changed": e.field_changed,
+                    "old_value": e.old_value,
+                    "new_value": e.new_value,
+                    "changed_by_user_id": str(e.changed_by_user_id)
+                    if e.changed_by_user_id
+                    else None,
+                    "created_at": e.created_at.isoformat(),
+                }
+                for e in entries
+            ],
+        }

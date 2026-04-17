@@ -14,6 +14,7 @@ def lock_service():
     with patch.object(MediaLockService, "__init__", lambda self: None):
         service = MediaLockService()
         service.lock_repo = Mock()
+        service.audit_repo = Mock()
         service.service_run_repo = Mock()
         service.service_name = "MediaLockService"
         service.track_execution = mock_track_execution

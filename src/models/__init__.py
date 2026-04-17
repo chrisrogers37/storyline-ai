@@ -13,6 +13,7 @@ from src.models.api_token import ApiToken
 from src.models.chat_settings import ChatSettings
 from src.models.user_chat_membership import UserChatMembership
 from src.models.onboarding_session import OnboardingSession
+from src.models.audit_log import AuditLog
 
 __all__ = [
     "User",
@@ -28,4 +29,5 @@ __all__ = [
     "ChatSettings",
     "UserChatMembership",
     "OnboardingSession",
+    "AuditLog",
 ]
