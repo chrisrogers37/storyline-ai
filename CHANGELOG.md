@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Onboarding drop-off tracking** (#245) — Expired onboarding sessions are now logged to `user_interactions` with `interaction_type='onboarding_dropout'` before deletion, capturing the step and duration for funnel analysis.
 - **BFF proxy per-request membership validation** (#246) — Proxied dashboard API requests now validate that the user's `activeChatId` corresponds to an active membership before forwarding. Stale JWTs (e.g. user removed from a group mid-session) get reissued without `activeChatId`, forcing redirect to instance picker. Extracted shared `fetchUserInstances()` helper into `@/lib/backend`.
 - **Multi-account Phase 3+4 — API auth, instance picker, dashboard switcher** (#235, #236) — Session `chatId` renamed to `activeChatId: number | null`. Login starts with null; user selects an instance on `/instances` page. New `GET /api/instances` and `POST /api/instances/:id/select` endpoints with server-side membership validation. BFF proxy and middleware guard on null `activeChatId`. Instance picker page handles 0/1/N instances (CTA, auto-redirect, card picker). Dashboard header shows instance switcher dropdown for multi-instance users. Mini App `/webapp/instances` entry point for Telegram WebView.
 - **Multi-account Phase 2b — group linking + instance management** (#240) — `/start` deep links, `/link`, `/name`, `/instances`, `/new` bot commands. `ChatMemberHandler` for group add/kick detection.

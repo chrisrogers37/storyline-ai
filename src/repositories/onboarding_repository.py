@@ -83,6 +83,14 @@ class OnboardingRepository(BaseRepository):
         self.db.refresh(session)
         return session
 
+    def get_expired(self) -> list[OnboardingSession]:
+        """Return all expired onboarding sessions (before deletion)."""
+        return (
+            self.db.query(OnboardingSession)
+            .filter(OnboardingSession.expires_at <= datetime.utcnow())
+            .all()
+        )
+
     def delete_expired(self) -> int:
         """Delete all expired onboarding sessions.
 
