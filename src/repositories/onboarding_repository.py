@@ -41,9 +41,14 @@ class OnboardingRepository(BaseRepository):
     ) -> OnboardingSession:
         """Create a new onboarding session.
 
-        Replaces any existing session for this user (UNIQUE constraint).
+        Replaces any existing session for this user (including expired ones)
+        to avoid hitting the UNIQUE(user_id) constraint.
         """
-        existing = self.get_active_for_user(user_id)
+        existing = (
+            self.db.query(OnboardingSession)
+            .filter(OnboardingSession.user_id == user_id)
+            .first()
+        )
         if existing:
             self.db.delete(existing)
             self.db.commit()

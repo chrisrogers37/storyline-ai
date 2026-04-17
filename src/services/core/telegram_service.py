@@ -390,6 +390,12 @@ class TelegramService(BaseService):
                 parse_mode="Markdown",
                 reply_markup=keyboard,
             )
+        elif session.step == "awaiting_group":
+            await update.message.reply_text(
+                "Still waiting to link your group — add me to the group chat, "
+                "or run `/link` in that group if I'm already there.",
+                parse_mode="Markdown",
+            )
 
     async def _handle_callback(self, update, context):
         """Handle inline button callbacks.

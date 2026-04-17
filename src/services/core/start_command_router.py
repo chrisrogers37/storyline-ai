@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -292,6 +293,5 @@ class StartCommandRouter:
 
 def _escape_md2(text: str) -> str:
     """Escape Telegram MarkdownV2 special characters."""
-    import re
 
     return re.sub(r"([_*\[\]()~`>#+\-=|{}.!\\])", r"\\\1", text)

@@ -1426,6 +1426,152 @@ class TestStartCommand:
         call_kwargs = service.interaction_service.log_command.call_args[1]
         assert call_kwargs["command"] == "/start"
 
+    async def test_start_dm_returning_user_shows_instance_list(
+        self, mock_command_handlers
+    ):
+        """DM user with memberships sees instance list (branch 4)."""
+        handlers = mock_command_handlers
+        service = handlers.service
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        service.user_repo.get_by_telegram_id.return_value = mock_user
+
+        mock_update = AsyncMock()
+        mock_update.effective_user.id = 12345
+        mock_update.effective_user.first_name = "Test"
+        mock_update.effective_user.username = "testuser"
+        mock_update.effective_chat.id = 12345
+        mock_update.effective_chat.type = "private"
+        mock_update.message.message_id = 1
+        mock_context = Mock()
+        mock_context.args = []
+
+        with (
+            patch(
+                "src.services.core.start_command_router.ConversationService"
+            ) as MockConv,
+            patch(
+                "src.services.core.start_command_router.MembershipRepository"
+            ) as MockMembership,
+            patch(
+                "src.services.core.start_command_router.DashboardService"
+            ) as MockDash,
+        ):
+            mock_conv = MockConv.return_value
+            mock_conv.__enter__ = Mock(return_value=mock_conv)
+            mock_conv.__exit__ = Mock(return_value=False)
+            mock_conv.get_current_session.return_value = None
+
+            mock_mem = MockMembership.return_value
+            mock_mem.__enter__ = Mock(return_value=mock_mem)
+            mock_mem.__exit__ = Mock(return_value=False)
+            mock_mem.get_for_user.return_value = [Mock()]  # has memberships
+
+            mock_dash = MockDash.return_value
+            mock_dash.__enter__ = Mock(return_value=mock_dash)
+            mock_dash.__exit__ = Mock(return_value=False)
+            mock_dash.get_user_instances.return_value = {
+                "instances": [
+                    {
+                        "chat_settings_id": "abc",
+                        "telegram_chat_id": -100123,
+                        "display_name": "TL Enterprises",
+                        "media_count": 100,
+                        "posts_per_day": 5,
+                        "is_paused": False,
+                        "last_post_at": None,
+                        "instance_role": "owner",
+                    }
+                ]
+            }
+
+            await handlers.handle_start(mock_update, mock_context)
+
+        call_args = str(mock_update.message.reply_text.call_args)
+        assert "TL Enterprises" in call_args
+        assert "Welcome back" in call_args
+
+    async def test_start_dm_new_user_starts_onboarding(self, mock_command_handlers):
+        """DM user with no memberships starts onboarding (branch 5)."""
+        handlers = mock_command_handlers
+        service = handlers.service
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        service.user_repo.get_by_telegram_id.return_value = mock_user
+
+        mock_update = AsyncMock()
+        mock_update.effective_user.id = 12345
+        mock_update.effective_user.first_name = "Test"
+        mock_update.effective_user.username = "testuser"
+        mock_update.effective_chat.id = 12345
+        mock_update.effective_chat.type = "private"
+        mock_update.message.message_id = 1
+        mock_context = Mock()
+        mock_context.args = []
+        mock_context.user_data = {}
+
+        with (
+            patch(
+                "src.services.core.start_command_router.ConversationService"
+            ) as MockConv,
+            patch(
+                "src.services.core.start_command_router.MembershipRepository"
+            ) as MockMembership,
+        ):
+            mock_conv = MockConv.return_value
+            mock_conv.__enter__ = Mock(return_value=mock_conv)
+            mock_conv.__exit__ = Mock(return_value=False)
+            mock_conv.get_current_session.return_value = None
+            mock_session = Mock()
+            mock_session.id = uuid4()
+            mock_conv.start_onboarding.return_value = mock_session
+
+            mock_mem = MockMembership.return_value
+            mock_mem.__enter__ = Mock(return_value=mock_mem)
+            mock_mem.__exit__ = Mock(return_value=False)
+            mock_mem.get_for_user.return_value = []  # no memberships
+
+            await handlers.handle_start(mock_update, mock_context)
+
+        call_args = str(mock_update.message.reply_text.call_args)
+        assert "first posting instance" in call_args
+        assert "onboarding_session_id" in mock_context.user_data
+
+    async def test_start_dm_resume_onboarding(self, mock_command_handlers):
+        """DM user with active onboarding session resumes (branch 3)."""
+        handlers = mock_command_handlers
+        service = handlers.service
+
+        mock_user = Mock()
+        mock_user.id = uuid4()
+        service.user_repo.get_by_telegram_id.return_value = mock_user
+
+        mock_update = AsyncMock()
+        mock_update.effective_user.id = 12345
+        mock_update.effective_user.first_name = "Test"
+        mock_update.effective_user.username = "testuser"
+        mock_update.effective_chat.id = 12345
+        mock_update.effective_chat.type = "private"
+        mock_update.message.message_id = 1
+        mock_context = Mock()
+        mock_context.args = []
+
+        with patch(
+            "src.services.core.start_command_router.ConversationService"
+        ) as MockConv:
+            mock_conv = MockConv.return_value
+            mock_conv.__enter__ = Mock(return_value=mock_conv)
+            mock_conv.__exit__ = Mock(return_value=False)
+            mock_session = Mock(step="naming")
+            mock_conv.get_current_session.return_value = mock_session
+
+            await handlers.handle_start(mock_update, mock_context)
+
+        call_args = str(mock_update.message.reply_text.call_args)
+        assert "instance setup in progress" in call_args
+
 
 @pytest.mark.unit
 @pytest.mark.asyncio

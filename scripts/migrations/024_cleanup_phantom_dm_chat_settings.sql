@@ -5,6 +5,10 @@
 --   2. Have no references from media_items, posting_queue, posting_history,
 --      or user_chat_memberships
 --
+-- Note: onboarding_sessions.pending_chat_settings_id is also an FK on
+-- chat_settings, but it always references group chats (telegram_chat_id < 0)
+-- so phantoms (telegram_chat_id > 0) are never referenced by it.
+--
 -- These rows were created by the old get_or_create() behavior in
 -- SettingsService.get_settings() when DM users interacted with the bot.
 -- Phase 2a's get_settings() split prevents new phantoms.
