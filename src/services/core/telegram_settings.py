@@ -220,7 +220,11 @@ class TelegramSettingsHandlers:
     async def handle_settings_edit_start(self, setting_name: str, user, query, context):
         """Start editing a numeric setting (posts_per_day or hours)."""
         chat_id = query.message.chat_id
-        chat_settings = self.service.settings_service.get_settings(chat_id)
+        chat_settings = self.service.settings_service.get_settings(
+            chat_id, create_if_missing=False
+        )
+        if not chat_settings:
+            return
 
         if setting_name == "posts_per_day":
             context.user_data["settings_edit_state"] = "awaiting_posts_per_day"
@@ -421,7 +425,9 @@ class TelegramSettingsHandlers:
                 ]
             ]
 
-            chat_settings = self.service.settings_service.get_settings(chat_id)
+            chat_settings = self.service.settings_service.get_settings(
+                chat_id, create_if_missing=False
+            )
             chat_settings_id = str(chat_settings.id) if chat_settings else None
             pending_count = self.service.queue_repo.count_pending(
                 chat_settings_id=chat_settings_id
@@ -457,7 +463,9 @@ class TelegramSettingsHandlers:
         if action == "clear_queue":
             await query.answer("Clearing queue...")
 
-            chat_settings = self.service.settings_service.get_settings(chat_id)
+            chat_settings = self.service.settings_service.get_settings(
+                chat_id, create_if_missing=False
+            )
             chat_settings_id = str(chat_settings.id) if chat_settings else None
             cleared = self.service.queue_repo.delete_all_pending(
                 chat_settings_id=chat_settings_id
