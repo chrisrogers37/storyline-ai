@@ -3,6 +3,7 @@
 from typing import Optional
 
 from src.services.base_service import BaseService
+from src.repositories.audit_repository import AuditRepository
 from src.repositories.lock_repository import LockRepository
 from src.config.settings import settings
 from src.utils.logger import logger
@@ -14,6 +15,7 @@ class MediaLockService(BaseService):
     def __init__(self):
         super().__init__()
         self.lock_repo = LockRepository()
+        self.audit_repo = AuditRepository()
 
     def create_lock(
         self,
@@ -43,12 +45,26 @@ class MediaLockService(BaseService):
             logger.warning(f"Media {media_item_id} is already locked")
             return False
 
-        self.lock_repo.create(
+        lock = self.lock_repo.create(
             media_item_id=media_item_id,
             ttl_days=ttl_days,
             lock_reason=lock_reason,
             created_by_user_id=created_by_user_id,
         )
+
+        try:
+            self.audit_repo.log(
+                entity_type="lock",
+                entity_id=str(lock.id),
+                action="create",
+                new_value={"reason": lock_reason, "ttl_days": ttl_days},
+                changed_by_user_id=created_by_user_id,
+                chat_settings_id=str(lock.chat_settings_id)
+                if lock.chat_settings_id
+                else None,
+            )
+        except Exception:
+            logger.warning("Audit log failed for lock create", exc_info=True)
 
         if ttl_days is None:
             logger.info(
@@ -90,9 +106,30 @@ class MediaLockService(BaseService):
         """Get active lock for media item (if any)."""
         return self.lock_repo.get_active_lock(media_item_id)
 
-    def remove_lock(self, lock_id: str) -> bool:
+    def remove_lock(
+        self, lock_id: str, removed_by_user_id: Optional[str] = None
+    ) -> bool:
         """Manually remove a lock."""
-        return self.lock_repo.delete(lock_id)
+        lock = self.lock_repo.get_by_id(lock_id)
+        if not lock:
+            return False
+        lock_reason = lock.lock_reason
+        lock_chat_settings_id = (
+            str(lock.chat_settings_id) if lock.chat_settings_id else None
+        )
+        result = self.lock_repo.delete(lock_id)
+        try:
+            self.audit_repo.log(
+                entity_type="lock",
+                entity_id=lock_id,
+                action="delete",
+                old_value={"reason": lock_reason},
+                changed_by_user_id=removed_by_user_id,
+                chat_settings_id=lock_chat_settings_id,
+            )
+        except Exception:
+            logger.warning("Audit log failed for lock delete", exc_info=True)
+        return result
 
     def cleanup_expired_locks(self) -> int:
         """

@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Optional, Any, Dict, List
 
 from src.services.base_service import BaseService
+from src.repositories.audit_repository import AuditRepository
 from src.repositories.chat_settings_repository import ChatSettingsRepository
 from src.config.constants import (
     MAX_POSTING_HOUR,
@@ -36,12 +37,13 @@ class SettingsService(BaseService):
     1. DB value for chat (if exists)
     2. .env default (on first access, bootstrapped to DB)
 
-    All setting changes are tracked via ServiceRun for audit.
+    All setting changes are tracked via ServiceRun and audit_log.
     """
 
     def __init__(self):
         super().__init__()
         self.settings_repo = ChatSettingsRepository()
+        self.audit_repo = AuditRepository()
 
     def get_settings(
         self, telegram_chat_id: int, create_if_missing: bool = True
@@ -108,6 +110,20 @@ class SettingsService(BaseService):
                 )
             else:
                 self.settings_repo.update(telegram_chat_id, **{setting_name: new_value})
+
+            try:
+                self.audit_repo.log(
+                    entity_type="setting",
+                    entity_id=str(settings.id),
+                    action="update",
+                    field_changed=setting_name,
+                    old_value=old_value,
+                    new_value=new_value,
+                    changed_by_user_id=str(user.id) if user else None,
+                    chat_settings_id=str(settings.id),
+                )
+            except Exception:
+                logger.warning("Audit log failed for setting change", exc_info=True)
 
             self.set_result_summary(
                 run_id,
@@ -182,6 +198,20 @@ class SettingsService(BaseService):
             updated = self.settings_repo.update(
                 telegram_chat_id, **{setting_name: value}
             )
+
+            try:
+                self.audit_repo.log(
+                    entity_type="setting",
+                    entity_id=str(settings.id),
+                    action="update",
+                    field_changed=setting_name,
+                    old_value=old_value,
+                    new_value=value,
+                    changed_by_user_id=str(user.id) if user else None,
+                    chat_settings_id=str(settings.id),
+                )
+            except Exception:
+                logger.warning("Audit log failed for setting change", exc_info=True)
 
             self.set_result_summary(
                 run_id,

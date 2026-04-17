@@ -65,6 +65,7 @@ def init_db():
         instagram_account,
         api_token,
         chat_settings,
+        audit_log,
     )
 
     Base.metadata.create_all(bind=engine)

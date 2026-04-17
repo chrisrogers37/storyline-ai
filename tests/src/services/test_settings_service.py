@@ -32,6 +32,11 @@ from src.models.chat_settings import ChatSettings
 class TestSettingsServiceUnit:
     """Unit tests with mocked dependencies - run without database."""
 
+    @pytest.fixture(autouse=True)
+    def _mock_audit(self):
+        with patch("src.services.core.settings_service.AuditRepository"):
+            yield
+
     def test_toggleable_settings_are_defined(self):
         """Verify TOGGLEABLE_SETTINGS contains expected settings."""
         assert "dry_run_mode" in TOGGLEABLE_SETTINGS
@@ -431,6 +436,11 @@ class TestEnvFallback:
 class TestMultiChatIsolation:
     """Tests ensuring different chats have isolated settings."""
 
+    @pytest.fixture(autouse=True)
+    def _mock_audit(self):
+        with patch("src.services.core.settings_service.AuditRepository"):
+            yield
+
     def test_different_chat_ids_get_different_settings(self):
         """Two chat IDs should get independent settings."""
         service = SettingsService()
@@ -781,6 +791,7 @@ class TestSettingsServiceOnboarding:
         with patch.object(SettingsService, "__init__", lambda self: None):
             service = SettingsService()
             service.settings_repo = Mock()
+            service.audit_repo = Mock()
             return service
 
     def test_set_onboarding_step(self, settings_service):
@@ -830,12 +841,18 @@ class TestSettingsServiceOnboarding:
 class TestSettingsServiceMediaSource:
     """Tests for per-chat media source configuration."""
 
+    @pytest.fixture(autouse=True)
+    def _mock_audit(self):
+        with patch("src.services.core.settings_service.AuditRepository"):
+            yield
+
     @pytest.fixture
     def settings_service(self):
         """Create SettingsService with mocked repository."""
         with patch.object(SettingsService, "__init__", lambda self: None):
             service = SettingsService()
             service.settings_repo = Mock()
+            service.audit_repo = Mock()
             return service
 
     def test_text_settings_defined(self):

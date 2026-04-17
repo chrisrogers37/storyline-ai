@@ -2,13 +2,28 @@
 
 from typing import Optional
 
-
+from src.repositories.audit_repository import AuditRepository
 from src.repositories.base_repository import BaseRepository
 from src.models.user_chat_membership import UserChatMembership
 
 
 class MembershipRepository(BaseRepository):
     """Repository for UserChatMembership CRUD operations."""
+
+    def __init__(self):
+        super().__init__()
+        self._audit_repo: Optional[AuditRepository] = None
+
+    @property
+    def audit_repo(self) -> AuditRepository:
+        if self._audit_repo is None:
+            self._audit_repo = AuditRepository()
+        return self._audit_repo
+
+    def close(self):
+        if self._audit_repo is not None:
+            self._audit_repo.close()
+        super().close()
 
     def get_for_user(
         self, user_id: str, active_only: bool = True
@@ -70,6 +85,23 @@ class MembershipRepository(BaseRepository):
                 existing.is_active = True
                 self.db.commit()
                 self.db.refresh(existing)
+                try:
+                    self.audit_repo.log(
+                        entity_type="membership",
+                        entity_id=str(existing.id),
+                        action="update",
+                        field_changed="is_active",
+                        old_value=False,
+                        new_value=True,
+                        changed_by_user_id=user_id,
+                        chat_settings_id=chat_settings_id,
+                    )
+                except Exception:
+                    from src.utils.logger import logger
+
+                    logger.warning(
+                        "Audit log failed for membership change", exc_info=True
+                    )
             return existing
 
         membership = UserChatMembership(
@@ -84,12 +116,28 @@ class MembershipRepository(BaseRepository):
             self.db.rollback()
             return self.get_membership(user_id, chat_settings_id)
         self.db.refresh(membership)
+        try:
+            self.audit_repo.log(
+                entity_type="membership",
+                entity_id=str(membership.id),
+                action="create",
+                new_value={"instance_role": instance_role},
+                changed_by_user_id=user_id,
+                chat_settings_id=chat_settings_id,
+            )
+        except Exception:
+            from src.utils.logger import logger
+
+            logger.warning("Audit log failed for membership change", exc_info=True)
         return membership
 
     def deactivate_for_chat(self, chat_settings_id: str) -> int:
         """Deactivate all memberships for a chat (e.g. bot kicked from group).
 
         Returns number of memberships deactivated.
+
+        No per-row audit logging — this is a system-triggered bulk operation
+        (Telegram ChatMemberHandler). The event is tracked via service_runs.
         """
         count = (
             self.db.query(UserChatMembership)
@@ -111,4 +159,17 @@ class MembershipRepository(BaseRepository):
             membership.is_active = False
             self.db.commit()
             self.db.refresh(membership)
+            try:
+                self.audit_repo.log(
+                    entity_type="membership",
+                    entity_id=str(membership.id),
+                    action="update",
+                    field_changed="is_active",
+                    old_value=True,
+                    new_value=False,
+                    changed_by_user_id=user_id,
+                    chat_settings_id=chat_settings_id,
+                )
+            except Exception:
+                pass
         return membership

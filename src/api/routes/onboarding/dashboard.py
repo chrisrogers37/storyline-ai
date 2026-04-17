@@ -6,7 +6,11 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
 
+from src.repositories.audit_repository import AuditRepository
+from src.repositories.chat_settings_repository import ChatSettingsRepository
 from src.repositories.media_repository import MediaRepository
+from src.repositories.membership_repository import MembershipRepository
+from src.repositories.user_repository import UserRepository
 from src.services.core.dashboard_service import DashboardService
 from src.services.core.health_check import HealthCheckService
 from src.services.core.instagram_account_service import InstagramAccountService
@@ -441,3 +445,53 @@ async def onboarding_upload_media(
         "mime_type": media_item.mime_type,
         "created_at": media_item.created_at.isoformat(),
     }
+
+
+@router.get("/audit-log")
+async def onboarding_audit_log(
+    init_data: str,
+    chat_id: int,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> dict:
+    """Return audit log entries for a chat instance."""
+    user_info = _validate_request(init_data, chat_id)
+
+    with ChatSettingsRepository() as cs_repo:
+        cs = cs_repo.get_by_chat_id(chat_id)
+        if not cs:
+            raise HTTPException(status_code=404, detail="Instance not found")
+        chat_settings_id = str(cs.id)
+
+    # Verify caller has active membership for this instance
+    user_id = user_info.get("user_id")
+    with UserRepository() as user_repo:
+        user = user_repo.get_by_telegram_id(user_id) if user_id else None
+    if user:
+        with MembershipRepository() as membership_repo:
+            membership = membership_repo.get_membership(str(user.id), chat_settings_id)
+        if not membership or not membership.is_active:
+            raise HTTPException(status_code=403, detail="Not a member of this instance")
+
+    with AuditRepository() as audit_repo:
+        entries = audit_repo.get_for_instance(
+            chat_settings_id, limit=limit, offset=offset
+        )
+        return {
+            "entries": [
+                {
+                    "id": str(e.id),
+                    "entity_type": e.entity_type,
+                    "entity_id": str(e.entity_id) if e.entity_id else None,
+                    "action": e.action,
+                    "field_changed": e.field_changed,
+                    "old_value": e.old_value,
+                    "new_value": e.new_value,
+                    "changed_by_user_id": str(e.changed_by_user_id)
+                    if e.changed_by_user_id
+                    else None,
+                    "created_at": e.created_at.isoformat(),
+                }
+                for e in entries
+            ],
+        }

@@ -23,6 +23,7 @@ import { BACKEND_URL, fetchUserInstances } from "@/lib/backend";
 const ALLOWED_PATHS = [
   "analytics",
   "accounts",
+  "audit-log",
   "history-detail",
   "media-library",
   "media-stats",
