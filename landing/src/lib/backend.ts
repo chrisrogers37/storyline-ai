@@ -41,6 +41,23 @@ export async function backendFetchJson(
   return res.json();
 }
 
+interface InstanceInfo {
+  telegram_chat_id: number;
+  display_name?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Fetch the authenticated user's instance list from the backend.
+ * Returns the instances array, or null if the request fails.
+ */
+export async function fetchUserInstances(
+  userId: number
+): Promise<InstanceInfo[] | null> {
+  const data = await backendFetchJson("instances", 0, userId);
+  return data?.instances ?? null;
+}
+
 /**
  * POST to the FastAPI backend with URL token auth and JSON body.
  */

@@ -9,9 +9,14 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { verifySessionToken, SESSION_COOKIE } from "@/lib/auth";
-import { generateUrlToken } from "@/lib/auth";
-import { BACKEND_URL } from "@/lib/backend";
+import {
+  verifySessionToken,
+  createSessionToken,
+  SESSION_COOKIE,
+  SESSION_COOKIE_OPTIONS,
+  generateUrlToken,
+} from "@/lib/auth";
+import { BACKEND_URL, fetchUserInstances } from "@/lib/backend";
 
 // Allowlisted backend path prefixes the proxy can forward to.
 // Prevents path traversal to arbitrary FastAPI endpoints.
@@ -60,6 +65,30 @@ async function proxyRequest(
       { error: "No instance selected" },
       { status: 422 }
     );
+  }
+
+  // Prevents stale JWTs from granting access after a user is removed from a group.
+  try {
+    const instances = await fetchUserInstances(session.userId);
+    if (
+      instances &&
+      !instances.some((i) => i.telegram_chat_id === session.activeChatId)
+    ) {
+      const freshToken = await createSessionToken({
+        ...session,
+        activeChatId: null,
+      });
+      const resp = NextResponse.json(
+        { error: "Membership no longer active", code: "MEMBERSHIP_INVALID" },
+        { status: 403 }
+      );
+      resp.cookies.set(SESSION_COOKIE, freshToken, SESSION_COOKIE_OPTIONS);
+      return resp;
+    }
+    // instances === null means the backend is unreachable; fall through
+    // and let the proxied request handle auth at the backend level.
+  } catch (err) {
+    console.error("Membership check failed:", err);
   }
 
   const { path } = await params;
