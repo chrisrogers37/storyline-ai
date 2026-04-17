@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     authenticated: true,
     user: {
       id: session.userId,
-      chatId: session.chatId,
+      activeChatId: session.activeChatId,
       firstName: session.firstName,
       username: session.username,
       photoUrl: session.photoUrl,

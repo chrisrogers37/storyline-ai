@@ -10,6 +10,7 @@ import { createHmac, createHash } from "crypto";
 export type { SessionPayload } from "./session";
 export {
   SESSION_COOKIE,
+  SESSION_COOKIE_OPTIONS,
   createSessionToken,
   verifySessionToken,
   getSession,
@@ -35,6 +36,10 @@ let _urlTokenKey: Buffer | null = null;
 let _cachedBotToken: string | null = null;
 
 function getBotToken(): string {
+  // Dev bypass — return a dummy token so backend calls gracefully return null
+  if (process.env.DEV_AUTH_BYPASS === "true" && process.env.NODE_ENV !== "production") {
+    return "0000000000:dev_bypass_token_for_local_review_only";
+  }
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) throw new Error("TELEGRAM_BOT_TOKEN not configured");
   // Invalidate cached keys if token changes (e.g. test env)

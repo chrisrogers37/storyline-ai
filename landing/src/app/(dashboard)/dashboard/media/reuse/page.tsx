@@ -12,11 +12,11 @@ import {
 export default async function ContentReusePage() {
   const session = await getSession();
   if (!session) redirect("/login");
-  const { chatId, userId } = session;
+  const { activeChatId, userId } = session;
 
   const data = await backendFetchJson(
     "analytics/content-reuse",
-    chatId,
+    activeChatId!,
     userId,
     { revalidate: 60 }
   );

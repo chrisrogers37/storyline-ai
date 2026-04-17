@@ -13,11 +13,11 @@ import { Progress } from "@/components/ui/progress";
 export default async function DeadContentPage() {
   const session = await getSession();
   if (!session) redirect("/login");
-  const { chatId, userId } = session;
+  const { activeChatId, userId } = session;
 
   const data = await backendFetchJson(
     "analytics/dead-content?min_age_days=30",
-    chatId,
+    activeChatId!,
     userId,
     { revalidate: 60 }
   );

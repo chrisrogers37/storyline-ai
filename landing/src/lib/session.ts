@@ -11,7 +11,7 @@ import { cookies } from "next/headers";
 
 export interface SessionPayload {
   userId: number;
-  chatId: number;
+  activeChatId: number | null;
   firstName: string;
   username?: string;
   photoUrl?: string;
@@ -20,6 +20,16 @@ export interface SessionPayload {
 export const SESSION_COOKIE = "storyline_session";
 
 const JWT_EXPIRY = "24h";
+const JWT_MAX_AGE_SECONDS = 86400; // must match JWT_EXPIRY
+
+/** Shared cookie options for the session JWT. */
+export const SESSION_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax" as const,
+  path: "/",
+  maxAge: JWT_MAX_AGE_SECONDS,
+};
 
 // Lazy-initialized: Next.js evaluates modules at build time during page data
 // collection, but env vars aren't available then. Validate on first use.
@@ -43,7 +53,7 @@ export async function createSessionToken(
 ): Promise<string> {
   return new SignJWT({
     userId: payload.userId,
-    chatId: payload.chatId,
+    activeChatId: payload.activeChatId,
     firstName: payload.firstName,
     username: payload.username,
     photoUrl: payload.photoUrl,
@@ -61,7 +71,7 @@ export async function verifySessionToken(
     const { payload } = await jwtVerify(token, getJwtSecret());
     return {
       userId: payload.userId as number,
-      chatId: payload.chatId as number,
+      activeChatId: (payload.activeChatId as number) ?? null,
       firstName: payload.firstName as string,
       username: payload.username as string | undefined,
       photoUrl: payload.photoUrl as string | undefined,
@@ -76,6 +86,10 @@ export async function verifySessionToken(
  * Returns null if no valid session — callers decide whether to redirect.
  */
 export const getSession = cache(async (): Promise<SessionPayload | null> => {
+  // Dev auth bypass — returns a mock session without cookie validation.
+  if (process.env.DEV_AUTH_BYPASS === "true" && process.env.NODE_ENV !== "production") {
+    return { userId: 0, activeChatId: null, firstName: "Dev User", username: "dev" };
+  }
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;
   if (!token) return null;

@@ -17,6 +17,24 @@ from .helpers import _validate_request
 router = APIRouter(tags=["onboarding"])
 
 
+@router.get("/instances")
+async def onboarding_user_instances(init_data: str) -> dict:
+    """Return all instances a user belongs to, with stats per instance.
+
+    Auth-only (no chat_id scoping) — the user_id is extracted from the
+    signed init_data token to look up memberships.
+    """
+    from .helpers import _validate_auth
+
+    user_info = _validate_auth(init_data)
+    user_id = user_info.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="No user_id in token")
+
+    with DashboardService() as service:
+        return service.get_user_instances(user_id)
+
+
 @router.get("/queue-detail")
 async def onboarding_queue_detail(
     init_data: str,
@@ -151,9 +169,9 @@ async def onboarding_service_health(
     Requires valid init_data for authentication but does not scope by chat.
     """
     # Auth-only validation (no chat_id scoping — service runs are global)
-    from src.utils.webapp_auth import validate_init_data
+    from .helpers import _validate_auth
 
-    validate_init_data(init_data)
+    _validate_auth(init_data)
 
     with DashboardService() as service:
         return service.get_service_health_stats(hours=hours)
