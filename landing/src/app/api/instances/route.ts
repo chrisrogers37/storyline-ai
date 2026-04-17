@@ -6,8 +6,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { verifySessionToken, SESSION_COOKIE, generateUrlToken } from "@/lib/auth";
-import { BACKEND_URL } from "@/lib/backend";
+import { verifySessionToken, SESSION_COOKIE } from "@/lib/auth";
+import { fetchUserInstances } from "@/lib/backend";
 
 export async function GET(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE)?.value;
@@ -20,21 +20,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid session" }, { status: 401 });
   }
 
-  // Use chat_id=0 in the URL token — the instances endpoint only needs user_id
-  const urlToken = generateUrlToken(0, session.userId);
-  const url = `${BACKEND_URL}/api/onboarding/instances?init_data=${encodeURIComponent(urlToken)}`;
-
   try {
-    const res = await fetch(url);
-    if (!res.ok) {
-      console.error("Backend /instances error:", res.status);
+    const instances = await fetchUserInstances(session.userId);
+    if (instances === null) {
       return NextResponse.json(
         { error: "Failed to fetch instances" },
-        { status: res.status >= 500 ? 502 : res.status }
+        { status: 502 }
       );
     }
-    const data = await res.json();
-    return NextResponse.json(data);
+    return NextResponse.json({ instances });
   } catch (error) {
     console.error("Instances fetch error:", error);
     return NextResponse.json(
