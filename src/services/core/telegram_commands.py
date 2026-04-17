@@ -503,6 +503,232 @@ class TelegramCommandHandlers:
             parse_mode="Markdown",
         )
 
+    # ==================== Multi-Account Commands ====================
+
+    async def handle_link(self, update, context):
+        """Handle /link — manual group-to-instance linking fallback.
+
+        Used when the bot is already in the group (so startgroup/my_chat_member
+        won't fire). Links the current group to the user's pending onboarding session.
+
+        Note: Does not accept a <session_id> argument (intentional deviation from spec).
+        Session lookup is always scoped to the calling user.
+        """
+        chat_id = update.effective_chat.id
+        is_group = update.effective_chat.type in ("group", "supergroup")
+
+        if not is_group:
+            await update.message.reply_text(
+                "Run /link in the group chat you want to link."
+            )
+            return
+
+        user = self.service._get_or_create_user(
+            update.effective_user, telegram_chat_id=chat_id
+        )
+
+        # Verify bot is actually a member of this group
+        try:
+            bot_member = await context.bot.get_chat_member(chat_id, context.bot.id)
+            if bot_member.status in ("left", "kicked"):
+                await update.message.reply_text(
+                    "⚠️ I'm not a member of this group. "
+                    "Add me first, then run /link again."
+                )
+                return
+        except Exception:
+            await update.message.reply_text(
+                "⚠️ I can't verify my membership in this group. "
+                "Try removing and re-adding me."
+            )
+            return
+
+        from src.services.core.conversation_service import ConversationService
+
+        with ConversationService() as conv_service:
+            session = conv_service.get_current_session(str(user.id))
+
+        if not session or session.step != "awaiting_group":
+            await update.message.reply_text(
+                "⚠️ No pending instance setup found.\n\n"
+                "Start a new instance by DMing me and running /start."
+            )
+            return
+
+        with ConversationService() as conv_service:
+            conv_service.link_group_to_instance(
+                session=session,
+                chat_id=chat_id,
+                user_id=str(user.id),
+                membership_repo=self.service.membership_repo,
+            )
+
+        name = session.pending_instance_name or "this group"
+        await update.message.reply_text(
+            f"✅ *{name}* is linked to this group!\n\n"
+            "Use /status to check health, or /setup to configure.",
+            parse_mode="Markdown",
+        )
+
+        # Notify in DM
+        try:
+            await self.service.bot.send_message(
+                chat_id=update.effective_user.id,
+                text=(
+                    f"✅ *{name}* is linked!\n\n"
+                    "Use /start here to manage your instances."
+                ),
+                parse_mode="Markdown",
+            )
+        except Exception:
+            pass
+
+        self.service.interaction_service.log_command(
+            user_id=str(user.id),
+            command="/link",
+            telegram_chat_id=chat_id,
+            telegram_message_id=update.message.message_id,
+        )
+
+    async def handle_name(self, update, context):
+        """Handle /name <name> — set display name for this group's instance."""
+        chat_id = update.effective_chat.id
+        is_group = update.effective_chat.type in ("group", "supergroup")
+
+        if not is_group:
+            await update.message.reply_text(
+                "Run /name in a group chat to set that instance's name."
+            )
+            return
+
+        user = self.service._get_or_create_user(
+            update.effective_user, telegram_chat_id=chat_id
+        )
+
+        name = " ".join(context.args).strip()[:100] if context.args else ""
+        if not name:
+            await update.message.reply_text(
+                "Usage: `/name My Instance Name`",
+                parse_mode="Markdown",
+            )
+            return
+
+        from src.services.core.settings_service import SettingsService
+
+        with SettingsService() as settings_service:
+            chat_settings = settings_service.get_settings_if_exists(chat_id)
+            if not chat_settings:
+                await update.message.reply_text(
+                    "⚠️ This group isn't set up yet. Run /start first."
+                )
+                return
+            settings_service.update_setting(chat_id, "display_name", name)
+
+        await update.message.reply_text(
+            f"✅ Instance renamed to *{name}*",
+            parse_mode="Markdown",
+        )
+
+        self.service.interaction_service.log_command(
+            user_id=str(user.id),
+            command="/name",
+            context={"display_name": name},
+            telegram_chat_id=chat_id,
+            telegram_message_id=update.message.message_id,
+        )
+
+    async def handle_instances(self, update, context):
+        """Handle /instances — list user's instances in DM."""
+        if update.effective_chat.type != "private":
+            await update.message.reply_text(
+                "Use /instances in a DM with me to see all your instances."
+            )
+            return
+
+        user = self.service._get_or_create_user(update.effective_user)
+
+        from src.services.core.dashboard_service import DashboardService
+        from src.services.core.start_command_router import _escape_md2
+
+        with DashboardService() as dash:
+            data = dash.get_user_instances(update.effective_user.id)
+
+        instances = data["instances"]
+        if not instances:
+            await update.message.reply_text(
+                "You don't have any instances yet.\n\n"
+                "Run /new to create one, or /start to get started."
+            )
+            return
+
+        lines = ["Your instances:"]
+        keyboard_rows = []
+        for i, inst in enumerate(instances, 1):
+            name = inst["display_name"] or f"Chat {inst['telegram_chat_id']}"
+            media = inst["media_count"]
+            ppd = inst["posts_per_day"]
+            status = "paused" if inst["is_paused"] else "active"
+            lines.append(
+                f"{i}\\. *{_escape_md2(name)}* \\({media} media · {ppd}/day · {status}\\)"
+            )
+            keyboard_rows.append(
+                [
+                    InlineKeyboardButton(
+                        f"Manage {name}",
+                        callback_data=f"instance_manage:{inst['chat_settings_id']}",
+                    )
+                ]
+            )
+
+        keyboard_rows.append(
+            [InlineKeyboardButton("+ New Instance", callback_data="instance_new")]
+        )
+
+        await update.message.reply_text(
+            "\n".join(lines),
+            parse_mode="MarkdownV2",
+            reply_markup=InlineKeyboardMarkup(keyboard_rows),
+        )
+
+        self.service.interaction_service.log_command(
+            user_id=str(user.id),
+            command="/instances",
+            context={"count": len(instances)},
+            telegram_chat_id=update.effective_chat.id,
+            telegram_message_id=update.message.message_id,
+        )
+
+    async def handle_new(self, update, context):
+        """Handle /new — shortcut to start new instance creation in DM."""
+        if update.effective_chat.type != "private":
+            await update.message.reply_text(
+                "Use /new in a DM with me to create a new instance."
+            )
+            return
+
+        user = self.service._get_or_create_user(update.effective_user)
+
+        from src.services.core.conversation_service import ConversationService
+
+        with ConversationService() as conv_service:
+            session = conv_service.start_onboarding(str(user.id))
+
+        context.user_data["onboarding_session_id"] = str(session.id)
+
+        await update.message.reply_text(
+            "Let's set up a new instance\\!\n\n"
+            "What do you want to call it?\n"
+            '_\\(e\\.g\\. "TL Enterprises", "Personal Brand"\\)_',
+            parse_mode="MarkdownV2",
+        )
+
+        self.service.interaction_service.log_command(
+            user_id=str(user.id),
+            command="/new",
+            telegram_chat_id=update.effective_chat.id,
+            telegram_message_id=update.message.message_id,
+        )
+
     async def _send_gdrive_reconnect_message(self, update, chat_id: int) -> None:
         """Send a Google Drive reconnect message with an inline button."""
         text = (

@@ -60,6 +60,47 @@ class ConversationService(BaseService):
             pending_chat_settings_id=chat_settings_id,
         )
 
+    def link_group_to_instance(
+        self,
+        session: "OnboardingSession",
+        chat_id: int,
+        user_id: str,
+        membership_repo,
+    ) -> "ChatSettings":
+        """Shared linking flow: create chat_settings, set display_name,
+        create owner membership, complete onboarding session.
+
+        Used by startgroup deep link, my_chat_member, and /link command.
+        Returns the chat_settings record.
+
+        Idempotent: MembershipRepository.create_membership handles duplicates
+        via upsert, so partial failures (e.g. update_step fails after
+        create_membership succeeds) are safe to retry.
+        """
+        from src.services.core.settings_service import SettingsService
+
+        with SettingsService() as settings_service:
+            chat_settings = settings_service.get_settings(chat_id)
+            if session.pending_instance_name:
+                settings_service.update_setting(
+                    chat_id, "display_name", session.pending_instance_name
+                )
+
+        # Idempotent: returns existing membership if already created
+        membership_repo.create_membership(
+            user_id=user_id,
+            chat_settings_id=str(chat_settings.id),
+            instance_role="owner",
+        )
+
+        self.onboarding_repo.update_step(
+            session_id=str(session.id),
+            step="complete",
+            pending_chat_settings_id=str(chat_settings.id),
+        )
+
+        return chat_settings
+
     def cleanup_expired(self) -> int:
         """Delete expired onboarding sessions. Call from scheduler loop."""
         count = self.onboarding_repo.delete_expired()
