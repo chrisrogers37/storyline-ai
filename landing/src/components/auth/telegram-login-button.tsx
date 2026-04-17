@@ -14,11 +14,21 @@ interface TelegramUser {
   hash: string;
 }
 
+function isMobile() {
+  if (typeof window === "undefined") return false;
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+}
+
 export function TelegramLoginButton() {
   const containerRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const [status, setStatus] = useState<"loading" | "ready" | "failed">("loading");
+  const [mobile, setMobile] = useState(false);
   const botName = process.env.NEXT_PUBLIC_TELEGRAM_BOT_NAME;
+
+  useEffect(() => {
+    setMobile(isMobile());
+  }, []);
 
   const handleAuth = useCallback(
     async (user: TelegramUser) => {
@@ -38,7 +48,7 @@ export function TelegramLoginButton() {
   );
 
   useEffect(() => {
-    if (!botName || !containerRef.current) return;
+    if (!botName || !containerRef.current || mobile) return;
 
     setStatus("loading");
     (window as unknown as Record<string, unknown>).__telegram_login_callback = handleAuth;
@@ -56,8 +66,6 @@ export function TelegramLoginButton() {
     let pollTimer: ReturnType<typeof setInterval>;
 
     script.onload = () => {
-      // Script loaded, but the widget iframe may still not render.
-      // Poll until the iframe appears or give up after 5s.
       let elapsed = 0;
       pollTimer = setInterval(() => {
         elapsed += 500;
@@ -79,7 +87,7 @@ export function TelegramLoginButton() {
       delete (window as unknown as Record<string, unknown>).__telegram_login_callback;
       container.innerHTML = "";
     };
-  }, [botName, handleAuth]);
+  }, [botName, handleAuth, mobile]);
 
   if (!botName) {
     return (
@@ -89,6 +97,21 @@ export function TelegramLoginButton() {
           <code className="rounded bg-muted px-1 py-0.5 text-xs">NEXT_PUBLIC_TELEGRAM_BOT_NAME</code>{" "}
           to enable sign-in.
         </p>
+      </div>
+    );
+  }
+
+  if (mobile) {
+    return (
+      <div className="space-y-3 text-center">
+        <a
+          href={`https://t.me/${botName}?start=login`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 rounded-md bg-[#2AABEE] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#229ED9]"
+        >
+          Sign in with Telegram
+        </a>
       </div>
     );
   }
