@@ -11,9 +11,8 @@ import {
   createSessionToken,
   SESSION_COOKIE,
   SESSION_COOKIE_OPTIONS,
-  generateUrlToken,
 } from "@/lib/auth";
-import { BACKEND_URL } from "@/lib/backend";
+import { fetchUserInstances } from "@/lib/backend";
 
 export async function POST(
   request: NextRequest,
@@ -38,23 +37,17 @@ export async function POST(
     );
   }
 
-  // Verify membership by fetching user's instances from backend
-  const urlToken = generateUrlToken(0, session.userId);
-  const url = `${BACKEND_URL}/api/onboarding/instances?init_data=${encodeURIComponent(urlToken)}`;
-
   try {
-    const res = await fetch(url);
-    if (!res.ok) {
+    const instances = await fetchUserInstances(session.userId);
+    if (instances === null) {
       return NextResponse.json(
         { error: "Failed to verify membership" },
         { status: 502 }
       );
     }
 
-    const data = await res.json();
-    const instance = data.instances?.find(
-      (i: { telegram_chat_id: number }) =>
-        i.telegram_chat_id === instanceChatId
+    const instance = instances.find(
+      (i) => i.telegram_chat_id === instanceChatId
     );
 
     if (!instance) {
