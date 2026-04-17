@@ -11,6 +11,8 @@ from src.models.category_mix import CategoryPostCaseMix
 from src.models.instagram_account import InstagramAccount
 from src.models.api_token import ApiToken
 from src.models.chat_settings import ChatSettings
+from src.models.user_chat_membership import UserChatMembership
+from src.models.onboarding_session import OnboardingSession
 
 __all__ = [
     "User",
@@ -24,4 +26,6 @@ __all__ = [
     "InstagramAccount",
     "ApiToken",
     "ChatSettings",
+    "UserChatMembership",
+    "OnboardingSession",
 ]
