@@ -22,6 +22,7 @@ from src.services.core.interaction_service import InteractionService
 from src.services.core.settings_service import SettingsService
 from src.services.core.instagram_account_service import InstagramAccountService
 from src.services.core.telegram_notification import TelegramNotificationService
+from src.repositories.membership_repository import MembershipRepository
 from src.config.settings import settings
 from src.utils.logger import logger
 from src import __version__
@@ -56,11 +57,13 @@ class TelegramService(BaseService):
         self.interaction_service = InteractionService()
         self.settings_service = SettingsService()
         self.ig_account_service = InstagramAccountService()
+        self.membership_repo = MembershipRepository()
         self.bot = None
         self.application = None
         self.notification_service = TelegramNotificationService(self)
         self._operation_locks: dict[str, asyncio.Lock] = {}
         self._cancel_flags: dict[str, asyncio.Event] = {}
+        self._known_memberships: set[tuple[str, int]] = set()
         self._callback_dispatch: dict = {}
 
     def get_operation_lock(self, queue_id: str) -> asyncio.Lock:
@@ -357,8 +360,12 @@ class TelegramService(BaseService):
 
             logger.info(f"📞 Parsed action='{action}', data='{data}'")
 
-            # Get user info
-            user = self._get_or_create_user(query.from_user)
+            # Get user info (pass chat_id for auto-membership in groups)
+            try:
+                chat_id = int(query.message.chat_id) if query.message else None
+            except (TypeError, ValueError):
+                chat_id = None
+            user = self._get_or_create_user(query.from_user, telegram_chat_id=chat_id)
 
             # Tier 1: Standard dispatch (data, user, query) handlers
             handler = self._callback_dispatch.get(action)
@@ -393,8 +400,12 @@ class TelegramService(BaseService):
             # Clean up open transactions to prevent "idle in transaction"
             self.cleanup_transactions()
 
-    def _get_or_create_user(self, telegram_user):
-        """Get or create user from Telegram data, syncing profile on each interaction."""
+    def _get_or_create_user(self, telegram_user, telegram_chat_id=None):
+        """Get or create user from Telegram data, syncing profile on each interaction.
+
+        If telegram_chat_id is provided and is a group chat (< 0), also ensures
+        a user_chat_membership exists linking this user to that chat's instance.
+        """
         user = self.user_repo.get_by_telegram_id(telegram_user.id)
 
         if not user:
@@ -414,7 +425,35 @@ class TelegramService(BaseService):
                 telegram_last_name=telegram_user.last_name,
             )
 
+        # Auto-create membership for group chat interactions
+        if telegram_chat_id is not None and telegram_chat_id < 0:
+            self._ensure_membership(user, telegram_chat_id)
+
         return user
+
+    def _ensure_membership(self, user, telegram_chat_id):
+        """Ensure a membership exists linking user to a group chat instance.
+
+        Uses a process-local cache to avoid DB queries on repeated
+        interactions from the same user in the same group.
+        """
+        cache_key = (str(user.id), telegram_chat_id)
+        if cache_key in self._known_memberships:
+            return
+
+        try:
+            chat_settings = self.settings_service.settings_repo.get_by_chat_id(
+                telegram_chat_id
+            )
+            if not chat_settings:
+                return
+            self.membership_repo.create_membership(
+                user_id=str(user.id),
+                chat_settings_id=str(chat_settings.id),
+            )
+            self._known_memberships.add(cache_key)
+        except Exception as e:
+            logger.debug(f"Membership auto-create failed: {e}")
 
     def _is_verbose(self, chat_id, chat_settings=None) -> bool:
         """Check if verbose notifications are enabled for a chat.

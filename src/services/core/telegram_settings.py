@@ -133,8 +133,10 @@ class TelegramSettingsHandlers:
 
     async def handle_settings(self, update, context):
         """Handle /settings command - show settings menu with toggle buttons."""
-        user = self.service._get_or_create_user(update.effective_user)
         chat_id = update.effective_chat.id
+        user = self.service._get_or_create_user(
+            update.effective_user, telegram_chat_id=chat_id
+        )
 
         # Log the actual command used (could be /setup or /settings alias)
         command_text = (

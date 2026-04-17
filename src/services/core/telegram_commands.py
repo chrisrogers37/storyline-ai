@@ -32,8 +32,10 @@ class TelegramCommandHandlers:
         New users: show onboarding Mini App button.
         Returning users: show dashboard summary.
         """
-        user = self.service._get_or_create_user(update.effective_user)
         chat_id = update.effective_chat.id
+        user = self.service._get_or_create_user(
+            update.effective_user, telegram_chat_id=chat_id
+        )
 
         # Check onboarding status
         from src.services.core.settings_service import SettingsService
@@ -103,8 +105,10 @@ class TelegramCommandHandlers:
         All data is scoped to the current chat's tenant (chat_settings_id)
         and all configuration is read from the database, never from env vars.
         """
-        user = self.service._get_or_create_user(update.effective_user)
         chat_id = update.effective_chat.id
+        user = self.service._get_or_create_user(
+            update.effective_user, telegram_chat_id=chat_id
+        )
 
         # Load tenant-scoped settings from DB (single source of truth)
         chat_settings = self.service.settings_service.get_settings(chat_id)
@@ -396,8 +400,10 @@ class TelegramCommandHandlers:
 
     async def handle_cleanup(self, update, context):
         """Handle /cleanup command - delete recent bot messages from chat."""
-        user = self.service._get_or_create_user(update.effective_user)
         chat_id = update.effective_chat.id
+        user = self.service._get_or_create_user(
+            update.effective_user, telegram_chat_id=chat_id
+        )
 
         # Query database for bot messages from last 48 hours
         bot_messages = self.service.interaction_service.get_deletable_bot_messages(
@@ -470,8 +476,10 @@ class TelegramCommandHandlers:
         Shows a summary of pending items and a confirmation button.
         On confirmation, marks each item as posted with history and lock creation.
         """
-        user = self.service._get_or_create_user(update.effective_user)
         chat_id = update.effective_chat.id
+        user = self.service._get_or_create_user(
+            update.effective_user, telegram_chat_id=chat_id
+        )
 
         chat_settings = self.service.settings_service.get_settings(chat_id)
         cs_id = str(chat_settings.id)
