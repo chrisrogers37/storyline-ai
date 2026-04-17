@@ -46,6 +46,7 @@ BACKFILL_SQL = text("""
 
 BACKFILL_PREVIEW_SQL = text("""
     SELECT
+        u.id AS user_id,
         u.telegram_username,
         cs.telegram_chat_id,
         cs.display_name,
@@ -56,7 +57,7 @@ BACKFILL_PREVIEW_SQL = text("""
     WHERE ui.user_id IS NOT NULL
       AND ui.telegram_chat_id < 0
       AND ui.interaction_type IN ('command', 'callback')
-    GROUP BY u.telegram_username, cs.telegram_chat_id, cs.display_name
+    GROUP BY u.id, u.telegram_username, cs.telegram_chat_id, cs.display_name
     ORDER BY u.telegram_username, MIN(ui.created_at)
 """)
 
@@ -188,6 +189,7 @@ async def promote_roles() -> int:
 # Verification
 # ---------------------------------------------------------------------------
 
+# Catches fully-missed users; partial per-group gaps require manual inspection.
 VERIFY_SQL = text("""
     SELECT u.id, u.telegram_username, COUNT(DISTINCT ui.telegram_chat_id) AS groups
     FROM users u
@@ -277,6 +279,9 @@ def main():
         help="Run verification query only",
     )
     args = parser.parse_args()
+
+    if args.apply and args.promote:
+        parser.error("Cannot combine --apply and --promote. Run them sequentially.")
 
     start = time.time()
 
