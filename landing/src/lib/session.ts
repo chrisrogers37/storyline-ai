@@ -88,7 +88,8 @@ export async function verifySessionToken(
 export const getSession = cache(async (): Promise<SessionPayload | null> => {
   // Dev auth bypass — returns a mock session without cookie validation.
   if (process.env.DEV_AUTH_BYPASS === "true" && process.env.NODE_ENV !== "production") {
-    return { userId: 0, activeChatId: null, firstName: "Dev User", username: "dev" };
+    // Use userId as activeChatId so dashboard pages can generate valid backend tokens
+    return { userId: 0, activeChatId: 0, firstName: "Dev User", username: "dev" };
   }
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;

@@ -145,7 +145,7 @@ export default function InstancePickerPage() {
                 <div className="space-y-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-medium truncate">
-                      {inst.display_name || `Instance ${inst.telegram_chat_id}`}
+                      {inst.display_name || "Unnamed Instance"}
                     </span>
                     {inst.is_paused ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-yellow-500/10 px-2 py-0.5 text-xs font-medium text-yellow-600">

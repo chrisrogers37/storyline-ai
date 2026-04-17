@@ -113,7 +113,7 @@ export default function WebAppInstancePicker() {
               <div className="min-w-0 space-y-0.5">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium truncate">
-                    {inst.display_name || `Instance ${inst.telegram_chat_id}`}
+                    {inst.display_name || "Unnamed Instance"}
                   </span>
                   {inst.is_paused ? (
                     <Pause className="h-3 w-3 text-yellow-500 shrink-0" />

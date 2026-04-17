@@ -6,6 +6,7 @@ from telegram import Bot, BotCommand
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
+    ChatMemberHandler,
     CommandHandler,
     MessageHandler,
     filters,

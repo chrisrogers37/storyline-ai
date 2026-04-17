@@ -14,6 +14,7 @@ export function DashboardHeader({ user }: { user: SessionPayload }) {
   const [instances, setInstances] = useState<Pick<Instance, "telegram_chat_id" | "display_name">[]>([]);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
+  const [switchError, setSwitchError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/instances")
@@ -35,6 +36,7 @@ export function DashboardHeader({ user }: { user: SessionPayload }) {
       return;
     }
     setSwitching(true);
+    setSwitchError(null);
     try {
       const res = await fetch(`/api/instances/${chatId}/select`, {
         method: "POST",
@@ -42,7 +44,11 @@ export function DashboardHeader({ user }: { user: SessionPayload }) {
       if (res.ok) {
         router.refresh();
         setSwitcherOpen(false);
+      } else {
+        setSwitchError("Failed to switch instance");
       }
+    } catch {
+      setSwitchError("Failed to switch instance");
     } finally {
       setSwitching(false);
     }
@@ -92,14 +98,18 @@ export function DashboardHeader({ user }: { user: SessionPayload }) {
                       className="flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-sm hover:bg-accent disabled:opacity-50 transition-colors"
                     >
                       <span className="truncate">
-                        {inst.display_name ||
-                          `Instance ${inst.telegram_chat_id}`}
+                        {inst.display_name || "Unnamed Instance"}
                       </span>
                       {inst.telegram_chat_id === user.activeChatId && (
                         <Check className="h-3.5 w-3.5 text-primary shrink-0" />
                       )}
                     </button>
                   ))}
+                  {switchError && (
+                    <p className="px-2 py-1 text-xs text-destructive">
+                      {switchError}
+                    </p>
+                  )}
                 </div>
               </>
             )}

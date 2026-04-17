@@ -1,12 +1,17 @@
 """Conversation service - DM onboarding state machine."""
 
+from __future__ import annotations
+
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from src.models.onboarding_session import OnboardingSession
 from src.repositories.onboarding_repository import OnboardingRepository
 from src.services.base_service import BaseService
 from src.utils.logger import logger
+
+if TYPE_CHECKING:
+    from src.models.chat_settings import ChatSettings
 
 ONBOARDING_TTL_HOURS = 24
 

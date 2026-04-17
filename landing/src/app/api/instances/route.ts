@@ -6,8 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { verifySessionToken, SESSION_COOKIE } from "@/lib/auth";
-import { generateUrlToken } from "@/lib/auth";
+import { verifySessionToken, SESSION_COOKIE, generateUrlToken } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/backend";
 
 export async function GET(request: NextRequest) {
