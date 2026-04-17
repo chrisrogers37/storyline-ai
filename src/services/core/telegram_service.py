@@ -161,6 +161,11 @@ class TelegramService(BaseService):
             "help": self.commands.handle_help,
             "settings": self.settings_handler.handle_settings,
             "setup": self.settings_handler.handle_settings,
+            # Multi-account commands
+            "link": self.commands.handle_link,
+            "name": self.commands.handle_name,
+            "instances": self.commands.handle_instances,
+            "new": self.commands.handle_new,
             # Retired commands (show helpful redirect)
             "queue": self.commands.handle_removed_command,
             "pause": self.commands.handle_removed_command,
@@ -187,6 +192,14 @@ class TelegramService(BaseService):
             )
         )
 
+        # my_chat_member handler for group linking / bot-kicked detection
+        self.application.add_handler(
+            ChatMemberHandler(
+                self._handle_my_chat_member,
+                ChatMemberHandler.MY_CHAT_MEMBER,
+            )
+        )
+
         # Register commands with Telegram for autocomplete menu
         commands = [
             BotCommand("start", "Open Storyline (setup & config)"),
@@ -194,6 +207,10 @@ class TelegramService(BaseService):
             BotCommand("setup", "Quick settings & toggles"),
             BotCommand("next", "Send next post now"),
             BotCommand("approveall", "Approve all pending posts"),
+            BotCommand("instances", "List your instances (DM)"),
+            BotCommand("new", "Create a new instance (DM)"),
+            BotCommand("name", "Set instance name (group)"),
+            BotCommand("link", "Link group to pending instance"),
             BotCommand("cleanup", "Delete recent bot messages"),
             BotCommand("help", "Show available commands"),
         ]
@@ -396,6 +413,114 @@ class TelegramService(BaseService):
                 "or run `/link` in that group if I'm already there.",
                 parse_mode="Markdown",
             )
+
+    async def _handle_my_chat_member(self, update, context):
+        """Handle ChatMemberUpdated events for the bot itself.
+
+        Fires when the bot's membership status changes in any chat:
+        - Bot added to group → auto-link pending onboarding session
+        - Bot kicked from group → deactivate all memberships for that chat
+        """
+        member_update = update.my_chat_member
+        if not member_update:
+            return
+
+        chat = member_update.chat
+        if chat.type not in ("group", "supergroup"):
+            return
+
+        old_status = member_update.old_chat_member.status
+        new_status = member_update.new_chat_member.status
+        from_user = member_update.from_user
+
+        try:
+            if new_status in ("member", "administrator") and old_status in (
+                "left",
+                "kicked",
+            ):
+                await self._handle_bot_added_to_group(chat, from_user)
+            elif new_status in ("left", "kicked") and old_status in (
+                "member",
+                "administrator",
+            ):
+                self._handle_bot_removed_from_group(chat)
+        except Exception as e:
+            logger.error(
+                f"my_chat_member handler error for chat {chat.id}: "
+                f"{type(e).__name__}: {e}",
+                exc_info=True,
+            )
+        finally:
+            self.cleanup_transactions()
+
+    async def _handle_bot_added_to_group(self, chat, from_user):
+        """Bot was added to a group — check for pending onboarding session to auto-link."""
+        from src.services.core.conversation_service import ConversationService
+
+        user = self._get_or_create_user(from_user)
+
+        # Race condition guard: the onboarding session may not be committed yet
+        # if the user clicked "Add to Group" very quickly after naming.
+        # Retry once after 2s.
+        session = None
+        for attempt in range(2):
+            with ConversationService() as conv_service:
+                session = conv_service.get_current_session(str(user.id))
+            if session and session.step == "awaiting_group":
+                break
+            if attempt == 0:
+                await asyncio.sleep(2)
+
+        if not session or session.step != "awaiting_group":
+            logger.info(
+                f"Bot added to group {chat.id} by user {from_user.id} "
+                f"— no pending onboarding session"
+            )
+            return
+
+        with ConversationService() as conv_service:
+            conv_service.link_group_to_instance(
+                session=session,
+                chat_id=chat.id,
+                user_id=str(user.id),
+                membership_repo=self.membership_repo,
+            )
+
+        name = session.pending_instance_name or "this group"
+        logger.info(
+            f"Auto-linked instance '{name}' to group {chat.id} "
+            f"via my_chat_member (user {from_user.id})"
+        )
+
+        # Notify user in DM
+        try:
+            await self.bot.send_message(
+                chat_id=from_user.id,
+                text=(
+                    f"✅ *{name}* is linked to your group!\n\n"
+                    "Use /start here to manage your instances."
+                ),
+                parse_mode="Markdown",
+            )
+        except Exception:
+            pass  # DM may be blocked
+
+    def _handle_bot_removed_from_group(self, chat):
+        """Bot was kicked from a group — deactivate all memberships."""
+        chat_settings = self.settings_service.get_settings_if_exists(chat.id)
+        if not chat_settings:
+            return
+
+        count = self.membership_repo.deactivate_for_chat(str(chat_settings.id))
+
+        # Evict _known_memberships cache entries for this chat
+        to_evict = {k for k in self._known_memberships if k[1] == chat.id}
+        self._known_memberships -= to_evict
+
+        logger.info(
+            f"Bot removed from group {chat.id} — "
+            f"deactivated {count} membership(s), evicted {len(to_evict)} cache entries"
+        )
 
     async def _handle_callback(self, update, context):
         """Handle inline button callbacks.

@@ -339,6 +339,16 @@ async def run_scheduler_loop(
             retention_tick_counter = 0
             await _retention_cleanup_tick(service_run_repo)
 
+        # --- Hourly: clean up expired onboarding sessions ---
+        if retention_tick_counter == 0:
+            try:
+                from src.services.core.conversation_service import ConversationService
+
+                with ConversationService() as conv_service:
+                    conv_service.cleanup_expired()
+            except Exception as e:
+                logger.warning(f"Onboarding session cleanup failed: {e}")
+
         # --- Hourly health checks: pool depletion + token health ---
         pool_check_tick_counter += 1
         if pool_check_tick_counter >= POOL_CHECK_INTERVAL_TICKS:

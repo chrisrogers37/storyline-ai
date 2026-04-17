@@ -96,26 +96,13 @@ class StartCommandRouter:
             )
             return
 
-        # Create chat_settings for this group and link it
-        from src.services.core.settings_service import SettingsService
-
-        with SettingsService() as settings_service:
-            chat_settings = settings_service.get_settings(chat_id)
-            if session.pending_instance_name:
-                settings_service.update_setting(
-                    chat_id, "display_name", session.pending_instance_name
-                )
-
-        # Create owner membership
-        self.service.membership_repo.create_membership(
-            user_id=str(user.id),
-            chat_settings_id=str(chat_settings.id),
-            instance_role="owner",
-        )
-
-        # Complete the onboarding session
         with ConversationService() as conv_service:
-            conv_service.link_group(str(session.id), str(chat_settings.id))
+            conv_service.link_group_to_instance(
+                session=session,
+                chat_id=chat_id,
+                user_id=str(user.id),
+                membership_repo=self.service.membership_repo,
+            )
 
         name = session.pending_instance_name or "this group"
         await update.message.reply_text(
