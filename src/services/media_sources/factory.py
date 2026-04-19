@@ -1,7 +1,6 @@
 """Factory for creating media source provider instances."""
 
 from src.config.settings import settings
-from src.exceptions.google_drive import GoogleDriveAuthError
 from src.services.media_sources.base_provider import MediaSourceProvider
 from src.services.media_sources.local_provider import LocalMediaProvider
 from src.utils.logger import logger
@@ -88,7 +87,7 @@ class MediaSourceFactory:
                         return gdrive_service.get_provider_for_chat(
                             telegram_chat_id, root_folder_id
                         )
-                    except GoogleDriveAuthError as e:
+                    except Exception as e:  # noqa: BLE001 — service-account fallback is intentionally broad
                         logger.warning(
                             "User OAuth failed for chat %s: %s, falling back to service account",
                             telegram_chat_id,

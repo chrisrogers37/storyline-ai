@@ -4,7 +4,6 @@ from datetime import datetime
 from typing import Optional, List, Union
 import random
 
-import anthropic
 
 from src.exceptions.google_drive import GoogleDriveAuthError
 from src.services.base_service import BaseService
@@ -247,7 +246,7 @@ class SchedulerService(BaseService):
                         generated = await caption_service.generate_caption(media_item)
                     if generated:
                         media_item = self.media_repo.get_by_id(str(media_item.id))
-                except (anthropic.APIError, OSError) as e:
+                except Exception as e:  # noqa: BLE001 — caption failures must never block posting
                     logger.warning(f"AI caption generation failed, continuing: {e}")
 
             # Auto-approve previously-approved media (skip Telegram)
