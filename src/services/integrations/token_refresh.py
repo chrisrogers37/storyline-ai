@@ -1,6 +1,6 @@
 """Token refresh service for managing OAuth tokens."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
@@ -144,7 +144,7 @@ class TokenRefreshService(BaseService):
 
             # Meta long-lived tokens expire after 60 days
             # We don't know the exact issue date, so assume issued now
-            issued_at = datetime.utcnow()
+            issued_at = datetime.now(timezone.utc)
             expires_at = issued_at + timedelta(days=60)
 
             # Store in database
@@ -265,7 +265,7 @@ class TokenRefreshService(BaseService):
                         return False
 
                     # Store the new token
-                    issued_at = datetime.utcnow()
+                    issued_at = datetime.now(timezone.utc)
                     expires_at = issued_at + timedelta(seconds=expires_in)
 
                     encrypted = self.encryption.encrypt(new_token)

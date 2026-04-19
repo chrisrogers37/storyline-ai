@@ -1,6 +1,6 @@
 """Scheduler service - JIT posting schedule with per-slot media selection."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Union
 import random
 
@@ -53,7 +53,7 @@ class SchedulerService(BaseService):
             None — slot is due, no category preference
             False — slot is not due
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         if not self._in_posting_window(now, chat_settings):
             return False
@@ -63,10 +63,9 @@ class SchedulerService(BaseService):
 
         last_sent = chat_settings.last_post_sent_at
         if last_sent:
-            # ORM now declares timezone=True; strip tzinfo for naive UTC comparison
-            last_sent = (
-                last_sent.replace(tzinfo=None) if last_sent.tzinfo else last_sent
-            )
+            # DB may return naive UTC; normalize to aware
+            if last_sent.tzinfo is None:
+                last_sent = last_sent.replace(tzinfo=timezone.utc)
         if last_sent and (now - last_sent).total_seconds() < interval_seconds:
             return False  # Too soon
 
@@ -265,7 +264,7 @@ class SchedulerService(BaseService):
             # Create in-flight queue item
             queue_item = self.queue_repo.create(
                 media_item_id=str(media_item.id),
-                scheduled_for=datetime.utcnow(),
+                scheduled_for=datetime.now(timezone.utc),
                 chat_settings_id=str(chat_settings.id),
             )
 
@@ -276,7 +275,7 @@ class SchedulerService(BaseService):
 
             if success:
                 self.settings_service.update_last_post_sent_at(
-                    chat_settings.telegram_chat_id, datetime.utcnow()
+                    chat_settings.telegram_chat_id, datetime.now(timezone.utc)
                 )
 
             result = {
@@ -349,7 +348,7 @@ class SchedulerService(BaseService):
         """
         from src.repositories.history_repository import HistoryCreateParams
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         media_id = str(media_item.id)
         cs_id = str(chat_settings.id)
 

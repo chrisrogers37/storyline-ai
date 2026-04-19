@@ -1,7 +1,7 @@
 """Tests for SchedulerService (JIT model)."""
 
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from unittest.mock import AsyncMock, Mock, patch
 from uuid import uuid4
@@ -74,7 +74,7 @@ class TestIsSlotDue:
         )
 
         with patch("src.services.core.scheduler.datetime") as mock_dt:
-            mock_dt.utcnow.return_value = datetime(2026, 3, 21, 12, 0)
+            mock_dt.now.return_value = datetime(2026, 3, 21, 12, 0, tzinfo=timezone.utc)
             result = service.is_slot_due(cs)
 
         # Should be due (None = no category preference)
@@ -89,7 +89,7 @@ class TestIsSlotDue:
         )
 
         with patch("src.services.core.scheduler.datetime") as mock_dt:
-            mock_dt.utcnow.return_value = datetime(2026, 3, 21, 20, 0)
+            mock_dt.now.return_value = datetime(2026, 3, 21, 20, 0, tzinfo=timezone.utc)
             result = service.is_slot_due(cs)
 
         assert result is False
@@ -107,7 +107,7 @@ class TestIsSlotDue:
 
         with patch("src.services.core.scheduler.datetime") as mock_dt:
             # Only 1 hour since last post, interval is 4 hours
-            mock_dt.utcnow.return_value = datetime(2026, 3, 21, 12, 0)
+            mock_dt.now.return_value = datetime(2026, 3, 21, 12, 0, tzinfo=timezone.utc)
             result = service.is_slot_due(cs)
 
         assert result is False
@@ -127,7 +127,7 @@ class TestIsSlotDue:
 
         with patch("src.services.core.scheduler.datetime") as mock_dt:
             # 5 hours since last post, interval is 4 hours -> due
-            mock_dt.utcnow.return_value = datetime(2026, 3, 21, 13, 0)
+            mock_dt.now.return_value = datetime(2026, 3, 21, 13, 0, tzinfo=timezone.utc)
             result = service.is_slot_due(cs)
 
         # No category ratios -> None (due, no preference)
@@ -146,7 +146,7 @@ class TestIsSlotDue:
         )
 
         with patch("src.services.core.scheduler.datetime") as mock_dt:
-            mock_dt.utcnow.return_value = datetime(2026, 3, 21, 23, 0)
+            mock_dt.now.return_value = datetime(2026, 3, 21, 23, 0, tzinfo=timezone.utc)
             result = service.is_slot_due(cs)
 
         assert result is not False
@@ -165,7 +165,7 @@ class TestIsSlotDue:
 
         with patch("src.services.core.scheduler.datetime") as mock_dt:
             # Only 2 hours since last post, interval is 12 hours
-            mock_dt.utcnow.return_value = datetime(2026, 3, 21, 11, 0)
+            mock_dt.now.return_value = datetime(2026, 3, 21, 11, 0, tzinfo=timezone.utc)
             result = service.is_slot_due(cs)
 
         assert result is False
@@ -186,7 +186,7 @@ class TestIsSlotDue:
         )
 
         with patch("src.services.core.scheduler.datetime") as mock_dt:
-            mock_dt.utcnow.return_value = datetime(2026, 3, 21, 12, 0)
+            mock_dt.now.return_value = datetime(2026, 3, 21, 12, 0, tzinfo=timezone.utc)
             result = service.is_slot_due(cs)
 
         assert isinstance(result, str)

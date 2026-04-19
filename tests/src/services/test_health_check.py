@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import Mock, patch
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from src.services.core.health_check import HealthCheckService
 
@@ -98,7 +98,7 @@ class TestHealthCheckService:
 
         # Create mock old queue item
         old_item = Mock()
-        old_item.created_at = datetime.utcnow() - timedelta(hours=8)
+        old_item.created_at = datetime.now(timezone.utc) - timedelta(hours=8)
         health_service.queue_repo.get_oldest_pending.return_value = old_item
 
         result = health_service._check_queue()
@@ -260,8 +260,8 @@ class TestHealthCheckService:
         mock_settings.MEDIA_SYNC_INTERVAL_SECONDS = 300
 
         mock_sync_info = {
-            "started_at": datetime.utcnow().isoformat(),
-            "completed_at": datetime.utcnow().isoformat(),
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "completed_at": datetime.now(timezone.utc).isoformat(),
             "success": True,
             "status": "completed",
             "result": {"new": 2, "errors": 0},
@@ -322,7 +322,7 @@ class TestHealthCheckService:
         mock_settings.MEDIA_SYNC_INTERVAL_SECONDS = 300  # 5 min
 
         # Last sync was 30 minutes ago (6x the interval)
-        old_time = datetime.utcnow() - timedelta(minutes=30)
+        old_time = datetime.now(timezone.utc) - timedelta(minutes=30)
         mock_sync_info = {
             "started_at": old_time.isoformat(),
             "completed_at": old_time.isoformat(),
@@ -382,7 +382,7 @@ class TestHealthCheckService:
         mock_settings.MEDIA_SOURCE_ROOT = "/media/stories"
 
         mock_sync_info = {
-            "started_at": datetime.utcnow().isoformat(),
+            "started_at": datetime.now(timezone.utc).isoformat(),
             "completed_at": None,
             "success": False,
             "status": "failed",

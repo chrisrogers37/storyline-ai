@@ -1,6 +1,6 @@
 """Tests for SetupStateService."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from unittest.mock import Mock, patch
@@ -92,7 +92,7 @@ class TestGetSetupState:
         """Fresh Google Drive token shows connected, not needing reconnect."""
         self.service.token_repo.get_token_for_chat.return_value = Mock(
             token_metadata={"email": "user@gmail.com"},
-            expires_at=datetime.utcnow() + timedelta(hours=1),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
         )
 
         state = self.service.get_setup_state(-1001234567890)
@@ -105,7 +105,8 @@ class TestGetSetupState:
         """Token expired > 7 days ago triggers needs_reconnect."""
         self.service.token_repo.get_token_for_chat.return_value = Mock(
             token_metadata={"email": "old@gmail.com"},
-            expires_at=datetime.utcnow() - timedelta(days=TOKEN_STALE_DAYS + 1),
+            expires_at=datetime.now(timezone.utc)
+            - timedelta(days=TOKEN_STALE_DAYS + 1),
         )
 
         state = self.service.get_setup_state(-1001234567890)
@@ -134,7 +135,7 @@ class TestGetSetupState:
     def test_posting_active(self):
         """Recent post within 48h makes posting_active True."""
         self.service.history_repo.get_recent_posts.return_value = [
-            Mock(posted_at=datetime.utcnow() - timedelta(hours=1)),
+            Mock(posted_at=datetime.now(timezone.utc) - timedelta(hours=1)),
         ]
 
         state = self.service.get_setup_state(-1001234567890)
@@ -159,20 +160,20 @@ class TestIsTokenStale:
 
     def test_fresh_token_not_stale(self):
         """Token expiring in the future is not stale."""
-        token = Mock(expires_at=datetime.utcnow() + timedelta(hours=1))
+        token = Mock(expires_at=datetime.now(timezone.utc) + timedelta(hours=1))
         assert is_token_stale(token) is False
 
     def test_recently_expired_not_stale(self):
         """Token expired within 7 days is not stale."""
         token = Mock(
-            expires_at=datetime.utcnow() - timedelta(days=TOKEN_STALE_DAYS - 1)
+            expires_at=datetime.now(timezone.utc) - timedelta(days=TOKEN_STALE_DAYS - 1)
         )
         assert is_token_stale(token) is False
 
     def test_expired_over_threshold_is_stale(self):
         """Token expired > 7 days ago is stale."""
         token = Mock(
-            expires_at=datetime.utcnow() - timedelta(days=TOKEN_STALE_DAYS + 1)
+            expires_at=datetime.now(timezone.utc) - timedelta(days=TOKEN_STALE_DAYS + 1)
         )
         assert is_token_stale(token) is True
 

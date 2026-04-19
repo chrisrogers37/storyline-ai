@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from src.services.core.telegram_commands import TelegramCommandHandlers
@@ -295,7 +295,7 @@ class TestGetNextPostDisplay:
             posting_hours_start=12,
             posting_hours_end=4,
             posts_per_day=15,
-            last_post_sent_at=datetime.utcnow(),
+            last_post_sent_at=datetime.now(timezone.utc),
         )
         result = TelegramCommandHandlers._get_next_post_display(mock_settings)
         assert "UTC" in result
@@ -322,14 +322,13 @@ class TestGetLastPostedDisplay:
         """Test shows hours ago for recent posts."""
         handlers = mock_command_handlers
         mock_post = Mock()
-        mock_post.posted_at = datetime.utcnow().replace(
-            hour=max(datetime.utcnow().hour - 3, 0)
-        )
 
         # Use a fixed time difference to avoid test flakiness
         with patch("src.services.core.telegram_commands.datetime") as mock_dt:
-            mock_dt.utcnow.return_value = datetime(2026, 3, 15, 15, 0, 0)
-            mock_post.posted_at = datetime(2026, 3, 15, 12, 0, 0)
+            mock_dt.now.return_value = datetime(
+                2026, 3, 15, 15, 0, 0, tzinfo=timezone.utc
+            )
+            mock_post.posted_at = datetime(2026, 3, 15, 12, 0, 0, tzinfo=timezone.utc)
             result = handlers._get_last_posted_display([mock_post])
 
         assert result == "3h ago"
@@ -340,8 +339,10 @@ class TestGetLastPostedDisplay:
         mock_post = Mock()
 
         with patch("src.services.core.telegram_commands.datetime") as mock_dt:
-            mock_dt.utcnow.return_value = datetime(2026, 3, 15, 15, 0, 0)
-            mock_post.posted_at = datetime(2026, 3, 15, 14, 45, 0)
+            mock_dt.now.return_value = datetime(
+                2026, 3, 15, 15, 0, 0, tzinfo=timezone.utc
+            )
+            mock_post.posted_at = datetime(2026, 3, 15, 14, 45, 0, tzinfo=timezone.utc)
             result = handlers._get_last_posted_display([mock_post])
 
         assert result == "< 1h ago"
@@ -807,7 +808,7 @@ class TestSetupStatusGoogleDrive:
 
         mock_token = Mock()
         # Expired 10 days ago (>7 day threshold)
-        mock_token.expires_at = datetime.utcnow() - timedelta(days=10)
+        mock_token.expires_at = datetime.now(timezone.utc) - timedelta(days=10)
         assert is_token_stale(mock_token) is True
 
     def test_gdrive_recently_expired_not_stale(self):
@@ -818,7 +819,7 @@ class TestSetupStatusGoogleDrive:
 
         mock_token = Mock()
         # Expired 2 days ago (within 7 day threshold)
-        mock_token.expires_at = datetime.utcnow() - timedelta(days=2)
+        mock_token.expires_at = datetime.now(timezone.utc) - timedelta(days=2)
         assert is_token_stale(mock_token) is False
 
 
