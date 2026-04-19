@@ -1,6 +1,6 @@
 """Health check service - system health monitoring."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from src.services.base_service import BaseService
 from src.repositories.queue_repository import QueueRepository
@@ -94,7 +94,7 @@ class HealthCheckService(BaseService):
         return {
             "status": overall_status,
             "checks": checks,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     def _check_database(self) -> dict:
@@ -209,7 +209,7 @@ class HealthCheckService(BaseService):
 
             # Alert if oldest item is very old
             if oldest_pending:
-                age = datetime.utcnow() - oldest_pending.created_at
+                age = datetime.now(timezone.utc) - oldest_pending.created_at
                 if age > timedelta(hours=self.MAX_PENDING_AGE_HOURS):
                     return {
                         "healthy": False,
@@ -329,7 +329,7 @@ class HealthCheckService(BaseService):
                 stale_threshold = timedelta(
                     seconds=settings.MEDIA_SYNC_INTERVAL_SECONDS * 3
                 )
-                if datetime.utcnow() - completed > stale_threshold:
+                if datetime.now(timezone.utc) - completed > stale_threshold:
                     return {
                         "healthy": False,
                         "message": (
@@ -665,7 +665,7 @@ class HealthCheckService(BaseService):
 
         if expires_in_days is not None and expires_in_days > 0:
             expiry_date = (
-                datetime.utcnow() + timedelta(days=expires_in_days)
+                datetime.now(timezone.utc) + timedelta(days=expires_in_days)
             ).strftime("%b %d")
             text += f"\n\nIf ignored, media sync will stop on {expiry_date}."
         else:

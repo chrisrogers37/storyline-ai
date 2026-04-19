@@ -1,7 +1,7 @@
 """Base service class with automatic execution tracking and error handling."""
 
 from abc import ABC
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 from uuid import UUID
 import traceback
@@ -131,7 +131,7 @@ class BaseService(ABC):
             context_metadata=metadata,
         )
 
-        started_at = datetime.utcnow()
+        started_at = datetime.now(timezone.utc)
 
         try:
             logger.info(
@@ -141,7 +141,7 @@ class BaseService(ABC):
             yield run_id  # Allow service to access run_id if needed
 
             # Success
-            completed_at = datetime.utcnow()
+            completed_at = datetime.now(timezone.utc)
             duration_ms = int((completed_at - started_at).total_seconds() * 1000)
 
             self.service_run_repo.complete_run(
@@ -154,7 +154,7 @@ class BaseService(ABC):
 
         except Exception as e:  # noqa: BLE001 — must record any failure
             # Failure
-            completed_at = datetime.utcnow()
+            completed_at = datetime.now(timezone.utc)
             duration_ms = int((completed_at - started_at).total_seconds() * 1000)
 
             error_type = type(e).__name__

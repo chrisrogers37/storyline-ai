@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -31,7 +31,7 @@ class ConversationService(BaseService):
 
     def start_onboarding(self, user_id: str) -> OnboardingSession:
         """Start a new onboarding session (replaces any existing)."""
-        expires_at = datetime.utcnow() + timedelta(hours=ONBOARDING_TTL_HOURS)
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=ONBOARDING_TTL_HOURS)
         session = self.onboarding_repo.create(
             user_id=user_id,
             expires_at=expires_at,
@@ -122,7 +122,7 @@ class ConversationService(BaseService):
             )
 
             try:
-                now = datetime.utcnow()
+                now = datetime.now(timezone.utc)
                 with InteractionRepository() as interaction_repo:
                     for session in expired:
                         duration_minutes = int(

@@ -1,7 +1,7 @@
 """Instagram Graph API service for Story posting."""
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
@@ -159,7 +159,7 @@ class InstagramAPIService(BaseService):
                     "success": True,
                     "story_id": story_id,
                     "container_id": container_id,
-                    "timestamp": datetime.utcnow(),
+                    "timestamp": datetime.now(timezone.utc),
                     "account_username": account_username,
                     "account_id": account_id,
                 }
@@ -352,7 +352,7 @@ class InstagramAPIService(BaseService):
         Returns:
             Number of posts remaining in the current hour window
         """
-        since = datetime.utcnow() - timedelta(hours=1)
+        since = datetime.now(timezone.utc) - timedelta(hours=1)
         recent_api_posts = self.history_repo.count_by_method(
             method="instagram_api",
             since=since,

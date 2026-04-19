@@ -619,7 +619,7 @@ class DashboardService(BaseService):
         slot falls outside the window, it advances to the next open.
         """
         import random
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
 
         with self.track_execution(
             "get_schedule_preview",
@@ -639,10 +639,10 @@ class DashboardService(BaseService):
             )
             interval_seconds = (window_hours * 3600) / ppd if ppd else 3600
 
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             last = chat_settings.last_post_sent_at
-            if last and last.tzinfo:
-                last = last.replace(tzinfo=None)
+            if last and last.tzinfo is None:
+                last = last.replace(tzinfo=timezone.utc)
             next_time = last + timedelta(seconds=interval_seconds) if last else now
 
             configured = self.category_mix_repo.get_current_mix_as_dict(

@@ -1,6 +1,6 @@
 """Setup state service - unified setup status for Telegram and API."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from src.services.base_service import BaseService
 from src.services.core.instagram_account_service import InstagramAccountService
@@ -182,7 +182,7 @@ class SetupStateService(BaseService):
             if recent_posts:
                 last_post_at = recent_posts[0].posted_at.isoformat()
                 # Consider posting active if last post was within 48 hours
-                age = datetime.utcnow() - recent_posts[0].posted_at
+                age = datetime.now(timezone.utc) - recent_posts[0].posted_at
                 posting_active = age < timedelta(hours=48)
         except Exception:  # noqa: BLE001 — best-effort status check
             logger.debug("Failed to fetch queue/history for setup state")
@@ -254,7 +254,7 @@ def is_token_stale(token) -> bool:
     Shared utility used by SetupStateService and available for import
     elsewhere to avoid duplicating the staleness heuristic.
     """
-    if token.expires_at and token.expires_at < datetime.utcnow() - timedelta(
+    if token.expires_at and token.expires_at < datetime.now(timezone.utc) - timedelta(
         days=TOKEN_STALE_DAYS
     ):
         return True

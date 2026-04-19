@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Narrow broad `except Exception` catches** (#250) — Audited 88 `except Exception` catches across `src/services/`. Narrowed catches to specific types (`TelegramError`, `SQLAlchemyError`, `InvalidToken`, etc.) where failure modes are known. Added `noqa: BLE001` annotations with justification comments to intentionally broad catches (best-effort logging, cleanup, health checks). Added `exc_info=True` to health check error handlers.
+- **Replace deprecated `datetime.utcnow()` calls** (#249) — Replaced 30+ `datetime.utcnow()` calls across `src/services/` with timezone-aware `datetime.now(timezone.utc)`, eliminating Python 3.12 deprecation warnings. Inverted `.replace(tzinfo=None)` patterns to ensure consistent aware-to-aware datetime comparisons.
 
 ### Added
 

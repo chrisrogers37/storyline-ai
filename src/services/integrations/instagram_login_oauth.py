@@ -9,7 +9,7 @@ This is separate from OAuthService (Facebook Login) and coexists alongside it.
 
 import json
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
@@ -176,7 +176,7 @@ class InstagramLoginOAuthService(BaseService):
             username = await self._get_username(long_token, ig_user_id)
 
             # Step 4: Create or update account
-            expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+            expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
             existing = self.account_service.get_account_by_instagram_id(ig_user_id)
 
             if existing:

@@ -12,7 +12,7 @@ from src.config.settings import settings
 from src.repositories.history_repository import HistoryCreateParams
 from src.utils.logger import logger
 from src.utils.resilience import telegram_edit_with_retry
-from datetime import datetime
+from datetime import datetime, timezone
 
 if TYPE_CHECKING:
     from src.services.core.telegram_service import TelegramService
@@ -127,13 +127,14 @@ class TelegramCallbackCore:
 
     def _create_history_params(self, queue_id, queue_item, user, status, success):
         """Build HistoryCreateParams for a queue action."""
+        now = datetime.now(timezone.utc)
         return HistoryCreateParams(
             media_item_id=str(queue_item.media_item_id),
             queue_item_id=queue_id,
             queue_created_at=queue_item.created_at,
-            queue_deleted_at=datetime.utcnow(),
+            queue_deleted_at=now,
             scheduled_for=queue_item.scheduled_for,
-            posted_at=datetime.utcnow(),
+            posted_at=now,
             status=status,
             success=success,
             posted_by_user_id=str(user.id),

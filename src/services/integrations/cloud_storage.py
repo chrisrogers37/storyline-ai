@@ -1,6 +1,6 @@
 """Cloud storage service for temporary media uploads (Cloudinary)."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -124,7 +124,7 @@ class CloudStorageService(BaseService):
 
                 result = cloudinary.uploader.upload(upload_source, **upload_options)
 
-                uploaded_at = datetime.utcnow()
+                uploaded_at = datetime.now(timezone.utc)
                 expires_at = uploaded_at + timedelta(
                     hours=settings.CLOUD_UPLOAD_RETENTION_HOURS
                 )
@@ -283,7 +283,7 @@ class CloudStorageService(BaseService):
         ) as run_id:
             deleted_count = 0
             retention_hours = settings.CLOUD_UPLOAD_RETENTION_HOURS
-            cutoff = datetime.utcnow() - timedelta(hours=retention_hours)
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=retention_hours)
 
             try:
                 # List all resources in the folder
@@ -301,7 +301,7 @@ class CloudStorageService(BaseService):
                             # Cloudinary format: "2024-01-11T12:00:00Z"
                             created_at = datetime.fromisoformat(
                                 created_at_str.replace("Z", "+00:00")
-                            ).replace(tzinfo=None)
+                            )
 
                             if created_at < cutoff:
                                 if self.delete_media(resource["public_id"]):

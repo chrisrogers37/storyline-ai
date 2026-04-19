@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -116,7 +116,7 @@ class TelegramCommandHandlers:
     def _get_last_posted_display(self, recent_posts) -> str:
         """Get formatted display for last post time."""
         if recent_posts:
-            time_diff = datetime.utcnow() - recent_posts[0].posted_at
+            time_diff = datetime.now(timezone.utc) - recent_posts[0].posted_at
             hours = int(time_diff.total_seconds() / 3600)
             return f"{hours}h ago" if hours > 0 else "< 1h ago"
         return "Never"
@@ -145,11 +145,11 @@ class TelegramCommandHandlers:
             if not last_sent:
                 return "Due now"
 
-            if last_sent.tzinfo:
-                last_sent = last_sent.replace(tzinfo=None)
+            if last_sent.tzinfo is None:
+                last_sent = last_sent.replace(tzinfo=timezone.utc)
 
             next_due = last_sent + timedelta(seconds=interval_seconds)
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
 
             if next_due <= now:
                 return "Due now"

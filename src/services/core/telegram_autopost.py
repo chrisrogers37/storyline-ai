@@ -24,7 +24,7 @@ from src.services.core.telegram_utils import (
 )
 from src.utils.logger import logger
 from src.utils.resilience import telegram_edit_with_retry
-from datetime import datetime
+from datetime import datetime, timezone
 
 if TYPE_CHECKING:
     from src.services.core.telegram_service import TelegramService
@@ -323,7 +323,7 @@ class TelegramAutopostHandler:
             media_id=str(ctx.media_item.id),
             cloud_url=ctx.cloud_url,
             cloud_public_id=ctx.cloud_public_id,
-            cloud_uploaded_at=datetime.utcnow(),
+            cloud_uploaded_at=datetime.now(timezone.utc),
         )
 
         return True
@@ -448,14 +448,15 @@ class TelegramAutopostHandler:
 
     def _record_successful_post(self, ctx: AutopostContext, story_id: str) -> None:
         """Record a successful Instagram post in all relevant tables."""
+        now = datetime.now(timezone.utc)
         self.service.history_repo.create(
             HistoryCreateParams(
                 media_item_id=str(ctx.queue_item.media_item_id),
                 queue_item_id=ctx.queue_id,
                 queue_created_at=ctx.queue_item.created_at,
-                queue_deleted_at=datetime.utcnow(),
+                queue_deleted_at=now,
                 scheduled_for=ctx.queue_item.scheduled_for,
-                posted_at=datetime.utcnow(),
+                posted_at=now,
                 status="posted",
                 success=True,
                 posted_by_user_id=str(ctx.user.id),
