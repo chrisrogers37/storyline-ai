@@ -147,6 +147,7 @@ class TestButtonLayout:
         mock_media_item.file_name = "image.jpg"
         mock_media_item.title = "Test"
         mock_media_item.caption = None
+        mock_media_item.generated_caption = None
         mock_media_item.link_url = None
         mock_media_item.tags = []
 
@@ -331,6 +332,7 @@ class TestCallbackRouting:
         mock_media_item.file_name = "test.jpg"
         mock_media_item.title = "Test"
         mock_media_item.caption = None
+        mock_media_item.generated_caption = None
         mock_media_item.link_url = None
         mock_media_item.tags = []
         mock_telegram_service.media_repo.get_by_id.return_value = mock_media_item
@@ -443,6 +445,7 @@ class TestTelegramService:
         mock_media.category = "memes"
         mock_media.title = None  # Must set explicitly to avoid Mock auto-creation
         mock_media.caption = None
+        mock_media.generated_caption = None
         mock_media.link_url = None
         mock_media.tags = []
 
@@ -497,6 +500,7 @@ class TestInlineAccountSelector:
         mock_media_item = Mock()
         mock_media_item.title = "Test Image"
         mock_media_item.caption = None
+        mock_media_item.generated_caption = None
         mock_media_item.link_url = None
         mock_media_item.tags = []
 
@@ -519,6 +523,7 @@ class TestInlineAccountSelector:
         mock_media_item = Mock()
         mock_media_item.title = "Test Image"
         mock_media_item.caption = None
+        mock_media_item.generated_caption = None
         mock_media_item.link_url = None
         mock_media_item.tags = []
 
@@ -718,6 +723,7 @@ class TestVerboseEnhancedCaption:
         mock_media = Mock()
         mock_media.title = "Test"
         mock_media.caption = None
+        mock_media.generated_caption = None
         mock_media.link_url = None
         mock_media.tags = []
 
@@ -735,6 +741,7 @@ class TestVerboseEnhancedCaption:
         mock_media = Mock()
         mock_media.title = "Test"
         mock_media.caption = None
+        mock_media.generated_caption = None
         mock_media.link_url = None
         mock_media.tags = []
 
@@ -752,6 +759,7 @@ class TestVerboseEnhancedCaption:
         mock_media = Mock()
         mock_media.title = "Test"
         mock_media.caption = None
+        mock_media.generated_caption = None
         mock_media.link_url = None
         mock_media.tags = []
 
@@ -778,6 +786,7 @@ class TestVerboseSimpleCaption:
         mock_media.title = "Test"
         mock_media.file_name = "image.jpg"
         mock_media.caption = None
+        mock_media.generated_caption = None
         mock_media.link_url = None
         mock_media.tags = []
 
@@ -797,6 +806,7 @@ class TestVerboseSimpleCaption:
         mock_media.title = "Test"
         mock_media.file_name = "image.jpg"
         mock_media.caption = None
+        mock_media.generated_caption = None
         mock_media.link_url = None
         mock_media.tags = []
 
@@ -815,6 +825,7 @@ class TestVerboseSimpleCaption:
         mock_media.title = "Test"
         mock_media.file_name = "image.jpg"
         mock_media.caption = None
+        mock_media.generated_caption = None
         mock_media.link_url = None
         mock_media.tags = []
 

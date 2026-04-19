@@ -356,6 +356,7 @@ class MediaRepository(BaseRepository):
         title: Optional[str] = None,
         link_url: Optional[str] = None,
         caption: Optional[str] = None,
+        generated_caption: Optional[str] = None,
         tags: Optional[List[str]] = None,
         custom_metadata: Optional[dict] = None,
     ) -> MediaItem:
@@ -368,6 +369,8 @@ class MediaRepository(BaseRepository):
                 media_item.link_url = link_url
             if caption is not None:
                 media_item.caption = caption
+            if generated_caption is not None:
+                media_item.generated_caption = generated_caption
             if tags is not None:
                 media_item.tags = tags
             if custom_metadata is not None:

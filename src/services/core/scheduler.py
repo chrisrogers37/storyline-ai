@@ -232,6 +232,22 @@ class SchedulerService(BaseService):
                 )
                 return result
 
+            # Generate AI caption if enabled and no manual caption
+            if (
+                chat_settings.enable_ai_captions
+                and not media_item.caption
+                and not media_item.generated_caption
+            ):
+                try:
+                    from src.services.core.caption_service import CaptionService
+
+                    with CaptionService(media_repo=self.media_repo) as caption_service:
+                        generated = await caption_service.generate_caption(media_item)
+                    if generated:
+                        media_item = self.media_repo.get_by_id(str(media_item.id))
+                except Exception as e:
+                    logger.warning(f"AI caption generation failed, continuing: {e}")
+
             # Auto-approve previously-approved media (skip Telegram)
             if media_item.times_posted > 0 and triggered_by == "scheduler":
                 result = self._auto_approve(media_item, chat_settings)
