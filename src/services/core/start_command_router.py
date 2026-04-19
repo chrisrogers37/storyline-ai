@@ -122,7 +122,7 @@ class StartCommandRouter:
                 ),
                 parse_mode="Markdown",
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 — best-effort DM notification
             pass  # DM may be blocked
 
     # ------------------------------------------------------------------

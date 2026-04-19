@@ -63,14 +63,14 @@ class TelegramCallbackCore:
                     await query.edit_message_reply_markup(
                         reply_markup=InlineKeyboardMarkup([])
                     )
-                except Exception:
+                except Exception:  # noqa: BLE001
                     logger.debug(
                         f"Could not remove keyboard for queue item {queue_id} "
                         f"(message may have been already updated)"
                     )
 
                 await coro
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.error(
                     f"Failed to complete {callback_name} for queue {queue_id[:8]}: "
                     f"{type(e).__name__}: {e}",
@@ -115,7 +115,7 @@ class TelegramCallbackCore:
             yield
             # All ops succeeded — do the real commit
             original_commit()
-        except Exception:
+        except Exception:  # noqa: BLE001 — rollback on any failure, then re-raise
             primary_session.rollback()
             raise
         finally:

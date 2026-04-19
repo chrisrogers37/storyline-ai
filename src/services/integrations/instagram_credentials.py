@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 import httpx
+from cryptography.fernet import InvalidToken
 
 from src.config.settings import settings
 from src.utils.logger import logger
@@ -69,7 +70,7 @@ class InstagramCredentialManager:
                         active_account.instagram_account_id,
                         active_account.instagram_username,
                     )
-                except Exception as e:
+                except (ValueError, InvalidToken) as e:
                     logger.error(
                         f"Failed to decrypt token for account {active_account.display_name}: {e}"
                     )

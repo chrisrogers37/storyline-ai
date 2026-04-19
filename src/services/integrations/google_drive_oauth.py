@@ -7,6 +7,7 @@ from typing import Optional
 from urllib.parse import urlencode
 
 import httpx
+from cryptography.fernet import InvalidToken
 from telegram import Bot
 
 from src.config.settings import settings
@@ -131,7 +132,7 @@ class GoogleDriveOAuthService(BaseService):
         except ValueError:
             raise
         except Exception as e:
-            raise ValueError(f"Invalid or expired state token: {e}")
+            raise ValueError(f"Invalid or expired state token: {e}") from e
 
     async def exchange_and_store(self, auth_code: str, telegram_chat_id: int) -> dict:
         """
@@ -353,7 +354,7 @@ class GoogleDriveOAuthService(BaseService):
                 client_secret=settings.GOOGLE_CLIENT_SECRET,
                 scopes=self.REQUIRED_SCOPES,
             )
-        except Exception as e:
+        except (ValueError, InvalidToken) as e:
             logger.error(f"Failed to construct Google credentials: {e}")
             return None
 

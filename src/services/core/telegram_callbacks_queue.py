@@ -259,7 +259,7 @@ class TelegramCallbackQueueHandlers:
                 new_caption = await caption_service.generate_caption(
                     media_item, regenerate=True
                 )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.warning(f"Caption regeneration failed: {e}")
             new_caption = None
 

@@ -102,8 +102,8 @@ class HealthCheckService(BaseService):
         try:
             BaseRepository.check_connection()
             return {"healthy": True, "message": "Database connection OK"}
-        except Exception as e:
-            logger.error(f"Database health check failed: {e}")
+        except Exception as e:  # noqa: BLE001 — health check must not crash
+            logger.error(f"Database health check failed: {e}", exc_info=True)
             return {"healthy": False, "message": f"Database error: {str(e)}"}
 
     def _check_telegram_config(self) -> dict:
@@ -185,8 +185,8 @@ class HealthCheckService(BaseService):
 
             return response
 
-        except Exception as e:
-            logger.error(f"Instagram API health check failed: {e}")
+        except Exception as e:  # noqa: BLE001 — health check must not crash
+            logger.error(f"Instagram API health check failed: {e}", exc_info=True)
             return {
                 "healthy": False,
                 "message": f"Check failed: {str(e)}",
@@ -223,7 +223,8 @@ class HealthCheckService(BaseService):
                 "pending_count": pending_count,
             }
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — health check must not crash
+            logger.error(f"Queue health check failed: {e}", exc_info=True)
             return {"healthy": False, "message": f"Queue check error: {str(e)}"}
 
     def _check_recent_posts(self) -> dict:
@@ -249,7 +250,8 @@ class HealthCheckService(BaseService):
                 "successful_count": len(successful_posts),
             }
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — health check must not crash
+            logger.error(f"Recent posts health check failed: {e}", exc_info=True)
             return {"healthy": False, "message": f"Recent posts check error: {str(e)}"}
 
     def _check_media_sync(self) -> dict:
@@ -288,7 +290,7 @@ class HealthCheckService(BaseService):
                 provider_healthy = provider.is_configured()
                 if not provider_healthy:
                     provider_message = f"Provider '{source_type}' not accessible"
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — health check must not crash
                 provider_message = f"Provider error: {str(e)[:100]}"
 
             if not provider_healthy:
@@ -363,7 +365,8 @@ class HealthCheckService(BaseService):
                 "last_result": result_summary,
             }
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — health check must not crash
+            logger.error(f"Media sync health check failed: {e}", exc_info=True)
             return {
                 "healthy": False,
                 "message": f"Sync check error: {str(e)}",
@@ -449,7 +452,7 @@ class HealthCheckService(BaseService):
                 "message": f"All categories have >{self.POOL_WARNING_DAYS} days of runway",
             }
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — health check must not crash
             logger.error(f"Media pool check failed: {e}", exc_info=True)
             return {"healthy": False, "message": f"Pool check error: {str(e)}"}
 
@@ -574,7 +577,8 @@ class HealthCheckService(BaseService):
             token_health = self.token_service.check_token_health_for_chat(
                 "google_drive", chat_settings_id
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — health check must not crash
+            logger.error(f"GDrive token health check failed: {e}", exc_info=True)
             return {"healthy": False, "message": f"Token check error: {str(e)}"}
 
         if not token_health["exists"]:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardMarkup
+from telegram.error import TelegramError
 
 from src.utils.logger import logger
 from src.utils.resilience import telegram_edit_with_retry
@@ -39,7 +40,7 @@ class TelegramCallbackAdminHandlers:
 
         try:
             await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup([]))
-        except Exception:
+        except TelegramError:
             pass
 
         pending = self.service.queue_repo.get_all_with_media(
@@ -78,7 +79,7 @@ class TelegramCallbackAdminHandlers:
                     queue_id, claimed, user, "posted", True
                 )
                 approved += 1
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.error(
                     f"Batch approve failed for {queue_id[:8]}: {type(e).__name__}: {e}"
                 )
@@ -121,7 +122,7 @@ class TelegramCallbackAdminHandlers:
         """Handle resume callback buttons (reschedule/clear/force)."""
         try:
             await self._do_resume_callback(action, user, query)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.error(
                 f"Failed to handle resume:{action}: {type(e).__name__}: {e}",
                 exc_info=True,
@@ -246,7 +247,7 @@ class TelegramCallbackAdminHandlers:
                 telegram_chat_id=query.message.chat_id,
                 telegram_message_id=query.message.message_id,
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.error(
                 f"Failed to handle reset:{action}: {type(e).__name__}: {e}",
                 exc_info=True,

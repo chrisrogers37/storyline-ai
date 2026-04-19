@@ -413,7 +413,7 @@ class InstagramBackfillService(BaseService):
             )
             ctx.result.downloaded += 1
             ctx.known_ig_ids.add(ig_media_id)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — per-item error, continue backfill
             ctx.result.failed += 1
             error_msg = f"Failed to download {ig_media_id}: {e}"
             ctx.result.error_details.append(error_msg)

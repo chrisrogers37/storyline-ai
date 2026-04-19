@@ -58,8 +58,7 @@ class InteractionService:
                 telegram_chat_id=telegram_chat_id,
                 telegram_message_id=telegram_message_id,
             )
-        except Exception as e:
-            # Don't let logging failures break the main flow
+        except Exception as e:  # noqa: BLE001 — fire-and-forget logging
             logger.warning(f"Failed to log command interaction: {e}")
             return None
 
@@ -93,8 +92,7 @@ class InteractionService:
                 telegram_chat_id=telegram_chat_id,
                 telegram_message_id=telegram_message_id,
             )
-        except Exception as e:
-            # Don't let logging failures break the main flow
+        except Exception as e:  # noqa: BLE001 — fire-and-forget logging
             logger.warning(f"Failed to log callback interaction: {e}")
             return None
 
@@ -128,7 +126,7 @@ class InteractionService:
                 telegram_chat_id=telegram_chat_id,
                 telegram_message_id=telegram_message_id,
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — fire-and-forget logging
             logger.warning(f"Failed to log message interaction: {e}")
             return None
 
@@ -168,7 +166,7 @@ class InteractionService:
                 telegram_chat_id=telegram_chat_id,
                 telegram_message_id=telegram_message_id,
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — fire-and-forget logging
             logger.warning(f"Failed to log bot response: {e}")
             return None
 

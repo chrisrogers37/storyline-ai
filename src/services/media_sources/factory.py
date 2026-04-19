@@ -87,7 +87,7 @@ class MediaSourceFactory:
                         return gdrive_service.get_provider_for_chat(
                             telegram_chat_id, root_folder_id
                         )
-                    except Exception as e:
+                    except Exception as e:  # noqa: BLE001 — service-account fallback is intentionally broad
                         logger.warning(
                             "User OAuth failed for chat %s: %s, falling back to service account",
                             telegram_chat_id,

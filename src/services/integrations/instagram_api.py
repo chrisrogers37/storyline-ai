@@ -300,7 +300,7 @@ class InstagramAPIService(BaseService):
         try:
             data = response.json()
             error = data.get("error", {})
-        except Exception:
+        except (ValueError, UnicodeDecodeError):
             raise InstagramAPIError(
                 f"HTTP {response.status_code}: {response.text}",
             )

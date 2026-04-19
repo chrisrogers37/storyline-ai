@@ -2,6 +2,7 @@
 
 from typing import Optional
 
+
 from src.config.constants import MAX_CAPTION_LENGTH
 from src.config.settings import settings
 from src.repositories.media_repository import MediaRepository
@@ -124,7 +125,7 @@ class CaptionService(BaseService):
             if len(caption) > MAX_CAPTION_LENGTH:
                 caption = caption[:MAX_CAPTION_LENGTH]
             return caption
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — best-effort caption generation
             logger.error(f"AI caption generation failed: {e}", exc_info=True)
             return None
 

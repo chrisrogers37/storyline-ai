@@ -134,7 +134,7 @@ class InstagramLoginOAuthService(BaseService):
         except ValueError:
             raise
         except Exception as e:
-            raise ValueError(f"Invalid or expired state token: {e}")
+            raise ValueError(f"Invalid or expired state token: {e}") from e
 
     async def exchange_and_store(self, auth_code: str, telegram_chat_id: int) -> dict:
         """Exchange the authorization code for tokens and store them.

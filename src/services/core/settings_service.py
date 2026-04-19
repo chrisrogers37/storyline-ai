@@ -3,6 +3,8 @@
 from datetime import datetime
 from typing import Optional, Any, Dict, List
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from src.services.base_service import BaseService
 from src.repositories.audit_repository import AuditRepository
 from src.repositories.chat_settings_repository import ChatSettingsRepository
@@ -123,7 +125,7 @@ class SettingsService(BaseService):
                     changed_by_user_id=str(user.id) if user else None,
                     chat_settings_id=str(settings.id),
                 )
-            except Exception:
+            except SQLAlchemyError:
                 logger.warning("Audit log failed for setting change", exc_info=True)
 
             self.set_result_summary(
@@ -211,7 +213,7 @@ class SettingsService(BaseService):
                     changed_by_user_id=str(user.id) if user else None,
                     chat_settings_id=str(settings.id),
                 )
-            except Exception:
+            except SQLAlchemyError:
                 logger.warning("Audit log failed for setting change", exc_info=True)
 
             self.set_result_summary(

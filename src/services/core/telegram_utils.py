@@ -410,7 +410,7 @@ async def cleanup_conversation_messages(
         try:
             await bot.delete_message(chat_id=chat_id, message_id=msg_id)
             deleted += 1
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — best-effort message cleanup
             logger.debug(f"Could not delete conversation message {msg_id}: {e}")
     return deleted
 

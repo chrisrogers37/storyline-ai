@@ -134,7 +134,7 @@ class OAuthService(BaseService):
         except ValueError:
             raise
         except Exception as e:
-            raise ValueError(f"Invalid or expired state token: {e}")
+            raise ValueError(f"Invalid or expired state token: {e}") from e
 
     async def exchange_and_store(self, auth_code: str, telegram_chat_id: int) -> dict:
         """
@@ -365,7 +365,7 @@ class OAuthService(BaseService):
                 text=full_message,
                 parse_mode="Markdown",
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — best-effort notification
             logger.error(f"Failed to send OAuth notification to chat {chat_id}: {e}")
 
     def _validate_oauth_config(self) -> None:

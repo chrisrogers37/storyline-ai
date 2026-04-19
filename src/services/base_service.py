@@ -47,7 +47,7 @@ class BaseService(ABC):
                     attr.end_read_transaction()
                 elif isinstance(attr, BaseService) and attr is not self:
                     attr.cleanup_transactions()
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.warning(
                     f"[{self.service_name}] Transaction cleanup failed for "
                     f"{attr_name}: {type(e).__name__}: {e}"
@@ -71,7 +71,7 @@ class BaseService(ABC):
                     attr.close()
                 elif isinstance(attr, BaseRepository):
                     attr.close()
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.warning(
                     f"[{self.service_name}] Error closing {attr_name}: "
                     f"{type(e).__name__}: {e}"
@@ -90,7 +90,7 @@ class BaseService(ABC):
         """Cleanup when service is garbage collected."""
         try:
             self.close()
-        except Exception:
+        except Exception:  # noqa: BLE001
             pass  # Suppress errors during garbage collection
 
     @contextmanager
@@ -152,7 +152,7 @@ class BaseService(ABC):
                 f"[{self.service_name}.{method_name}] Completed successfully ({duration_ms}ms)"
             )
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — must record any failure
             # Failure
             completed_at = datetime.now(timezone.utc)
             duration_ms = int((completed_at - started_at).total_seconds() * 1000)
@@ -169,7 +169,7 @@ class BaseService(ABC):
                     stack_trace=stack_trace,
                     duration_ms=duration_ms,
                 )
-            except Exception as log_err:
+            except Exception as log_err:  # noqa: BLE001
                 logger.warning(
                     f"[{self.service_name}.{method_name}] "
                     f"Failed to record service run failure: {log_err}"

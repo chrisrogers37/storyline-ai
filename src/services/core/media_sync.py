@@ -3,6 +3,8 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from src.config.settings import settings
 from src.repositories.media_repository import MediaRepository
 from src.services.base_service import BaseService
@@ -178,7 +180,7 @@ class MediaSyncService(BaseService):
                         seen_identifiers=seen_identifiers,
                         result=result,
                     )
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 — per-file error must not halt sync
                     self.media_repo.rollback()
                     result.errors += 1
                     error_msg = f"Error processing {file_info.name}: {e}"
@@ -195,7 +197,7 @@ class MediaSyncService(BaseService):
                             f"[MediaSyncService] Deactivated: {item.file_name} "
                             f"(no longer in provider)"
                         )
-                    except Exception as e:
+                    except SQLAlchemyError as e:
                         result.errors += 1
                         error_msg = f"Error deactivating {item.file_name}: {e}"
                         result.error_details.append(error_msg)

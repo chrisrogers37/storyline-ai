@@ -171,7 +171,7 @@ class TelegramNotificationService:
 
         except GoogleDriveAuthError:
             raise
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             if _is_google_auth_error(e):
                 raise GoogleDriveAuthError(
                     f"Google Drive token expired or revoked: {e}"

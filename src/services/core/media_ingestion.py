@@ -4,6 +4,8 @@ from pathlib import Path
 from typing import Optional, Dict
 import mimetypes
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from src.services.base_service import BaseService
 from src.repositories.media_repository import MediaRepository
 from src.repositories.category_mix_repository import CategoryMixRepository
@@ -83,7 +85,7 @@ class MediaIngestionService(BaseService):
                     self._index_file(file_path, user_id, category=category)
                     indexed_count += 1
 
-                except Exception as e:
+                except (OSError, SQLAlchemyError, ValueError) as e:
                     logger.error(f"Failed to index {file_path}: {e}")
                     error_count += 1
 

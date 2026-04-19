@@ -86,5 +86,5 @@ class PostingService(BaseService):
             )
             logger.info("Sent Google Drive auth alert to Telegram")
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — best-effort alert
             logger.error(f"Failed to send Google Drive auth alert: {e}")
