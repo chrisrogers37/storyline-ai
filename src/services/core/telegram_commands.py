@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import TelegramError
 
 from src.config.settings import settings
 from src.services.core.telegram_utils import build_webapp_button
@@ -161,7 +162,7 @@ class TelegramCommandHandlers:
             if hours > 0:
                 return f"~{hours}h {minutes}m ({time_str})"
             return f"~{minutes}m ({time_str})"
-        except Exception:
+        except Exception:  # noqa: BLE001
             return "Unknown"
 
     @staticmethod
@@ -182,7 +183,7 @@ class TelegramCommandHandlers:
                     chat_settings_id=chat_settings_id,
                 )
             return f"✅ Enabled ({rate_remaining}/25 remaining)"
-        except Exception:
+        except Exception:  # noqa: BLE001
             return "✅ Enabled (rate limit unknown)"
 
     @staticmethod
@@ -220,7 +221,7 @@ class TelegramCommandHandlers:
                 f"🔄 Media Sync: ⚠️ Last sync failed"
                 f"\n   └─ {last_sync.get('started_at', 'N/A')[:16]}"
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.warning(f"Sync status check failed: {type(e).__name__}: {e}")
             return "🔄 Media Sync: ❓ Check failed"
 
@@ -364,7 +365,7 @@ class TelegramCommandHandlers:
                     message_id=message_id,
                 )
                 deleted_count += 1
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 # Message might be already deleted or inaccessible
                 failed_count += 1
                 logger.debug(f"Could not delete message {message_id}: {e}")
@@ -398,7 +399,7 @@ class TelegramCommandHandlers:
         try:
             await response.delete()
             await update.message.delete()  # Also delete the user's /cleanup command
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.debug(f"Could not auto-delete cleanup messages: {e}")
 
     async def handle_approveall(self, update, context):
@@ -536,7 +537,7 @@ class TelegramCommandHandlers:
                     "Add me first, then run /link again."
                 )
                 return
-        except Exception:
+        except TelegramError:
             await update.message.reply_text(
                 "⚠️ I can't verify my membership in this group. "
                 "Try removing and re-adding me."
@@ -580,7 +581,7 @@ class TelegramCommandHandlers:
                 ),
                 parse_mode="Markdown",
             )
-        except Exception:
+        except Exception:  # noqa: BLE001
             pass
 
         self.service.interaction_service.log_command(

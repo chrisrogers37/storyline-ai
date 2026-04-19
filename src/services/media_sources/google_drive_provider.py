@@ -183,7 +183,7 @@ class GoogleDriveProvider(MediaSourceProvider):
                 fileId=self.root_folder_id, fields="id, name"
             ).execute()
             return True
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — config check must not crash
             logger.error(f"Google Drive is_configured check failed: {e}")
             return False
 

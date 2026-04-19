@@ -118,7 +118,7 @@ class SetupStateService(BaseService):
                     "username": active.instagram_username,
                     "display_name": active.display_name,
                 }
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — best-effort status check
             logger.debug(f"Instagram setup check failed: {e}")
         return {"connected": False, "username": None, "display_name": None}
 
@@ -137,7 +137,7 @@ class SetupStateService(BaseService):
                     "email": email,
                     "needs_reconnect": needs_reconnect,
                 }
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — best-effort status check
             logger.debug(f"Google Drive setup check failed: {e}")
         return {"connected": False, "email": None, "needs_reconnect": False}
 
@@ -154,7 +154,7 @@ class SetupStateService(BaseService):
                 )
                 count = len(active_items)
                 indexed = count > 0
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 — best-effort status check
                 logger.debug(f"Media setup check failed: {e}")
 
         return {
@@ -184,7 +184,7 @@ class SetupStateService(BaseService):
                 # Consider posting active if last post was within 48 hours
                 age = datetime.utcnow() - recent_posts[0].posted_at
                 posting_active = age < timedelta(hours=48)
-        except Exception:
+        except Exception:  # noqa: BLE001 — best-effort status check
             logger.debug("Failed to fetch queue/history for setup state")
         return {
             "in_flight_count": in_flight_count,

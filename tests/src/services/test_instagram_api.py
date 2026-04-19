@@ -234,7 +234,7 @@ class TestInstagramAPIService:
         mock_response = Mock()
         mock_response.status_code = 500
         mock_response.text = "Internal Server Error"
-        mock_response.json.side_effect = Exception("Not JSON")
+        mock_response.json.side_effect = ValueError("Not JSON")
 
         with pytest.raises(InstagramAPIError, match="HTTP 500"):
             instagram_service._check_response_errors(mock_response)

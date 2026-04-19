@@ -4,6 +4,8 @@ from datetime import datetime
 from typing import Optional, List, Union
 import random
 
+import anthropic
+
 from src.exceptions.google_drive import GoogleDriveAuthError
 from src.services.base_service import BaseService
 from src.services.core.settings_service import SettingsService
@@ -245,7 +247,7 @@ class SchedulerService(BaseService):
                         generated = await caption_service.generate_caption(media_item)
                     if generated:
                         media_item = self.media_repo.get_by_id(str(media_item.id))
-                except Exception as e:
+                except (anthropic.APIError, OSError) as e:
                     logger.warning(f"AI caption generation failed, continuing: {e}")
 
             # Auto-approve previously-approved media (skip Telegram)
@@ -329,7 +331,7 @@ class SchedulerService(BaseService):
             )
             try:
                 self.queue_repo.delete(queue_item_id)
-            except Exception:
+            except Exception:  # noqa: BLE001 — best-effort cleanup
                 pass
             raise
 
@@ -337,7 +339,7 @@ class SchedulerService(BaseService):
             logger.error(f"Error sending to Telegram: {e}")
             try:
                 self.queue_repo.delete(queue_item_id)
-            except Exception:
+            except Exception:  # noqa: BLE001 — best-effort cleanup
                 pass
             return False
 

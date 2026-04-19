@@ -6,6 +6,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from src.config.settings import settings
@@ -110,7 +111,7 @@ class TelegramAutopostHandler:
                 await query.edit_message_reply_markup(
                     reply_markup=InlineKeyboardMarkup([])
                 )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.debug(
                     f"Could not remove keyboard for autopost item {queue_id}: {e}"
                 )
@@ -175,7 +176,7 @@ class TelegramAutopostHandler:
             finally:
                 instagram_service.close()
                 cloud_service.close()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.error(
                 f"Background autopost failed for {queue_id[:8]}: {e}", exc_info=True
             )
@@ -254,7 +255,7 @@ class TelegramAutopostHandler:
             await self._send_success_message(ctx, story_id)
             self._cleanup_cloudinary(ctx)
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             await self._handle_autopost_error(ctx, e)
 
     # ==================== Extracted Helpers ====================
@@ -266,7 +267,7 @@ class TelegramAutopostHandler:
                 telegram_chat_id=ctx.chat_id
             )
             return f"@{account_info.get('username', 'Unknown')}"
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — best-effort display info
             logger.warning(f"Could not fetch account display info: {e}")
             return "Unknown account"
 
@@ -552,7 +553,7 @@ class TelegramAutopostHandler:
                 logger.warning(
                     f"Cloudinary delete returned false for {ctx.cloud_public_id}"
                 )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.warning(
                 f"Failed to clean up Cloudinary upload {ctx.cloud_public_id}: {e}"
             )

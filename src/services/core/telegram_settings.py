@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import TelegramError
 
 from src.config.constants import (
     MAX_POSTING_HOUR,
@@ -182,7 +183,7 @@ class TelegramSettingsHandlers:
 
         except ValueError as e:
             await query.answer(f"Error: {e}", show_alert=True)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.error(f"Failed to toggle {setting_name}: {e}", exc_info=True)
             await query.answer(
                 "⚠️ Failed to update setting. Please try again.",
@@ -210,11 +211,11 @@ class TelegramSettingsHandlers:
         """Handle Close button - delete the settings message."""
         try:
             await query.message.delete()
-        except Exception as e:
+        except TelegramError as e:
             logger.debug(f"Could not delete settings message: {e}")
             try:
                 await query.answer("Could not close menu")
-            except Exception:
+            except TelegramError:
                 pass
 
     async def handle_settings_edit_start(self, setting_name: str, user, query, context):
@@ -265,7 +266,7 @@ class TelegramSettingsHandlers:
         # Delete user's message to keep chat clean (best-effort)
         try:
             await update.message.delete()
-        except Exception as e:
+        except TelegramError as e:
             logger.debug(f"Could not delete user settings input message: {e}")
 
         if state == "awaiting_posts_per_day":

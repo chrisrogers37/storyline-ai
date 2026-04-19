@@ -96,7 +96,7 @@ class TelegramService(BaseService):
         super().cleanup_transactions()
         try:
             self.interaction_service.interaction_repo.end_read_transaction()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.warning(
                 f"[TelegramService] Interaction repo cleanup failed: "
                 f"{type(e).__name__}: {e}"
@@ -111,7 +111,7 @@ class TelegramService(BaseService):
         super().close()
         try:
             self.interaction_service.interaction_repo.close()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.warning(
                 f"[TelegramService] Interaction repo close failed: "
                 f"{type(e).__name__}: {e}"
@@ -453,7 +453,7 @@ class TelegramService(BaseService):
                 "administrator",
             ):
                 self._handle_bot_removed_from_group(chat)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.error(
                 f"my_chat_member handler error for chat {chat.id}: "
                 f"{type(e).__name__}: {e}",
@@ -511,7 +511,7 @@ class TelegramService(BaseService):
                 ),
                 parse_mode="Markdown",
             )
-        except Exception:
+        except Exception:  # noqa: BLE001
             pass  # DM may be blocked
 
     def _handle_bot_removed_from_group(self, chat):
@@ -544,7 +544,7 @@ class TelegramService(BaseService):
 
             try:
                 await query.answer()
-            except Exception:
+            except Exception:  # noqa: BLE001
                 logger.debug(
                     f"Could not answer callback query (may be stale): {query.data}"
                 )
@@ -579,7 +579,7 @@ class TelegramService(BaseService):
 
             logger.warning(f"Unknown callback action: {action}")
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.error(
                 f"Unhandled error in callback '{query.data}': {type(e).__name__}: {e}",
                 exc_info=True,
@@ -590,7 +590,7 @@ class TelegramService(BaseService):
                     "⚠️ Something went wrong. Please try again.",
                     show_alert=True,
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001
                 pass  # query.answer may have already been called
 
         finally:
@@ -653,7 +653,7 @@ class TelegramService(BaseService):
                 chat_settings_id=str(chat_settings.id),
             )
             self._known_memberships.add(cache_key)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.warning(f"Membership auto-create failed: {e}")
 
     def _is_verbose(self, chat_id, chat_settings=None) -> bool:
@@ -721,7 +721,7 @@ class TelegramService(BaseService):
 
             logger.info("Startup notification sent to admin")
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.error(f"Failed to send startup notification: {e}")
 
     async def send_shutdown_notification(
@@ -756,7 +756,7 @@ class TelegramService(BaseService):
 
             logger.info("Shutdown notification sent to admin")
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.error(f"Failed to send shutdown notification: {e}")
 
     async def start_polling(self):

@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Optional
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from src.models.onboarding_session import OnboardingSession
 from src.repositories.onboarding_repository import OnboardingRepository
 from src.services.base_service import BaseService
@@ -132,7 +134,7 @@ class ConversationService(BaseService):
                             interaction_name=session.step,
                             context={"duration_minutes": duration_minutes},
                         )
-            except Exception:
+            except SQLAlchemyError:
                 logger.warning("Failed to log onboarding dropouts", exc_info=True)
 
         count = self.onboarding_repo.delete_expired()

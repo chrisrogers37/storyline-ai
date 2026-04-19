@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Narrow broad `except Exception` catches** (#250) — Audited 88 `except Exception` catches across `src/services/`. Narrowed catches to specific types (`TelegramError`, `SQLAlchemyError`, `InvalidToken`, etc.) where failure modes are known. Added `noqa: BLE001` annotations with justification comments to intentionally broad catches (best-effort logging, cleanup, health checks). Added `exc_info=True` to health check error handlers.
+
 ### Added
 
 - **AI caption generation** (#182) — New `CaptionService` generates Instagram Story captions using Claude API at queue time. Controlled by per-instance `enable_ai_captions` toggle. Generated captions are stored separately from manual captions on `media_items.generated_caption`, shown with a robot indicator in Telegram review, and include a "Regenerate Caption" button. Skips generation when a manual caption exists or ANTHROPIC_API_KEY is not configured. Non-blocking — API failures never prevent posting. Migration 026 adds the new columns.

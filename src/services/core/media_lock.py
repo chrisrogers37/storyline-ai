@@ -2,6 +2,8 @@
 
 from typing import Optional
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from src.services.base_service import BaseService
 from src.repositories.audit_repository import AuditRepository
 from src.repositories.lock_repository import LockRepository
@@ -63,7 +65,7 @@ class MediaLockService(BaseService):
                 if lock.chat_settings_id
                 else None,
             )
-        except Exception:
+        except SQLAlchemyError:
             logger.warning("Audit log failed for lock create", exc_info=True)
 
         if ttl_days is None:
@@ -127,7 +129,7 @@ class MediaLockService(BaseService):
                 changed_by_user_id=removed_by_user_id,
                 chat_settings_id=lock_chat_settings_id,
             )
-        except Exception:
+        except SQLAlchemyError:
             logger.warning("Audit log failed for lock delete", exc_info=True)
         return result
 

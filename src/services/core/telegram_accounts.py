@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import TelegramError
 
 from src.config.settings import settings as app_settings
 from src.services.core.telegram_utils import (
@@ -397,7 +398,7 @@ class TelegramAccountHandlers:
         except ValueError as e:
             logger.error(f"ValueError during account switch: {e}", exc_info=True)
             await query.answer(f"Error: {e}", show_alert=True)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             # Catch all other exceptions (DB errors, Telegram errors, etc.)
             logger.error(f"Unexpected error during account switch: {e}", exc_info=True)
             await query.answer(
@@ -478,7 +479,7 @@ class TelegramAccountHandlers:
 
         except ValueError as e:
             await query.answer(f"Error: {e}", show_alert=True)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.error(f"Error cycling account: {e}", exc_info=True)
             await query.answer(f"⚠️ Error: {str(e)[:50]}", show_alert=True)
 
@@ -590,7 +591,7 @@ class TelegramAccountHandlers:
                     parse_mode="Markdown",
                 )
                 updated += 1
-            except Exception as e:
+            except TelegramError as e:
                 logger.debug(
                     f"Could not update caption for queue item "
                     f"{str(queue_item.id)[:8]}: {e}"

@@ -49,7 +49,7 @@ class MediaLifecycleService(BaseService):
                             f"Cloudinary delete returned false for "
                             f"{media_item.cloud_public_id}"
                         )
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001 — best-effort Cloudinary cleanup
                     logger.warning(
                         f"Failed to delete Cloudinary resource "
                         f"{media_item.cloud_public_id}: {e}"
