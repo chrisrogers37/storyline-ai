@@ -38,7 +38,7 @@ class CaptionService(BaseService):
         super().__init__()
         self.media_repo = media_repo or MediaRepository()
 
-    def generate_caption(
+    async def generate_caption(
         self,
         media_item,
         *,
@@ -83,7 +83,7 @@ class CaptionService(BaseService):
                 "regenerate": regenerate,
             },
         ) as run_id:
-            caption = self._call_api(media_item)
+            caption = await self._call_api(media_item)
 
             if caption:
                 self.media_repo.update_metadata(
@@ -100,17 +100,23 @@ class CaptionService(BaseService):
             )
             return caption
 
-    def _call_api(self, media_item) -> Optional[str]:
+    async def _call_api(self, media_item) -> Optional[str]:
         """Call Claude API to generate a caption.
+
+        Runs the synchronous Anthropic SDK call in a thread to avoid
+        blocking the asyncio event loop.
 
         Returns:
             Generated caption text, or None on failure.
         """
+        import asyncio
+
         prompt = self._build_prompt(media_item)
         try:
             client = _get_anthropic_client()
-            response = client.messages.create(
-                model="claude-sonnet-4-20250514",
+            response = await asyncio.to_thread(
+                client.messages.create,
+                model=settings.CAPTION_MODEL,
                 max_tokens=300,
                 messages=[{"role": "user", "content": prompt}],
             )
@@ -141,6 +147,8 @@ class CaptionService(BaseService):
         if media_item.tags:
             parts.append(f"Tags: {', '.join(media_item.tags)}")
 
+        # NOTE: custom_metadata is sent to Anthropic's API for caption context.
+        # Do not store sensitive data in this JSONB field if AI captions are enabled.
         if media_item.custom_metadata:
             parts.append(f"Additional context: {media_item.custom_metadata}")
 

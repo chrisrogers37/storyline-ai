@@ -53,7 +53,8 @@ def _mock_api_response(text):
 class TestCaptionService:
     """Unit tests for CaptionService."""
 
-    def test_generate_caption_success(self, caption_service):
+    @pytest.mark.asyncio
+    async def test_generate_caption_success(self, caption_service):
         """Should generate and persist a caption via Claude API."""
         media_item = _make_media_item()
         mock_client = _mock_api_response("Check this out! ")
@@ -66,30 +67,34 @@ class TestCaptionService:
             ),
         ):
             mock_settings.ANTHROPIC_API_KEY = "sk-test"
-            result = caption_service.generate_caption(media_item)
+            mock_settings.CAPTION_MODEL = "claude-haiku-4-5-20251001"
+            result = await caption_service.generate_caption(media_item)
 
         assert result == "Check this out!"
         caption_service.media_repo.update_metadata.assert_called_once_with(
             str(media_item.id), generated_caption="Check this out!"
         )
 
-    def test_skip_when_manual_caption_exists(self, caption_service):
+    @pytest.mark.asyncio
+    async def test_skip_when_manual_caption_exists(self, caption_service):
         """Should skip generation when media has a manual caption."""
         media_item = _make_media_item(caption="My custom caption")
 
-        result = caption_service.generate_caption(media_item)
+        result = await caption_service.generate_caption(media_item)
 
         assert result is None
 
-    def test_skip_when_already_generated(self, caption_service):
+    @pytest.mark.asyncio
+    async def test_skip_when_already_generated(self, caption_service):
         """Should return cached caption when one already exists."""
         media_item = _make_media_item(generated_caption="Existing AI caption")
 
-        result = caption_service.generate_caption(media_item)
+        result = await caption_service.generate_caption(media_item)
 
         assert result == "Existing AI caption"
 
-    def test_regenerate_overrides_existing(self, caption_service):
+    @pytest.mark.asyncio
+    async def test_regenerate_overrides_existing(self, caption_service):
         """Should regenerate when regenerate=True even if caption exists."""
         media_item = _make_media_item(generated_caption="Old caption")
         mock_client = _mock_api_response("New caption")
@@ -102,21 +107,24 @@ class TestCaptionService:
             ),
         ):
             mock_settings.ANTHROPIC_API_KEY = "sk-test"
-            result = caption_service.generate_caption(media_item, regenerate=True)
+            mock_settings.CAPTION_MODEL = "claude-haiku-4-5-20251001"
+            result = await caption_service.generate_caption(media_item, regenerate=True)
 
         assert result == "New caption"
 
-    def test_skip_when_no_api_key(self, caption_service):
+    @pytest.mark.asyncio
+    async def test_skip_when_no_api_key(self, caption_service):
         """Should skip when ANTHROPIC_API_KEY is not configured."""
         media_item = _make_media_item()
 
         with patch("src.services.core.caption_service.settings") as mock_settings:
             mock_settings.ANTHROPIC_API_KEY = None
-            result = caption_service.generate_caption(media_item)
+            result = await caption_service.generate_caption(media_item)
 
         assert result is None
 
-    def test_api_failure_returns_none(self, caption_service):
+    @pytest.mark.asyncio
+    async def test_api_failure_returns_none(self, caption_service):
         """Should return None on API error without crashing."""
         media_item = _make_media_item()
         mock_client = Mock()
@@ -130,12 +138,14 @@ class TestCaptionService:
             ),
         ):
             mock_settings.ANTHROPIC_API_KEY = "sk-test"
-            result = caption_service.generate_caption(media_item)
+            mock_settings.CAPTION_MODEL = "claude-haiku-4-5-20251001"
+            result = await caption_service.generate_caption(media_item)
 
         assert result is None
         caption_service.media_repo.update_metadata.assert_not_called()
 
-    def test_caption_truncated_at_limit(self, caption_service):
+    @pytest.mark.asyncio
+    async def test_caption_truncated_at_limit(self, caption_service):
         """Should truncate captions exceeding Instagram's limit."""
         media_item = _make_media_item()
         mock_client = _mock_api_response("x" * 3000)
@@ -148,7 +158,8 @@ class TestCaptionService:
             ),
         ):
             mock_settings.ANTHROPIC_API_KEY = "sk-test"
-            result = caption_service.generate_caption(media_item)
+            mock_settings.CAPTION_MODEL = "claude-haiku-4-5-20251001"
+            result = await caption_service.generate_caption(media_item)
 
         assert len(result) == MAX_CAPTION_LENGTH
 

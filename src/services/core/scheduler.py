@@ -242,7 +242,7 @@ class SchedulerService(BaseService):
                     from src.services.core.caption_service import CaptionService
 
                     with CaptionService(media_repo=self.media_repo) as caption_service:
-                        generated = caption_service.generate_caption(media_item)
+                        generated = await caption_service.generate_caption(media_item)
                     if generated:
                         media_item = self.media_repo.get_by_id(str(media_item.id))
                 except Exception as e:

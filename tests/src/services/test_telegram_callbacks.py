@@ -135,6 +135,7 @@ class TestRejectConfirmation:
         mock_media_item.file_name = "test.jpg"
         mock_media_item.title = "Test"
         mock_media_item.caption = None
+        mock_media_item.generated_caption = None
         mock_media_item.link_url = None
         mock_media_item.tags = []
         service.media_repo.get_by_id.return_value = mock_media_item
@@ -567,7 +568,9 @@ class TestCompleteQueueAction:
         mock_queue_item.scheduled_for = datetime.utcnow()
         service.queue_repo.get_by_id.return_value = mock_queue_item
         service.queue_repo.claim_for_processing.return_value = mock_queue_item
-        service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
+        service.media_repo.get_by_id.return_value = Mock(
+            file_name="test.jpg", generated_caption=None
+        )
 
         mock_user = Mock()
         mock_user.id = uuid4()
@@ -605,7 +608,9 @@ class TestCompleteQueueAction:
         mock_queue_item.scheduled_for = datetime.utcnow()
         service.queue_repo.get_by_id.return_value = mock_queue_item
         service.queue_repo.claim_for_processing.return_value = mock_queue_item
-        service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
+        service.media_repo.get_by_id.return_value = Mock(
+            file_name="test.jpg", generated_caption=None
+        )
 
         mock_user = Mock()
         mock_user.id = uuid4()
@@ -673,7 +678,9 @@ class TestEarlyProcessingFeedback:
         mock_queue_item.scheduled_for = datetime.utcnow()
         service.queue_repo.get_by_id.return_value = mock_queue_item
         service.queue_repo.claim_for_processing.return_value = mock_queue_item
-        service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
+        service.media_repo.get_by_id.return_value = Mock(
+            file_name="test.jpg", generated_caption=None
+        )
 
         mock_user = Mock()
         mock_user.id = uuid4()
@@ -719,7 +726,9 @@ class TestEarlyProcessingFeedback:
         mock_queue_item.scheduled_for = datetime.utcnow()
         service.queue_repo.get_by_id.return_value = mock_queue_item
         service.queue_repo.claim_for_processing.return_value = mock_queue_item
-        service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
+        service.media_repo.get_by_id.return_value = Mock(
+            file_name="test.jpg", generated_caption=None
+        )
 
         mock_user = Mock()
         mock_user.id = uuid4()
@@ -902,7 +911,9 @@ class TestRaceConditionHandling:
         mock_queue_item.scheduled_for = datetime.utcnow()
         service.queue_repo.get_by_id.return_value = mock_queue_item
         service.queue_repo.claim_for_processing.return_value = mock_queue_item
-        service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
+        service.media_repo.get_by_id.return_value = Mock(
+            file_name="test.jpg", generated_caption=None
+        )
 
         mock_user = Mock()
         mock_user.id = uuid4()
@@ -933,7 +944,9 @@ class TestRaceConditionHandling:
         mock_queue_item.scheduled_for = datetime.utcnow()
         service.queue_repo.get_by_id.return_value = mock_queue_item
         service.queue_repo.claim_for_processing.return_value = mock_queue_item
-        service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
+        service.media_repo.get_by_id.return_value = Mock(
+            file_name="test.jpg", generated_caption=None
+        )
 
         mock_settings = Mock()
         mock_settings.show_verbose_notifications = True
@@ -969,7 +982,9 @@ class TestRaceConditionHandling:
         mock_queue_item.scheduled_for = datetime.utcnow()
         service.queue_repo.get_by_id.return_value = mock_queue_item
         service.queue_repo.claim_for_processing.return_value = mock_queue_item
-        service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
+        service.media_repo.get_by_id.return_value = Mock(
+            file_name="test.jpg", generated_caption=None
+        )
 
         mock_user = Mock()
         mock_user.id = uuid4()
@@ -1054,7 +1069,9 @@ class TestSSLRetry:
         mock_queue_item.chat_settings_id = uuid4()
         service.queue_repo.get_by_id.return_value = mock_queue_item
         service.queue_repo.claim_for_processing.return_value = mock_queue_item
-        service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
+        service.media_repo.get_by_id.return_value = Mock(
+            file_name="test.jpg", generated_caption=None
+        )
 
         mock_user = Mock()
         mock_user.id = uuid4()
@@ -1094,7 +1111,9 @@ class TestSSLRetry:
         mock_queue_item.scheduled_for = datetime.utcnow()
         service.queue_repo.get_by_id.return_value = mock_queue_item
         service.queue_repo.claim_for_processing.return_value = mock_queue_item
-        service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
+        service.media_repo.get_by_id.return_value = Mock(
+            file_name="test.jpg", generated_caption=None
+        )
 
         mock_user = Mock()
         mock_user.id = uuid4()
@@ -1131,7 +1150,9 @@ class TestSSLRetry:
         mock_queue_item.chat_settings_id = uuid4()
         service.queue_repo.get_by_id.return_value = mock_queue_item
         service.queue_repo.claim_for_processing.return_value = mock_queue_item
-        service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
+        service.media_repo.get_by_id.return_value = Mock(
+            file_name="test.jpg", generated_caption=None
+        )
 
         mock_user = Mock()
         mock_user.id = uuid4()
@@ -1170,7 +1191,9 @@ class TestSSLRetry:
         service.queue_repo.claim_for_processing.return_value = mock_queue_item
         # get_by_id returns None on re-fetch after error
         service.queue_repo.get_by_id.return_value = None
-        service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
+        service.media_repo.get_by_id.return_value = Mock(
+            file_name="test.jpg", generated_caption=None
+        )
 
         mock_user = Mock()
         mock_user.id = uuid4()
@@ -1211,7 +1234,9 @@ class TestSSLRetry:
         mock_queue_item.chat_settings_id = uuid4()
         service.queue_repo.get_by_id.return_value = mock_queue_item
         service.queue_repo.claim_for_processing.return_value = mock_queue_item
-        service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
+        service.media_repo.get_by_id.return_value = Mock(
+            file_name="test.jpg", generated_caption=None
+        )
 
         mock_settings = Mock()
         mock_settings.show_verbose_notifications = False
@@ -1281,7 +1306,9 @@ class TestAtomicClaim:
         mock_queue_item.created_at = datetime.utcnow()
         mock_queue_item.scheduled_for = datetime.utcnow()
         service.queue_repo.claim_for_processing.return_value = mock_queue_item
-        service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
+        service.media_repo.get_by_id.return_value = Mock(
+            file_name="test.jpg", generated_caption=None
+        )
 
         mock_user = Mock()
         mock_user.id = uuid4()
@@ -1346,7 +1373,9 @@ class TestAtomicClaim:
         mock_queue_item.scheduled_for = datetime.utcnow()
         mock_queue_item.chat_settings_id = uuid4()
         service.queue_repo.claim_for_processing.return_value = mock_queue_item
-        service.media_repo.get_by_id.return_value = Mock(file_name="test.jpg")
+        service.media_repo.get_by_id.return_value = Mock(
+            file_name="test.jpg", generated_caption=None
+        )
 
         mock_user = Mock()
         mock_user.id = uuid4()

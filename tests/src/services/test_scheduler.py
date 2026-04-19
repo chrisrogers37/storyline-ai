@@ -334,7 +334,14 @@ class TestForceSendNext:
         cs = _make_chat_settings()
         service.settings_service.get_settings.return_value = cs
 
-        mock_media = Mock(id=uuid4(), file_name="f.jpg", category=None, times_posted=0)
+        mock_media = Mock(
+            id=uuid4(),
+            file_name="f.jpg",
+            category=None,
+            times_posted=0,
+            caption=None,
+            generated_caption=None,
+        )
         service.media_repo.get_next_eligible_for_posting.return_value = mock_media
 
         mock_queue_item = Mock(id=uuid4())

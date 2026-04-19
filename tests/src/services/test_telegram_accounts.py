@@ -79,6 +79,7 @@ class TestAccountSelectorCallbacks:
         mock_media_item = Mock()
         mock_media_item.title = "Test"
         mock_media_item.caption = None
+        mock_media_item.generated_caption = None
         mock_media_item.link_url = None
         mock_media_item.tags = []
         mock_account_handlers.service.media_repo.get_by_id.return_value = (

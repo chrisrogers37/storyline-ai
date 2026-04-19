@@ -235,6 +235,17 @@ class TelegramCallbackQueueHandlers:
 
     async def handle_regenerate_caption(self, queue_id: str, user, query):
         """Handle 'Regenerate Caption' button — generate a new AI caption."""
+        # Guard: check toggle is still enabled
+        chat_id = query.message.chat_id
+        chat_settings = self.service.settings_service.get_settings(
+            chat_id, create_if_missing=False
+        )
+        if not chat_settings or not chat_settings.enable_ai_captions:
+            await query.answer(
+                "AI captions are disabled for this instance", show_alert=True
+            )
+            return
+
         queue_item, media_item = await validate_queue_and_media(
             self.service, queue_id, query
         )
@@ -245,7 +256,7 @@ class TelegramCallbackQueueHandlers:
 
         try:
             with CaptionService() as caption_service:
-                new_caption = caption_service.generate_caption(
+                new_caption = await caption_service.generate_caption(
                     media_item, regenerate=True
                 )
         except Exception as e:
@@ -256,18 +267,14 @@ class TelegramCallbackQueueHandlers:
             await query.answer("Caption generation failed — try again", show_alert=True)
             return
 
+        # Re-fetch media_item to pick up the persisted generated_caption
+        media_item = self.service.media_repo.get_by_id(str(queue_item.media_item_id))
+
         # Rebuild caption and keyboard with the new generated caption
-        chat_id = query.message.chat_id
         active_account = self.service.ig_account_service.get_active_account(chat_id)
         caption = self.service._build_caption(
             media_item, queue_item, active_account=active_account
         )
-
-        chat_settings = self.service.settings_service.get_settings(
-            chat_id, create_if_missing=False
-        )
-        if not chat_settings:
-            return
 
         reply_markup = build_queue_action_keyboard(
             queue_id,

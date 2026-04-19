@@ -45,6 +45,7 @@ class TestBuildCaption:
         media = Mock(
             title="Test Image",
             caption=None,
+            generated_caption=None,
             link_url=None,
             tags=[],
         )
@@ -61,6 +62,7 @@ class TestBuildCaption:
         media = Mock(
             title="Test Image",
             caption=None,
+            generated_caption=None,
             link_url=None,
             tags=[],
             file_name="test.jpg",
@@ -81,6 +83,7 @@ class TestBuildCaption:
         media = Mock(
             title="Test Image",
             caption=None,
+            generated_caption=None,
             link_url=None,
             tags=[],
         )
@@ -97,6 +100,7 @@ class TestBuildCaption:
         media = Mock(
             title="Test Image",
             caption=None,
+            generated_caption=None,
             link_url=None,
             tags=[],
         )
@@ -117,6 +121,7 @@ class TestBuildSimpleCaption:
         media = Mock(
             title="My Title",
             caption=None,
+            generated_caption=None,
             link_url=None,
             tags=[],
             file_name="img.jpg",
@@ -132,6 +137,7 @@ class TestBuildSimpleCaption:
         media = Mock(
             title="Test",
             caption=None,
+            generated_caption=None,
             link_url=None,
             tags=[],
             file_name="img.jpg",
@@ -147,6 +153,7 @@ class TestBuildSimpleCaption:
         media = Mock(
             title="Test",
             caption=None,
+            generated_caption=None,
             link_url=None,
             tags=[],
             file_name="image.jpg",
@@ -163,6 +170,7 @@ class TestBuildSimpleCaption:
         media = Mock(
             title="Test",
             caption=None,
+            generated_caption=None,
             link_url=None,
             tags=[],
             file_name="image.jpg",
@@ -179,6 +187,7 @@ class TestBuildSimpleCaption:
         media = Mock(
             title="Test",
             caption=None,
+            generated_caption=None,
             link_url=None,
             tags=[],
             file_name="img.jpg",
@@ -197,6 +206,7 @@ class TestBuildSimpleCaption:
         media = Mock(
             title="Test",
             caption=None,
+            generated_caption=None,
             link_url=None,
             tags=["meme", "funny"],
             file_name="img.jpg",
@@ -213,6 +223,7 @@ class TestBuildSimpleCaption:
         media = Mock(
             title="Test",
             caption=None,
+            generated_caption=None,
             link_url="https://example.com",
             tags=[],
             file_name="img.jpg",
@@ -233,6 +244,7 @@ class TestBuildEnhancedCaption:
         media = Mock(
             title="Test",
             caption=None,
+            generated_caption=None,
             link_url=None,
             tags=[],
         )
@@ -249,6 +261,7 @@ class TestBuildEnhancedCaption:
         media = Mock(
             title="Test",
             caption=None,
+            generated_caption=None,
             link_url=None,
             tags=[],
         )
@@ -265,6 +278,7 @@ class TestBuildEnhancedCaption:
         media = Mock(
             title="Test",
             caption=None,
+            generated_caption=None,
             link_url=None,
             tags=[],
             file_name="image.jpg",
@@ -283,6 +297,7 @@ class TestBuildEnhancedCaption:
         media = Mock(
             title="Test",
             caption=None,
+            generated_caption=None,
             link_url=None,
             tags=[],
             file_name="image.jpg",
@@ -301,6 +316,7 @@ class TestBuildEnhancedCaption:
         media = Mock(
             title="Test",
             caption=None,
+            generated_caption=None,
             link_url=None,
             tags=[],
         )
@@ -317,6 +333,7 @@ class TestBuildEnhancedCaption:
         media = Mock(
             title="Test",
             caption=None,
+            generated_caption=None,
             link_url=None,
             tags=[],
         )
@@ -347,6 +364,7 @@ class TestBuildEnhancedCaption:
         media = Mock(
             title="Test",
             caption=None,
+            generated_caption=None,
             link_url=None,
             tags=["product", "sale"],
         )
@@ -581,6 +599,7 @@ class TestSendNotification:
             file_name="test.jpg",
             title="Test",
             caption=None,
+            generated_caption=None,
             link_url=None,
             tags=[],
             source_identifier="test.jpg",
@@ -626,6 +645,7 @@ class TestSendNotification:
             file_name="test.jpg",
             title="Test",
             caption=None,
+            generated_caption=None,
             link_url=None,
             tags=[],
             source_identifier="test.jpg",
@@ -666,6 +686,7 @@ class TestSendNotification:
             file_name="test.jpg",
             title="Test",
             caption=None,
+            generated_caption=None,
             link_url=None,
             tags=[],
             source_identifier="test.jpg",
@@ -704,6 +725,7 @@ class TestSendNotification:
             file_name="test.jpg",
             title="Test",
             caption=None,
+            generated_caption=None,
             link_url=None,
             tags=[],
             source_identifier="test.jpg",
@@ -750,6 +772,7 @@ class TestSendNotification:
             file_name="test.jpg",
             title="Test",
             caption=None,
+            generated_caption=None,
             link_url=None,
             tags=[],
             source_identifier="test.jpg",

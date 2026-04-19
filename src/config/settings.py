@@ -92,6 +92,7 @@ class Settings(BaseSettings):
 
     # AI Caption Generation
     ANTHROPIC_API_KEY: Optional[str] = None
+    CAPTION_MODEL: str = "claude-haiku-4-5-20251001"
 
     @property
     def meta_graph_base(self) -> str:

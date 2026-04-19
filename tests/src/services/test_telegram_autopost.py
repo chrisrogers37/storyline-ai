@@ -389,7 +389,7 @@ class TestAutopostBackgroundTask:
         mock_queue_item.chat_settings_id = None
         service.queue_repo.claim_for_processing.return_value = mock_queue_item
 
-        mock_media = Mock(id=uuid4(), file_name="test.jpg")
+        mock_media = Mock(id=uuid4(), file_name="test.jpg", generated_caption=None)
         service.media_repo.get_by_id.return_value = mock_media
 
         mock_user = Mock(id=uuid4())
@@ -501,6 +501,7 @@ def make_autopost_ctx():
                 file_name="story.jpg",
                 source_identifier="/test/story.jpg",
                 mime_type="image/jpeg",
+                generated_caption=None,
             )
         if user is None:
             user = Mock(

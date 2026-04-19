@@ -122,8 +122,7 @@ class TelegramNotificationService:
             active_account=active_account,
             account_count=account_count,
             has_generated_caption=bool(
-                isinstance(getattr(media_item, "generated_caption", None), str)
-                and not media_item.caption
+                media_item.generated_caption and not media_item.caption
             ),
         )
 
@@ -229,7 +228,7 @@ class TelegramNotificationService:
 
         if media_item.caption:
             lines.append(f"\n{_escape_md(media_item.caption)}")
-        elif isinstance(getattr(media_item, "generated_caption", None), str):
+        elif media_item.generated_caption:
             lines.append(f"\n🤖 {_escape_md(media_item.generated_caption)}")
 
         if media_item.link_url:
@@ -269,7 +268,7 @@ class TelegramNotificationService:
 
         if media_item.caption:
             lines.append(f"\n{_escape_md(media_item.caption)}")
-        elif isinstance(getattr(media_item, "generated_caption", None), str):
+        elif media_item.generated_caption:
             lines.append(f"\n🤖 {_escape_md(media_item.generated_caption)}")
 
         if media_item.link_url:
