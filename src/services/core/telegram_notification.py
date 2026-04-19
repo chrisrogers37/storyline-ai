@@ -121,6 +121,10 @@ class TelegramNotificationService:
             enable_instagram_api=chat_settings.enable_instagram_api,
             active_account=active_account,
             account_count=account_count,
+            has_generated_caption=bool(
+                isinstance(getattr(media_item, "generated_caption", None), str)
+                and not media_item.caption
+            ),
         )
 
         try:
@@ -225,6 +229,8 @@ class TelegramNotificationService:
 
         if media_item.caption:
             lines.append(f"\n{_escape_md(media_item.caption)}")
+        elif isinstance(getattr(media_item, "generated_caption", None), str):
+            lines.append(f"\n🤖 {_escape_md(media_item.generated_caption)}")
 
         if media_item.link_url:
             lines.append(f"\n🔗 {media_item.link_url}")
@@ -263,6 +269,8 @@ class TelegramNotificationService:
 
         if media_item.caption:
             lines.append(f"\n{_escape_md(media_item.caption)}")
+        elif isinstance(getattr(media_item, "generated_caption", None), str):
+            lines.append(f"\n🤖 {_escape_md(media_item.generated_caption)}")
 
         if media_item.link_url:
             lines.append(f"\n🔗 {media_item.link_url}")

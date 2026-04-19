@@ -236,6 +236,7 @@ class TelegramService(BaseService):
             "reject": self.callbacks.handle_reject_confirmation,
             "confirm_reject": self.callbacks.handle_rejected,
             "cancel_reject": self.callbacks.handle_cancel_reject,
+            "regenerate_caption": self.callbacks.handle_regenerate_caption,
             "resume": self.callbacks.handle_resume_callback,
             "clear": self.callbacks.handle_reset_callback,  # Legacy name for reset
             "batch_approve": self.callbacks.handle_batch_approve,

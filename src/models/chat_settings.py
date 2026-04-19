@@ -58,6 +58,9 @@ class ChatSettings(Base):
     # Media sync (Phase 04 Cloud Media)
     media_sync_enabled = Column(Boolean, default=False)
 
+    # AI caption generation
+    enable_ai_captions = Column(Boolean, default=False)
+
     # Per-chat media source configuration (NULL = use global env var fallback)
     media_source_type = Column(String(50), nullable=True)  # 'local' or 'google_drive'
     media_source_root = Column(

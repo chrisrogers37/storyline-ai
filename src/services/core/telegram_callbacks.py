@@ -89,6 +89,9 @@ class TelegramCallbackHandlers:
     async def handle_back(self, queue_id, user, query):
         return await self._queue.handle_back(queue_id, user, query)
 
+    async def handle_regenerate_caption(self, queue_id, user, query):
+        return await self._queue.handle_regenerate_caption(queue_id, user, query)
+
     async def handle_reject_confirmation(self, queue_id, user, query):
         return await self._queue.handle_reject_confirmation(queue_id, user, query)
 

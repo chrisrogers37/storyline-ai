@@ -90,6 +90,9 @@ class Settings(BaseSettings):
     INSTAGRAM_USERNAME: Optional[str] = None
     CAPTION_STYLE: str = "enhanced"  # or 'simple'
 
+    # AI Caption Generation
+    ANTHROPIC_API_KEY: Optional[str] = None
+
     @property
     def meta_graph_base(self) -> str:
         """Base URL for Meta Graph API calls."""

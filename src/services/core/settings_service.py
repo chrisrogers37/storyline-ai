@@ -24,6 +24,7 @@ TOGGLEABLE_SETTINGS = {
     "is_paused",
     "show_verbose_notifications",
     "media_sync_enabled",
+    "enable_ai_captions",
 }
 NUMERIC_SETTINGS = {"posts_per_day", "posting_hours_start", "posting_hours_end"}
 TEXT_SETTINGS = {"media_source_type", "media_source_root"}
@@ -249,6 +250,7 @@ class SettingsService(BaseService):
             "posting_hours_end": settings.posting_hours_end,
             "show_verbose_notifications": settings.show_verbose_notifications,
             "media_sync_enabled": settings.media_sync_enabled,
+            "enable_ai_captions": settings.enable_ai_captions,
             "media_source_type": settings.media_source_type,
             "media_source_root": settings.media_source_root,
             "updated_at": settings.updated_at,

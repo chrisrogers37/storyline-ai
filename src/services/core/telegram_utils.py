@@ -147,6 +147,7 @@ def build_queue_action_keyboard(
     active_account=None,
     account_count: int = 0,
     error_recovery: bool = False,
+    has_generated_caption: bool = False,
 ) -> InlineKeyboardMarkup:
     """Build the action keyboard for a queue item notification.
 
@@ -180,6 +181,17 @@ def build_queue_action_keyboard(
                 InlineKeyboardButton(
                     label,
                     callback_data=f"autopost:{queue_id}",
+                ),
+            ]
+        )
+
+    # Regenerate caption button (only when AI caption is present)
+    if has_generated_caption:
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    "🔄 Regenerate Caption",
+                    callback_data=f"regenerate_caption:{queue_id}",
                 ),
             ]
         )

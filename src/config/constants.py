@@ -11,6 +11,9 @@ MAX_POSTS_PER_DAY = 50
 MIN_POSTING_HOUR = 0
 MAX_POSTING_HOUR = 23
 
+# Instagram caption limits (used by caption_service.py)
+MAX_CAPTION_LENGTH = 2200  # Instagram caption character limit
+
 # Instagram Login API base URLs (unversioned, separate from Meta Graph API)
 # Used by instagram_login_oauth.py and token_refresh.py
 IG_LOGIN_GRAPH_BASE = "https://graph.instagram.com"

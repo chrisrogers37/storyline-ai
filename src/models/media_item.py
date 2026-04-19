@@ -50,6 +50,7 @@ class MediaItem(Base):
     title = Column(Text)  # General purpose title (product name, meme title, etc.)
     link_url = Column(Text)  # Link for sticker
     caption = Column(Text)
+    generated_caption = Column(Text)  # AI-generated caption (kept separate from manual)
     tags = Column(ARRAY(Text))  # Array of custom tags (user-defined)
     custom_metadata = Column(JSONB)  # Flexible JSON field for any additional data
 
