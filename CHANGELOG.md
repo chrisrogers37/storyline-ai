@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Replace deprecated `datetime.utcnow()` calls** (#249) — Replaced 30+ `datetime.utcnow()` calls across `src/services/` with timezone-aware `datetime.now(timezone.utc)`, eliminating Python 3.12 deprecation warnings. Inverted `.replace(tzinfo=None)` patterns to ensure consistent aware-to-aware datetime comparisons.
+
 ### Added
 
 - **AI caption generation** (#182) — New `CaptionService` generates Instagram Story captions using Claude API at queue time. Controlled by per-instance `enable_ai_captions` toggle. Generated captions are stored separately from manual captions on `media_items.generated_caption`, shown with a robot indicator in Telegram review, and include a "Regenerate Caption" button. Skips generation when a manual caption exists or ANTHROPIC_API_KEY is not configured. Non-blocking — API failures never prevent posting. Migration 026 adds the new columns.

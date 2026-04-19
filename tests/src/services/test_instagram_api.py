@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
-from datetime import datetime
+from datetime import datetime, timezone
 
 import httpx
 
@@ -104,7 +104,7 @@ class TestInstagramAPIService:
         assert call_args[1]["method"] == "instagram_api"
         since = call_args[1]["since"]
         # Should be approximately 1 hour ago
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         assert (now - since).total_seconds() < 3610  # Within ~1 hour
 
     # ==================== get_rate_limit_status Tests ====================

@@ -2,7 +2,7 @@
 
 import json
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from urllib.parse import urlencode
 
@@ -173,7 +173,7 @@ class GoogleDriveOAuthService(BaseService):
             chat_settings_id = str(chat_settings.id)
 
             # Step 4: Encrypt and store tokens
-            expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+            expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
 
             self.token_repo.create_or_update_for_chat(
                 service_name=self.SERVICE_NAME,

@@ -2,7 +2,7 @@
 
 import hashlib
 import mimetypes
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -124,7 +124,7 @@ class BackfillDownloader:
 
         # Set backfill tracking fields directly on the returned object
         media_item.instagram_media_id = ig_media_id
-        media_item.backfilled_at = datetime.utcnow()
+        media_item.backfilled_at = datetime.now(timezone.utc)
         self.service.media_repo.db.commit()
 
         logger.info(

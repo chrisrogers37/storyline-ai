@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import Mock, patch, AsyncMock
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from src.exceptions import TokenExpiredError
 from tests.src.services.conftest import mock_track_execution
@@ -35,13 +35,13 @@ class TestTokenRefreshService:
         token = Mock()
         token.token_value = "encrypted_token_value"
         token.is_expired = False
-        token.expires_at = datetime.utcnow() + timedelta(days=30)
-        token.last_refreshed_at = datetime.utcnow() - timedelta(days=10)
+        token.expires_at = datetime.now(timezone.utc) + timedelta(days=30)
+        token.last_refreshed_at = datetime.now(timezone.utc) - timedelta(days=10)
 
         def hours_until_expiry():
             if token.expires_at is None:
                 return None
-            delta = token.expires_at - datetime.utcnow()
+            delta = token.expires_at - datetime.now(timezone.utc)
             return delta.total_seconds() / 3600
 
         token.hours_until_expiry = hours_until_expiry
@@ -156,9 +156,9 @@ class TestTokenRefreshService:
         mock_settings.INSTAGRAM_ACCESS_TOKEN = "token"
         token_service._encryption.encrypt.return_value = "encrypted"
 
-        before_call = datetime.utcnow()
+        before_call = datetime.now(timezone.utc)
         token_service.bootstrap_from_env("instagram")
-        after_call = datetime.utcnow()
+        after_call = datetime.now(timezone.utc)
 
         call_kwargs = token_service.token_repo.create_or_update.call_args[1]
         expires_at = call_kwargs["expires_at"]
@@ -176,7 +176,7 @@ class TestTokenRefreshService:
 
     def test_check_token_health_valid_token(self, token_service, mock_db_token):
         """Test health check for valid token."""
-        mock_db_token.expires_at = datetime.utcnow() + timedelta(days=30)
+        mock_db_token.expires_at = datetime.now(timezone.utc) + timedelta(days=30)
         token_service.token_repo.get_token.return_value = mock_db_token
 
         result = token_service.check_token_health("instagram")
@@ -190,7 +190,7 @@ class TestTokenRefreshService:
     def test_check_token_health_expired_token(self, token_service, mock_db_token):
         """Test health check for expired token."""
         mock_db_token.is_expired = True
-        mock_db_token.expires_at = datetime.utcnow() - timedelta(days=1)
+        mock_db_token.expires_at = datetime.now(timezone.utc) - timedelta(days=1)
         token_service.token_repo.get_token.return_value = mock_db_token
 
         result = token_service.check_token_health("instagram")
@@ -202,7 +202,7 @@ class TestTokenRefreshService:
     def test_check_token_health_needs_refresh(self, token_service, mock_db_token):
         """Test health check identifies tokens needing refresh."""
         # Token expires in 5 days (within 7-day buffer)
-        mock_db_token.expires_at = datetime.utcnow() + timedelta(days=5)
+        mock_db_token.expires_at = datetime.now(timezone.utc) + timedelta(days=5)
         token_service.token_repo.get_token.return_value = mock_db_token
 
         result = token_service.check_token_health("instagram")
@@ -213,7 +213,7 @@ class TestTokenRefreshService:
     def test_check_token_health_no_refresh_needed(self, token_service, mock_db_token):
         """Test health check when token doesn't need refresh."""
         # Token expires in 30 days (outside 7-day buffer)
-        mock_db_token.expires_at = datetime.utcnow() + timedelta(days=30)
+        mock_db_token.expires_at = datetime.now(timezone.utc) + timedelta(days=30)
         token_service.token_repo.get_token.return_value = mock_db_token
 
         result = token_service.check_token_health("instagram")
@@ -253,7 +253,7 @@ class TestTokenRefreshService:
     ):
         """Access token expired + valid refresh token = healthy (auto-refreshable)."""
         mock_db_token.is_expired = True
-        mock_db_token.expires_at = datetime.utcnow() - timedelta(hours=1)
+        mock_db_token.expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
 
         refresh_token = Mock()
         refresh_token.expires_at = None  # Refresh tokens don't expire
@@ -277,7 +277,7 @@ class TestTokenRefreshService:
     ):
         """Access token expired + no refresh token = unhealthy."""
         mock_db_token.is_expired = True
-        mock_db_token.expires_at = datetime.utcnow() - timedelta(hours=1)
+        mock_db_token.expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
 
         token_service.token_repo.get_token_for_chat.side_effect = (
             lambda svc, token_type, cid: (
@@ -297,10 +297,10 @@ class TestTokenRefreshService:
     ):
         """Both access and refresh tokens expired = unhealthy."""
         mock_db_token.is_expired = True
-        mock_db_token.expires_at = datetime.utcnow() - timedelta(hours=1)
+        mock_db_token.expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
 
         refresh_token = Mock()
-        refresh_token.expires_at = datetime.utcnow() - timedelta(days=1)
+        refresh_token.expires_at = datetime.now(timezone.utc) - timedelta(days=1)
         refresh_token.is_expired = True
 
         token_service.token_repo.get_token_for_chat.side_effect = (

@@ -2,7 +2,7 @@
 
 import json
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from urllib.parse import urlencode
 
@@ -184,7 +184,7 @@ class OAuthService(BaseService):
             # Step 4: Create or update account
             ig_account_id = account_info["id"]
             ig_username = account_info["username"]
-            expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+            expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
 
             existing = self.account_service.get_account_by_instagram_id(ig_account_id)
 
