@@ -8,8 +8,8 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from sqlalchemy.exc import OperationalError
 
-from src.services.core.telegram_service import _escape_markdown
 from src.services.core.telegram_utils import (
+    escape_markdown as _escape_markdown,
     build_queue_action_keyboard,
     validate_queue_and_media,
     validate_queue_item,
