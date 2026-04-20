@@ -929,8 +929,8 @@ class TestRaceConditionHandling:
         await handlers.handle_posted(queue_id, mock_user, mock_query)
 
         # Lock and cancel flag should be cleaned up
-        assert queue_id not in service._operation_locks
-        assert queue_id not in service._cancel_flags
+        assert queue_id not in service.operation_state._operation_locks
+        assert queue_id not in service.operation_state._cancel_flags
 
     async def test_posted_sets_cancel_flag_for_autopost(self, mock_callback_handlers):
         """Test that clicking 'Posted' sets the cancel flag to abort pending auto-post."""
