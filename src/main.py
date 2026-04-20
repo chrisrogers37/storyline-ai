@@ -202,7 +202,12 @@ async def _retention_cleanup_tick(
     except Exception as e:
         logger.warning(f"Service runs retention cleanup failed: {e}")
     finally:
-        service_run_repo.end_read_transaction()
+        try:
+            service_run_repo.end_read_transaction()
+        except Exception as cleanup_err:
+            logger.warning(
+                f"cleanup_transactions failed for ServiceRunRepository: {cleanup_err}"
+            )
 
 
 async def _pool_health_tick(
@@ -243,7 +248,12 @@ async def _pool_health_tick(
     except Exception as e:
         logger.warning(f"Pool depletion check failed: {e}")
     finally:
-        health_check_service.cleanup_transactions()
+        try:
+            health_check_service.cleanup_transactions()
+        except Exception as cleanup_err:
+            logger.warning(
+                f"cleanup_transactions failed for HealthCheckService: {cleanup_err}"
+            )
 
 
 async def _token_health_tick(
@@ -285,7 +295,12 @@ async def _token_health_tick(
     except Exception as e:
         logger.warning(f"Token health check failed: {e}")
     finally:
-        health_check_service.cleanup_transactions()
+        try:
+            health_check_service.cleanup_transactions()
+        except Exception as cleanup_err:
+            logger.warning(
+                f"cleanup_transactions failed for HealthCheckService: {cleanup_err}"
+            )
 
 
 async def run_scheduler_loop(
@@ -330,8 +345,14 @@ async def run_scheduler_loop(
         except Exception as e:
             logger.error(f"Error in scheduler loop: {e}", exc_info=True)
         finally:
-            scheduler_service.cleanup_transactions()
-            posting_service.cleanup_transactions()
+            for svc in (scheduler_service, posting_service):
+                try:
+                    svc.cleanup_transactions()
+                except Exception as cleanup_err:
+                    logger.warning(
+                        f"cleanup_transactions failed for "
+                        f"{type(svc).__name__}: {cleanup_err}"
+                    )
 
         # --- Hourly retention: purge old service_runs ---
         retention_tick_counter += 1
@@ -389,8 +410,12 @@ async def cleanup_locks_loop(lock_service: MediaLockService):
         except Exception as e:
             logger.error(f"Error in cleanup loop: {e}", exc_info=True)
         finally:
-            # Clean up open transactions
-            lock_service.cleanup_transactions()
+            try:
+                lock_service.cleanup_transactions()
+            except Exception as cleanup_err:
+                logger.warning(
+                    f"cleanup_transactions failed for MediaLockService: {cleanup_err}"
+                )
 
 
 async def cleanup_cloud_storage_loop(cloud_service):
@@ -423,8 +448,18 @@ async def cleanup_cloud_storage_loop(cloud_service):
         except Exception as e:
             logger.error(f"Error in cloud storage cleanup loop: {e}", exc_info=True)
         finally:
-            cloud_service.cleanup_transactions()
-            media_repo.end_read_transaction()
+            try:
+                cloud_service.cleanup_transactions()
+            except Exception as cleanup_err:
+                logger.warning(
+                    f"cleanup_transactions failed for CloudStorageService: {cleanup_err}"
+                )
+            try:
+                media_repo.end_read_transaction()
+            except Exception as cleanup_err:
+                logger.warning(
+                    f"cleanup_transactions failed for MediaRepository: {cleanup_err}"
+                )
 
 
 async def transaction_cleanup_loop(services: list):
@@ -549,9 +584,19 @@ async def media_sync_loop(
                 )
 
         finally:
-            sync_service.cleanup_transactions()
+            try:
+                sync_service.cleanup_transactions()
+            except Exception as cleanup_err:
+                logger.warning(
+                    f"cleanup_transactions failed for MediaSyncService: {cleanup_err}"
+                )
             if settings_service:
-                settings_service.cleanup_transactions()
+                try:
+                    settings_service.cleanup_transactions()
+                except Exception as cleanup_err:
+                    logger.warning(
+                        f"cleanup_transactions failed for SettingsService: {cleanup_err}"
+                    )
 
         await asyncio.sleep(settings.MEDIA_SYNC_INTERVAL_SECONDS)
 
