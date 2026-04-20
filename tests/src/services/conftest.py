@@ -2,10 +2,30 @@
 
 import pytest
 from contextlib import contextmanager
-from unittest.mock import patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from src.services.core.start_command_router import StartCommandRouter  # noqa: F401
 from src.services.core.telegram_service import TelegramService
+
+
+def make_query(chat_id=-100123):
+    """Build a mock Telegram CallbackQuery."""
+    query = AsyncMock()
+    query.message = Mock()
+    query.message.chat_id = chat_id
+    query.message.message_id = 42
+    return query
+
+
+def make_user(user_id="user-1"):
+    """Build a mock Telegram user."""
+    return Mock(id=user_id)
+
+
+@contextmanager
+def noop_context_manager():
+    """Pass-through context manager for replacing service context managers in tests."""
+    yield
 
 
 @contextmanager
