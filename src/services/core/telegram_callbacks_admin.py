@@ -9,7 +9,7 @@ from telegram.error import TelegramError
 
 from src.utils.logger import logger
 from src.utils.resilience import telegram_edit_with_retry
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 if TYPE_CHECKING:
     from src.services.core.telegram_callbacks_core import TelegramCallbackCore
@@ -135,7 +135,7 @@ class TelegramCallbackAdminHandlers:
 
     async def _do_resume_callback(self, action: str, user, query):
         """Internal implementation of resume callback."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         all_pending = self.service.queue_repo.get_all(status="pending")
         overdue = [p for p in all_pending if p.scheduled_for < now]
 

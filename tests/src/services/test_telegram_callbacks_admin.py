@@ -1,6 +1,6 @@
 """Tests for TelegramCallbackAdminHandlers — batch approve, resume, reset."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 
 import pytest
@@ -74,7 +74,6 @@ class TestHandleBatchApprove:
         await handlers.handle_batch_approve("cs-1", user, query)
 
         mock_retry.assert_called()
-        # First real call after the progress message
         first_call_text = mock_retry.call_args_list[0][0][1]
         assert "No pending items" in first_call_text
 
@@ -86,7 +85,6 @@ class TestHandleBatchApprove:
             [(qi1, "f1.jpg", "m"), (qi2, "f2.jpg", "m")],
             [],
         ]
-        # First succeeds, second fails
         handlers.service.queue_repo.claim_for_processing.side_effect = [Mock(), Mock()]
         handlers.core._execute_complete_db_ops.side_effect = [
             None,
@@ -98,7 +96,6 @@ class TestHandleBatchApprove:
 
         await handlers.handle_batch_approve("cs-1", user, query)
 
-        # Last call should contain both approved and failed counts
         last_call_text = mock_retry.call_args_list[-1][0][1]
         assert "1 item marked as posted" in last_call_text
         assert "1 item failed" in last_call_text
@@ -152,7 +149,7 @@ class TestHandleResumeCallback:
     @patch("src.services.core.telegram_callbacks_admin.telegram_edit_with_retry")
     async def test_reschedule_action(self, mock_retry, handlers):
         """Reschedules overdue posts and resumes delivery."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         overdue = [Mock(id="q-1", scheduled_for=now - timedelta(hours=2))]
         future = [Mock(id="q-2", scheduled_for=now + timedelta(hours=1))]
         handlers.service.queue_repo.get_all.return_value = overdue + future
@@ -169,7 +166,7 @@ class TestHandleResumeCallback:
     @patch("src.services.core.telegram_callbacks_admin.telegram_edit_with_retry")
     async def test_clear_action(self, mock_retry, handlers):
         """Clears overdue posts and resumes delivery."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         overdue = [Mock(id="q-1", scheduled_for=now - timedelta(hours=2))]
         handlers.service.queue_repo.get_all.return_value = overdue
 
@@ -184,7 +181,7 @@ class TestHandleResumeCallback:
     @patch("src.services.core.telegram_callbacks_admin.telegram_edit_with_retry")
     async def test_force_action(self, mock_retry, handlers):
         """Force resumes without handling overdue posts."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         overdue = [Mock(id="q-1", scheduled_for=now - timedelta(hours=2))]
         handlers.service.queue_repo.get_all.return_value = overdue
 
