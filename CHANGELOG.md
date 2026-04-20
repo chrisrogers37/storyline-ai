@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **TelegramService god class refactor** (#251) — Broke 804-line `TelegramService` into thin orchestrator (496 lines) plus 4 focused handler classes: `OperationStateManager`, `TelegramUserManager`, `TelegramMembershipHandler`, `TelegramLifecycleHandler`. Consolidated duplicate `_escape_markdown` into `telegram_utils.py`.
+
 ### Fixed
 
 - **Narrow broad `except Exception` catches** (#250) — Audited 88 `except Exception` catches across `src/services/`. Narrowed catches to specific types (`TelegramError`, `SQLAlchemyError`, `InvalidToken`, etc.) where failure modes are known. Added `noqa: BLE001` annotations with justification comments to intentionally broad catches (best-effort logging, cleanup, health checks). Added `exc_info=True` to health check error handlers.

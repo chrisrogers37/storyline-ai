@@ -31,7 +31,7 @@ class TelegramLifecycleHandler:
             last_post_time = recent_posts[0].posted_at if recent_posts else None
 
             if last_post_time:
-                time_diff = datetime.utcnow() - last_post_time
+                time_diff = datetime.now(timezone.utc) - last_post_time
                 hours = int(time_diff.total_seconds() / 3600)
                 last_posted = f"{hours}h ago" if hours > 0 else "< 1h ago"
             else:
