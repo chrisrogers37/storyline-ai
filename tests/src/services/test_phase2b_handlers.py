@@ -9,12 +9,19 @@ from unittest.mock import Mock, patch, AsyncMock
 from uuid import uuid4
 
 from src.services.core.telegram_commands import TelegramCommandHandlers
+from src.services.core.telegram_membership import TelegramMembershipHandler
 
 
 @pytest.fixture
 def mock_command_handlers(mock_telegram_service):
     """Create TelegramCommandHandlers from shared mock_telegram_service."""
     return TelegramCommandHandlers(mock_telegram_service)
+
+
+@pytest.fixture
+def mock_membership_handler(mock_telegram_service):
+    """Create TelegramMembershipHandler from shared mock_telegram_service."""
+    return TelegramMembershipHandler(mock_telegram_service)
 
 
 def _make_user(service, user_id=None):
@@ -44,11 +51,12 @@ def _make_update(chat_id, chat_type="group", user_id=12345):
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestMyChatMemberHandler:
-    """Tests for the my_chat_member handler on TelegramService."""
+    """Tests for the TelegramMembershipHandler (extracted from TelegramService)."""
 
-    async def test_bot_added_auto_links_pending_session(self, mock_telegram_service):
+    async def test_bot_added_auto_links_pending_session(self, mock_membership_handler):
         """Bot added to group auto-links a pending onboarding session."""
-        service = mock_telegram_service
+        handler = mock_membership_handler
+        service = handler.service
         mock_user = _make_user(service)
 
         mock_session = Mock()
@@ -74,7 +82,7 @@ class TestMyChatMemberHandler:
             mock_conv.__exit__ = Mock(return_value=False)
             mock_conv.get_current_session.return_value = mock_session
 
-            await service._handle_my_chat_member(mock_update, Mock())
+            await handler.handle_my_chat_member(mock_update, Mock())
 
         # Should call link_group_to_instance
         mock_conv.link_group_to_instance.assert_called_once_with(
@@ -85,10 +93,11 @@ class TestMyChatMemberHandler:
         )
 
     async def test_bot_added_retries_once_on_missing_session(
-        self, mock_telegram_service
+        self, mock_membership_handler
     ):
         """Race condition guard: retries after 2s if session not committed yet."""
-        service = mock_telegram_service
+        handler = mock_membership_handler
+        service = handler.service
         mock_user = _make_user(service)
 
         mock_session = Mock()
@@ -118,7 +127,7 @@ class TestMyChatMemberHandler:
             # First call returns None, second returns the session
             mock_conv.get_current_session.side_effect = [None, mock_session]
 
-            await service._handle_my_chat_member(mock_update, Mock())
+            await handler.handle_my_chat_member(mock_update, Mock())
 
         # Should have slept 2s between retries
         mock_sleep.assert_called_once_with(2)
@@ -131,9 +140,10 @@ class TestMyChatMemberHandler:
             membership_repo=service.membership_repo,
         )
 
-    async def test_bot_added_anonymous_admin_skips(self, mock_telegram_service):
+    async def test_bot_added_anonymous_admin_skips(self, mock_membership_handler):
         """Anonymous admin (from_user=None) is handled gracefully."""
-        service = mock_telegram_service
+        handler = mock_membership_handler
+        service = handler.service
 
         mock_update = Mock()
         mock_update.my_chat_member = Mock()
@@ -142,13 +152,14 @@ class TestMyChatMemberHandler:
         mock_update.my_chat_member.old_chat_member = Mock(status="left")
         mock_update.my_chat_member.new_chat_member = Mock(status="member")
 
-        await service._handle_my_chat_member(mock_update, Mock())
+        await handler.handle_my_chat_member(mock_update, Mock())
 
         service.membership_repo.create_membership.assert_not_called()
 
-    async def test_bot_added_no_pending_session_is_noop(self, mock_telegram_service):
+    async def test_bot_added_no_pending_session_is_noop(self, mock_membership_handler):
         """Bot added to group with no pending session does nothing harmful."""
-        service = mock_telegram_service
+        handler = mock_membership_handler
+        service = handler.service
         _make_user(service)
 
         mock_update = Mock()
@@ -168,13 +179,14 @@ class TestMyChatMemberHandler:
             mock_conv.__exit__ = Mock(return_value=False)
             mock_conv.get_current_session.return_value = None
 
-            await service._handle_my_chat_member(mock_update, Mock())
+            await handler.handle_my_chat_member(mock_update, Mock())
 
         service.membership_repo.create_membership.assert_not_called()
 
-    async def test_bot_kicked_deactivates_memberships(self, mock_telegram_service):
+    async def test_bot_kicked_deactivates_memberships(self, mock_membership_handler):
         """Bot kicked from group deactivates all memberships."""
-        service = mock_telegram_service
+        handler = mock_membership_handler
+        service = handler.service
 
         mock_chat_settings = Mock()
         mock_chat_settings.id = uuid4()
@@ -184,7 +196,7 @@ class TestMyChatMemberHandler:
         service.membership_repo.deactivate_for_chat.return_value = 3
 
         # Pre-populate cache with entries for this chat
-        service._known_memberships = {
+        service.user_manager._known_memberships = {
             ("user1", -100999),
             ("user2", -100999),
             ("user3", -100888),  # different chat, should survive
@@ -197,27 +209,28 @@ class TestMyChatMemberHandler:
         mock_update.my_chat_member.old_chat_member = Mock(status="member")
         mock_update.my_chat_member.new_chat_member = Mock(status="kicked")
 
-        await service._handle_my_chat_member(mock_update, Mock())
+        await handler.handle_my_chat_member(mock_update, Mock())
 
         service.membership_repo.deactivate_for_chat.assert_called_once_with(
             str(mock_chat_settings.id)
         )
 
         # Cache entries for -100999 should be evicted
-        assert ("user1", -100999) not in service._known_memberships
-        assert ("user2", -100999) not in service._known_memberships
+        assert ("user1", -100999) not in service.user_manager._known_memberships
+        assert ("user2", -100999) not in service.user_manager._known_memberships
         # Entry for different chat should remain
-        assert ("user3", -100888) in service._known_memberships
+        assert ("user3", -100888) in service.user_manager._known_memberships
 
-    async def test_ignores_non_group_events(self, mock_telegram_service):
+    async def test_ignores_non_group_events(self, mock_membership_handler):
         """my_chat_member events in non-group chats are ignored."""
-        service = mock_telegram_service
+        handler = mock_membership_handler
+        service = handler.service
 
         mock_update = Mock()
         mock_update.my_chat_member = Mock()
         mock_update.my_chat_member.chat = Mock(id=12345, type="private")
 
-        await service._handle_my_chat_member(mock_update, Mock())
+        await handler.handle_my_chat_member(mock_update, Mock())
 
         service.membership_repo.create_membership.assert_not_called()
         service.membership_repo.deactivate_for_chat.assert_not_called()

@@ -1,9 +1,8 @@
 """Notification sending and caption building for Telegram."""
 
-import re
-
 from src.config.settings import settings
 from src.exceptions.google_drive import GoogleDriveAuthError
+from src.services.core.telegram_utils import escape_markdown as _escape_md
 from src.utils.logger import logger
 
 
@@ -23,11 +22,6 @@ def _is_google_auth_error(exc: Exception) -> bool:
             return True
         current = getattr(current, "__cause__", None)
     return False
-
-
-def _escape_md(text: str) -> str:
-    """Escape Telegram Markdown special characters in user-generated text."""
-    return re.sub(r"([_*`\[])", r"\\\1", text)
 
 
 def _extract_button_labels(reply_markup) -> list:

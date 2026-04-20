@@ -1,4 +1,20 @@
-"""Telegram service - bot operations and callbacks."""
+"""Telegram service - thin orchestrator for bot operations.
+
+TelegramService owns the bot lifecycle (init, polling, shutdown) and
+coordinates between focused handler classes. All domain logic lives in
+the extracted handler modules:
+
+- telegram_operation_state.py  — operation locks and cancel flags
+- telegram_user_manager.py     — user creation, membership, display names
+- telegram_membership.py       — bot added/removed from groups, onboarding
+- telegram_lifecycle.py        — startup/shutdown admin notifications
+- telegram_notification.py     — queue item notifications and captions
+- telegram_commands.py         — /command handlers
+- telegram_callbacks*.py       — inline button callback handlers
+- telegram_autopost.py         — Instagram auto-post flow
+- telegram_settings.py         — settings UI handlers
+- telegram_accounts.py         — account management handlers
+"""
 
 import asyncio
 
@@ -23,26 +39,24 @@ from src.services.core.interaction_service import InteractionService
 from src.services.core.settings_service import SettingsService
 from src.services.core.instagram_account_service import InstagramAccountService
 from src.services.core.telegram_notification import TelegramNotificationService
+from src.services.core.telegram_operation_state import OperationStateManager
+from src.services.core.telegram_user_manager import TelegramUserManager
 from src.repositories.membership_repository import MembershipRepository
 from src.config.settings import settings
 from src.utils.logger import logger
-from src import __version__
-from datetime import datetime
-import re
 
-# Imported after class definition to avoid circular imports at module level
-# TelegramCommandHandlers, TelegramCallbackHandlers, TelegramAutopostHandler,
-# TelegramSettingsHandlers, TelegramAccountHandlers are imported inside initialize()
+# Re-export for any remaining external imports
+from src.services.core.telegram_utils import escape_markdown as _escape_markdown  # noqa: F401
 
-
-def _escape_markdown(text: str) -> str:
-    """Escape Telegram Markdown special characters in text."""
-    # For Telegram's Markdown mode, escape: _ * ` [
-    return re.sub(r"([_*`\[])", r"\\\1", text)
+# Handler classes are imported inside initialize() to avoid circular imports.
 
 
 class TelegramService(BaseService):
-    """All Telegram bot operations."""
+    """Thin orchestrator for Telegram bot operations.
+
+    Owns the bot lifecycle and coordinates between extracted handler classes.
+    Domain logic lives in the handler modules listed in the module docstring.
+    """
 
     def __init__(self):
         super().__init__()
@@ -61,28 +75,48 @@ class TelegramService(BaseService):
         self.membership_repo = MembershipRepository()
         self.bot = None
         self.application = None
+        # Extracted sub-components
+        self.operation_state = OperationStateManager()
+        self.user_manager = TelegramUserManager(self)
         self.notification_service = TelegramNotificationService(self)
-        self._operation_locks: dict[str, asyncio.Lock] = {}
-        self._cancel_flags: dict[str, asyncio.Event] = {}
-        self._known_memberships: set[tuple[str, int]] = set()
         self._callback_dispatch: dict = {}
 
+    # ------------------------------------------------------------------
+    # Delegate methods — preserve the public API so handler modules can
+    # continue accessing these through self.service.* unchanged.
+    # ------------------------------------------------------------------
+
     def get_operation_lock(self, queue_id: str) -> asyncio.Lock:
-        """Get or create an asyncio lock for a queue item."""
-        if queue_id not in self._operation_locks:
-            self._operation_locks[queue_id] = asyncio.Lock()
-        return self._operation_locks[queue_id]
+        """Delegate to OperationStateManager."""
+        return self.operation_state.get_lock(queue_id)
 
     def get_cancel_flag(self, queue_id: str) -> asyncio.Event:
-        """Get or create a cancellation flag for a queue item."""
-        if queue_id not in self._cancel_flags:
-            self._cancel_flags[queue_id] = asyncio.Event()
-        return self._cancel_flags[queue_id]
+        """Delegate to OperationStateManager."""
+        return self.operation_state.get_cancel_flag(queue_id)
 
     def cleanup_operation_state(self, queue_id: str):
-        """Clean up lock and cancel flag after operation completes."""
-        self._operation_locks.pop(queue_id, None)
-        self._cancel_flags.pop(queue_id, None)
+        """Delegate to OperationStateManager."""
+        self.operation_state.cleanup(queue_id)
+
+    def _get_or_create_user(self, telegram_user, telegram_chat_id=None):
+        """Delegate to TelegramUserManager."""
+        return self.user_manager.get_or_create_user(telegram_user, telegram_chat_id)
+
+    def _get_display_name(self, user) -> str:
+        """Delegate to TelegramUserManager."""
+        return self.user_manager.get_display_name(user)
+
+    def _is_verbose(self, chat_id, chat_settings=None) -> bool:
+        """Check if verbose notifications are enabled for a chat."""
+        if chat_settings is None:
+            chat_settings = self.settings_service.get_settings(chat_id)
+        if chat_settings.show_verbose_notifications is not None:
+            return chat_settings.show_verbose_notifications
+        return True
+
+    # ------------------------------------------------------------------
+    # Lifecycle overrides (BaseService)
+    # ------------------------------------------------------------------
 
     def cleanup_transactions(self):
         """Override to also clean up InteractionService's repository session.
@@ -128,8 +162,12 @@ class TelegramService(BaseService):
         if self.is_paused != paused:
             self.settings_service.toggle_setting(self.channel_id, "is_paused", user)
 
+    # ------------------------------------------------------------------
+    # Initialization
+    # ------------------------------------------------------------------
+
     async def initialize(self):
-        """Initialize Telegram bot."""
+        """Initialize Telegram bot and register all handlers."""
         self.bot = Bot(token=self.bot_token)
         self.application = Application.builder().token(self.bot_token).build()
 
@@ -140,6 +178,8 @@ class TelegramService(BaseService):
         from src.services.core.telegram_settings import TelegramSettingsHandlers
         from src.services.core.telegram_accounts import TelegramAccountHandlers
         from src.services.core.start_command_router import StartCommandRouter
+        from src.services.core.telegram_membership import TelegramMembershipHandler
+        from src.services.core.telegram_lifecycle import TelegramLifecycleHandler
 
         self.commands = TelegramCommandHandlers(self)
         self.callbacks = TelegramCallbackHandlers(self)
@@ -147,6 +187,8 @@ class TelegramService(BaseService):
         self.settings_handler = TelegramSettingsHandlers(self)
         self.accounts = TelegramAccountHandlers(self)
         self.start_router = StartCommandRouter(self)
+        self.membership_handler = TelegramMembershipHandler(self)
+        self.lifecycle = TelegramLifecycleHandler(self)
 
         # Build callback dispatch table (must be after handlers are initialized)
         self._callback_dispatch = self._build_callback_dispatch_table()
@@ -186,17 +228,14 @@ class TelegramService(BaseService):
 
         # Register callback and message handlers
         self.application.add_handler(CallbackQueryHandler(self._handle_callback))
-        # Message handler for conversation flows (add account, etc.)
         self.application.add_handler(
             MessageHandler(
                 filters.TEXT & ~filters.COMMAND, self._handle_conversation_message
             )
         )
-
-        # my_chat_member handler for group linking / bot-kicked detection
         self.application.add_handler(
             ChatMemberHandler(
-                self._handle_my_chat_member,
+                self.membership_handler.handle_my_chat_member,
                 ChatMemberHandler.MY_CHAT_MEMBER,
             )
         )
@@ -218,6 +257,10 @@ class TelegramService(BaseService):
         await self.bot.set_my_commands(commands)
 
         logger.info("Telegram bot initialized with command menu")
+
+    # ------------------------------------------------------------------
+    # Callback dispatch (orchestration — stays here)
+    # ------------------------------------------------------------------
 
     def _build_callback_dispatch_table(self) -> dict:
         """Build the callback action dispatch table.
@@ -261,14 +304,6 @@ class TelegramService(BaseService):
         """Handle callback actions that need special signatures or sub-routing.
 
         Returns True if the action was handled, False if not recognized.
-
-        Special cases:
-        - settings_refresh: takes only (query)
-        - settings_edit: takes (data, user, query, context)
-        - settings_edit_cancel: takes (query, context)
-        - settings_close: takes only (query)
-        - settings_accounts: has sub-routing based on data value
-        - accounts_config: has sub-routing based on data value
         """
         if action == "settings_refresh":
             await self.settings_handler.refresh_settings_message(query)
@@ -306,231 +341,6 @@ class TelegramService(BaseService):
 
         return False
 
-    async def send_notification(
-        self, queue_item_id: str, force_sent: bool = False
-    ) -> bool:
-        """Delegate to notification service."""
-        return await self.notification_service.send_notification(
-            queue_item_id, force_sent=force_sent
-        )
-
-    def _build_caption(
-        self,
-        media_item,
-        queue_item=None,
-        force_sent: bool = False,
-        verbose: bool = True,
-        active_account=None,
-    ) -> str:
-        """Delegate to notification service."""
-        return self.notification_service._build_caption(
-            media_item,
-            queue_item,
-            force_sent=force_sent,
-            verbose=verbose,
-            active_account=active_account,
-        )
-
-    # Notification sending, caption building, keyboard construction,
-    # and header emoji logic have been moved to telegram_notification.py.
-    # Command handlers have been moved to telegram_commands.py
-    # Callback handlers have been moved to telegram_callbacks.py
-    # Auto-post handler has been moved to telegram_autopost.py
-    # Settings handlers have been moved to telegram_settings.py
-    # Account handlers have been moved to telegram_accounts.py
-
-    async def _handle_conversation_message(self, update, context):
-        """
-        Handle text messages for active conversations.
-
-        Routes to appropriate conversation handler based on state in context.user_data.
-        """
-        # Check for settings edit conversation
-        if "settings_edit_state" in context.user_data:
-            handled = await self.settings_handler.handle_settings_edit_message(
-                update, context
-            )
-            if handled:
-                return
-
-        # Check for DM onboarding conversation
-        if (
-            update.effective_chat.type == "private"
-            and "onboarding_session_id" in context.user_data
-        ):
-            await self._handle_onboarding_message(update, context)
-            return
-
-        # Message not part of any conversation - ignore silently
-
-    async def _handle_onboarding_message(self, update, context):
-        """Handle text input during DM onboarding (naming step)."""
-        from src.services.core.conversation_service import ConversationService
-
-        session_id = context.user_data.get("onboarding_session_id")
-        if not session_id:
-            return
-
-        with ConversationService() as conv_service:
-            session = conv_service.get_session_by_id(session_id)
-
-        if not session or session.step == "complete":
-            context.user_data.pop("onboarding_session_id", None)
-            return
-
-        if session.step == "naming":
-            instance_name = update.message.text.strip()[:100]
-            if not instance_name:
-                await update.message.reply_text(
-                    "Please enter a name for your instance."
-                )
-                return
-
-            with ConversationService() as conv_service:
-                conv_service.set_instance_name(str(session.id), instance_name)
-
-            # Show add-to-group step
-            bot_username = (await self.bot.get_me()).username
-            startgroup_url = (
-                f"https://t.me/{bot_username}?startgroup=setup_{session.id}"
-            )
-
-            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-
-            keyboard = InlineKeyboardMarkup(
-                [
-                    [InlineKeyboardButton("Add to Group Chat", url=startgroup_url)],
-                ]
-            )
-            await update.message.reply_text(
-                f"Great! *{instance_name}* it is.\n\n"
-                "Now add me to the group chat where your team will review posts.\n\n"
-                "Bot already in your group? Run `/link` in that group.",
-                parse_mode="Markdown",
-                reply_markup=keyboard,
-            )
-        elif session.step == "awaiting_group":
-            await update.message.reply_text(
-                "Still waiting to link your group — add me to the group chat, "
-                "or run `/link` in that group if I'm already there.",
-                parse_mode="Markdown",
-            )
-
-    async def _handle_my_chat_member(self, update, context):
-        """Handle ChatMemberUpdated events for the bot itself.
-
-        Fires when the bot's membership status changes in any chat:
-        - Bot added to group → auto-link pending onboarding session
-        - Bot kicked from group → deactivate all memberships for that chat
-        """
-        member_update = update.my_chat_member
-        if not member_update:
-            return
-
-        chat = member_update.chat
-        if chat.type not in ("group", "supergroup"):
-            return
-
-        old_status = member_update.old_chat_member.status
-        new_status = member_update.new_chat_member.status
-        from_user = member_update.from_user
-
-        if from_user is None:
-            logger.info(
-                f"Bot membership changed in group {chat.id} by anonymous admin "
-                f"— skipping auto-link (use /link)"
-            )
-            return
-
-        try:
-            if new_status in ("member", "administrator") and old_status in (
-                "left",
-                "kicked",
-            ):
-                await self._handle_bot_added_to_group(chat, from_user)
-            elif new_status in ("left", "kicked") and old_status in (
-                "member",
-                "administrator",
-            ):
-                self._handle_bot_removed_from_group(chat)
-        except Exception as e:  # noqa: BLE001
-            logger.error(
-                f"my_chat_member handler error for chat {chat.id}: "
-                f"{type(e).__name__}: {e}",
-                exc_info=True,
-            )
-        finally:
-            self.cleanup_transactions()
-
-    async def _handle_bot_added_to_group(self, chat, from_user):
-        """Bot was added to a group — check for pending onboarding session to auto-link."""
-        from src.services.core.conversation_service import ConversationService
-
-        user = self._get_or_create_user(from_user)
-
-        # Race condition guard: the onboarding session may not be committed yet
-        # if the user clicked "Add to Group" very quickly after naming.
-        # Retry once after 2s.
-        session = None
-        for attempt in range(2):
-            with ConversationService() as conv_service:
-                session = conv_service.get_current_session(str(user.id))
-            if session and session.step == "awaiting_group":
-                break
-            if attempt == 0:
-                await asyncio.sleep(2)
-
-        if not session or session.step != "awaiting_group":
-            logger.info(
-                f"Bot added to group {chat.id} by user {from_user.id} "
-                f"— no pending onboarding session"
-            )
-            return
-
-        with ConversationService() as conv_service:
-            conv_service.link_group_to_instance(
-                session=session,
-                chat_id=chat.id,
-                user_id=str(user.id),
-                membership_repo=self.membership_repo,
-            )
-
-        name = session.pending_instance_name or "this group"
-        logger.info(
-            f"Auto-linked instance '{name}' to group {chat.id} "
-            f"via my_chat_member (user {from_user.id})"
-        )
-
-        # Notify user in DM
-        try:
-            await self.bot.send_message(
-                chat_id=from_user.id,
-                text=(
-                    f"✅ *{name}* is linked to your group!\n\n"
-                    "Use /start here to manage your instances."
-                ),
-                parse_mode="Markdown",
-            )
-        except Exception:  # noqa: BLE001
-            pass  # DM may be blocked
-
-    def _handle_bot_removed_from_group(self, chat):
-        """Bot was kicked from a group — deactivate all memberships."""
-        chat_settings = self.settings_service.get_settings_if_exists(chat.id)
-        if not chat_settings:
-            return
-
-        count = self.membership_repo.deactivate_for_chat(str(chat_settings.id))
-
-        # Evict _known_memberships cache entries for this chat
-        to_evict = {k for k in self._known_memberships if k[1] == chat.id}
-        self._known_memberships -= to_evict
-
-        logger.info(
-            f"Bot removed from group {chat.id} — "
-            f"deactivated {count} membership(s), evicted {len(to_evict)} cache entries"
-        )
-
     async def _handle_callback(self, update, context):
         """Handle inline button callbacks.
 
@@ -549,15 +359,12 @@ class TelegramService(BaseService):
                     f"Could not answer callback query (may be stale): {query.data}"
                 )
 
-            # Parse callback data
-            # Split on FIRST colon only, so data can contain colons (e.g., sap:queue_id:account_id)
             parts = query.data.split(":", 1)
             action = parts[0]
             data = parts[1] if len(parts) > 1 else None
 
             logger.info(f"📞 Parsed action='{action}', data='{data}'")
 
-            # Get user info (pass chat_id for auto-membership in groups)
             try:
                 chat_id = int(query.message.chat_id) if query.message else None
             except (TypeError, ValueError):
@@ -584,192 +391,84 @@ class TelegramService(BaseService):
                 f"Unhandled error in callback '{query.data}': {type(e).__name__}: {e}",
                 exc_info=True,
             )
-            # Try to give the user some feedback
             try:
                 await query.answer(
                     "⚠️ Something went wrong. Please try again.",
                     show_alert=True,
                 )
             except Exception:  # noqa: BLE001
-                pass  # query.answer may have already been called
+                pass
 
         finally:
-            # Clean up open transactions to prevent "idle in transaction"
             self.cleanup_transactions()
 
-    def _get_or_create_user(self, telegram_user, telegram_chat_id=None):
-        """Get or create user from Telegram data, syncing profile on each interaction.
+    # ------------------------------------------------------------------
+    # Conversation routing
+    # ------------------------------------------------------------------
 
-        If telegram_chat_id is provided and is a group chat (< 0), also ensures
-        a user_chat_membership exists linking this user to that chat's instance.
-        """
-        user = self.user_repo.get_by_telegram_id(telegram_user.id)
-
-        if not user:
-            user = self.user_repo.create(
-                telegram_user_id=telegram_user.id,
-                telegram_username=telegram_user.username,
-                telegram_first_name=telegram_user.first_name,
-                telegram_last_name=telegram_user.last_name,
+    async def _handle_conversation_message(self, update, context):
+        """Route text messages to the appropriate conversation handler."""
+        if "settings_edit_state" in context.user_data:
+            handled = await self.settings_handler.handle_settings_edit_message(
+                update, context
             )
-            logger.info(f"New user discovered: {self._get_display_name(user)}")
-        else:
-            # Sync profile data on each interaction (username may have changed/been added)
-            user = self.user_repo.update_profile(
-                str(user.id),
-                telegram_username=telegram_user.username,
-                telegram_first_name=telegram_user.first_name,
-                telegram_last_name=telegram_user.last_name,
-            )
+            if handled:
+                return
 
-        # Auto-create membership for group chat interactions
-        if telegram_chat_id is not None and telegram_chat_id < 0:
-            self._ensure_membership(user, telegram_chat_id)
-
-        return user
-
-    def _ensure_membership(self, user, telegram_chat_id):
-        """Ensure a membership exists linking user to a group chat instance.
-
-        Uses a process-local cache to avoid DB queries on repeated
-        interactions from the same user in the same group.
-
-        NOTE: _known_memberships is never invalidated in this process.
-        Phase 2b's my_chat_member kicked handler must evict entries for
-        the affected chat_id when the bot is removed from a group.
-        """
-        cache_key = (str(user.id), telegram_chat_id)
-        if cache_key in self._known_memberships:
+        if (
+            update.effective_chat.type == "private"
+            and "onboarding_session_id" in context.user_data
+        ):
+            await self.membership_handler.handle_onboarding_message(update, context)
             return
 
-        try:
-            chat_settings = self.settings_service.get_settings_if_exists(
-                telegram_chat_id
-            )
-            if not chat_settings:
-                return
-            self.membership_repo.create_membership(
-                user_id=str(user.id),
-                chat_settings_id=str(chat_settings.id),
-            )
-            self._known_memberships.add(cache_key)
-        except Exception as e:  # noqa: BLE001
-            logger.warning(f"Membership auto-create failed: {e}")
+    # ------------------------------------------------------------------
+    # Notification delegates
+    # ------------------------------------------------------------------
 
-    def _is_verbose(self, chat_id, chat_settings=None) -> bool:
-        """Check if verbose notifications are enabled for a chat.
+    async def send_notification(
+        self, queue_item_id: str, force_sent: bool = False
+    ) -> bool:
+        """Delegate to notification service."""
+        return await self.notification_service.send_notification(
+            queue_item_id, force_sent=force_sent
+        )
 
-        Accepts optional pre-loaded chat_settings to avoid redundant DB queries
-        when the caller already has settings loaded.
-        """
-        if chat_settings is None:
-            chat_settings = self.settings_service.get_settings(chat_id)
-        if chat_settings.show_verbose_notifications is not None:
-            return chat_settings.show_verbose_notifications
-        return True
-
-    def _get_display_name(self, user) -> str:
-        """Get best available display name for user (username > first_name > user_id)."""
-        if user.telegram_username:
-            return f"@{user.telegram_username}"
-        elif user.telegram_first_name:
-            return user.telegram_first_name
-        else:
-            return f"User {user.telegram_user_id}"
+    def _build_caption(
+        self,
+        media_item,
+        queue_item=None,
+        force_sent: bool = False,
+        verbose: bool = True,
+        active_account=None,
+    ) -> str:
+        """Delegate to notification service."""
+        return self.notification_service._build_caption(
+            media_item,
+            queue_item,
+            force_sent=force_sent,
+            verbose=verbose,
+            active_account=active_account,
+        )
 
     async def send_startup_notification(self):
-        """Send startup notification to admin with system status."""
-        if not settings.SEND_LIFECYCLE_NOTIFICATIONS:
-            return
-
-        try:
-            # Gather system status
-            pending_count = self.queue_repo.count_pending()
-            media_count = len(self.media_repo.get_all(is_active=True))
-            recent_posts = self.history_repo.get_recent_posts(hours=24)
-            last_post_time = recent_posts[0].posted_at if recent_posts else None
-
-            # Format last posted time
-            if last_post_time:
-                time_diff = datetime.utcnow() - last_post_time
-                hours = int(time_diff.total_seconds() / 3600)
-                last_posted = f"{hours}h ago" if hours > 0 else "< 1h ago"
-            else:
-                last_posted = "Never"
-
-            # Build message
-            message = (
-                f"🟢 *Storyline AI Started*\n\n"
-                f"📊 *System Status:*\n"
-                f"├─ Database: ✅ Connected\n"
-                f"├─ Telegram: ✅ Bot online\n"
-                f"├─ Queue: {pending_count} pending posts\n"
-                f"└─ Last posted: {last_posted}\n\n"
-                f"⚙️ *Configuration:*\n"
-                f"├─ Posts/day: {settings.POSTS_PER_DAY}\n"
-                f"├─ Window: {settings.POSTING_HOURS_START:02d}:00-{settings.POSTING_HOURS_END:02d}:00 UTC\n"
-                f"└─ Media indexed: {media_count} items\n\n"
-                f"🤖 v{__version__}"
-            )
-
-            # Send to admin
-            await self.bot.send_message(
-                chat_id=self.admin_chat_id,
-                text=message,
-                parse_mode="Markdown",
-            )
-
-            logger.info("Startup notification sent to admin")
-
-        except Exception as e:  # noqa: BLE001
-            logger.error(f"Failed to send startup notification: {e}")
+        """Delegate to lifecycle handler."""
+        await self.lifecycle.send_startup_notification()
 
     async def send_shutdown_notification(
         self, uptime_seconds: int = 0, posts_sent: int = 0
     ):
-        """Send shutdown notification to admin with session summary."""
-        if not settings.SEND_LIFECYCLE_NOTIFICATIONS:
-            return
+        """Delegate to lifecycle handler."""
+        await self.lifecycle.send_shutdown_notification(uptime_seconds, posts_sent)
 
-        try:
-            # Format uptime
-            hours = int(uptime_seconds / 3600)
-            minutes = int((uptime_seconds % 3600) / 60)
-            uptime_str = f"{hours}h {minutes}m"
-
-            # Build message
-            message = (
-                f"🔴 *Storyline AI Stopped*\n\n"
-                f"📊 *Session Summary:*\n"
-                f"├─ Uptime: {uptime_str}\n"
-                f"├─ Posts sent: {posts_sent}\n"
-                f"└─ Shutdown: Graceful\n\n"
-                f"See you next time! 👋"
-            )
-
-            # Send to admin
-            await self.bot.send_message(
-                chat_id=self.admin_chat_id,
-                text=message,
-                parse_mode="Markdown",
-            )
-
-            logger.info("Shutdown notification sent to admin")
-
-        except Exception as e:  # noqa: BLE001
-            logger.error(f"Failed to send shutdown notification: {e}")
+    # ------------------------------------------------------------------
+    # Polling lifecycle
+    # ------------------------------------------------------------------
 
     async def start_polling(self):
-        """Start bot polling.
-
-        Starts the Telegram updater and blocks forever to keep the
-        polling task alive.  An application-level error handler is
-        registered so handler exceptions are logged instead of silently
-        swallowed.
-        """
+        """Start bot polling."""
         logger.info("Starting Telegram bot polling...")
 
-        # Register application error handler so handler errors are logged
         async def _error_handler(update, context):
             logger.error(
                 f"Telegram handler error: {context.error}",
@@ -790,8 +489,6 @@ class TelegramService(BaseService):
         )
         logger.info("Telegram bot polling started successfully")
 
-        # Block forever — the updater runs as a background task but this
-        # coroutine must stay alive to keep the asyncio task running.
         stop_event = asyncio.Event()
         await stop_event.wait()
 

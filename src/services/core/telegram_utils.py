@@ -1,6 +1,7 @@
 """Telegram handler utilities - shared patterns extracted from handler modules.
 
 This module contains common patterns used across multiple Telegram handler files:
+- Markdown escaping (canonical location)
 - Queue item validation
 - Standard action keyboard builders
 - Settings edit state management
@@ -8,6 +9,7 @@ This module contains common patterns used across multiple Telegram handler files
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
@@ -18,6 +20,15 @@ from src.utils.webapp_auth import generate_url_token
 
 if TYPE_CHECKING:
     from src.services.core.telegram_service import TelegramService
+
+
+def escape_markdown(text: str) -> str:
+    """Escape Telegram Markdown special characters in text.
+
+    Canonical location for Markdown escaping — all modules should import
+    from here rather than defining local copies.
+    """
+    return re.sub(r"([_*`\[])", r"\\\1", text)
 
 
 # =========================================================================
