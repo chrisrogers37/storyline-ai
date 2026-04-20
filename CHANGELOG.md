@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Test coverage for 7 untested service modules** (#252) — 110 unit tests covering `telegram_callbacks_core`, `telegram_callbacks_queue`, `telegram_callbacks_admin`, `conversation_service`, `start_command_router`, `user_service`, and `backfill_downloader`. Shared test helpers added to `conftest.py`.
 - **AI caption generation** (#182) — New `CaptionService` generates Instagram Story captions using Claude API at queue time. Controlled by per-instance `enable_ai_captions` toggle. Generated captions are stored separately from manual captions on `media_items.generated_caption`, shown with a robot indicator in Telegram review, and include a "Regenerate Caption" button. Skips generation when a manual caption exists or ANTHROPIC_API_KEY is not configured. Non-blocking — API failures never prevent posting. Migration 026 adds the new columns.
 - **Settings & membership audit trail** (#244) — New `audit_log` table tracks settings changes, membership lifecycle, and media lock create/delete with entity type, field-level old/new values, and who made the change. Instrumented `SettingsService`, `MediaLockService`, and `MembershipRepository`. New `GET /audit-log` endpoint for per-instance activity log.
 - **Onboarding drop-off tracking** (#245) — Expired onboarding sessions are now logged to `user_interactions` with `interaction_type='onboarding_dropout'` before deletion, capturing the step and duration for funnel analysis.

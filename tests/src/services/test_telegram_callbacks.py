@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import Mock, AsyncMock
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from sqlalchemy.exc import OperationalError
@@ -187,7 +187,7 @@ class TestResumeCallbacks:
         # Create overdue item
         overdue_item = Mock()
         overdue_item.id = uuid4()
-        overdue_item.scheduled_for = datetime(2020, 1, 1, 12, 0)
+        overdue_item.scheduled_for = datetime(2020, 1, 1, 12, 0, tzinfo=timezone.utc)
 
         service.queue_repo.get_all.return_value = [overdue_item]
 
@@ -228,11 +228,11 @@ class TestResumeCallbacks:
         # Create overdue and future items
         overdue_item = Mock()
         overdue_item.id = uuid4()
-        overdue_item.scheduled_for = datetime(2020, 1, 1, 12, 0)
+        overdue_item.scheduled_for = datetime(2020, 1, 1, 12, 0, tzinfo=timezone.utc)
 
         future_item = Mock()
         future_item.id = uuid4()
-        future_item.scheduled_for = datetime(2030, 1, 1, 12, 0)
+        future_item.scheduled_for = datetime(2030, 1, 1, 12, 0, tzinfo=timezone.utc)
 
         service.queue_repo.get_all.return_value = [overdue_item, future_item]
 
@@ -271,7 +271,7 @@ class TestResumeCallbacks:
         )
 
         overdue_item = Mock()
-        overdue_item.scheduled_for = datetime(2020, 1, 1, 12, 0)
+        overdue_item.scheduled_for = datetime(2020, 1, 1, 12, 0, tzinfo=timezone.utc)
 
         service.queue_repo.get_all.return_value = [overdue_item]
 
