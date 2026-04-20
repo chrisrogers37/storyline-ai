@@ -1,6 +1,6 @@
 """Tests for TelegramCallbackAdminHandlers — batch approve, resume, reset."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 
 import pytest
