@@ -132,6 +132,7 @@ class QueueRepository(BaseRepository):
         self,
         status: Optional[str] = None,
         chat_settings_id: Optional[str] = None,
+        limit: Optional[int] = None,
     ) -> list:
         """Get queue items with joined media info (file_name, category).
 
@@ -149,7 +150,23 @@ class QueueRepository(BaseRepository):
             query = query.filter(PostingQueue.status == status)
 
         query = query.order_by(PostingQueue.scheduled_for.asc())
+        if limit is not None:
+            query = query.limit(limit)
         result = query.all()
+        self.end_read_transaction()
+        return result
+
+    def count_by_status(
+        self,
+        statuses: list[str],
+        chat_settings_id: Optional[str] = None,
+    ) -> int:
+        """Count items matching any of the given statuses."""
+        result = (
+            self._tenant_query(PostingQueue, chat_settings_id)
+            .filter(PostingQueue.status.in_(statuses))
+            .count()
+        )
         self.end_read_transaction()
         return result
 
