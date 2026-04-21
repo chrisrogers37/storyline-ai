@@ -81,6 +81,7 @@ class TestChatSettingsRepository:
         assert added_obj.telegram_chat_id == -100123
         assert added_obj.dry_run_mode is True
         assert added_obj.posts_per_day == 3
+        assert added_obj.onboarding_completed is True
 
     def test_update_modifies_fields(self, settings_repo, mock_db):
         """Test update modifies specified fields on existing record."""

@@ -139,6 +139,20 @@ async def _scheduler_tick(
     else:
         active_chats = []
 
+    if not active_chats:
+        # Throttle to once per 10 minutes (every 10th tick) to avoid log spam
+        _no_active_chats_tick_count = (
+            getattr(_scheduler_tick, "_no_active_ticks", 0) + 1
+        )
+        _scheduler_tick._no_active_ticks = _no_active_chats_tick_count
+        if _no_active_chats_tick_count == 1 or _no_active_chats_tick_count % 10 == 0:
+            logger.warning(
+                "Scheduler tick: no active chats found "
+                "(check onboarding_completed / active_instagram_account_id)"
+            )
+    else:
+        _scheduler_tick._no_active_ticks = 0
+
     if active_chats:
         for chat in active_chats:
             chat_id = chat.telegram_chat_id
@@ -345,7 +359,9 @@ async def run_scheduler_loop(
         except Exception as e:
             logger.error(f"Error in scheduler loop: {e}", exc_info=True)
         finally:
-            for svc in (scheduler_service, posting_service):
+            for svc in (scheduler_service, posting_service, settings_service):
+                if svc is None:
+                    continue
                 try:
                     svc.cleanup_transactions()
                 except Exception as cleanup_err:
