@@ -31,6 +31,28 @@ def escape_markdown(text: str) -> str:
     return re.sub(r"([_*`\[])", r"\\\1", text)
 
 
+def escape_markdownv2(text: str) -> str:
+    """Escape Telegram MarkdownV2 special characters."""
+    return re.sub(r"([_*\[\]()~`>#+\-=|{}.!\\])", r"\\\1", text)
+
+
+def format_last_post(last_post_at: str | None) -> str:
+    """Format an ISO timestamp into a human-readable 'X ago' string."""
+    if not last_post_at:
+        return "never"
+    from datetime import datetime, timezone
+
+    posted = datetime.fromisoformat(last_post_at)
+    if posted.tzinfo is None:
+        posted = posted.replace(tzinfo=timezone.utc)
+    diff = datetime.now(timezone.utc) - posted
+    days = diff.days
+    if days > 0:
+        return f"{days}d ago"
+    hours = int(diff.total_seconds() / 3600)
+    return f"{hours}h ago" if hours > 0 else "< 1h ago"
+
+
 # =========================================================================
 # Pattern 1: Queue Item Validation
 # =========================================================================

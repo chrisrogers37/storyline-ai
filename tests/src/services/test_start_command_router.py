@@ -4,7 +4,8 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from src.services.core.start_command_router import StartCommandRouter, _escape_md2
+from src.services.core.start_command_router import StartCommandRouter
+from src.services.core.telegram_utils import escape_markdownv2
 
 
 @pytest.fixture
@@ -492,7 +493,7 @@ class TestHandleNewUser:
 
 
 # ──────────────────────────────────────────────────────────────
-# _escape_md2
+# escape_markdownv2
 # ──────────────────────────────────────────────────────────────
 
 
@@ -500,11 +501,11 @@ class TestHandleNewUser:
 class TestEscapeMd2:
     def test_escapes_special_characters(self):
         """Escapes all MarkdownV2 special characters."""
-        assert _escape_md2("hello_world") == "hello\\_world"
-        assert _escape_md2("test*bold*") == "test\\*bold\\*"
-        assert _escape_md2("a.b") == "a\\.b"
+        assert escape_markdownv2("hello_world") == "hello\\_world"
+        assert escape_markdownv2("test*bold*") == "test\\*bold\\*"
+        assert escape_markdownv2("a.b") == "a\\.b"
 
     def test_plain_text_unchanged(self):
         """Plain text without special chars passes through unchanged."""
-        assert _escape_md2("hello world") == "hello world"
-        assert _escape_md2("abc123") == "abc123"
+        assert escape_markdownv2("hello world") == "hello world"
+        assert escape_markdownv2("abc123") == "abc123"

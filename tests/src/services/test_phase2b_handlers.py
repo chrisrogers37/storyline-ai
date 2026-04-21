@@ -426,7 +426,7 @@ class TestInstancesCommand:
 
         mock_update = _make_update(12345, chat_type="private")
 
-        with patch("src.services.core.dashboard_service.DashboardService") as MockDash:
+        with patch("src.services.core.telegram_commands.DashboardService") as MockDash:
             mock_dash = MockDash.return_value
             mock_dash.__enter__ = Mock(return_value=mock_dash)
             mock_dash.__exit__ = Mock(return_value=False)
@@ -458,7 +458,7 @@ class TestInstancesCommand:
 
         mock_update = _make_update(12345, chat_type="private")
 
-        with patch("src.services.core.dashboard_service.DashboardService") as MockDash:
+        with patch("src.services.core.telegram_commands.DashboardService") as MockDash:
             mock_dash = MockDash.return_value
             mock_dash.__enter__ = Mock(return_value=mock_dash)
             mock_dash.__exit__ = Mock(return_value=False)

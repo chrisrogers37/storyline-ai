@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from src.config.settings import settings
+from src.services.core.dashboard_service import DashboardService
+from src.services.core.telegram_utils import escape_markdown, format_last_post
 from src.utils.logger import logger
 from src import __version__
 
@@ -20,40 +21,40 @@ class TelegramLifecycleHandler:
         self.service = service
 
     async def send_startup_notification(self):
-        """Send startup notification to admin with system status."""
+        """Send startup notification to admin with multi-instance overview."""
         if not settings.SEND_LIFECYCLE_NOTIFICATIONS:
             return
 
         try:
-            pending_count = self.service.queue_repo.count_pending()
-            media_count = len(self.service.media_repo.get_all(is_active=True))
-            recent_posts = self.service.history_repo.get_recent_posts(hours=24)
-            last_post_time = recent_posts[0].posted_at if recent_posts else None
+            with DashboardService() as dash:
+                data = dash.get_user_instances(self.service.admin_chat_id)
 
-            if last_post_time:
-                time_diff = datetime.now(timezone.utc) - last_post_time
-                hours = int(time_diff.total_seconds() / 3600)
-                last_posted = f"{hours}h ago" if hours > 0 else "< 1h ago"
+            instances = data["instances"]
+            lines = ["🟢 *Storyline AI Started*\n"]
+
+            if instances:
+                lines.append("Your instances:")
+                for i, inst in enumerate(instances, 1):
+                    raw_name = (
+                        inst["display_name"] or f"Chat {inst['telegram_chat_id']}"
+                    )
+                    name = escape_markdown(raw_name)
+                    media = inst["media_count"]
+                    ppd = inst["posts_per_day"]
+                    last = format_last_post(inst["last_post_at"])
+                    status = "⏸️ paused" if inst["is_paused"] else "✅ active"
+                    lines.append(
+                        f"{i}. *{name}* — {ppd}/day, {media} media, "
+                        f"last post {last} ({status})"
+                    )
             else:
-                last_posted = "Never"
+                lines.append("No instances configured yet.")
 
-            message = (
-                f"🟢 *Storyline AI Started*\n\n"
-                f"📊 *System Status:*\n"
-                f"├─ Database: ✅ Connected\n"
-                f"├─ Telegram: ✅ Bot online\n"
-                f"├─ Queue: {pending_count} pending posts\n"
-                f"└─ Last posted: {last_posted}\n\n"
-                f"⚙️ *Configuration:*\n"
-                f"├─ Posts/day: {settings.POSTS_PER_DAY}\n"
-                f"├─ Window: {settings.POSTING_HOURS_START:02d}:00-{settings.POSTING_HOURS_END:02d}:00 UTC\n"
-                f"└─ Media indexed: {media_count} items\n\n"
-                f"🤖 v{__version__}"
-            )
+            lines.append(f"\n🤖 v{__version__}")
 
             await self.service.bot.send_message(
                 chat_id=self.service.admin_chat_id,
-                text=message,
+                text="\n".join(lines),
                 parse_mode="Markdown",
             )
 

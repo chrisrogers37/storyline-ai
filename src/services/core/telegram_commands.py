@@ -10,7 +10,12 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
 
 from src.config.settings import settings
-from src.services.core.telegram_utils import build_webapp_button
+from src.services.core.dashboard_service import DashboardService
+from src.services.core.telegram_utils import (
+    build_webapp_button,
+    escape_markdownv2,
+    format_last_post,
+)
 from src.utils.logger import logger
 
 if TYPE_CHECKING:
@@ -34,15 +39,72 @@ class TelegramCommandHandlers:
     async def handle_status(self, update, context):
         """Handle /status command.
 
-        All data is scoped to the current chat's tenant (chat_settings_id)
-        and all configuration is read from the database, never from env vars.
+        In DMs: shows user-level instance list (multi-instance view).
+        In groups: shows instance-scoped status for this chat's tenant.
         """
         chat_id = update.effective_chat.id
         user = self.service._get_or_create_user(
             update.effective_user, telegram_chat_id=chat_id
         )
+        is_dm = update.effective_chat.type == "private"
 
-        # Load tenant-scoped settings from DB (single source of truth)
+        if is_dm:
+            await self._handle_dm_status(update, user)
+        else:
+            await self._handle_group_status(update, user, chat_id)
+
+    async def _handle_dm_status(self, update, user):
+        """Show user-level instance overview in DMs."""
+        with DashboardService() as dash:
+            data = dash.get_user_instances(update.effective_user.id)
+
+        instances = data["instances"]
+        lines = ["📊 *Storyline AI Status*\n\nYour instances:"]
+
+        keyboard_rows = []
+        if instances:
+            for i, inst in enumerate(instances, 1):
+                raw_name = inst["display_name"] or f"Chat {inst['telegram_chat_id']}"
+                name = escape_markdownv2(raw_name)
+                media = inst["media_count"]
+                ppd = inst["posts_per_day"]
+                last = format_last_post(inst["last_post_at"])
+                status = "⏸️ paused" if inst["is_paused"] else "✅ active"
+                lines.append(
+                    f"{i}\\. *{name}* "
+                    f"\\({ppd}/day · {media} media · last post {last} · {status}\\)"
+                )
+                keyboard_rows.append(
+                    [
+                        InlineKeyboardButton(
+                            f"Manage {raw_name}",
+                            callback_data=f"instance_manage:{inst['chat_settings_id']}",
+                        )
+                    ]
+                )
+        else:
+            lines.append("No instances configured yet\\.")
+
+        keyboard_rows.append(
+            [InlineKeyboardButton("+ New Instance", callback_data="instance_new")]
+        )
+
+        await update.message.reply_text(
+            "\n".join(lines),
+            parse_mode="MarkdownV2",
+            reply_markup=InlineKeyboardMarkup(keyboard_rows),
+        )
+
+        self.service.interaction_service.log_command(
+            user_id=str(user.id),
+            command="/status",
+            context={"view": "dm", "instance_count": len(instances)},
+            telegram_chat_id=update.effective_chat.id,
+            telegram_message_id=update.message.message_id,
+        )
+
+    async def _handle_group_status(self, update, user, chat_id):
+        """Show instance-scoped status in group chats."""
         chat_settings = self.service.settings_service.get_settings(chat_id)
         cs_id = str(chat_settings.id)
 
@@ -103,6 +165,7 @@ class TelegramCommandHandlers:
             user_id=str(user.id),
             command="/status",
             context={
+                "view": "group",
                 "posted": posted_count,
                 "never_posted": never_posted,
                 "posts_24h": len(recent_posts),
@@ -648,9 +711,6 @@ class TelegramCommandHandlers:
 
         user = self.service._get_or_create_user(update.effective_user)
 
-        from src.services.core.dashboard_service import DashboardService
-        from src.services.core.start_command_router import _escape_md2
-
         with DashboardService() as dash:
             data = dash.get_user_instances(update.effective_user.id)
 
@@ -670,7 +730,7 @@ class TelegramCommandHandlers:
             ppd = inst["posts_per_day"]
             status = "paused" if inst["is_paused"] else "active"
             lines.append(
-                f"{i}\\. *{_escape_md2(name)}* \\({media} media · {ppd}/day · {status}\\)"
+                f"{i}\\. *{escape_markdownv2(name)}* \\({media} media · {ppd}/day · {status}\\)"
             )
             keyboard_rows.append(
                 [

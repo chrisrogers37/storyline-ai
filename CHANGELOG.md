@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Multi-instance DM view for /status and startup** (#267) — DM `/status` now shows user-level instance list with manage buttons instead of single-instance status dump. Startup notification uses `DashboardService.get_user_instances()` for the same multi-instance overview. Group `/status` unchanged. Consolidated `escape_markdownv2` and `format_last_post` into `telegram_utils.py` as shared helpers. Added Core Mental Model section to `PROJECT_MISSION.md`.
+
 ### Added
 
 - **Test coverage for 7 untested service modules** (#252) — 110 unit tests covering `telegram_callbacks_core`, `telegram_callbacks_queue`, `telegram_callbacks_admin`, `conversation_service`, `start_command_router`, `user_service`, and `backfill_downloader`. Shared test helpers (`make_query`, `make_user`, `noop_context_manager`) added to `conftest.py`.
