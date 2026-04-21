@@ -5,6 +5,18 @@ from unittest.mock import MagicMock, Mock, patch
 from datetime import datetime
 
 from src.services.core.dashboard_service import DashboardService
+from src.services.core.dashboard_queue_queries import QueueDashboardQueries
+from src.services.core.dashboard_media_queries import MediaDashboardQueries
+from src.services.core.dashboard_history_queries import HistoryDashboardQueries
+from src.services.core.dashboard_instance_queries import InstanceDashboardQueries
+
+
+def _init_query_classes(service):
+    """Attach query class instances after patched __init__ skips them."""
+    service.queue_queries = QueueDashboardQueries(service)
+    service.media_queries = MediaDashboardQueries(service)
+    service.history_queries = HistoryDashboardQueries(service)
+    service.instance_queries = InstanceDashboardQueries(service)
 
 
 @pytest.fixture
@@ -20,6 +32,8 @@ def dashboard_service():
         # Default: _resolve_chat_settings_id returns a tenant ID
         mock_settings = Mock(id="tenant-uuid-1")
         service.settings_service.get_settings.return_value = mock_settings
+
+        _init_query_classes(service)
         return service
 
 
@@ -263,6 +277,8 @@ class TestGetAnalytics:
 
             mock_settings = Mock(id="tenant-uuid-1")
             service.settings_service.get_settings.return_value = mock_settings
+
+            _init_query_classes(service)
             return service
 
     def test_returns_complete_analytics(self):
@@ -367,6 +383,7 @@ class TestGetCategoryAnalytics:
 
             mock_settings = Mock(id="tenant-uuid-1")
             service.settings_service.get_settings.return_value = mock_settings
+            _init_query_classes(service)
             return service
 
     def test_enriches_with_configured_ratios(self):
@@ -459,6 +476,7 @@ class TestGetScheduleRecommendations:
 
             mock_settings = Mock(id="tenant-uuid-1")
             service.settings_service.get_settings.return_value = mock_settings
+            _init_query_classes(service)
             return service
 
     def test_returns_recommendations_with_sufficient_data(self):
@@ -600,6 +618,7 @@ class TestGetSchedulePreview:
             service.category_mix_repo = MagicMock()
             service.service_run_repo = MagicMock()
             service.service_name = "DashboardService"
+            _init_query_classes(service)
             return service
 
     def test_returns_slot_times(self):
@@ -683,6 +702,7 @@ class TestGetCategoryMixDrift:
             service.service_name = "DashboardService"
             mock_settings = Mock(id="tenant-uuid-1")
             service.settings_service.get_settings.return_value = mock_settings
+            _init_query_classes(service)
             return service
 
     def test_detects_drift(self):
@@ -756,6 +776,7 @@ class TestGetApprovalLatency:
             service.service_name = "DashboardService"
             mock_settings = Mock(id="tenant-uuid-1")
             service.settings_service.get_settings.return_value = mock_settings
+            _init_query_classes(service)
             return service
 
     def test_returns_latency_stats(self):
@@ -813,6 +834,7 @@ class TestGetContentReuseInsights:
             service.service_name = "DashboardService"
             mock_settings = Mock(id="tenant-uuid-1")
             service.settings_service.get_settings.return_value = mock_settings
+            _init_query_classes(service)
             return service
 
     def test_returns_reuse_tiers(self):
@@ -867,6 +889,7 @@ class TestGetDeadContentReport:
             service.service_name = "DashboardService"
             mock_settings = Mock(id="tenant-uuid-1")
             service.settings_service.get_settings.return_value = mock_settings
+            _init_query_classes(service)
             return service
 
     def test_returns_dead_content(self):
@@ -910,6 +933,7 @@ class TestGetTeamPerformance:
             service.service_name = "DashboardService"
             mock_settings = Mock(id="tenant-uuid-1")
             service.settings_service.get_settings.return_value = mock_settings
+            _init_query_classes(service)
             return service
 
     def test_returns_user_stats(self):
