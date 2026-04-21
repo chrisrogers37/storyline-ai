@@ -995,7 +995,7 @@ class TestStatusDashboardButton:
         mock_update.effective_user = Mock(
             id=123, username="test", first_name="Test", last_name=None
         )
-        mock_update.effective_chat = Mock(id=-100123, type="private")
+        mock_update.effective_chat = Mock(id=-100123, type="group")
         mock_update.message = AsyncMock()
         mock_update.message.message_id = 1
 
@@ -1063,7 +1063,7 @@ class TestStatusDashboardButton:
         mock_update.effective_user = Mock(
             id=123, username="test", first_name="Test", last_name=None
         )
-        mock_update.effective_chat = Mock(id=-100123, type="private")
+        mock_update.effective_chat = Mock(id=-100123, type="group")
         mock_update.message = AsyncMock()
         mock_update.message.message_id = 1
 

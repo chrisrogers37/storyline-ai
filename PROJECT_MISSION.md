@@ -9,6 +9,25 @@ The single control center for social media content. Upload or pull content from 
 ## North star
 Zero-friction content automation — from source to posted to optimized, with as few manual steps as possible.
 
+## Core Mental Model
+
+The entire product — data model, UI, and bot behavior — is anchored to this hierarchy:
+
+```
+User (Telegram identity)
+  → manages multiple Instances (group chats)
+    → each Instance has: social media accounts, media sources, queue, schedule, settings
+    → media sources contain: multiple files
+```
+
+**Surfaces map directly to this model:**
+
+- **DM** = management console (user-level view of all instances)
+- **Group chat** = where the instance lives (team review + posting)
+- **Web dashboard** = instance picker → instance management
+
+A user sees their instance list first. Tapping an instance drills into its config, media, and posting state. Every command, screen, and API endpoint should know whether it operates at the user level or the instance level — and behave accordingly.
+
 ## Guiding principles
 - **Simple over powerful.** If a feature needs explanation, simplify it.
 - **Web-first for management, Telegram-first for actions.** Approval flows and quick decisions live in Telegram. Everything else belongs on the web dashboard.

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -11,7 +10,7 @@ from src.config.settings import settings
 from src.services.core.conversation_service import ConversationService
 from src.services.core.dashboard_service import DashboardService
 from src.repositories.membership_repository import MembershipRepository
-from src.services.core.telegram_utils import build_webapp_button
+from src.services.core.telegram_utils import build_webapp_button, escape_markdownv2
 
 if TYPE_CHECKING:
     from src.services.core.telegram_service import TelegramService
@@ -235,7 +234,7 @@ class StartCommandRouter:
             ppd = inst["posts_per_day"]
             status = "⏸️ paused" if inst["is_paused"] else "✅ active"
             lines.append(
-                f"{i}\\. *{_escape_md2(name)}* "
+                f"{i}\\. *{escape_markdownv2(name)}* "
                 f"\\({media} media · {ppd}/day · {status}\\)"
             )
 
@@ -276,9 +275,3 @@ class StartCommandRouter:
             '_\\(e\\.g\\. "TL Enterprises", "Personal Brand"\\)_',
             parse_mode="MarkdownV2",
         )
-
-
-def _escape_md2(text: str) -> str:
-    """Escape Telegram MarkdownV2 special characters."""
-
-    return re.sub(r"([_*\[\]()~`>#+\-=|{}.!\\])", r"\\\1", text)
