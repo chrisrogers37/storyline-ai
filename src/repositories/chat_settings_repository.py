@@ -44,7 +44,8 @@ class ChatSettingsRepository(BaseRepository):
             self.end_read_transaction()
             return existing
 
-        # Bootstrap from .env values
+        # Bootstrap from .env values — mark as onboarded since these
+        # are fully-configured deployment defaults, not wizard-created chats.
         chat_settings = ChatSettings(
             telegram_chat_id=telegram_chat_id,
             dry_run_mode=env_settings.DRY_RUN_MODE,
@@ -55,6 +56,7 @@ class ChatSettingsRepository(BaseRepository):
             posting_hours_end=env_settings.POSTING_HOURS_END,
             show_verbose_notifications=True,
             media_sync_enabled=env_settings.MEDIA_SYNC_ENABLED,
+            onboarding_completed=True,
         )
         self.db.add(chat_settings)
         self.db.commit()
