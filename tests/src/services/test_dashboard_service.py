@@ -52,6 +52,7 @@ class TestGetQueueDetail:
             status="processing",
         )
 
+        dashboard_service.queue_repo.count_by_status.return_value = 2
         dashboard_service.queue_repo.get_all_with_media.side_effect = [
             [(pending_item, "meme_01.jpg", "memes")],
             [(processing_item, "merch_01.jpg", "merch")],
@@ -78,6 +79,7 @@ class TestGetQueueDetail:
             status="pending",
         )
 
+        dashboard_service.queue_repo.count_by_status.return_value = 1
         dashboard_service.queue_repo.get_all_with_media.side_effect = [
             [(item, None, None)],  # pending
             [],  # processing
@@ -91,6 +93,7 @@ class TestGetQueueDetail:
 
     def test_includes_posts_today_and_last_post(self, dashboard_service):
         """get_queue_detail includes posts_today and last_post_at."""
+        dashboard_service.queue_repo.count_by_status.return_value = 0
         dashboard_service.queue_repo.get_all_with_media.side_effect = [[], []]
 
         post = Mock(posted_at=datetime(2026, 3, 1, 14, 0))
@@ -102,19 +105,19 @@ class TestGetQueueDetail:
         assert result["last_post_at"] == "2026-03-01T14:00:00"
 
     def test_respects_limit(self, dashboard_service):
-        """get_queue_detail limits the number of items returned."""
+        """get_queue_detail pushes limit to repo and uses count for total."""
         items = [
             (
                 Mock(scheduled_for=datetime(2026, 3, 1, i, 0), status="pending"),
                 f"img_{i}.jpg",
                 "cat",
             )
-            for i in range(5)
+            for i in range(3)
         ]
 
+        dashboard_service.queue_repo.count_by_status.return_value = 5
         dashboard_service.queue_repo.get_all_with_media.side_effect = [
-            items,
-            [],
+            items,  # pending (limit=3 passed to repo)
         ]
         dashboard_service.history_repo.get_recent_posts.return_value = []
 
@@ -122,9 +125,14 @@ class TestGetQueueDetail:
 
         assert len(result["items"]) == 3
         assert result["total_in_flight"] == 5
+        # Verify limit was pushed to repo
+        dashboard_service.queue_repo.get_all_with_media.assert_called_once_with(
+            status="pending", chat_settings_id="tenant-uuid-1", limit=3
+        )
 
     def test_empty_queue(self, dashboard_service):
         """get_queue_detail handles empty queue."""
+        dashboard_service.queue_repo.count_by_status.return_value = 0
         dashboard_service.queue_repo.get_all_with_media.side_effect = [[], []]
         dashboard_service.history_repo.get_recent_posts.return_value = []
 
@@ -220,7 +228,7 @@ class TestGetPendingQueueItems:
         assert result[0]["file_name"] == "queue_list.jpg"
         assert result[0]["category"] == "memes"
         assert result[0]["status"] == "pending"
-        assert result[0]["scheduled_for"] == datetime(2026, 3, 1, 14, 0)
+        assert result[0]["scheduled_for"] == "2026-03-01T14:00:00"
 
         # Verify media_repo.get_by_id was NOT called (no N+1)
         dashboard_service.media_repo.get_by_id.assert_not_called()

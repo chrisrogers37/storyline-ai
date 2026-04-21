@@ -22,16 +22,27 @@ class QueueDashboardQueries:
         """
         chat_settings_id = self.service.resolve_chat_settings_id(telegram_chat_id)
 
+        total_in_flight = self.service.queue_repo.count_by_status(
+            statuses=["pending", "processing"],
+            chat_settings_id=chat_settings_id,
+        )
+
         pending_rows = self.service.queue_repo.get_all_with_media(
-            status="pending", chat_settings_id=chat_settings_id
+            status="pending", chat_settings_id=chat_settings_id, limit=limit
         )
-        processing_rows = self.service.queue_repo.get_all_with_media(
-            status="processing", chat_settings_id=chat_settings_id
+        remaining = limit - len(pending_rows)
+        processing_rows = (
+            self.service.queue_repo.get_all_with_media(
+                status="processing",
+                chat_settings_id=chat_settings_id,
+                limit=remaining,
+            )
+            if remaining > 0
+            else []
         )
-        all_in_flight = pending_rows + processing_rows
 
         items = []
-        for item, file_name, category in all_in_flight[:limit]:
+        for item, file_name, category in pending_rows + processing_rows:
             items.append(
                 {
                     "scheduled_for": item.scheduled_for.isoformat(),
@@ -50,16 +61,15 @@ class QueueDashboardQueries:
         if today_posts:
             last_post_at = today_posts[0].posted_at.isoformat()
         else:
-            # Check further back
             recent = self.service.history_repo.get_recent_posts(
-                hours=720, chat_settings_id=chat_settings_id
+                hours=720, chat_settings_id=chat_settings_id, limit=1
             )
             if recent:
                 last_post_at = recent[0].posted_at.isoformat()
 
         return {
             "items": items,
-            "total_in_flight": len(all_in_flight),
+            "total_in_flight": total_in_flight,
             "posts_today": posts_today,
             "last_post_at": last_post_at,
         }
@@ -77,7 +87,7 @@ class QueueDashboardQueries:
         for item, file_name, category in rows:
             items.append(
                 {
-                    "scheduled_for": item.scheduled_for,
+                    "scheduled_for": item.scheduled_for.isoformat(),
                     "file_name": file_name if file_name else "Unknown",
                     "category": (category if category else None) or "-",
                     "status": item.status,
