@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **DashboardService god class refactor** (#253) — Broke 816-line `DashboardService` into thin facade (145 lines) plus 4 focused query classes: `QueueDashboardQueries`, `MediaDashboardQueries`, `HistoryDashboardQueries`, `InstanceDashboardQueries`. Pushed query limits to repo layer, added `count_by_status` to `QueueRepository`.
 - **TelegramService god class refactor** (#251) — Broke 804-line `TelegramService` into thin orchestrator (496 lines) plus 4 focused handler classes: `OperationStateManager`, `TelegramUserManager`, `TelegramMembershipHandler`, `TelegramLifecycleHandler`. Consolidated duplicate `_escape_markdown` into `telegram_utils.py`.
 
 ### Fixed
