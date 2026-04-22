@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Landing page hero copy — 3-second test** (#256) — Replaced vague headline "Keep Your Stories Alive" with "Instagram Stories on Autopilot" for instant clarity. Rewrote subheadline to lead with pain point ("Stop manually posting") and close with trust hook ("hands-free but always in control"). Added social proof line under hero CTA.
+- **Unified CTA copy across landing page** (#257) — Changed all CTA labels from "Join the Waitlist" / "Join Waitlist" to "Get Early Access" for consistent, action-oriented messaging. Updated hero form, header nav button, and submitting state text.
+
+### Changed
+
 - **Multi-instance DM view for /status and startup** (#267) — DM `/status` now shows user-level instance list with manage buttons instead of single-instance status dump. Startup notification uses `DashboardService.get_user_instances()` for the same multi-instance overview. Group `/status` unchanged. Consolidated `escape_markdownv2` and `format_last_post` into `telegram_utils.py` as shared helpers. Added Core Mental Model section to `PROJECT_MISSION.md`.
 
 ### Added
