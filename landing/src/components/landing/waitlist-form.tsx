@@ -84,12 +84,29 @@ export function WaitlistForm({
         role="status"
         aria-live="polite"
       >
-        <p className="text-lg font-medium">{message}</p>
-        {status === "success" && (
-          <p className="text-sm text-muted-foreground mt-1">
-            We&apos;ll be in touch.
-          </p>
-        )}
+        <div className="space-y-3">
+          <p className="text-lg font-medium">{message}</p>
+          {status === "success" && (
+            <>
+              <p className="text-sm text-muted-foreground">
+                We&apos;re onboarding beta users in small batches. You&apos;ll
+                hear from us within a week with setup instructions.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                While you wait — get your Google Drive folder ready with your
+                story content. That&apos;s all you&apos;ll need to get started.
+              </p>
+            </>
+          )}
+          <a
+            href="https://t.me/storyline_ai"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground transition-colors"
+          >
+            Join the Telegram community
+          </a>
+        </div>
       </div>
     )
   }
