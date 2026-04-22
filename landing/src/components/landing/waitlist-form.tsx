@@ -123,7 +123,7 @@ export function WaitlistForm({
         required
       />
       <Button type="submit" disabled={status === "submitting"}>
-        {status === "submitting" ? "Joining..." : "Join the Waitlist"}
+        {status === "submitting" ? "Submitting..." : "Get Early Access"}
       </Button>
       {status === "error" && (
         <p className="text-sm text-destructive" role="alert" aria-live="assertive">
