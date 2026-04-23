@@ -214,7 +214,6 @@ class TestGDriveExchangeAndStore:
             result = await service.exchange_and_store("auth_code", -100123)
 
         assert result["email"] == "user@gmail.com"
-        assert result["expires_in_hours"] == 1
         # Should store both access and refresh tokens
         assert service.token_repo.create_or_update_for_chat.call_count == 2
 

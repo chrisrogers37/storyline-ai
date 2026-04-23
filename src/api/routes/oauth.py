@@ -252,9 +252,7 @@ async def google_drive_oauth_callback(
             # Notify Telegram
             await gdrive_service.notify_telegram(
                 chat_id,
-                f"Google Drive connected! Account: {result['email']}\n"
-                f"Access token valid for {result['expires_in_hours']} hours "
-                f"(auto-refreshes).",
+                f"Google Drive connected! Account: {result['email']}",
                 success=True,
             )
 

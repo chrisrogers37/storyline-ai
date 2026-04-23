@@ -202,7 +202,6 @@ class GoogleDriveOAuthService(BaseService):
 
             result = {
                 "email": email or "unknown",
-                "expires_in_hours": expires_in // 3600,
             }
 
             self.set_result_summary(run_id, result)

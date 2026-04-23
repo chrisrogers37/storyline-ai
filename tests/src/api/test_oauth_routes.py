@@ -299,7 +299,7 @@ class TestGDriveOAuthCallbackEndpoint:
             mock_svc = MockService.return_value
             mock_svc.validate_state_token.return_value = -100123
             mock_svc.exchange_and_store = AsyncMock(
-                return_value={"email": "user@gmail.com", "expires_in_hours": 1}
+                return_value={"email": "user@gmail.com"}
             )
             mock_svc.notify_telegram = AsyncMock()
             mock_svc.__enter__ = Mock(return_value=mock_svc)
@@ -396,7 +396,7 @@ class TestGDriveOAuthCallbackEndpoint:
             mock_svc = MockService.return_value
             mock_svc.validate_state_token.return_value = -100123
             mock_svc.exchange_and_store = AsyncMock(
-                return_value={"email": "user@gmail.com", "expires_in_hours": 1}
+                return_value={"email": "user@gmail.com"}
             )
             mock_svc.notify_telegram = AsyncMock()
             mock_svc.__enter__ = Mock(return_value=mock_svc)
@@ -462,12 +462,7 @@ class TestOAuthHtmlEscaping:
         with patch("src.api.routes.oauth.GoogleDriveOAuthService") as MockService:
             mock_svc = MockService.return_value
             mock_svc.validate_state_token.return_value = -100123
-            mock_svc.exchange_and_store = AsyncMock(
-                return_value={
-                    "email": xss_email,
-                    "expires_in_hours": 1,
-                }
-            )
+            mock_svc.exchange_and_store = AsyncMock(return_value={"email": xss_email})
             mock_svc.notify_telegram = AsyncMock()
             mock_svc.__enter__ = Mock(return_value=mock_svc)
             mock_svc.__exit__ = Mock(return_value=False)
