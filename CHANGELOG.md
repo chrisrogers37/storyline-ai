@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Social proof stats bar and trust badges** (#258) — Added stats bar (stories posted, content managed, active creators) between Hero and How It Works sections. Added trust badges below hero CTA with lock/Instagram/key icons addressing top 3 signup objections (content stays in Drive, official API, no password required).
 - **Competitive positioning section** (#259) — Added "Why not just use Buffer?" comparison table between Features and Pricing, contrasting Storyline vs Buffer/Later across 5 dimensions. Added positioning line to hero: "The Instagram Story tool that lives in Telegram — not another dashboard."
 
+### Fixed
+
+- **Google Drive OAuth "valid for 0 hours" message** — Removed misleading token expiry detail from Telegram notification since tokens auto-refresh. Cleaned up unused `expires_in_hours` from OAuth return dict.
+
 ### Changed
 
 - **Landing page hero copy — 3-second test** (#256) — Replaced vague headline "Keep Your Stories Alive" with "Instagram Stories on Autopilot" for instant clarity. Rewrote subheadline to lead with pain point ("Stop manually posting") and close with trust hook ("hands-free but always in control"). Added social proof line under hero CTA.
