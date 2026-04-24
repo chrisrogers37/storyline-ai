@@ -313,33 +313,23 @@ def _detect_mime_from_magic(content: bytes) -> str | None:
     return None
 
 
-@router.post("/upload-media")
-async def onboarding_upload_media(
-    request: Request,
-    init_data: str = Query(...),
-    chat_id: int = Query(...),
-    file: UploadFile = File(...),
-    category: str | None = Form(default=None),
-) -> dict:
-    """Upload a media file and create a media_item record.
+async def _validate_upload_content(
+    request: Request, file: UploadFile
+) -> tuple[bytes, str]:
+    """Read and validate uploaded file content, size, and MIME type.
 
-    Files are stored locally and indexed for posting.
+    Returns (content_bytes, claimed_mime).
     """
-    _validate_request(init_data, chat_id)
-
-    # Fast-fail on Content-Length before buffering the file
     content_length = int(request.headers.get("content-length", 0))
     if content_length > MAX_UPLOAD_SIZE:
         raise HTTPException(status_code=413, detail="File exceeds 50 MB limit")
 
-    # Read file content
     content = await file.read()
     if len(content) > MAX_UPLOAD_SIZE:
         raise HTTPException(status_code=413, detail="File exceeds 50 MB limit")
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="Empty file")
 
-    # Validate MIME type from header/extension, then verify with magic bytes
     claimed_mime = (
         file.content_type
         or mimetypes.guess_type(file.filename or "")[0]
@@ -359,55 +349,36 @@ async def onboarding_upload_media(
             detail=f"File content ({actual_mime}) does not match declared type ({claimed_mime})",
         )
 
-    file_hash = hashlib.sha256(content).hexdigest()
+    return content, claimed_mime
 
-    # Sanitize filename — strip path components to prevent directory traversal
-    safe_name = Path(file.filename or "upload").name
-    if not safe_name or safe_name.startswith("."):
-        safe_name = "upload"
 
-    # Resolve tenant
-    with SettingsService() as settings_service:
-        chat_settings = settings_service.get_settings(chat_id)
-        chat_settings_id = str(chat_settings.id)
+def _resolve_upload_category(category: str | None, chat_settings_id: str) -> str | None:
+    """Validate and sanitize the upload category against known categories."""
+    if not category:
+        return None
 
-    # Validate category against known categories from DB
-    valid_category = None
-    if category:
-        with MediaRepository() as media_repo:
-            known_categories = media_repo.get_categories(
-                chat_settings_id=chat_settings_id
-            )
-        if category in known_categories:
-            valid_category = category
-        else:
-            # Sanitize: strip path separators as defense-in-depth
-            sanitized = Path(category).name
-            if sanitized and not sanitized.startswith(".") and "/" not in category:
-                valid_category = sanitized
-            else:
-                raise HTTPException(
-                    status_code=400, detail=f"Invalid category: {category}"
-                )
-
-    # Check for duplicate content
     with MediaRepository() as media_repo:
-        existing = media_repo.get_active_by_hash(
-            file_hash, chat_settings_id=chat_settings_id
-        )
-        if existing:
-            raise HTTPException(
-                status_code=409,
-                detail=f"Duplicate content — matches existing file: {existing.file_name}",
-            )
+        known_categories = media_repo.get_categories(chat_settings_id=chat_settings_id)
+    if category in known_categories:
+        return category
 
-    # Save to disk
-    folder = valid_category or "uncategorized"
+    sanitized = Path(category).name
+    if sanitized and not sanitized.startswith(".") and "/" not in category:
+        return sanitized
+
+    raise HTTPException(status_code=400, detail=f"Invalid category: {category}")
+
+
+def _prepare_save_path(
+    chat_settings_id: str, category: str | None, filename: str
+) -> Path:
+    """Create directory structure and resolve a unique save path."""
+    folder = category or "uncategorized"
     save_dir = Path(UPLOAD_DIR) / chat_settings_id / folder
     save_dir.mkdir(parents=True, exist_ok=True)
-    save_path = save_dir / safe_name
+    save_path = save_dir / filename
 
-    # Belt-and-suspenders: verify resolved path is within UPLOAD_DIR
+    # Verify resolved path is within UPLOAD_DIR (path traversal defense)
     resolved = save_path.resolve()
     if not str(resolved).startswith(str(Path(UPLOAD_DIR).resolve())):
         raise HTTPException(status_code=400, detail="Invalid file path")
@@ -421,9 +392,50 @@ async def onboarding_upload_media(
             save_path = save_dir / f"{stem}_{counter}{suffix}"
             counter += 1
 
+    return save_path
+
+
+@router.post("/upload-media")
+async def onboarding_upload_media(
+    request: Request,
+    init_data: str = Query(...),
+    chat_id: int = Query(...),
+    file: UploadFile = File(...),
+    category: str | None = Form(default=None),
+) -> dict:
+    """Upload a media file and create a media_item record.
+
+    Files are stored locally and indexed for posting.
+    """
+    _validate_request(init_data, chat_id)
+
+    content, claimed_mime = await _validate_upload_content(request, file)
+    file_hash = hashlib.sha256(content).hexdigest()
+
+    safe_name = Path(file.filename or "upload").name
+    if not safe_name or safe_name.startswith("."):
+        safe_name = "upload"
+
+    with SettingsService() as settings_service:
+        chat_settings = settings_service.get_settings(chat_id)
+        chat_settings_id = str(chat_settings.id)
+
+    valid_category = _resolve_upload_category(category, chat_settings_id)
+
+    # Check for duplicate content
+    with MediaRepository() as media_repo:
+        existing = media_repo.get_active_by_hash(
+            file_hash, chat_settings_id=chat_settings_id
+        )
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Duplicate content — matches existing file: {existing.file_name}",
+            )
+
+    save_path = _prepare_save_path(chat_settings_id, valid_category, safe_name)
     save_path.write_bytes(content)
 
-    # Create media_item record
     with MediaRepository() as media_repo:
         media_item = media_repo.create(
             file_path=str(save_path),

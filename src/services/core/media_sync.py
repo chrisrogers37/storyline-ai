@@ -8,7 +8,9 @@ from sqlalchemy.exc import SQLAlchemyError
 from src.config.settings import settings
 from src.repositories.media_repository import MediaRepository
 from src.services.base_service import BaseService
-from src.services.media_sources.base_provider import MediaFileInfo
+from src.services.media_sources.base_provider import (
+    MediaFileInfo,
+)
 from src.services.media_sources.factory import MediaSourceFactory
 from src.utils.logger import logger
 
@@ -61,6 +63,18 @@ class SyncResult:
         )
 
 
+@dataclass
+class SyncContext:
+    """Encapsulates shared sync processing state to reduce parameter count."""
+
+    source_type: str
+    provider: object
+    db_by_identifier: dict
+    db_by_hash: dict[str, list]
+    seen_identifiers: set[str]
+    result: SyncResult
+
+
 class MediaSyncService(BaseService):
     """Scheduled reconciliation of media source providers with the database.
 
@@ -79,6 +93,66 @@ class MediaSyncService(BaseService):
     def __init__(self):
         super().__init__()
         self.media_repo = MediaRepository()
+
+    def _resolve_source_config(
+        self,
+        source_type: Optional[str],
+        source_root: Optional[str],
+        telegram_chat_id: Optional[int],
+    ) -> tuple[str, str]:
+        """Resolve source type and root with fallback chain.
+
+        Resolution order: explicit params > per-chat DB config > global env vars.
+        """
+        if not source_type and not source_root and telegram_chat_id:
+            from src.services.core.settings_service import SettingsService
+
+            settings_service = SettingsService()
+            try:
+                source_type, source_root = settings_service.get_media_source_config(
+                    telegram_chat_id
+                )
+            finally:
+                settings_service.close()
+
+        resolved_type = source_type or settings.MEDIA_SOURCE_TYPE
+        resolved_root = source_root or settings.MEDIA_SOURCE_ROOT
+
+        if resolved_type == "local" and not resolved_root:
+            resolved_root = settings.MEDIA_DIR
+
+        return resolved_type, resolved_root
+
+    def _build_db_lookups(self, source_type: str) -> tuple[list, dict, dict]:
+        """Fetch DB records and build O(1) lookup dicts.
+
+        Returns (db_items, db_by_identifier, db_by_hash).
+        """
+        db_items = self.media_repo.get_active_by_source_type(source_type)
+        db_by_identifier = {
+            item.source_identifier: item for item in db_items if item.source_identifier
+        }
+        db_by_hash: dict[str, list] = {}
+        for item in db_items:
+            db_by_hash.setdefault(item.file_hash, []).append(item)
+        return db_items, db_by_identifier, db_by_hash
+
+    def _deactivate_missing_items(self, ctx: SyncContext) -> None:
+        """Deactivate DB items whose identifiers were not seen in the provider."""
+        for identifier, item in ctx.db_by_identifier.items():
+            if identifier not in ctx.seen_identifiers:
+                try:
+                    self.media_repo.deactivate(str(item.id))
+                    ctx.result.deactivated += 1
+                    logger.info(
+                        f"[MediaSyncService] Deactivated: {item.file_name} "
+                        f"(no longer in provider)"
+                    )
+                except SQLAlchemyError as e:
+                    ctx.result.errors += 1
+                    error_msg = f"Error deactivating {item.file_name}: {e}"
+                    ctx.result.error_details.append(error_msg)
+                    logger.error(f"[MediaSyncService] {error_msg}")
 
     def sync(
         self,
@@ -101,210 +175,184 @@ class MediaSyncService(BaseService):
         Raises:
             ValueError: If provider is not configured or source_type is invalid
         """
-        # Resolution order: explicit params > per-chat DB config > global env vars
-        if not source_type and not source_root and telegram_chat_id:
-            from src.services.core.settings_service import SettingsService
-
-            settings_service = SettingsService()
-            try:
-                source_type, source_root = settings_service.get_media_source_config(
-                    telegram_chat_id
-                )
-            finally:
-                settings_service.close()
-
-        resolved_source_type = source_type or settings.MEDIA_SOURCE_TYPE
-        resolved_source_root = source_root or settings.MEDIA_SOURCE_ROOT
-
-        # For local provider, fall back to MEDIA_DIR if no root specified
-        if resolved_source_type == "local" and not resolved_source_root:
-            resolved_source_root = settings.MEDIA_DIR
+        resolved_type, resolved_root = self._resolve_source_config(
+            source_type, source_root, telegram_chat_id
+        )
 
         with self.track_execution(
             method_name="sync",
             triggered_by=triggered_by,
             input_params={
-                "source_type": resolved_source_type,
-                "source_root": resolved_source_root,
+                "source_type": resolved_type,
+                "source_root": resolved_root,
             },
         ) as run_id:
-            result = SyncResult()
-
-            # Create provider
             provider = self._create_provider(
-                resolved_source_type, resolved_source_root, telegram_chat_id
+                resolved_type, resolved_root, telegram_chat_id
             )
-
             if not provider.is_configured():
                 raise ValueError(
-                    f"Media source provider '{resolved_source_type}' is not configured. "
+                    f"Media source provider '{resolved_type}' is not configured. "
                     f"Check your settings or run the appropriate setup command."
                 )
 
-            # Phase 1: Get provider file listing
             logger.info(
-                f"[MediaSyncService] Starting sync for {resolved_source_type} "
-                f"(root: {resolved_source_root})"
+                f"[MediaSyncService] Starting sync for {resolved_type} "
+                f"(root: {resolved_root})"
             )
             provider_files = provider.list_files()
             logger.info(
                 f"[MediaSyncService] Provider reports {len(provider_files)} files"
             )
 
-            # Phase 2: Get DB records for this source type
-            db_items = self.media_repo.get_active_by_source_type(resolved_source_type)
+            db_items, db_by_identifier, db_by_hash = self._build_db_lookups(
+                resolved_type
+            )
             logger.info(f"[MediaSyncService] Database has {len(db_items)} active items")
 
-            # Build lookup dicts for O(1) matching
-            db_by_identifier = {
-                item.source_identifier: item
-                for item in db_items
-                if item.source_identifier
-            }
-            db_by_hash: dict[str, list] = {}
-            for item in db_items:
-                db_by_hash.setdefault(item.file_hash, []).append(item)
+            ctx = SyncContext(
+                source_type=resolved_type,
+                provider=provider,
+                db_by_identifier=db_by_identifier,
+                db_by_hash=db_by_hash,
+                seen_identifiers=set(),
+                result=SyncResult(),
+            )
 
-            # Track which DB identifiers were seen in the provider
-            seen_identifiers: set[str] = set()
-
-            # Phase 3: Process provider files
             for file_info in provider_files:
                 try:
-                    self._process_provider_file(
-                        file_info=file_info,
-                        source_type=resolved_source_type,
-                        provider=provider,
-                        db_by_identifier=db_by_identifier,
-                        db_by_hash=db_by_hash,
-                        seen_identifiers=seen_identifiers,
-                        result=result,
-                    )
+                    self._process_provider_file(file_info, ctx)
                 except Exception as e:  # noqa: BLE001 — per-file error must not halt sync
                     self.media_repo.rollback()
-                    result.errors += 1
+                    ctx.result.errors += 1
                     error_msg = f"Error processing {file_info.name}: {e}"
-                    result.error_details.append(error_msg)
+                    ctx.result.error_details.append(error_msg)
                     logger.error(f"[MediaSyncService] {error_msg}")
 
-            # Phase 4: Deactivate DB items not seen in provider
-            for identifier, item in db_by_identifier.items():
-                if identifier not in seen_identifiers:
-                    try:
-                        self.media_repo.deactivate(str(item.id))
-                        result.deactivated += 1
-                        logger.info(
-                            f"[MediaSyncService] Deactivated: {item.file_name} "
-                            f"(no longer in provider)"
-                        )
-                    except SQLAlchemyError as e:
-                        result.errors += 1
-                        error_msg = f"Error deactivating {item.file_name}: {e}"
-                        result.error_details.append(error_msg)
-                        logger.error(f"[MediaSyncService] {error_msg}")
+            self._deactivate_missing_items(ctx)
 
             logger.info(
                 f"[MediaSyncService] Sync complete: "
-                f"{result.new} new, {result.updated} updated, "
-                f"{result.deactivated} deactivated, {result.reactivated} reactivated, "
-                f"{result.unchanged} unchanged, {result.errors} errors"
+                f"{ctx.result.new} new, {ctx.result.updated} updated, "
+                f"{ctx.result.deactivated} deactivated, "
+                f"{ctx.result.reactivated} reactivated, "
+                f"{ctx.result.unchanged} unchanged, {ctx.result.errors} errors"
             )
 
-            self.set_result_summary(run_id, result.to_dict())
-            return result
+            self.set_result_summary(run_id, ctx.result.to_dict())
+            return ctx.result
 
     def _process_provider_file(
-        self,
-        file_info: MediaFileInfo,
-        source_type: str,
-        provider,
-        db_by_identifier: dict,
-        db_by_hash: dict,
-        seen_identifiers: set,
-        result: SyncResult,
+        self, file_info: MediaFileInfo, ctx: SyncContext
     ) -> None:
         """Process a single file from the provider listing.
 
         Decision tree:
         1. Identifier matches DB record -> unchanged (or update name if changed)
-        2. Identifier not in DB, but hash matches existing record -> rename/move
-        3. Identifier not in DB, check for inactive record -> reactivate
-        4. Identifier not in DB, no hash match -> new file, index it
+        2. Hash matches existing record -> rename/move
+        3. Inactive record with same identifier -> reactivate
+        4. No match -> new file, index it
         """
         identifier = file_info.identifier
-        seen_identifiers.add(identifier)
+        ctx.seen_identifiers.add(identifier)
 
-        # Case 1: Exact identifier match in DB
-        if identifier in db_by_identifier:
-            existing = db_by_identifier[identifier]
-
-            if existing.file_name != file_info.name:
-                file_path = self._build_file_path(source_type, file_info)
-                self.media_repo.update_source_info(
-                    media_id=str(existing.id),
-                    file_name=file_info.name,
-                    file_path=file_path,
-                )
-                result.updated += 1
-                logger.info(
-                    f"[MediaSyncService] Updated name: "
-                    f"{existing.file_name} -> {file_info.name}"
-                )
-            else:
-                result.unchanged += 1
+        if self._handle_identifier_match(file_info, ctx):
             return
 
-        # Need hash for further matching
-        file_hash = self._get_file_hash(file_info, provider)
+        file_hash = self._get_file_hash(file_info, ctx.provider)
 
-        # Case 2: Hash matches an existing active record (rename/move)
-        if file_hash in db_by_hash:
-            existing_items = db_by_hash[file_hash]
-            existing = existing_items[0]
+        if self._handle_hash_match(file_info, file_hash, ctx):
+            return
 
-            file_path = self._build_file_path(source_type, file_info)
+        if self._handle_reactivation(file_info, ctx):
+            return
 
-            # Skip if another item already holds this file_path (e.g. inactive
-            # duplicate with same Drive ID).  Updating would hit the unique
-            # constraint and poison the session.
-            if self.media_repo.get_by_path(file_path):
-                result.unchanged += 1
-                return
+        self._index_new_file(file_info, file_hash, ctx)
 
+    def _handle_identifier_match(
+        self, file_info: MediaFileInfo, ctx: SyncContext
+    ) -> bool:
+        """Case 1: Exact identifier match — update name if changed."""
+        existing = ctx.db_by_identifier.get(file_info.identifier)
+        if not existing:
+            return False
+
+        if existing.file_name != file_info.name:
+            file_path = self._build_file_path(ctx.source_type, file_info)
             self.media_repo.update_source_info(
                 media_id=str(existing.id),
                 file_name=file_info.name,
                 file_path=file_path,
-                source_identifier=identifier,
             )
-            result.updated += 1
+            ctx.result.updated += 1
             logger.info(
-                f"[MediaSyncService] Rename detected: "
-                f"{existing.file_name} -> {file_info.name} "
-                f"(hash: {file_hash[:8]}...)"
+                f"[MediaSyncService] Updated name: "
+                f"{existing.file_name} -> {file_info.name}"
             )
-            return
+        else:
+            ctx.result.unchanged += 1
+        return True
 
-        # Case 3: Check for inactive record with same identifier (reactivation)
-        inactive = self.media_repo.get_inactive_by_source_identifier(
-            source_type, identifier
+    def _handle_hash_match(
+        self, file_info: MediaFileInfo, file_hash: str, ctx: SyncContext
+    ) -> bool:
+        """Case 2: Hash matches an existing active record (rename/move)."""
+        if file_hash not in ctx.db_by_hash:
+            return False
+
+        existing = ctx.db_by_hash[file_hash][0]
+        file_path = self._build_file_path(ctx.source_type, file_info)
+
+        # Skip if another item already holds this file_path to avoid
+        # unique constraint violation.
+        if self.media_repo.get_by_path(file_path):
+            ctx.result.unchanged += 1
+            return True
+
+        self.media_repo.update_source_info(
+            media_id=str(existing.id),
+            file_name=file_info.name,
+            file_path=file_path,
+            source_identifier=file_info.identifier,
         )
-        if inactive:
-            self.media_repo.reactivate(str(inactive.id))
-            result.reactivated += 1
-            logger.info(f"[MediaSyncService] Reactivated: {inactive.file_name}")
-            return
+        ctx.result.updated += 1
+        logger.info(
+            f"[MediaSyncService] Rename detected: "
+            f"{existing.file_name} -> {file_info.name} "
+            f"(hash: {file_hash[:8]}...)"
+        )
+        return True
 
-        # Case 4: Truly new file -- check for hash duplicate before indexing
-        if file_hash and self.media_repo.get_active_by_hash(file_hash):
-            result.unchanged += 1
+    def _handle_reactivation(self, file_info: MediaFileInfo, ctx: SyncContext) -> bool:
+        """Case 3: Inactive record with same identifier — reactivate."""
+        inactive = self.media_repo.get_inactive_by_source_identifier(
+            ctx.source_type, file_info.identifier
+        )
+        if not inactive:
+            return False
+
+        self.media_repo.reactivate(str(inactive.id))
+        ctx.result.reactivated += 1
+        logger.info(f"[MediaSyncService] Reactivated: {inactive.file_name}")
+        return True
+
+    def _index_new_file(
+        self, file_info: MediaFileInfo, file_hash: str, ctx: SyncContext
+    ) -> None:
+        """Case 4: Truly new file — check for hash duplicate, then index."""
+        # Use in-memory lookup first; this covers same-source-type duplicates.
+        # The DB query catches cross-source-type duplicates not in ctx.db_by_hash.
+        if file_hash and (
+            file_hash in ctx.db_by_hash or self.media_repo.get_active_by_hash(file_hash)
+        ):
+            ctx.result.unchanged += 1
             logger.info(
                 f"[MediaSyncService] Skipped duplicate: {file_info.name} "
                 f"(hash {file_hash[:8]}... already exists)"
             )
             return
 
-        file_path = self._build_file_path(source_type, file_info)
+        file_path = self._build_file_path(ctx.source_type, file_info)
         self.media_repo.create(
             file_path=file_path,
             file_name=file_info.name,
@@ -312,10 +360,10 @@ class MediaSyncService(BaseService):
             file_size_bytes=file_info.size_bytes,
             mime_type=file_info.mime_type,
             category=file_info.folder,
-            source_type=source_type,
-            source_identifier=identifier,
+            source_type=ctx.source_type,
+            source_identifier=file_info.identifier,
         )
-        result.new += 1
+        ctx.result.new += 1
         logger.info(
             f"[MediaSyncService] Indexed new: {file_info.name}"
             + (f" [{file_info.folder}]" if file_info.folder else "")

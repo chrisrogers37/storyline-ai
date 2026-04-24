@@ -253,8 +253,110 @@ class TelegramSettingsHandlers:
                 reply_markup=CANCEL_KEYBOARD,
             )
 
+    @staticmethod
+    def _parse_int_in_range(text: str, min_val: int, max_val: int) -> int:
+        """Parse text as int and validate it's within [min_val, max_val].
+
+        Raises ValueError if parsing fails or value is out of range.
+        """
+        value = int(text)
+        if not min_val <= value <= max_val:
+            raise ValueError("Out of range")
+        return value
+
+    async def _show_edit_error(self, chat_id, context, error_text: str):
+        """Edit the inline settings message to show a validation error."""
+        await context.bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=context.user_data.get("settings_edit_message_id"),
+            text=error_text,
+            parse_mode="Markdown",
+            reply_markup=CANCEL_KEYBOARD,
+        )
+
+    async def _handle_posts_per_day_input(self, message_text, chat_id, user, context):
+        """Process user input for posts_per_day setting."""
+        try:
+            value = self._parse_int_in_range(
+                message_text, MIN_POSTS_PER_DAY, MAX_POSTS_PER_DAY
+            )
+            self.service.settings_service.update_setting(
+                chat_id, "posts_per_day", value, user
+            )
+            clear_settings_edit_state(context)
+            await self.send_settings_message_by_chat_id(chat_id, context)
+            logger.info(
+                f"User {self.service._get_display_name(user)} updated posts_per_day to {value}"
+            )
+        except ValueError:
+            await self._show_edit_error(
+                chat_id,
+                context,
+                f"\U0001f4ca *Edit Posts Per Day*\n\n"
+                f"\u274c Invalid input. Please enter a number between "
+                f"{MIN_POSTS_PER_DAY} and {MAX_POSTS_PER_DAY}:",
+            )
+
+    async def _handle_hours_start_input(self, message_text, chat_id, context):
+        """Process user input for posting hours start."""
+        try:
+            value = self._parse_int_in_range(
+                message_text, MIN_POSTING_HOUR, MAX_POSTING_HOUR
+            )
+            context.user_data["settings_edit_hours_start"] = value
+            context.user_data["settings_edit_state"] = "awaiting_hours_end"
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=context.user_data.get("settings_edit_message_id"),
+                text=(
+                    f"\U0001f550 *Edit Posting Hours*\n\n"
+                    f"Start hour: *{value}:00 UTC*\n\n"
+                    f"Enter the *end hour* ({MIN_POSTING_HOUR}-{MAX_POSTING_HOUR} UTC):"
+                ),
+                parse_mode="Markdown",
+                reply_markup=CANCEL_KEYBOARD,
+            )
+        except ValueError:
+            await self._show_edit_error(
+                chat_id,
+                context,
+                f"\U0001f550 *Edit Posting Hours*\n\n"
+                f"\u274c Invalid input. Please enter a number between "
+                f"{MIN_POSTING_HOUR} and {MAX_POSTING_HOUR}:",
+            )
+
+    async def _handle_hours_end_input(self, message_text, chat_id, user, context):
+        """Process user input for posting hours end."""
+        try:
+            value = self._parse_int_in_range(
+                message_text, MIN_POSTING_HOUR, MAX_POSTING_HOUR
+            )
+            start_hour = context.user_data.get("settings_edit_hours_start")
+            self.service.settings_service.update_setting(
+                chat_id, "posting_hours_start", start_hour, user
+            )
+            self.service.settings_service.update_setting(
+                chat_id, "posting_hours_end", value, user
+            )
+            clear_settings_edit_state(context)
+            await self.send_settings_message_by_chat_id(chat_id, context)
+            logger.info(
+                f"User {self.service._get_display_name(user)} updated posting hours "
+                f"to {start_hour}:00-{value}:00 UTC"
+            )
+        except ValueError:
+            start = context.user_data.get("settings_edit_hours_start")
+            await self._show_edit_error(
+                chat_id,
+                context,
+                f"\U0001f550 *Edit Posting Hours*\n\n"
+                f"Start hour: *{start}:00 UTC*\n\n"
+                f"\u274c Invalid input. Please enter a number between "
+                f"{MIN_POSTING_HOUR} and {MAX_POSTING_HOUR}:",
+            )
+
     async def handle_settings_edit_message(self, update, context):
-        """Handle user input for editing settings."""
+        """Handle user input for editing settings — dispatches to per-state handlers."""
         if "settings_edit_state" not in context.user_data:
             return False
 
@@ -270,116 +372,13 @@ class TelegramSettingsHandlers:
             logger.debug(f"Could not delete user settings input message: {e}")
 
         if state == "awaiting_posts_per_day":
-            try:
-                value = int(message_text)
-                if not MIN_POSTS_PER_DAY <= value <= MAX_POSTS_PER_DAY:
-                    raise ValueError("Out of range")
-
-                # Update the setting
-                self.service.settings_service.update_setting(
-                    chat_id, "posts_per_day", value, user
-                )
-
-                # Clear state and refresh settings
-                clear_settings_edit_state(context)
-
-                # Rebuild settings message
-                await self.send_settings_message_by_chat_id(chat_id, context)
-
-                logger.info(
-                    f"User {self.service._get_display_name(user)} updated posts_per_day to {value}"
-                )
-
-            except ValueError:
-                # Show error, keep waiting for valid input
-                await context.bot.edit_message_text(
-                    chat_id=chat_id,
-                    message_id=context.user_data.get("settings_edit_message_id"),
-                    text=(
-                        "📊 *Edit Posts Per Day*\n\n"
-                        f"❌ Invalid input. Please enter a number between {MIN_POSTS_PER_DAY} and {MAX_POSTS_PER_DAY}:"
-                    ),
-                    parse_mode="Markdown",
-                    reply_markup=CANCEL_KEYBOARD,
-                )
-
+            await self._handle_posts_per_day_input(message_text, chat_id, user, context)
             return True
-
         elif state == "awaiting_hours_start":
-            try:
-                value = int(message_text)
-                if not MIN_POSTING_HOUR <= value <= MAX_POSTING_HOUR:
-                    raise ValueError("Out of range")
-
-                # Store start hour, ask for end hour
-                context.user_data["settings_edit_hours_start"] = value
-                context.user_data["settings_edit_state"] = "awaiting_hours_end"
-
-                await context.bot.edit_message_text(
-                    chat_id=chat_id,
-                    message_id=context.user_data.get("settings_edit_message_id"),
-                    text=(
-                        f"🕐 *Edit Posting Hours*\n\n"
-                        f"Start hour: *{value}:00 UTC*\n\n"
-                        f"Enter the *end hour* ({MIN_POSTING_HOUR}-{MAX_POSTING_HOUR} UTC):"
-                    ),
-                    parse_mode="Markdown",
-                    reply_markup=CANCEL_KEYBOARD,
-                )
-
-            except ValueError:
-                await context.bot.edit_message_text(
-                    chat_id=chat_id,
-                    message_id=context.user_data.get("settings_edit_message_id"),
-                    text=(
-                        "🕐 *Edit Posting Hours*\n\n"
-                        f"❌ Invalid input. Please enter a number between {MIN_POSTING_HOUR} and {MAX_POSTING_HOUR}:"
-                    ),
-                    parse_mode="Markdown",
-                    reply_markup=CANCEL_KEYBOARD,
-                )
-
+            await self._handle_hours_start_input(message_text, chat_id, context)
             return True
-
         elif state == "awaiting_hours_end":
-            try:
-                value = int(message_text)
-                if not MIN_POSTING_HOUR <= value <= MAX_POSTING_HOUR:
-                    raise ValueError("Out of range")
-
-                start_hour = context.user_data.get("settings_edit_hours_start")
-
-                # Update both settings
-                self.service.settings_service.update_setting(
-                    chat_id, "posting_hours_start", start_hour, user
-                )
-                self.service.settings_service.update_setting(
-                    chat_id, "posting_hours_end", value, user
-                )
-
-                # Clear state
-                clear_settings_edit_state(context)
-
-                # Rebuild settings message
-                await self.send_settings_message_by_chat_id(chat_id, context)
-
-                logger.info(
-                    f"User {self.service._get_display_name(user)} updated posting hours to {start_hour}:00-{value}:00 UTC"
-                )
-
-            except ValueError:
-                await context.bot.edit_message_text(
-                    chat_id=chat_id,
-                    message_id=context.user_data.get("settings_edit_message_id"),
-                    text=(
-                        f"🕐 *Edit Posting Hours*\n\n"
-                        f"Start hour: *{context.user_data.get('settings_edit_hours_start')}:00 UTC*\n\n"
-                        f"❌ Invalid input. Please enter a number between {MIN_POSTING_HOUR} and {MAX_POSTING_HOUR}:"
-                    ),
-                    parse_mode="Markdown",
-                    reply_markup=CANCEL_KEYBOARD,
-                )
-
+            await self._handle_hours_end_input(message_text, chat_id, user, context)
             return True
 
         return False
