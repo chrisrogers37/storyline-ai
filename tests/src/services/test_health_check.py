@@ -181,7 +181,10 @@ class TestHealthCheckService:
                 "transaction_cleanup",
             ]
         }
-        with patch("src.main.get_loop_liveness", return_value=all_alive):
+        with patch(
+            "src.services.core.loops.heartbeat.get_loop_liveness",
+            return_value=all_alive,
+        ):
             result = health_service.check_all()
 
         assert result["status"] == "healthy"
