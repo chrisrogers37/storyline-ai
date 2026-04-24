@@ -1,18 +1,27 @@
-"""Tests for the per-tenant scheduler, media sync loops, and _guarded() in main.py."""
+"""Tests for the per-tenant scheduler, media sync loops, _guarded(), and heartbeat."""
 
 import asyncio
 
 import pytest
 from unittest.mock import AsyncMock, Mock, patch
 
-from src.main import (
-    _guarded,
+from src.services.core.loops.guarded import guarded
+from src.services.core.loops.heartbeat import (
     get_loop_liveness,
     loop_heartbeats,
     record_heartbeat,
-    run_scheduler_loop,
-    media_sync_loop,
 )
+from src.services.core.loops.scheduler_loop import (
+    run_scheduler_loop,
+    RETENTION_INTERVAL_TICKS,
+    SERVICE_RUNS_RETENTION_DAYS,
+)
+from src.services.core.loops.media_sync_loop import media_sync_loop
+
+# Module paths for patching
+_SCHEDULER = "src.services.core.loops.scheduler_loop"
+_GUARDED = "src.services.core.loops.guarded"
+_SYNC = "src.services.core.loops.media_sync_loop"
 
 
 @pytest.mark.unit
@@ -35,9 +44,9 @@ class TestSchedulerLoop:
         settings_service.get_all_active_chats.return_value = [chat1, chat2]
 
         with (
-            patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
-            patch("src.main.QueueRepository") as mock_queue_repo_cls,
-            patch("src.main.ServiceRunRepository"),
+            patch(f"{_SCHEDULER}.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch(f"{_SCHEDULER}.QueueRepository") as mock_queue_repo_cls,
+            patch(f"{_SCHEDULER}.ServiceRunRepository"),
         ):
             mock_queue_repo_cls.return_value.discard_abandoned_processing.return_value = 0
             mock_sleep.side_effect = StopAsyncIteration
@@ -67,9 +76,9 @@ class TestSchedulerLoop:
         settings_service.get_all_active_chats.return_value = []
 
         with (
-            patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
-            patch("src.main.QueueRepository") as mock_queue_repo_cls,
-            patch("src.main.ServiceRunRepository"),
+            patch(f"{_SCHEDULER}.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch(f"{_SCHEDULER}.QueueRepository") as mock_queue_repo_cls,
+            patch(f"{_SCHEDULER}.ServiceRunRepository"),
         ):
             mock_queue_repo_cls.return_value.discard_abandoned_processing.return_value = 0
             mock_sleep.side_effect = StopAsyncIteration
@@ -94,9 +103,9 @@ class TestSchedulerLoop:
         posting_service.cleanup_transactions = Mock()
 
         with (
-            patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
-            patch("src.main.QueueRepository") as mock_queue_repo_cls,
-            patch("src.main.ServiceRunRepository"),
+            patch(f"{_SCHEDULER}.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch(f"{_SCHEDULER}.QueueRepository") as mock_queue_repo_cls,
+            patch(f"{_SCHEDULER}.ServiceRunRepository"),
         ):
             mock_queue_repo_cls.return_value.discard_abandoned_processing.return_value = 0
             mock_sleep.side_effect = StopAsyncIteration
@@ -129,9 +138,9 @@ class TestSchedulerLoop:
         settings_service.get_all_active_chats.return_value = [chat1, chat2]
 
         with (
-            patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
-            patch("src.main.QueueRepository") as mock_queue_repo_cls,
-            patch("src.main.ServiceRunRepository"),
+            patch(f"{_SCHEDULER}.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch(f"{_SCHEDULER}.QueueRepository") as mock_queue_repo_cls,
+            patch(f"{_SCHEDULER}.ServiceRunRepository"),
         ):
             mock_queue_repo_cls.return_value.discard_abandoned_processing.return_value = 0
             mock_sleep.side_effect = StopAsyncIteration
@@ -169,9 +178,9 @@ class TestSchedulerLoop:
         settings_service.get_all_active_chats.return_value = [chat1, chat2]
 
         with (
-            patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
-            patch("src.main.QueueRepository") as mock_queue_repo_cls,
-            patch("src.main.ServiceRunRepository"),
+            patch(f"{_SCHEDULER}.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch(f"{_SCHEDULER}.QueueRepository") as mock_queue_repo_cls,
+            patch(f"{_SCHEDULER}.ServiceRunRepository"),
         ):
             mock_queue_repo_cls.return_value.discard_abandoned_processing.return_value = 0
             mock_sleep.side_effect = StopAsyncIteration
@@ -201,9 +210,9 @@ class TestSchedulerLoop:
         settings_service.get_all_active_chats.return_value = []
 
         with (
-            patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
-            patch("src.main.QueueRepository") as mock_queue_repo_cls,
-            patch("src.main.ServiceRunRepository"),
+            patch(f"{_SCHEDULER}.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch(f"{_SCHEDULER}.QueueRepository") as mock_queue_repo_cls,
+            patch(f"{_SCHEDULER}.ServiceRunRepository"),
         ):
             mock_queue_repo_cls.return_value.discard_abandoned_processing.return_value = 0
             mock_sleep.side_effect = StopAsyncIteration
@@ -220,10 +229,10 @@ class TestSchedulerLoop:
     @pytest.mark.asyncio
     async def test_scheduler_loop_increments_session_posts_on_posted(self):
         """Session counter increments when process_slot returns posted=True."""
-        import src.main as main_module
+        from src.services.core.loops.lifecycle import session_state
 
-        original = main_module.session_posts_sent
-        main_module.session_posts_sent = 0
+        original = session_state.posts_sent
+        session_state.posts_sent = 0
 
         scheduler_service = Mock()
         scheduler_service.process_slot = AsyncMock(
@@ -239,9 +248,9 @@ class TestSchedulerLoop:
         settings_service.get_all_active_chats.return_value = [chat1]
 
         with (
-            patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
-            patch("src.main.QueueRepository") as mock_queue_repo_cls,
-            patch("src.main.ServiceRunRepository"),
+            patch(f"{_SCHEDULER}.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch(f"{_SCHEDULER}.QueueRepository") as mock_queue_repo_cls,
+            patch(f"{_SCHEDULER}.ServiceRunRepository"),
         ):
             mock_queue_repo_cls.return_value.discard_abandoned_processing.return_value = 0
             mock_sleep.side_effect = StopAsyncIteration
@@ -252,14 +261,12 @@ class TestSchedulerLoop:
             except StopAsyncIteration:
                 pass
 
-        assert main_module.session_posts_sent == 1
-        main_module.session_posts_sent = original
+        assert session_state.posts_sent == 1
+        session_state.posts_sent = original
 
     @pytest.mark.asyncio
     async def test_scheduler_loop_runs_retention_at_interval(self):
         """Service runs retention fires after RETENTION_INTERVAL_TICKS ticks."""
-        import src.main as main_module
-
         scheduler_service = Mock()
         scheduler_service.process_slot = AsyncMock(return_value={"posted": False})
         scheduler_service.cleanup_transactions = Mock()
@@ -275,13 +282,13 @@ class TestSchedulerLoop:
         async def counting_sleep(seconds):
             nonlocal tick_count
             tick_count += 1
-            if tick_count >= main_module.RETENTION_INTERVAL_TICKS:
+            if tick_count >= RETENTION_INTERVAL_TICKS:
                 raise StopAsyncIteration
 
         with (
-            patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
-            patch("src.main.QueueRepository") as mock_queue_repo_cls,
-            patch("src.main.ServiceRunRepository") as mock_sr_repo_cls,
+            patch(f"{_SCHEDULER}.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch(f"{_SCHEDULER}.QueueRepository") as mock_queue_repo_cls,
+            patch(f"{_SCHEDULER}.ServiceRunRepository") as mock_sr_repo_cls,
         ):
             mock_queue_repo_cls.return_value.discard_abandoned_processing.return_value = 0
             mock_sr_repo = mock_sr_repo_cls.return_value
@@ -297,7 +304,7 @@ class TestSchedulerLoop:
                 pass
 
         mock_sr_repo.delete_older_than.assert_called_once_with(
-            main_module.SERVICE_RUNS_RETENTION_DAYS
+            SERVICE_RUNS_RETENTION_DAYS
         )
 
 
@@ -319,7 +326,7 @@ class TestMediaSyncLoop:
         settings_service.get_all_sync_enabled_chats.return_value = [chat1, chat2]
         settings_service.cleanup_transactions = Mock()
 
-        with patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        with patch(f"{_SYNC}.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
             mock_sleep.side_effect = StopAsyncIteration
             try:
                 await media_sync_loop(sync_service, settings_service=settings_service)
@@ -346,7 +353,7 @@ class TestMediaSyncLoop:
         settings_service.get_all_sync_enabled_chats.return_value = []
         settings_service.cleanup_transactions = Mock()
 
-        with patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        with patch(f"{_SYNC}.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
             mock_sleep.side_effect = StopAsyncIteration
             try:
                 await media_sync_loop(sync_service, settings_service=settings_service)
@@ -364,7 +371,7 @@ class TestMediaSyncLoop:
         sync_service.sync.return_value = result
         sync_service.cleanup_transactions = Mock()
 
-        with patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        with patch(f"{_SYNC}.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
             mock_sleep.side_effect = StopAsyncIteration
             try:
                 await media_sync_loop(sync_service)
@@ -390,7 +397,7 @@ class TestMediaSyncLoop:
         settings_service.get_all_sync_enabled_chats.return_value = [chat1, chat2]
         settings_service.cleanup_transactions = Mock()
 
-        with patch("src.main.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        with patch(f"{_SYNC}.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
             mock_sleep.side_effect = StopAsyncIteration
             try:
                 await media_sync_loop(sync_service, settings_service=settings_service)
@@ -403,7 +410,7 @@ class TestMediaSyncLoop:
 
 @pytest.mark.unit
 class TestGuarded:
-    """Tests for _guarded() crash handling and Telegram alerts."""
+    """Tests for guarded() crash handling and Telegram alerts."""
 
     @pytest.mark.asyncio
     async def test_logs_critical_on_crash(self):
@@ -412,8 +419,8 @@ class TestGuarded:
         async def crashing_coro():
             raise RuntimeError("boom")
 
-        with patch("src.main.logger") as mock_logger:
-            await _guarded("test_task", crashing_coro())
+        with patch(f"{_GUARDED}.logger") as mock_logger:
+            await guarded("test_task", crashing_coro())
 
         mock_logger.critical.assert_called_once()
         assert "test_task" in mock_logger.critical.call_args[0][0]
@@ -426,9 +433,9 @@ class TestGuarded:
         async def crashing_coro():
             raise ValueError("something broke")
 
-        with patch("src.main.settings") as mock_settings:
+        with patch(f"{_GUARDED}.settings") as mock_settings:
             mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100999
-            await _guarded("scheduler", crashing_coro(), bot=mock_bot)
+            await guarded("scheduler", crashing_coro(), bot=mock_bot)
 
         mock_bot.send_message.assert_called_once()
         call_kwargs = mock_bot.send_message.call_args.kwargs
@@ -443,9 +450,9 @@ class TestGuarded:
         async def crashing_coro():
             raise RuntimeError("boom")
 
-        with patch("src.main.logger"):
+        with patch(f"{_GUARDED}.logger"):
             # Should not raise — just logs
-            await _guarded("test_task", crashing_coro(), bot=None)
+            await guarded("test_task", crashing_coro(), bot=None)
 
     @pytest.mark.asyncio
     async def test_alert_failure_does_not_mask_crash_log(self):
@@ -457,11 +464,11 @@ class TestGuarded:
             raise RuntimeError("original error")
 
         with (
-            patch("src.main.logger") as mock_logger,
-            patch("src.main.settings") as mock_settings,
+            patch(f"{_GUARDED}.logger") as mock_logger,
+            patch(f"{_GUARDED}.settings") as mock_settings,
         ):
             mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100999
-            await _guarded("scheduler", crashing_coro(), bot=mock_bot)
+            await guarded("scheduler", crashing_coro(), bot=mock_bot)
 
         # Original crash still logged at CRITICAL
         mock_logger.critical.assert_called_once()
@@ -477,7 +484,7 @@ class TestGuarded:
             raise asyncio.CancelledError()
 
         with pytest.raises(asyncio.CancelledError):
-            await _guarded("test_task", cancelled_coro(), bot=AsyncMock())
+            await guarded("test_task", cancelled_coro(), bot=AsyncMock())
 
 
 @pytest.mark.unit

@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Extract background loops from main.py** (#271) — Moved 5 background loops (scheduler, lock cleanup, cloud cleanup, transaction cleanup, media sync), heartbeat tracking, crash guard, and lifecycle helpers into dedicated modules under `src/services/core/loops/`. Reduced main.py from 851 lines to ~170 lines of pure service wiring.
+
 - **Landing page hero copy — 3-second test** (#256) — Replaced vague headline "Keep Your Stories Alive" with "Instagram Stories on Autopilot" for instant clarity. Rewrote subheadline to lead with pain point ("Stop manually posting") and close with trust hook ("hands-free but always in control"). Added social proof line under hero CTA.
 - **Unified CTA copy across landing page** (#257) — Changed all CTA labels from "Join the Waitlist" / "Join Waitlist" to "Get Early Access" for consistent, action-oriented messaging. Updated hero form, header nav button, and submitting state text.
 
