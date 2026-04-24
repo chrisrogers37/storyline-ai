@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Update outdated dependencies** (#274) — Bumped 12 direct dependencies to latest: pydantic 2.13.0→2.13.3, pydantic-settings 2.12.0→2.14.0, SQLAlchemy 2.0.46→2.0.49, psycopg2-binary 2.9.11→2.9.12, Pillow 12.1.1→12.2.0, click 8.3.2→8.3.3, python-dotenv 1.2.1→1.2.2, certifi→2026.4.22 (security certs), uvicorn 0.44→0.46, fastapi 0.136.0→0.136.1, anthropic 0.96→0.97, cryptography ≥46.0. Updated lower bounds for all `>=` specifiers to reflect tested versions.
+
 - **Break up oversized functions** (#272) — Refactored 5 functions exceeding 90 lines into smaller, focused methods: `refresh_instagram_token()` (128→65 lines), `handle_settings_edit_message()` (130→20 lines), `onboarding_upload_media()` (131→40 lines), `sync()` (132→60 lines), and `_process_provider_file()` (7 params→2 via `SyncContext` dataclass).
 
 - **Extract background loops from main.py** (#271) — Moved 5 background loops (scheduler, lock cleanup, cloud cleanup, transaction cleanup, media sync), heartbeat tracking, crash guard, and lifecycle helpers into dedicated modules under `src/services/core/loops/`. Reduced main.py from 851 lines to ~170 lines of pure service wiring.
