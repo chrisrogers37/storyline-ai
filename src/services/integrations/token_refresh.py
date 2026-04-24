@@ -177,6 +177,63 @@ class TokenRefreshService(BaseService):
 
         return f"{settings.meta_graph_base}/oauth/access_token"
 
+    def _get_current_token(self, instagram_account_id: Optional[str] = None):
+        """Retrieve the current token from the database.
+
+        Returns:
+            The token DB record, or None if not found.
+        """
+        if instagram_account_id:
+            return self.token_repo.get_token_for_account(
+                instagram_account_id, token_type="access_token"
+            )
+        return self.token_repo.get_token("instagram", "access_token")
+
+    async def _call_meta_refresh(
+        self, current_token: str, instagram_account_id: Optional[str]
+    ) -> httpx.Response:
+        """Call Meta's token refresh endpoint.
+
+        Returns:
+            The HTTP response from Meta's API.
+        """
+        refresh_url = self._get_refresh_endpoint(instagram_account_id)
+        async with httpx.AsyncClient() as client:
+            return await client.get(
+                refresh_url,
+                params={
+                    "grant_type": "ig_refresh_token",
+                    "access_token": current_token,
+                },
+                timeout=30.0,
+            )
+
+    def _store_refreshed_token(
+        self, new_token: str, expires_in: int, instagram_account_id: Optional[str]
+    ) -> datetime:
+        """Encrypt and persist a refreshed token to the database.
+
+        Returns:
+            The new expiry datetime.
+        """
+        issued_at = datetime.now(timezone.utc)
+        expires_at = issued_at + timedelta(seconds=expires_in)
+        encrypted = self.encryption.encrypt(new_token)
+
+        self.token_repo.create_or_update(
+            service_name="instagram",
+            token_type="access_token",
+            token_value=encrypted,
+            issued_at=issued_at,
+            expires_at=expires_at,
+            metadata={
+                "refreshed_at": issued_at.isoformat(),
+                "expires_in_seconds": expires_in,
+            },
+            instagram_account_id=instagram_account_id,
+        )
+        return expires_at
+
     async def refresh_instagram_token(
         self, instagram_account_id: Optional[str] = None
     ) -> bool:
@@ -205,14 +262,7 @@ class TokenRefreshService(BaseService):
             method_name="refresh_instagram_token",
             input_params={"account_id": account_label},
         ) as run_id:
-            # Get current token
-            if instagram_account_id:
-                db_token = self.token_repo.get_token_for_account(
-                    instagram_account_id, token_type="access_token"
-                )
-            else:
-                db_token = self.token_repo.get_token("instagram", "access_token")
-
+            db_token = self._get_current_token(instagram_account_id)
             if not db_token:
                 logger.error(f"No Instagram token found to refresh for {account_label}")
                 self.set_result_summary(
@@ -223,81 +273,57 @@ class TokenRefreshService(BaseService):
             current_token = self.encryption.decrypt(db_token.token_value)
 
             try:
-                async with httpx.AsyncClient() as client:
-                    refresh_url = self._get_refresh_endpoint(instagram_account_id)
-                    response = await client.get(
-                        refresh_url,
-                        params={
-                            "grant_type": "ig_refresh_token",
-                            "access_token": current_token,
-                        },
-                        timeout=30.0,
+                response = await self._call_meta_refresh(
+                    current_token, instagram_account_id
+                )
+
+                if response.status_code != 200:
+                    error_data = response.json()
+                    logger.error(
+                        f"Instagram token refresh failed for {account_label}: {error_data}"
                     )
-
-                    if response.status_code != 200:
-                        error_data = response.json()
-                        logger.error(
-                            f"Instagram token refresh failed for {account_label}: {error_data}"
-                        )
-                        self.set_result_summary(
-                            run_id,
-                            {
-                                "success": False,
-                                "status_code": response.status_code,
-                                "error": error_data,
-                            },
-                        )
-                        return False
-
-                    data = response.json()
-                    new_token = data.get("access_token")
-                    expires_in = data.get(
-                        "expires_in", 5184000
-                    )  # Default 60 days in seconds
-
-                    if not new_token:
-                        logger.error(
-                            f"No access_token in refresh response for {account_label}"
-                        )
-                        self.set_result_summary(
-                            run_id, {"success": False, "reason": "no_token_in_response"}
-                        )
-                        return False
-
-                    # Store the new token
-                    issued_at = datetime.now(timezone.utc)
-                    expires_at = issued_at + timedelta(seconds=expires_in)
-
-                    encrypted = self.encryption.encrypt(new_token)
-
-                    self.token_repo.create_or_update(
-                        service_name="instagram",
-                        token_type="access_token",
-                        token_value=encrypted,
-                        issued_at=issued_at,
-                        expires_at=expires_at,
-                        metadata={
-                            "refreshed_at": issued_at.isoformat(),
-                            "expires_in_seconds": expires_in,
-                        },
-                        instagram_account_id=instagram_account_id,
-                    )
-
-                    logger.info(
-                        f"Instagram token refreshed successfully for {account_label}. "
-                        f"New expiry: {expires_at.isoformat()}"
-                    )
-
                     self.set_result_summary(
                         run_id,
                         {
-                            "success": True,
-                            "account": account_label,
-                            "expires_at": expires_at.isoformat(),
-                            "expires_in_days": expires_in // 86400,
+                            "success": False,
+                            "status_code": response.status_code,
+                            "error": error_data,
                         },
                     )
-                    return True
+                    return False
+
+                data = response.json()
+                new_token = data.get("access_token")
+                expires_in = data.get("expires_in", 5184000)  # Default 60 days
+
+                if not new_token:
+                    logger.error(
+                        f"No access_token in refresh response for {account_label}"
+                    )
+                    self.set_result_summary(
+                        run_id, {"success": False, "reason": "no_token_in_response"}
+                    )
+                    return False
+
+                expires_at = self._store_refreshed_token(
+                    new_token, expires_in, instagram_account_id
+                )
+
+                logger.info(
+                    f"Instagram token refreshed successfully for {account_label}. "
+                    f"New expiry: {expires_at.isoformat()}"
+                )
+
+                self.set_result_summary(
+                    run_id,
+                    {
+                        "success": True,
+                        "account": account_label,
+                        "expires_at": expires_at.isoformat(),
+                        "expires_in_days": expires_in // 86400,
+                    },
+                )
+                return True
 
             except httpx.RequestError as e:
                 logger.error(

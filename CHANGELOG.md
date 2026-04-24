@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Break up oversized functions** (#272) — Refactored 5 functions exceeding 90 lines into smaller, focused methods: `refresh_instagram_token()` (128→65 lines), `handle_settings_edit_message()` (130→20 lines), `onboarding_upload_media()` (131→40 lines), `sync()` (132→60 lines), and `_process_provider_file()` (7 params→2 via `SyncContext` dataclass).
+
 - **Extract background loops from main.py** (#271) — Moved 5 background loops (scheduler, lock cleanup, cloud cleanup, transaction cleanup, media sync), heartbeat tracking, crash guard, and lifecycle helpers into dedicated modules under `src/services/core/loops/`. Reduced main.py from 851 lines to ~170 lines of pure service wiring.
 
 - **Landing page hero copy — 3-second test** (#256) — Replaced vague headline "Keep Your Stories Alive" with "Instagram Stories on Autopilot" for instant clarity. Rewrote subheadline to lead with pain point ("Stop manually posting") and close with trust hook ("hands-free but always in control"). Added social proof line under hero CTA.
