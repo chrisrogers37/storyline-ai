@@ -1,3 +1,5 @@
+"use client"
+
 import { siteConfig } from "@/config/site"
 import {
   Accordion,
@@ -5,6 +7,7 @@ import {
   AccordionTrigger,
   AccordionContent,
 } from "@/components/ui/accordion"
+import { trackEvent } from "@/lib/analytics"
 
 const faqs = [
   {
@@ -55,7 +58,18 @@ export function FAQ() {
         <h2 className="text-center text-3xl font-bold tracking-tight">
           Frequently Asked Questions
         </h2>
-        <Accordion type="single" collapsible className="mt-12">
+        <Accordion
+          type="single"
+          collapsible
+          className="mt-12"
+          onValueChange={(value) => {
+            if (value) {
+              const idx = parseInt(value.replace("faq-", ""), 10)
+              const faq = faqs[idx]
+              if (faq) trackEvent("FAQ Expanded", { question: faq.question })
+            }
+          }}
+        >
           {faqs.map((faq, i) => (
             <AccordionItem key={i} value={`faq-${i}`}>
               <AccordionTrigger>{faq.question}</AccordionTrigger>

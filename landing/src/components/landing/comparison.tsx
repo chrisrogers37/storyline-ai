@@ -1,4 +1,8 @@
+"use client"
+
+import { useEffect, useRef } from "react"
 import { Check, X } from "lucide-react"
+import { trackEvent } from "@/lib/analytics"
 
 const rows = [
   {
@@ -29,8 +33,26 @@ const rows = [
 ]
 
 export function Comparison() {
+  const sectionRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    const el = sectionRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          trackEvent("Comparison Viewed")
+          observer.disconnect()
+        }
+      },
+      { threshold: 0.5 }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
   return (
-    <section className="py-16 md:py-24">
+    <section ref={sectionRef} className="py-16 md:py-24">
       <div className="mx-auto max-w-5xl px-4">
         <h2 className="text-center text-3xl font-bold tracking-tight">
           Why not just use Buffer?
