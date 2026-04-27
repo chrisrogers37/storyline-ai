@@ -1,8 +1,6 @@
 import { siteConfig } from "@/config/site"
 import { faqs } from "@/config/faqs"
 
-const structuredFaqs = faqs.filter((f) => f.answer !== "built-by-chris")
-
 const softwareAppSchema = {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
@@ -22,7 +20,7 @@ const softwareAppSchema = {
 const faqSchema = {
   "@context": "https://schema.org",
   "@type": "FAQPage",
-  mainEntity: structuredFaqs.map((faq) => ({
+  mainEntity: faqs.map((faq) => ({
     "@type": "Question",
     name: faq.question,
     acceptedAnswer: {

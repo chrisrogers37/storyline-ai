@@ -33,7 +33,7 @@ export function FAQ() {
             <AccordionItem key={i} value={`faq-${i}`}>
               <AccordionTrigger>{faq.question}</AccordionTrigger>
               <AccordionContent>
-                {faq.answer === "built-by-chris" ? (
+                {faq.question === "Who built this?" ? (
                   <p className="text-muted-foreground">
                     Storydump is built by{" "}
                     <a

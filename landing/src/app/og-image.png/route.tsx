@@ -33,7 +33,7 @@ export async function GET() {
               letterSpacing: "-0.02em",
             }}
           >
-            Storyline AI
+            Storydump
           </div>
           <div
             style={{

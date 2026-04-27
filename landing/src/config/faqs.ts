@@ -36,6 +36,7 @@ export const faqs = [
   },
   {
     question: "Who built this?",
-    answer: "built-by-chris",
+    answer:
+      "Storyline AI is built by Chris Rogers. Have questions or feedback? Reach out at christophertrogers37@gmail.com.",
   },
 ]
