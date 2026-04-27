@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getDb } from "@/lib/db"
 import { waitlistSignups } from "@/lib/schema"
 import { notifyAdmin } from "@/lib/telegram"
+import { UTM_KEYS } from "@/lib/analytics"
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -17,8 +18,17 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // Capture UTM params
+    const utm: Record<string, string> = {}
+    for (const key of UTM_KEYS) {
+      if (typeof body[key] === "string" && body[key].trim()) {
+        utm[key] = body[key].trim()
+      }
+    }
+    const notes = Object.keys(utm).length > 0 ? JSON.stringify(utm) : null
+
     try {
-      await getDb().insert(waitlistSignups).values({ email })
+      await getDb().insert(waitlistSignups).values({ email, notes })
     } catch (err: unknown) {
       // Unique constraint violation = already registered
       if (

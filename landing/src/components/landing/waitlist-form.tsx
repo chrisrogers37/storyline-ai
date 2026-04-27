@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
+import { trackEvent, UTM_KEYS } from "@/lib/analytics"
 
 interface WaitlistFormProps {
   variant?: "hero" | "footer"
@@ -14,6 +15,17 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const STORAGE_KEY = "storyline-waitlist-registered"
 
 type FormStatus = "idle" | "submitting" | "success" | "error" | "duplicate"
+
+function getUtmParams(): Record<string, string> {
+  if (typeof window === "undefined") return {}
+  const params = new URLSearchParams(window.location.search)
+  const utm: Record<string, string> = {}
+  for (const key of UTM_KEYS) {
+    const val = params.get(key)
+    if (val) utm[key] = val
+  }
+  return utm
+}
 
 function getInitialStatus(): FormStatus {
   if (typeof window !== "undefined" && localStorage.getItem(STORAGE_KEY)) {
@@ -43,16 +55,18 @@ export function WaitlistForm({
     if (!email || !EMAIL_REGEX.test(email)) {
       setStatus("error")
       setMessage("Please enter a valid email address.")
+      trackEvent("Waitlist Error", { reason: "invalid_email", variant })
       return
     }
 
     setStatus("submitting")
+    const utm = getUtmParams()
 
     try {
       const res = await fetch("/api/waitlist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, ...utm }),
       })
 
       const data = await res.json()
@@ -64,15 +78,18 @@ export function WaitlistForm({
         } else {
           setStatus("success")
           setMessage(data.message)
+          trackEvent("Waitlist Signup", { variant, ...utm })
         }
         localStorage.setItem(STORAGE_KEY, "true")
       } else {
         setStatus("error")
         setMessage(data.message || "Something went wrong. Please try again.")
+        trackEvent("Waitlist Error", { reason: "server_error", variant })
       }
     } catch {
       setStatus("error")
       setMessage("Something went wrong. Please try again.")
+      trackEvent("Waitlist Error", { reason: "network_error", variant })
     }
   }
 

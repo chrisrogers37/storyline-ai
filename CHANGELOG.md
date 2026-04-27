@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Analytics and conversion tracking** (#279) — Integrated Plausible Analytics for privacy-friendly page views, referrer tracking, and custom events. Tracks waitlist signups, form errors, FAQ expansions, and comparison table views. Captures UTM parameters (source, medium, campaign) with waitlist submissions for attribution. Controlled via `NEXT_PUBLIC_PLAUSIBLE_DOMAIN` env var — omit to disable.
+
 - **Post-signup experience** (#260) — Replaced dead-end "We'll be in touch" confirmation with enriched post-signup block: sets timeline expectations (within a week), gives a micro-task (prepare Google Drive folder), and adds Telegram community link to move signups from "registered" to "engaged."
 - **Social proof stats bar and trust badges** (#258) — Added stats bar (stories posted, content managed, active creators) between Hero and How It Works sections. Added trust badges below hero CTA with lock/Instagram/key icons addressing top 3 signup objections (content stays in Drive, official API, no password required).
 - **Competitive positioning section** (#259) — Added "Why not just use Buffer?" comparison table between Features and Pricing, contrasting Storyline vs Buffer/Later across 5 dimensions. Added positioning line to hero: "The Instagram Story tool that lives in Telegram — not another dashboard."
