@@ -261,12 +261,12 @@ ENCRYPTION_KEY=your_generated_key_here
 Apply the Phase 2 database changes:
 
 ```bash
-psql -U your_user -d storyline_ai -f scripts/migrations/004_instagram_api_phase2.sql
+psql -U your_user -d storydump -f scripts/migrations/004_instagram_api_phase2.sql
 ```
 
 Verify:
 ```bash
-psql -U your_user -d storyline_ai -c "SELECT * FROM schema_version ORDER BY version;"
+psql -U your_user -d storydump -c "SELECT * FROM schema_version ORDER BY version;"
 ```
 
 ---
@@ -363,7 +363,7 @@ DRY_RUN_MODE=true
 
 Then:
 ```bash
-storyline-cli process-queue --force
+storydump-cli process-queue --force
 ```
 
 When ready for real posting, set `DRY_RUN_MODE=false`.
@@ -421,7 +421,7 @@ Instagram allows ~25 content publishing calls per hour.
 
 **Check status:**
 ```bash
-storyline-cli check-health
+storydump-cli check-health
 ```
 
 ### "No Instagram Business Account" Error
@@ -457,27 +457,27 @@ The system supports multiple Instagram accounts natively. Use CLI commands to ma
 
 ```bash
 # Add your first account (tokens are encrypted and stored in the database)
-storyline-cli add-instagram-account \
+storydump-cli add-instagram-account \
     --display-name "Main Brand" \
     --account-id "12345678901234567" \
     --username "brand_main" \
     --access-token "EAAXXX...your_token_here..."
 
 # Add additional accounts
-storyline-cli add-instagram-account \
+storydump-cli add-instagram-account \
     --display-name "Promo Account" \
     --account-id "98765432109876543" \
     --username "brand_promo" \
     --access-token "EAAXXX...alternate_token_here..."
 
 # List all accounts
-storyline-cli list-instagram-accounts
+storydump-cli list-instagram-accounts
 
 # Deactivate an account (soft delete)
-storyline-cli deactivate-instagram-account <account-uuid>
+storydump-cli deactivate-instagram-account <account-uuid>
 
 # Reactivate a previously deactivated account
-storyline-cli reactivate-instagram-account <account-uuid>
+storydump-cli reactivate-instagram-account <account-uuid>
 ```
 
 **Switching active accounts** in Telegram:

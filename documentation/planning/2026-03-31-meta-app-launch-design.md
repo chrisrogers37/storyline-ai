@@ -2,7 +2,7 @@
 
 **Date:** 2026-03-31
 **Status:** APPROVED
-**Goal:** Take Storyline AI from single-user dry-run to a system where testers can self-onboard and post to their own Instagram accounts via the Mini App.
+**Goal:** Take Storydump from single-user dry-run to a system where testers can self-onboard and post to their own Instagram accounts via the Mini App.
 
 ## Context
 
@@ -56,7 +56,7 @@ Both paths produce the same data model (tokens in `api_tokens`, accounts in `ins
 
 ### Verification
 - Deploy to Railway
-- `storyline-cli check-health`
+- `storydump-cli check-health`
 - Confirm next scheduled post completes successfully
 
 ## Milestone 2: Meta App Registration + Instagram Login OAuth

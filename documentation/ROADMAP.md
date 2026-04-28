@@ -1,4 +1,4 @@
-# Storyline AI - Product Roadmap
+# Storydump - Product Roadmap
 
 **Last Updated**: 2026-03-28
 **Current Version**: v1.6.0 (Phase 2 Complete, Phase 1.8 Complete)
@@ -334,7 +334,7 @@ Build a delightful Instagram Story automation system that:
 - Command discovery through native Telegram UI improves UX significantly
 - Users can clean up verbose bot messages (queue lists, status reports)
 - Clear semantic distinction: "reset" = start over, "cleanup" = tidy up
-- CLI aligned: `storyline-cli reset-queue` matches Telegram's `/reset`
+- CLI aligned: `storydump-cli reset-queue` matches Telegram's `/reset`
 **Status**: ✅ COMPLETE - Ready for testing
 
 ### 2026-01-24: Phase 2 Complete - Instagram API Automation + Multi-Account

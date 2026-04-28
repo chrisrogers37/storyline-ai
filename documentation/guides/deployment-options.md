@@ -91,7 +91,7 @@ When others use this project:
 | **View worker logs** | `railway logs --service worker` |
 | **View web logs** | `railway logs --service web` |
 | **Force redeploy** | `railway up` or push to `main` |
-| **Run health check** | `railway shell --service worker -c "storyline-cli check-health"` |
+| **Run health check** | `railway shell --service worker -c "storydump-cli check-health"` |
 | **Run tests locally** | `pytest tests/ -v` |
 | **View CI status** | GitHub Actions tab in repo |
 

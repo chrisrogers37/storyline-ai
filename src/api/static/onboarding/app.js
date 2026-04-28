@@ -1,5 +1,5 @@
 /**
- * Storyline AI Onboarding Mini App
+ * Storydump Onboarding Mini App
  *
  * Telegram WebApp SDK integration for guided setup wizard
  * and returning-user home screen dashboard.

@@ -10,7 +10,7 @@
 
 ## Problem
 
-There's no way to see what's currently live on the Instagram story feed from within the Storyline workflow. Users must open the Instagram app to check. This creates a blind spot when deciding whether to post more, skip, or wait.
+There's no way to see what's currently live on the Instagram story feed from within the Storydump workflow. Users must open the Instagram app to check. This creates a blind spot when deciding whether to post more, skip, or wait.
 
 ## Solution
 

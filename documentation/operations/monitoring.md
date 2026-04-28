@@ -2,7 +2,7 @@
 
 ## Overview
 
-Storyline AI runs on Railway with a Neon PostgreSQL database. This guide covers monitoring the service health and common metrics.
+Storydump runs on Railway with a Neon PostgreSQL database. This guide covers monitoring the service health and common metrics.
 
 ---
 
@@ -20,7 +20,7 @@ railway logs --service web
 
 # Run health check via Railway shell
 railway shell --service worker
-storyline-cli check-health
+storydump-cli check-health
 ```
 
 ### Common Status Indicators

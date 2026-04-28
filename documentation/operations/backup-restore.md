@@ -16,11 +16,11 @@ Critical data to backup:
 
 ```bash
 # Dump from Neon using DATABASE_URL
-pg_dump "$DATABASE_URL" -F c -f ~/backups/storyline_$(date +%Y%m%d_%H%M%S).dump
+pg_dump "$DATABASE_URL" -F c -f ~/backups/storydump_$(date +%Y%m%d_%H%M%S).dump
 
 # Or with explicit connection string
-pg_dump "postgresql://user:pass@ep-xxx.neon.tech/storyline_ai?sslmode=require" \
-    -F c -f ~/backups/storyline_$(date +%Y%m%d_%H%M%S).dump
+pg_dump "postgresql://user:pass@ep-xxx.neon.tech/storydump_ai?sslmode=require" \
+    -F c -f ~/backups/storydump_$(date +%Y%m%d_%H%M%S).dump
 ```
 
 ### Automated Daily Backup
@@ -37,12 +37,12 @@ mkdir -p "$BACKUP_DIR"
 
 # Create backup from Neon
 pg_dump "$DATABASE_URL" -F c \
-    -f "$BACKUP_DIR/storyline_$(date +%Y%m%d).dump"
+    -f "$BACKUP_DIR/storydump_$(date +%Y%m%d).dump"
 
 # Remove old backups
-find "$BACKUP_DIR" -name "storyline_*.dump" -mtime +$RETENTION_DAYS -delete
+find "$BACKUP_DIR" -name "storydump_*.dump" -mtime +$RETENTION_DAYS -delete
 
-echo "Backup complete: storyline_$(date +%Y%m%d).dump"
+echo "Backup complete: storydump_$(date +%Y%m%d).dump"
 ```
 
 Schedule via crontab on your local machine or a GitHub Actions workflow:
@@ -66,7 +66,7 @@ Neon provides automatic point-in-time recovery on paid plans. Free tier has limi
 psql "$DATABASE_URL" -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'
 
 # Restore from backup
-pg_restore -d "$DATABASE_URL" ~/backups/storyline_YYYYMMDD.dump
+pg_restore -d "$DATABASE_URL" ~/backups/storydump_YYYYMMDD.dump
 
 # Restart Railway services after restore
 railway restart --service worker
@@ -77,11 +77,11 @@ railway restart --service web
 
 ```bash
 # List contents of backup
-pg_restore -l ~/backups/storyline_YYYYMMDD.dump
+pg_restore -l ~/backups/storydump_YYYYMMDD.dump
 
 # Restore specific table
 pg_restore -d "$DATABASE_URL" \
-    -t posting_history ~/backups/storyline_YYYYMMDD.dump
+    -t posting_history ~/backups/storydump_YYYYMMDD.dump
 ```
 
 ---
@@ -96,7 +96,7 @@ When using Google Drive as the media source, files are already stored in the clo
 
 ```bash
 # Backup media from Google Drive to local storage using rclone
-rclone sync gdrive:storyline-media/ ~/backups/storyline-media/
+rclone sync gdrive:storydump-media/ ~/backups/storydump-media/
 
 # Or download via the Google Drive web interface
 ```
@@ -156,7 +156,7 @@ psql "$DATABASE_URL" -c \
    ```
 6. **Verify**:
    ```bash
-   railway shell --service worker -c "storyline-cli check-health"
+   railway shell --service worker -c "storydump-cli check-health"
    ```
 7. **Re-connect OAuth** (if tokens expired):
    - Instagram: Re-authorize via /settings in Telegram

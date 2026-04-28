@@ -221,9 +221,9 @@ Using the `docs/` folder approach (vs `gh-pages` branch) keeps everything in the
 Support optional parameters via URL query strings for flexibility:
 
 ```
-https://<username>.github.io/storyline-ai/?action=story-camera    (default)
-https://<username>.github.io/storyline-ai/?action=camera
-https://<username>.github.io/storyline-ai/?action=profile&user=mybrand
+https://<username>.github.io/storydump/?action=story-camera    (default)
+https://<username>.github.io/storydump/?action=camera
+https://<username>.github.io/storydump/?action=profile&user=mybrand
 ```
 
 This makes the redirect page reusable for different Instagram actions without deploying new pages.
@@ -233,7 +233,7 @@ This makes the redirect page reusable for different Instagram actions without de
 **Files to modify** (3 files, ~1 line each):
 
 1. **`src/services/core/telegram_utils.py`** (lines 177, 222-223)
-   - Change `url="https://www.instagram.com/"` → `url="https://<username>.github.io/storyline-ai/"`
+   - Change `url="https://www.instagram.com/"` → `url="https://<username>.github.io/storydump/"`
 
 2. **`src/services/core/telegram_notification.py`** (lines 217-218)
    - Same URL change
@@ -256,7 +256,7 @@ One-time setup steps:
 1. Create `docs/` directory with `index.html`
 2. Go to repo Settings → Pages → Source: "Deploy from branch" → Branch: `main`, folder: `/docs`
 3. Wait for deployment (~1 min)
-4. Note the URL: `https://<username>.github.io/storyline-ai/`
+4. Note the URL: `https://<username>.github.io/storydump/`
 5. Update `.env` with the URL
 
 ### Configuration
@@ -265,7 +265,7 @@ One-time setup steps:
 # .env
 # URL for Instagram deep link redirect page (GitHub Pages)
 # Default: https://www.instagram.com/ (opens feed, no deep link)
-INSTAGRAM_DEEPLINK_URL=https://<username>.github.io/storyline-ai/
+INSTAGRAM_DEEPLINK_URL=https://<username>.github.io/storydump/
 ```
 
 ---

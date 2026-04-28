@@ -10,8 +10,8 @@
 
 ```bash
 # Clone the repository and navigate to it
-git clone <your-repo-url> storyline-ai
-cd storyline-ai
+git clone <your-repo-url> storydump
+cd storydump
 
 # Create virtual environment
 python3 -m venv venv
@@ -37,10 +37,10 @@ pip install -e .
 
 ```bash
 # Create database
-createdb storyline_ai
+createdb storydump
 
 # Setup schema
-psql -U postgres -d storyline_ai -f scripts/setup_database.sql
+psql -U postgres -d storydump -f scripts/setup_database.sql
 ```
 
 ## Step 4: Configure Application (2 min)
@@ -79,20 +79,20 @@ mkdir -p media/stories
 # Copy some images to media/stories/
 
 # Index media
-storyline-cli index-media media/stories
+storydump-cli index-media media/stories
 
 # Create 7-day schedule
-storyline-cli create-schedule --days 7
+storydump-cli create-schedule --days 7
 
 # View what was scheduled
-storyline-cli list-queue
+storydump-cli list-queue
 ```
 
 ## Step 6: Run the Application (1 min)
 
 ```bash
 # Check health first
-storyline-cli check-health
+storydump-cli check-health
 
 # Run application
 python -m src.main
@@ -100,7 +100,7 @@ python -m src.main
 
 You should see:
 ```
-Storyline AI - Instagram Story Automation System
+Storydump - Instagram Story Automation System
 ✓ Configuration validated successfully
 ✓ All services started
 ✓ Phase: Telegram-Only
@@ -114,7 +114,7 @@ Storyline AI - Instagram Story Automation System
 3. Click **⏭️ Skip** to skip a post
 4. Click **🚫 Reject** to permanently block unwanted media
 5. Use `/settings` in Telegram to configure bot behavior
-6. Check history: `storyline-cli list-media`
+6. Check history: `storydump-cli list-media`
 
 ## Troubleshooting
 
@@ -125,7 +125,7 @@ Storyline AI - Instagram Story Automation System
 
 **"Database connection failed"**
 - Check PostgreSQL is running: `pg_ctl status`
-- Verify database exists: `psql -l | grep storyline_ai`
+- Verify database exists: `psql -l | grep storydump`
 - Check DB_PASSWORD in .env matches PostgreSQL
 
 **"Telegram bot not responding"**
@@ -134,7 +134,7 @@ Storyline AI - Instagram Story Automation System
 - Ensure TELEGRAM_CHANNEL_ID is correct (negative for channels)
 
 **"No media found"**
-- Run: `storyline-cli index-media media/stories`
+- Run: `storydump-cli index-media media/stories`
 - Check files are .jpg, .jpeg, .png, or .gif
 - Verify files exist: `ls media/stories/`
 
@@ -142,30 +142,30 @@ Storyline AI - Instagram Story Automation System
 
 ```bash
 # Health check
-storyline-cli check-health
+storydump-cli check-health
 
 # List media
-storyline-cli list-media --limit 50
+storydump-cli list-media --limit 50
 
 # List users (after first Telegram interaction)
-storyline-cli list-users
+storydump-cli list-users
 
 # View queue
-storyline-cli list-queue
+storydump-cli list-queue
 
 # Preview upcoming posts
-storyline-cli queue-preview
+storydump-cli queue-preview
 ```
 
 ## Next Steps
 
 1. **Customize schedule**: Use `/settings` in Telegram or edit .env for defaults
 2. **Add team members**: Just have them interact with the bot (auto-discovery)
-3. **Promote admins**: `storyline-cli promote-user <telegram_id> --role admin`
+3. **Promote admins**: `storydump-cli promote-user <telegram_id> --role admin`
 4. **Deploy to Railway**: See [deployment.md](deployment.md) for production setup
 5. **Enable Instagram API** (Phase 2): See [instagram-api-setup.md](instagram-api-setup.md)
-6. **Add multiple accounts**: `storyline-cli add-instagram-account --help`
-7. **Category scheduling**: Organize media in subfolders, use `storyline-cli list-categories`
+6. **Add multiple accounts**: `storydump-cli add-instagram-account --help`
+7. **Category scheduling**: Organize media in subfolders, use `storydump-cli list-categories`
 
 ## Telegram Bot Commands
 
