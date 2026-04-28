@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { siteConfig } from "@/config/site"
 
 export function Footer() {
@@ -22,6 +23,13 @@ export function Footer() {
           >
             Contact
           </a>
+          {" "}&middot;{" "}
+          <Link
+            href="/login"
+            className="underline underline-offset-4 hover:text-foreground"
+          >
+            Sign in
+          </Link>
         </p>
       </div>
     </footer>
