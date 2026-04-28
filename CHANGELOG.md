@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **Stale documentation archive** — Deleted `documentation/archive/` directory containing 82 historical planning docs (Jan-Mar 2026) that are no longer relevant to current development. Reduces repo clutter by ~51,000 lines.
+
+### Changed
+
+- **Storydump rebrand in docs and CI** — Updated remaining `storyline` references to `storydump` across operational docs, planning docs, CI workflow, and onboarding UI.
+
 ### Added
 
 - **Sign-in link in landing page footer** — Subtle "Sign in" link for existing users to access `/login` without a prominent CTA.

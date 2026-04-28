@@ -12,7 +12,7 @@ Connect to your Shopify store to sync product catalog, track orders, and enable 
 
 ### Goals
 
-1. Sync product catalog from Shopify (one-way: Shopify → Storyline)
+1. Sync product catalog from Shopify (one-way: Shopify → Storydump)
 2. Track orders for correlation with social media posts
 3. Preserve product history using Type 2 SCD pattern
 4. Enable webhook-based real-time updates

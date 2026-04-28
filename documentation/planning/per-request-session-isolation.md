@@ -143,7 +143,7 @@ With `concurrent_updates=8`:
 - Peak concurrent connections: 8 (handlers) + 6 (background loops) = 14
 - Current pool: `pool_size=10`, `max_overflow=20`, max=30
 - **No pool size increase needed** for current concurrency level
-- Monitor with `storyline-cli check-health` after enabling
+- Monitor with `storydump-cli check-health` after enabling
 
 ## Key Design Decisions
 

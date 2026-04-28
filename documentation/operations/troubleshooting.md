@@ -4,7 +4,7 @@
 
 ```bash
 # One-liner health check via Railway shell
-railway shell --service worker -c "storyline-cli check-health"
+railway shell --service worker -c "storydump-cli check-health"
 
 # Or check logs for recent errors
 railway logs --service worker | grep -i error | tail -20
@@ -123,7 +123,7 @@ JOIN instagram_accounts ia ON t.instagram_account_id::uuid = ia.id;
 **Diagnosis**:
 ```bash
 # For Google Drive media source, check sync status
-railway shell --service worker -c "storyline-cli sync-status"
+railway shell --service worker -c "storydump-cli sync-status"
 
 # Check media source configuration
 railway shell --service worker -c "echo \$MEDIA_SOURCE_TYPE"
@@ -141,7 +141,7 @@ railway shell --service worker -c "echo \$MEDIA_SOURCE_TYPE"
 
 **Re-sync**:
 ```bash
-railway shell --service worker -c "storyline-cli sync-media"
+railway shell --service worker -c "storydump-cli sync-media"
 ```
 
 ---

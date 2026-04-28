@@ -1,6 +1,6 @@
 # Instagram Login OAuth Setup Guide
 
-This guide covers setting up the **Instagram Login** OAuth flow so new users can connect their Instagram accounts through the Storyline AI Mini App. This is the newer, simpler flow that does **not** require a Facebook Page.
+This guide covers setting up the **Instagram Login** OAuth flow so new users can connect their Instagram accounts through the Storydump Mini App. This is the newer, simpler flow that does **not** require a Facebook Page.
 
 > **Prerequisite:** The code for this flow is already deployed (PR #122). This guide covers the external infrastructure setup needed to activate it.
 
@@ -11,7 +11,7 @@ This guide covers setting up the **Instagram Login** OAuth flow so new users can
 Once configured, the "Connect Instagram" button in the Mini App wizard will:
 1. Open Instagram's OAuth consent screen
 2. User authorizes your app to post to their account
-3. Storyline AI stores their token (encrypted, per-tenant)
+3. Storydump stores their token (encrypted, per-tenant)
 4. User can immediately start scheduling Stories
 
 **No Facebook Page required** — users only need an Instagram Business or Creator account.
@@ -24,7 +24,7 @@ Once configured, the "Connect Instagram" button in the Mini App wizard will:
 2. Click **My Apps** → **Create App**
 3. Select **Other** as use case
 4. Select **Business** as app type
-5. Enter app name (e.g., "Storyline AI") and contact email
+5. Enter app name (e.g., "Storydump") and contact email
 6. Click **Create App**
 
 **Save these values:**
@@ -46,7 +46,7 @@ Once configured, the "Connect Instagram" button in the Mini App wizard will:
 1. Go to **Instagram** → **Basic Display** (or **Instagram Login** settings) in the left sidebar
 2. Under **Valid OAuth Redirect URIs**, add:
    ```
-   https://storyline-ai-production.up.railway.app/auth/instagram-login/callback
+   https://storydump-production.up.railway.app/auth/instagram-login/callback
    ```
 3. Click **Save Changes**
 
@@ -97,7 +97,7 @@ Your app starts in **Testing mode**, limited to users with explicit roles. To le
 
 After setting env vars and Railway redeployment:
 
-1. Open Telegram → send `/start` to the Storyline AI bot
+1. Open Telegram → send `/start` to the Storydump bot
 2. Open the Mini App wizard
 3. Click **Connect Instagram**
 4. You should see Instagram's OAuth consent screen (not Facebook's)
@@ -111,7 +111,7 @@ After setting env vars and Railway redeployment:
 |---------|-------|-----|
 | "Connect Instagram" opens Facebook OAuth | `INSTAGRAM_APP_ID` not set on API service | Check Railway env vars on the API service |
 | "OAuth not configured" error | Missing `INSTAGRAM_APP_ID` or `INSTAGRAM_APP_SECRET` | Verify both are set on API service |
-| Redirect URI mismatch error | URI in Meta dashboard doesn't match callback URL | Ensure exact match: `https://storyline-ai-production.up.railway.app/auth/instagram-login/callback` |
+| Redirect URI mismatch error | URI in Meta dashboard doesn't match callback URL | Ensure exact match: `https://storydump-production.up.railway.app/auth/instagram-login/callback` |
 | "Link Expired" on callback | State token older than 10 minutes | Try connecting again — don't wait too long on the consent screen |
 | User can't see consent screen | Not added as a tester | Add them via App Roles → Roles → Add People |
 | "No Business Account" error | User has a personal Instagram account | They need to switch to Business or Creator in Instagram settings |

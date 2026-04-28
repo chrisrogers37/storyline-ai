@@ -17,8 +17,8 @@ A guide for local development with cloud deployment (Railway + Neon).
 ```bash
 # Clone and set up
 cd ~/Projects
-git clone https://github.com/chrisrogers37/storyline-ai.git
-cd storyline-ai
+git clone https://github.com/chrisrogers37/storydump.git
+cd storydump
 
 # Create virtual environment
 python3 -m venv venv
@@ -43,12 +43,12 @@ brew install postgresql
 brew services start postgresql
 
 # Create database
-createdb storyline_ai
-psql -d storyline_ai -f scripts/setup_database.sql
+createdb storydump
+psql -d storydump -f scripts/setup_database.sql
 
 # Run migrations
 for f in scripts/migrations/0{01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21}_*.sql; do
-  psql -d storyline_ai -f "$f"
+  psql -d storydump -f "$f"
 done
 ```
 
@@ -61,8 +61,8 @@ psql "$DATABASE_URL"
 # Or set individual vars in .env
 DB_HOST=ep-xxx.neon.tech
 DB_PORT=5432
-DB_NAME=storyline_ai
-DB_USER=storyline_user
+DB_NAME=storydump
+DB_USER=storydump_user
 DB_PASSWORD=neon_password
 DB_SSLMODE=require
 DB_POOL_SIZE=3
@@ -76,22 +76,22 @@ DB_MAX_OVERFLOW=2
 Add these to `~/.zshrc` (or `~/.bashrc`) on your Mac:
 
 ```bash
-# Storyline AI shortcuts
-alias sl='cd ~/Projects/storyline-ai && source venv/bin/activate'
+# Storydump shortcuts
+alias sl='cd ~/Projects/storydump && source venv/bin/activate'
 
 # Quick checks
-alias sl-test='cd ~/Projects/storyline-ai && source venv/bin/activate && pytest'
-alias sl-lint='cd ~/Projects/storyline-ai && source venv/bin/activate && ruff check src/ tests/ cli/'
-alias sl-format='cd ~/Projects/storyline-ai && source venv/bin/activate && ruff format src/ tests/ cli/'
-alias sl-precommit='cd ~/Projects/storyline-ai && source venv/bin/activate && ruff check src/ tests/ cli/ && ruff format --check src/ tests/ cli/ && pytest'
+alias sl-test='cd ~/Projects/storydump && source venv/bin/activate && pytest'
+alias sl-lint='cd ~/Projects/storydump && source venv/bin/activate && ruff check src/ tests/ cli/'
+alias sl-format='cd ~/Projects/storydump && source venv/bin/activate && ruff format src/ tests/ cli/'
+alias sl-precommit='cd ~/Projects/storydump && source venv/bin/activate && ruff check src/ tests/ cli/ && ruff format --check src/ tests/ cli/ && pytest'
 
 # Database shortcuts (local PostgreSQL)
-alias sl-db-reset='cd ~/Projects/storyline-ai && make reset-db'
+alias sl-db-reset='cd ~/Projects/storydump && make reset-db'
 
 # Railway operations
 alias sl-logs='railway logs --service worker'
 alias sl-logs-web='railway logs --service web'
-alias sl-health='railway shell --service worker -c "storyline-cli check-health"'
+alias sl-health='railway shell --service worker -c "storydump-cli check-health"'
 alias sl-restart='railway restart --service worker'
 
 # Production database queries (via Neon)
@@ -145,8 +145,8 @@ Create a `.env.dev` for local development:
 # .env.dev - Local development settings
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=storyline_ai
-DB_USER=storyline_user
+DB_NAME=storydump
+DB_USER=storydump_user
 DB_PASSWORD=your_local_password
 
 TELEGRAM_BOT_TOKEN=your_test_bot_token
@@ -195,7 +195,7 @@ sl-db-prod          - connect to Neon production database
 
 - [ ] **Mac: Install dependencies**
   ```bash
-  cd ~/Projects/storyline-ai
+  cd ~/Projects/storydump
   python3 -m venv venv && source venv/bin/activate
   pip install -r requirements.txt && pip install -e .
   ```
@@ -203,7 +203,7 @@ sl-db-prod          - connect to Neon production database
 - [ ] **Mac: Set up local PostgreSQL** (optional, for offline dev)
   ```bash
   brew install postgresql && brew services start postgresql
-  createdb storyline_ai
+  createdb storydump
   ```
 
 - [ ] **Mac: Add aliases to ~/.zshrc**

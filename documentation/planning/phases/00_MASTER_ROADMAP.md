@@ -1,4 +1,4 @@
-# Storyline AI - Master Roadmap
+# Storydump - Master Roadmap
 
 **Last Updated**: 2026-02-09
 **Vision**: E-commerce Optimization Hub for Social Media Marketing
@@ -7,7 +7,7 @@
 
 ## Executive Summary
 
-Storyline AI evolves from an Instagram Story scheduler into a comprehensive e-commerce optimization platform that:
+Storydump evolves from an Instagram Story scheduler into a comprehensive e-commerce optimization platform that:
 
 1. **Automates social media posting** (Instagram Stories, future: Reels, Posts)
 2. **Connects media assets to products** (Shopify, Printify)
