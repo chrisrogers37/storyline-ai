@@ -341,7 +341,7 @@ class TestHandleGroupStart:
     async def test_with_oauth_url_and_onboarding_done(
         self, mock_button, mock_settings, router
     ):
-        """Onboarding complete → 'Open Storyline' button."""
+        """Onboarding complete → 'Open Storydump' button."""
         mock_settings.OAUTH_REDIRECT_BASE_URL = "https://example.com"
         mock_button.return_value = Mock()
 

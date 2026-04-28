@@ -1,4 +1,4 @@
-# Storyline AI - Project Context
+# Storydump - Project Context
 
 **Copy this into Claude web/phone sessions for context.**
 
@@ -6,7 +6,7 @@
 
 ## What This Project Does
 
-Storyline AI is a self-hosted Instagram Story scheduling system with Telegram-based workflow:
+Storydump is a self-hosted Instagram Story scheduling system with Telegram-based workflow:
 1. Media files are indexed from Google Drive (or local filesystem)
 2. A JIT scheduler checks if a posting slot is due each tick
 3. At each slot, the bot either:
@@ -96,12 +96,12 @@ Storyline AI is a self-hosted Instagram Story scheduling system with Telegram-ba
 ## Safety Rules
 
 **NEVER suggest running:**
-- `storyline-cli process-queue` (posts to Instagram)
-- `storyline-cli create-schedule` (modifies queue)
+- `storydump-cli process-queue` (posts to Instagram)
+- `storydump-cli create-schedule` (modifies queue)
 - `python -m src.main` (starts the bot)
 
 **SAFE to suggest:**
-- `storyline-cli list-queue` / `list-media` / `check-health`
+- `storydump-cli list-queue` / `list-media` / `check-health`
 - `pytest tests/`
 - Database SELECT queries
 

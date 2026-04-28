@@ -59,7 +59,7 @@ class TelegramCommandHandlers:
             data = dash.get_user_instances(update.effective_user.id)
 
         instances = data["instances"]
-        lines = ["📊 *Storyline AI Status*\n\nYour instances:"]
+        lines = ["📊 *Storydump Status*\n\nYour instances:"]
 
         keyboard_rows = []
         if instances:
@@ -126,7 +126,7 @@ class TelegramCommandHandlers:
         setup_section = self._get_setup_status(chat_id)
 
         status_msg = (
-            f"📊 *Storyline AI Status*\n\n"
+            f"📊 *Storydump Status*\n\n"
             f"{setup_section}\n\n"
             f"*Instagram API:*\n"
             f"📸 {ig_status}\n\n"
@@ -367,7 +367,7 @@ class TelegramCommandHandlers:
         user = self.service._get_or_create_user(update.effective_user)
 
         help_text = (
-            "📖 *Storyline AI Help*\n\n"
+            "📖 *Storydump Help*\n\n"
             "*Commands:*\n"
             "/start - Open dashboard & settings\n"
             "/status - System health & overview\n"
@@ -552,7 +552,7 @@ class TelegramCommandHandlers:
             "/locks": "Lock count is shown in /status. Full list in the dashboard.",
             "/reset": "The JIT scheduler manages the queue automatically.",
             "/dryrun": "Use /settings to toggle dry-run mode.",
-            "/backfill": "Use the CLI: storyline-cli backfill-instagram",
+            "/backfill": "Use the CLI: storydump-cli backfill-instagram",
             "/connect": "Use /start to open the setup wizard and connect Instagram.",
             "/queue": "View your queue in the dashboard. Use /start to open it.",
             "/pause": "Use Quick Controls in the dashboard. Use /start to open it.",

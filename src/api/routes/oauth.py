@@ -276,7 +276,7 @@ def _gdrive_success_html_page(email: str) -> HTMLResponse:
         content=f"""
         <!DOCTYPE html>
         <html>
-        <head><title>Storyline AI - Google Drive Connected!</title>
+        <head><title>Storydump - Google Drive Connected!</title>
         <style>
             body {{ font-family: -apple-system, sans-serif; text-align: center;
                    padding: 60px 20px; background: #f5f5f5; }}
@@ -290,7 +290,7 @@ def _gdrive_success_html_page(email: str) -> HTMLResponse:
         <div class="card">
             <h1>Google Drive Connected!</h1>
             <p>Your Google Drive (<strong>{safe_email}</strong>) has been
-            connected to Storyline AI.</p>
+            connected to Storydump.</p>
             <p>You can close this window and return to Telegram.</p>
         </div>
         </body></html>
@@ -306,7 +306,7 @@ def _success_html_page(username: str) -> HTMLResponse:
         content=f"""
         <!DOCTYPE html>
         <html>
-        <head><title>Storyline AI - Connected!</title>
+        <head><title>Storydump - Connected!</title>
         <style>
             body {{ font-family: -apple-system, sans-serif; text-align: center;
                    padding: 60px 20px; background: #f5f5f5; }}
@@ -320,7 +320,7 @@ def _success_html_page(username: str) -> HTMLResponse:
         <div class="card">
             <h1>Connected!</h1>
             <p>Instagram account <strong>@{safe_username}</strong> has been
-            connected to Storyline AI.</p>
+            connected to Storydump.</p>
             <p>You can close this window and return to Telegram.</p>
         </div>
         </body></html>
@@ -337,7 +337,7 @@ def _error_html_page(title: str, message: str) -> HTMLResponse:
         content=f"""
         <!DOCTYPE html>
         <html>
-        <head><title>Storyline AI - {safe_title}</title>
+        <head><title>Storydump - {safe_title}</title>
         <style>
             body {{ font-family: -apple-system, sans-serif; text-align: center;
                    padding: 60px 20px; background: #f5f5f5; }}

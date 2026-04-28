@@ -17,7 +17,7 @@ export interface SessionPayload {
   photoUrl?: string;
 }
 
-export const SESSION_COOKIE = "storyline_session";
+export const SESSION_COOKIE = "storydump_session";
 
 const JWT_EXPIRY = "24h";
 const JWT_MAX_AGE_SECONDS = 86400; // must match JWT_EXPIRY

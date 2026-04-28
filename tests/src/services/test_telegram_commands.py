@@ -559,7 +559,7 @@ class TestStatusCommand:
         call_args = mock_update.message.reply_text.call_args
         message_text = call_args.args[0]
 
-        assert "Storyline AI Status" in message_text
+        assert "Storydump Status" in message_text
         assert "Posted: 2" in message_text
         assert "Never posted: 1" in message_text
         assert "Next:" in message_text
@@ -966,7 +966,7 @@ class TestStatusIncludesSetup:
         assert "Delivery" in message_text
 
         # Existing sections should still be present
-        assert "Storyline AI Status" in message_text
+        assert "Storydump Status" in message_text
 
 
 @pytest.mark.unit
@@ -1312,7 +1312,7 @@ class TestStartCommand:
     async def test_start_returning_user_shows_webapp_button(
         self, mock_command_handlers
     ):
-        """Returning user (onboarding completed) sees 'Open Storyline' button in group."""
+        """Returning user (onboarding completed) sees 'Open Storydump' button in group."""
         handlers = mock_command_handlers
         service = handlers.service
 
@@ -1347,7 +1347,7 @@ class TestStartCommand:
                 await handlers.handle_start(mock_update, mock_context)
 
         call_args = mock_update.message.reply_text.call_args
-        assert "Open Storyline" in str(call_args)
+        assert "Open Storydump" in str(call_args)
         assert "Welcome back" in str(call_args)
 
     async def test_start_no_oauth_url_shows_text_fallback(self, mock_command_handlers):

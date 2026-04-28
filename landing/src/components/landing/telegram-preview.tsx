@@ -52,7 +52,7 @@ function TelegramMockup() {
           S
         </div>
         <div>
-          <p className="text-sm font-medium text-white">Storyline AI</p>
+          <p className="text-sm font-medium text-white">Storydump</p>
           <p className="text-xs text-[#6c7883]">bot</p>
         </div>
       </div>

@@ -2,10 +2,10 @@
 
 from typing import Optional
 
-from src.exceptions.base import StorylineError
+from src.exceptions.base import StorydumpError
 
 
-class BackfillError(StorylineError):
+class BackfillError(StorydumpError):
     """General error during Instagram media backfill."""
 
     def __init__(

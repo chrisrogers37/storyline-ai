@@ -21,13 +21,13 @@ class Settings(BaseSettings):
     DATABASE_URL: Optional[str] = None  # Full URL (overrides DB_* components if set)
     DB_HOST: str = "localhost"
     DB_PORT: int = 5432
-    DB_NAME: str = "storyline_ai"
-    DB_USER: str = "storyline_user"
+    DB_NAME: str = "storydump"
+    DB_USER: str = "storydump_user"
     DB_PASSWORD: Optional[str] = ""
     DB_SSLMODE: Optional[str] = None  # e.g., "require" for Neon
     DB_POOL_SIZE: int = 10
     DB_MAX_OVERFLOW: int = 20
-    TEST_DB_NAME: str = "storyline_ai_test"
+    TEST_DB_NAME: str = "storydump_test"
 
     # Telegram Configuration (REQUIRED)
     TELEGRAM_BOT_TOKEN: str
@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     MEDIA_DIR: str = "/tmp/media"
 
     # Backup Configuration
-    BACKUP_DIR: str = "/backup/storyline-ai"
+    BACKUP_DIR: str = "/backup/storydump"
     BACKUP_RETENTION_DAYS: int = 30
 
     # Instagram API Configuration (Phase 2 Only)
@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     FACEBOOK_APP_SECRET: Optional[str] = None  # Facebook Login OAuth (legacy)
     INSTAGRAM_APP_ID: Optional[str] = None  # Instagram Login OAuth (preferred)
     INSTAGRAM_APP_SECRET: Optional[str] = None  # Instagram Login OAuth (preferred)
-    OAUTH_REDIRECT_BASE_URL: Optional[str] = None  # e.g., "https://api.storyline.ai"
+    OAUTH_REDIRECT_BASE_URL: Optional[str] = None  # e.g., "https://api.storydump.app"
     INSTAGRAM_DEEPLINK_URL: str = "https://www.instagram.com/"
 
     # Google Drive OAuth (Phase 05 Multi-Tenant)

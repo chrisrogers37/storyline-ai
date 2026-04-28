@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.exceptions.base import StorylineError
+from src.exceptions.base import StorydumpError
 from src.exceptions.instagram import (
     InstagramAPIError,
     RateLimitError,
@@ -15,15 +15,15 @@ from src.exceptions.instagram import (
 class TestInstagramAPIError:
     """Tests for InstagramAPIError base class."""
 
-    def test_inherits_from_storyline_error(self):
-        assert issubclass(InstagramAPIError, StorylineError)
+    def test_inherits_from_storydump_error(self):
+        assert issubclass(InstagramAPIError, StorydumpError)
 
     def test_can_be_raised(self):
         with pytest.raises(InstagramAPIError, match="api error"):
             raise InstagramAPIError("api error")
 
-    def test_caught_by_storyline_error(self):
-        with pytest.raises(StorylineError):
+    def test_caught_by_storydump_error(self):
+        with pytest.raises(StorydumpError):
             raise InstagramAPIError("caught by parent")
 
     def test_error_code_attribute(self):
@@ -59,8 +59,8 @@ class TestRateLimitError:
     def test_inherits_from_instagram_api_error(self):
         assert issubclass(RateLimitError, InstagramAPIError)
 
-    def test_inherits_from_storyline_error(self):
-        assert issubclass(RateLimitError, StorylineError)
+    def test_inherits_from_storydump_error(self):
+        assert issubclass(RateLimitError, StorydumpError)
 
     def test_can_be_raised(self):
         with pytest.raises(RateLimitError, match="rate limited"):
@@ -103,8 +103,8 @@ class TestTokenExpiredError:
 class TestMediaUploadError:
     """Tests for MediaUploadError."""
 
-    def test_inherits_from_storyline_error(self):
-        assert issubclass(MediaUploadError, StorylineError)
+    def test_inherits_from_storydump_error(self):
+        assert issubclass(MediaUploadError, StorydumpError)
 
     def test_not_instagram_api_error(self):
         """MediaUploadError is separate from InstagramAPIError hierarchy."""

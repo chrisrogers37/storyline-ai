@@ -103,7 +103,7 @@ def sync_status():
         if not enabled:
             console.print(
                 "[dim]Enable with MEDIA_SYNC_ENABLED=true in .env, "
-                "or run 'storyline-cli sync-media' manually.[/dim]"
+                "or run 'storydump-cli sync-media' manually.[/dim]"
             )
         return
 

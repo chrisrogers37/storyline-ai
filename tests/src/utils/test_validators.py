@@ -23,7 +23,7 @@ class TestConfigValidator:
         mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
         mock_settings.ADMIN_TELEGRAM_CHAT_ID = 123456789
         mock_settings.ENABLE_INSTAGRAM_API = False
-        mock_settings.DB_NAME = "storyline_ai"
+        mock_settings.DB_NAME = "storydump"
         mock_settings.MEDIA_DIR = "/media/stories"
 
         # Mock path exists
@@ -48,7 +48,7 @@ class TestConfigValidator:
         mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
         mock_settings.ADMIN_TELEGRAM_CHAT_ID = 123456789
         mock_settings.ENABLE_INSTAGRAM_API = False
-        mock_settings.DB_NAME = "storyline_ai"
+        mock_settings.DB_NAME = "storydump"
         mock_settings.MEDIA_DIR = "/media/stories"
 
         mock_path_instance = MagicMock()
@@ -72,7 +72,7 @@ class TestConfigValidator:
         mock_settings.TELEGRAM_CHANNEL_ID = None  # Missing
         mock_settings.ADMIN_TELEGRAM_CHAT_ID = 123456789
         mock_settings.ENABLE_INSTAGRAM_API = False
-        mock_settings.DB_NAME = "storyline_ai"
+        mock_settings.DB_NAME = "storydump"
         mock_settings.MEDIA_DIR = "/media/stories"
 
         mock_path_instance = MagicMock()
@@ -96,7 +96,7 @@ class TestConfigValidator:
         mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
         mock_settings.ADMIN_TELEGRAM_CHAT_ID = 123456789
         mock_settings.ENABLE_INSTAGRAM_API = False
-        mock_settings.DB_NAME = "storyline_ai"
+        mock_settings.DB_NAME = "storydump"
         mock_settings.MEDIA_DIR = "/media/stories"
 
         mock_path_instance = MagicMock()
@@ -122,7 +122,7 @@ class TestConfigValidator:
         mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
         mock_settings.ADMIN_TELEGRAM_CHAT_ID = 123456789
         mock_settings.ENABLE_INSTAGRAM_API = False
-        mock_settings.DB_NAME = "storyline_ai"
+        mock_settings.DB_NAME = "storydump"
         mock_settings.MEDIA_DIR = "/media/stories"
 
         mock_path_instance = MagicMock()
@@ -146,7 +146,7 @@ class TestConfigValidator:
         mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
         mock_settings.ADMIN_TELEGRAM_CHAT_ID = 123456789
         mock_settings.ENABLE_INSTAGRAM_API = False
-        mock_settings.DB_NAME = "storyline_ai"
+        mock_settings.DB_NAME = "storydump"
         mock_settings.MEDIA_DIR = "/media/stories"
 
         mock_path_instance = MagicMock()
@@ -170,7 +170,7 @@ class TestConfigValidator:
         mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
         mock_settings.ADMIN_TELEGRAM_CHAT_ID = 123456789
         mock_settings.ENABLE_INSTAGRAM_API = False
-        mock_settings.DB_NAME = "storyline_ai"
+        mock_settings.DB_NAME = "storydump"
         mock_settings.MEDIA_DIR = "/media/stories"
 
         mock_path_instance = MagicMock()
@@ -194,7 +194,7 @@ class TestConfigValidator:
         mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
         mock_settings.ADMIN_TELEGRAM_CHAT_ID = 123456789
         mock_settings.ENABLE_INSTAGRAM_API = False
-        mock_settings.DB_NAME = "storyline_ai"
+        mock_settings.DB_NAME = "storydump"
         mock_settings.MEDIA_DIR = "/media/stories"
 
         mock_path_instance = MagicMock()
@@ -244,7 +244,7 @@ class TestConfigValidator:
         mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
         mock_settings.ADMIN_TELEGRAM_CHAT_ID = 123456789
         mock_settings.ENABLE_INSTAGRAM_API = False
-        mock_settings.DB_NAME = "storyline_ai"
+        mock_settings.DB_NAME = "storydump"
         mock_settings.MEDIA_DIR = "/nonexistent/path"
 
         mock_path_instance = MagicMock()
@@ -269,7 +269,7 @@ class TestConfigValidator:
         mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
         mock_settings.ADMIN_TELEGRAM_CHAT_ID = 123456789
         mock_settings.ENABLE_INSTAGRAM_API = False
-        mock_settings.DB_NAME = "storyline_ai"
+        mock_settings.DB_NAME = "storydump"
         mock_settings.MEDIA_DIR = "/tmp/media"
 
         mock_path_instance = MagicMock()
@@ -298,7 +298,7 @@ class TestConfigValidator:
         mock_settings.ADMIN_TELEGRAM_CHAT_ID = 123456789
         mock_settings.ENABLE_INSTAGRAM_API = True  # Enabled
         mock_settings.CLOUDINARY_CLOUD_NAME = ""  # Missing
-        mock_settings.DB_NAME = "storyline_ai"
+        mock_settings.DB_NAME = "storydump"
         mock_settings.MEDIA_DIR = "/media/stories"
 
         mock_path_instance = MagicMock()
@@ -322,7 +322,7 @@ class TestConfigValidator:
         mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
         mock_settings.ADMIN_TELEGRAM_CHAT_ID = 123456789
         mock_settings.ENABLE_INSTAGRAM_API = False
-        mock_settings.DB_NAME = "storyline_ai"
+        mock_settings.DB_NAME = "storydump"
         mock_settings.MEDIA_DIR = "/media/stories"
 
         mock_path_instance = MagicMock()

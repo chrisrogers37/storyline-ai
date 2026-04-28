@@ -1,16 +1,16 @@
-# Storyline AI - Quick Reference for Claude
+# Storydump - Quick Reference for Claude
 
 ## ⚠️ CRITICAL SAFETY RULES
 
 **NEVER run these commands** (they post to Instagram or modify production):
-- `storyline-cli process-queue`
-- `storyline-cli create-schedule`
-- `storyline-cli reset-queue`
+- `storydump-cli process-queue`
+- `storydump-cli create-schedule`
+- `storydump-cli reset-queue`
 - `python -m src.main`
 
 **SAFE commands** (read-only):
-- `storyline-cli list-queue` / `list-media` / `list-categories` / `list-users`
-- `storyline-cli check-health` / `instagram-status`
+- `storydump-cli list-queue` / `list-media` / `list-categories` / `list-users`
+- `storydump-cli check-health` / `instagram-status`
 - `pytest` (all tests)
 
 ---

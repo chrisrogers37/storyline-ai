@@ -91,12 +91,12 @@ export default function InstancePickerPage() {
               Set up your first instance
             </h1>
             <p className="text-muted-foreground">
-              Start a conversation with the Storyline AI bot in Telegram to
+              Start a conversation with the Storydump bot in Telegram to
               create your first posting instance.
             </p>
           </div>
           <a
-            href="https://t.me/storyline_ai_bot"
+            href="https://t.me/storydump_bot"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 rounded-md bg-primary px-6 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"

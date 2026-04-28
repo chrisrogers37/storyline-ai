@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.exceptions.base import StorylineError
+from src.exceptions.base import StorydumpError
 from src.exceptions.google_drive import (
     GoogleDriveError,
     GoogleDriveAuthError,
@@ -15,15 +15,15 @@ from src.exceptions.google_drive import (
 class TestGoogleDriveError:
     """Tests for GoogleDriveError base class."""
 
-    def test_inherits_from_storyline_error(self):
-        assert issubclass(GoogleDriveError, StorylineError)
+    def test_inherits_from_storydump_error(self):
+        assert issubclass(GoogleDriveError, StorydumpError)
 
     def test_can_be_raised(self):
         with pytest.raises(GoogleDriveError, match="drive error"):
             raise GoogleDriveError("drive error")
 
-    def test_caught_by_storyline_error(self):
-        with pytest.raises(StorylineError):
+    def test_caught_by_storydump_error(self):
+        with pytest.raises(StorydumpError):
             raise GoogleDriveError("caught by parent")
 
     def test_status_code_attribute(self):
@@ -54,8 +54,8 @@ class TestGoogleDriveAuthError:
     def test_inherits_from_google_drive_error(self):
         assert issubclass(GoogleDriveAuthError, GoogleDriveError)
 
-    def test_inherits_from_storyline_error(self):
-        assert issubclass(GoogleDriveAuthError, StorylineError)
+    def test_inherits_from_storydump_error(self):
+        assert issubclass(GoogleDriveAuthError, StorydumpError)
 
     def test_can_be_raised(self):
         with pytest.raises(GoogleDriveAuthError, match="auth failed"):

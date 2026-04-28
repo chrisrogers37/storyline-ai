@@ -717,14 +717,14 @@ class TestDeploymentModel:
         """
         DOCUMENTATION TEST: Current deployment model is single-tenant.
 
-        Each deployment of storyline-ai represents:
+        Each deployment of storydump represents:
         - ONE Telegram bot (TELEGRAM_BOT_TOKEN)
         - ONE admin channel (TELEGRAM_CHANNEL_ID / ADMIN_TELEGRAM_CHAT_ID)
         - ONE Instagram account (INSTAGRAM_ACCOUNT_ID)
 
         This is BY DESIGN for Phase 1. Multi-tenancy is Phase 3.
 
-        If another group wants to use storyline-ai, they should:
+        If another group wants to use storydump, they should:
         1. Fork/clone the repository
         2. Deploy their own instance
         3. Configure their own .env with their credentials

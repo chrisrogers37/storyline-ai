@@ -16,7 +16,7 @@ export function Pricing() {
           Free While in Beta
         </h2>
         <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
-          Storyline AI is free for early adopters. Join now and lock in access
+          Storydump is free for early adopters. Join now and lock in access
           before launch pricing kicks in.
         </p>
         <ul className="mx-auto mt-8 inline-flex flex-col items-start gap-3 text-left">

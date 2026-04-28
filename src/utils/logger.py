@@ -8,7 +8,7 @@ from src.config.settings import settings
 
 
 def setup_logger(
-    name: str = "storyline-ai", level: int = None, log_file: Optional[str] = None
+    name: str = "storydump", level: int = None, log_file: Optional[str] = None
 ) -> logging.Logger:
     """
     Setup and configure a logger.
@@ -71,7 +71,7 @@ def setup_logger(
     return logger_instance
 
 
-def get_logger(name: str = "storyline-ai") -> logging.Logger:
+def get_logger(name: str = "storydump") -> logging.Logger:
     """
     Get an existing logger or create a new one.
 

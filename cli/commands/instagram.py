@@ -39,7 +39,7 @@ def instagram_auth(manual: bool):
         Panel.fit(
             "[bold blue]Instagram API Authentication Setup[/bold blue]\n\n"
             "This wizard will help you obtain a long-lived Instagram access token.",
-            title="Storyline AI",
+            title="Storydump",
         )
     )
 
@@ -91,7 +91,7 @@ def _show_manual_instructions():
     console.print("   - pages_read_engagement\n")
 
     console.print("4. Copy the short-lived token and run:")
-    console.print("   [cyan]storyline-cli instagram-auth[/cyan]")
+    console.print("   [cyan]storydump-cli instagram-auth[/cyan]")
     console.print("   Then paste the token when prompted.\n")
 
     console.print("5. The token will be exchanged for a long-lived token (60 days)")
@@ -176,7 +176,7 @@ def _run_auth_wizard():
     console.print("1. Set ENABLE_INSTAGRAM_API=true in .env")
     if account_info:
         console.print(f"2. Set INSTAGRAM_ACCOUNT_ID={account_info.get('id')} in .env")
-    console.print("3. Run: storyline-cli check-health")
+    console.print("3. Run: storydump-cli check-health")
 
 
 async def _exchange_for_long_lived_token(short_token: str) -> tuple:
@@ -423,7 +423,7 @@ def add_instagram_account(
     Use /settings in Telegram to switch between accounts.
 
     Example:
-        storyline-cli add-instagram-account \\
+        storydump-cli add-instagram-account \\
             --display-name "Main Brand" \\
             --account-id "17841234567890" \\
             --username "brand_main" \\
@@ -438,7 +438,7 @@ def add_instagram_account(
             f"Display Name: {display_name}\n"
             f"Account ID: {account_id}\n"
             f"Username: @{username.lstrip('@')}",
-            title="Storyline AI",
+            title="Storydump",
         )
     )
 
@@ -515,7 +515,7 @@ def list_instagram_accounts(include_inactive):
     if not accounts:
         console.print("[yellow]No Instagram accounts configured.[/yellow]")
         console.print("\nAdd an account with:")
-        console.print("  storyline-cli add-instagram-account --help")
+        console.print("  storydump-cli add-instagram-account --help")
         return
 
     table = Table(title="Instagram Accounts")

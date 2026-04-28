@@ -7,27 +7,27 @@ import { trackEvent } from "@/lib/analytics"
 const rows = [
   {
     feature: "Built for",
-    storyline: "Instagram Stories",
+    storydump: "Instagram Stories",
     others: "Feeds, Reels, Stories (afterthought)",
   },
   {
     feature: "Approvals",
-    storyline: "In Telegram — instant, mobile",
+    storydump: "In Telegram — instant, mobile",
     others: "Log into web dashboard",
   },
   {
     feature: "Your content",
-    storyline: "Stays in Google Drive",
+    storydump: "Stays in Google Drive",
     others: "Uploaded to their servers",
   },
   {
     feature: "Content recycling",
-    storyline: "Automatic rotation",
+    storydump: "Automatic rotation",
     others: "Manual re-scheduling",
   },
   {
     feature: "Price",
-    storyline: "Free during beta",
+    storydump: "Free during beta",
     others: "$15–50/mo",
   },
 ]
@@ -58,7 +58,7 @@ export function Comparison() {
           Why not just use Buffer?
         </h2>
         <p className="mx-auto mt-4 max-w-xl text-center text-muted-foreground">
-          Generic schedulers treat Stories as an afterthought. Storyline is built
+          Generic schedulers treat Stories as an afterthought. Storydump is built
           entirely around them.
         </p>
         <div className="mt-12 overflow-x-auto">
@@ -66,7 +66,7 @@ export function Comparison() {
             <thead>
               <tr className="border-b">
                 <th className="pb-3 pr-4 font-medium text-muted-foreground" />
-                <th className="pb-3 pr-4 font-semibold">Storyline AI</th>
+                <th className="pb-3 pr-4 font-semibold">Storydump</th>
                 <th className="pb-3 font-semibold text-muted-foreground">
                   Buffer / Later
                 </th>
@@ -79,7 +79,7 @@ export function Comparison() {
                   <td className="py-3 pr-4">
                     <span className="flex items-center gap-2">
                       <Check className="h-4 w-4 shrink-0 text-green-600" />
-                      {row.storyline}
+                      {row.storydump}
                     </span>
                   </td>
                   <td className="py-3 text-muted-foreground">
