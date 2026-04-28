@@ -3,10 +3,10 @@
 -- Description: Add cloud storage fields, Instagram posting tracking, and API tokens table
 --
 -- Run on local:
---   psql -U storyline_user -d storyline_ai -f scripts/migrations/004_instagram_api_phase2.sql
+--   psql -U storydump_user -d storydump -f scripts/migrations/004_instagram_api_phase2.sql
 --
 -- Run on Pi:
---   PGPASSWORD=your_password psql -h localhost -U storyline_user -d storyline_ai -f scripts/migrations/004_instagram_api_phase2.sql
+--   PGPASSWORD=your_password psql -h localhost -U storydump_user -d storydump -f scripts/migrations/004_instagram_api_phase2.sql
 
 BEGIN;
 

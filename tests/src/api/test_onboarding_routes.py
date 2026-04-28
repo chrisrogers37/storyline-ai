@@ -88,7 +88,7 @@ class TestOnboardingInit:
             mock_validate(),
             _mock_setup_state(
                 instagram_connected=True,
-                instagram_username="storyline_ai",
+                instagram_username="storydump",
             ),
             patch(
                 "src.api.routes.onboarding.setup.SettingsService"
@@ -102,7 +102,7 @@ class TestOnboardingInit:
 
         data = response.json()
         assert data["setup_state"]["instagram_connected"] is True
-        assert data["setup_state"]["instagram_username"] == "storyline_ai"
+        assert data["setup_state"]["instagram_username"] == "storydump"
 
     def test_init_shows_connected_gdrive(self, client):
         """When Google Drive is connected, setup_state reflects it."""

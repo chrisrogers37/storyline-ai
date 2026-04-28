@@ -32,7 +32,7 @@ def connect_google_drive(credentials_file, folder_id):
             "[bold blue]Connecting Google Drive[/bold blue]\n\n"
             f"Credentials: {credentials_file}\n"
             f"Folder ID: {folder_id}",
-            title="Storyline AI",
+            title="Storydump",
         )
     )
 
@@ -113,7 +113,7 @@ def google_drive_status():
         table.add_row("Error", status.get("error", "Unknown"))
         console.print(table)
         console.print(
-            "\n[dim]Connect with: storyline-cli connect-google-drive "
+            "\n[dim]Connect with: storydump-cli connect-google-drive "
             "--credentials-file <path> --folder-id <id>[/dim]"
         )
 

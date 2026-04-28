@@ -61,15 +61,15 @@ def backfill_instagram(
 
     Examples:
 
-        storyline-cli backfill-instagram
+        storydump-cli backfill-instagram
 
-        storyline-cli backfill-instagram --limit 50
+        storydump-cli backfill-instagram --limit 50
 
-        storyline-cli backfill-instagram --dry-run
+        storydump-cli backfill-instagram --dry-run
 
-        storyline-cli backfill-instagram --since 2025-01-01
+        storydump-cli backfill-instagram --since 2025-01-01
 
-        storyline-cli backfill-instagram --account-id abc123...
+        storydump-cli backfill-instagram --account-id abc123...
     """
     from src.services.integrations.instagram_backfill import (
         InstagramBackfillService,
@@ -83,7 +83,7 @@ def backfill_instagram(
             f"Limit: {limit or 'all'}\n"
             f"Since: {since.strftime('%Y-%m-%d') if since else 'all time'}\n"
             f"Account: {account_id or 'active account'}",
-            title="Storyline AI",
+            title="Storydump",
         )
     )
 
@@ -162,7 +162,7 @@ def backfill_status():
     if not last_run:
         console.print("\n[yellow]No backfill runs recorded yet.[/yellow]")
         console.print(
-            "[dim]Run 'storyline-cli backfill-instagram --dry-run' to preview.[/dim]"
+            "[dim]Run 'storydump-cli backfill-instagram --dry-run' to preview.[/dim]"
         )
         return
 

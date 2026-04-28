@@ -31,7 +31,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-xs text-muted-foreground">
-          Only users with an active Storyline AI bot can access the dashboard.
+          Only users with an active Storydump bot can access the dashboard.
         </p>
       </div>
     </div>

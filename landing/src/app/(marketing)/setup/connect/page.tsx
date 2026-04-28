@@ -6,7 +6,7 @@ import { Callout } from "@/components/setup/callout"
 import { siteConfig } from "@/config/site"
 
 export const metadata: Metadata = {
-  title: "Connect to Telegram — Storyline AI",
+  title: "Connect to Telegram — Storydump",
   robots: { index: false, follow: false },
 }
 
@@ -17,7 +17,7 @@ export default function ConnectTelegram() {
         Connect to Telegram
       </h1>
       <p className="mt-4 text-lg text-muted-foreground">
-        The final step — link your account to the Storyline Telegram bot and
+        The final step — link your account to the Storydump Telegram bot and
         start automating your Stories.
       </p>
 
@@ -106,7 +106,7 @@ export default function ConnectTelegram() {
               <span className="font-medium text-foreground">
                 Select your media folder
               </span>{" "}
-              — point Storyline to the Drive folder you organized
+              — point Storydump to the Drive folder you organized
             </li>
             <li>
               <span className="font-medium text-foreground">
@@ -118,7 +118,7 @@ export default function ConnectTelegram() {
         </StepCard>
 
         <StepCard number={4} title="What happens next">
-          <p>Once setup is complete, Storyline will:</p>
+          <p>Once setup is complete, Storydump will:</p>
           <ul className="mt-2 space-y-2">
             <li className="flex items-start gap-3">
               <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-primary" />

@@ -130,7 +130,7 @@ class TestCloudStorageService:
         """Test successful media upload."""
         mock_cloudinary.uploader.upload.return_value = {
             "secure_url": "https://res.cloudinary.com/test/image/upload/test_image.jpg",
-            "public_id": "storyline/test_image",
+            "public_id": "storydump/test_image",
             "bytes": 12345,
             "format": "jpg",
             "width": 1080,
@@ -143,7 +143,7 @@ class TestCloudStorageService:
             result["url"]
             == "https://res.cloudinary.com/test/image/upload/test_image.jpg"
         )
-        assert result["public_id"] == "storyline/test_image"
+        assert result["public_id"] == "storydump/test_image"
         assert result["size_bytes"] == 12345
         assert result["format"] == "jpg"
         assert "uploaded_at" in result
@@ -232,7 +232,7 @@ class TestCloudStorageService:
         """Test successful upload using file_bytes instead of file_path."""
         mock_cloudinary.uploader.upload.return_value = {
             "secure_url": "https://res.cloudinary.com/test/image/upload/bytes_image.jpg",
-            "public_id": "storyline/bytes_image",
+            "public_id": "storydump/bytes_image",
             "bytes": 5000,
             "format": "jpg",
             "width": 1080,
@@ -248,7 +248,7 @@ class TestCloudStorageService:
             result["url"]
             == "https://res.cloudinary.com/test/image/upload/bytes_image.jpg"
         )
-        assert result["public_id"] == "storyline/bytes_image"
+        assert result["public_id"] == "storydump/bytes_image"
         assert result["size_bytes"] == 5000
         assert "uploaded_at" in result
         assert "expires_at" in result
@@ -327,10 +327,10 @@ class TestCloudStorageService:
         """Test successful media deletion."""
         mock_cloudinary.uploader.destroy.return_value = {"result": "ok"}
 
-        result = cloud_service.delete_media("storyline/test_image")
+        result = cloud_service.delete_media("storydump/test_image")
 
         assert result is True
-        mock_cloudinary.uploader.destroy.assert_called_once_with("storyline/test_image")
+        mock_cloudinary.uploader.destroy.assert_called_once_with("storydump/test_image")
 
     @patch("src.services.integrations.cloud_storage.cloudinary")
     def test_delete_media_not_found(self, mock_cloudinary, cloud_service):
@@ -406,8 +406,8 @@ class TestCloudStorageService:
 
         mock_cloudinary.api.resources.return_value = {
             "resources": [
-                {"public_id": "storyline/old_image", "created_at": old_date},
-                {"public_id": "storyline/new_image", "created_at": new_date},
+                {"public_id": "storydump/old_image", "created_at": old_date},
+                {"public_id": "storydump/new_image", "created_at": new_date},
             ]
         }
         mock_cloudinary.uploader.destroy.return_value = {"result": "ok"}
@@ -416,7 +416,7 @@ class TestCloudStorageService:
 
         # Only the old resource should be deleted
         assert deleted_count == 1
-        mock_cloudinary.uploader.destroy.assert_called_once_with("storyline/old_image")
+        mock_cloudinary.uploader.destroy.assert_called_once_with("storydump/old_image")
 
     @patch("src.services.integrations.cloud_storage.cloudinary")
     def test_cleanup_expired_no_old_resources(self, mock_cloudinary, cloud_service):
@@ -427,7 +427,7 @@ class TestCloudStorageService:
 
         mock_cloudinary.api.resources.return_value = {
             "resources": [
-                {"public_id": "storyline/recent", "created_at": recent_date},
+                {"public_id": "storydump/recent", "created_at": recent_date},
             ]
         }
 

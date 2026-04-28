@@ -1,4 +1,4 @@
-# Storyline AI - Instagram Story Automation System
+# Storydump - Instagram Story Automation System
 
 A self-hosted Instagram Story scheduling system with Telegram-based team collaboration.
 
@@ -22,7 +22,7 @@ A self-hosted Instagram Story scheduling system with Telegram-based team collabo
 ```bash
 # Clone repository
 git clone <your-repo-url>
-cd storyline-ai
+cd storydump
 
 # Create virtual environment
 python3 -m venv venv
@@ -54,10 +54,10 @@ Required configuration:
 
 ```bash
 # Create database
-createdb storyline_ai
+createdb storydump
 
 # Run schema setup
-psql -U postgres -d storyline_ai -f scripts/setup_database.sql
+psql -U postgres -d storydump -f scripts/setup_database.sql
 
 # Or use Python script
 python scripts/init_db.py
@@ -67,20 +67,20 @@ python scripts/init_db.py
 
 ```bash
 # Index media files
-storyline-cli index-media /path/to/media/stories
+storydump-cli index-media /path/to/media/stories
 
 # List indexed media
-storyline-cli list-media --limit 20
+storydump-cli list-media --limit 20
 ```
 
 ### 5. Create Schedule
 
 ```bash
 # Create 7-day posting schedule
-storyline-cli create-schedule --days 7
+storydump-cli create-schedule --days 7
 
 # View queue
-storyline-cli list-queue
+storydump-cli list-queue
 ```
 
 ### 6. Run the Application
@@ -98,62 +98,62 @@ python -m src.main
 
 ```bash
 # Index media from directory
-storyline-cli index-media /path/to/media
+storydump-cli index-media /path/to/media
 
 # List all media items
-storyline-cli list-media --limit 50 --active-only
+storydump-cli list-media --limit 50 --active-only
 
 # Validate image
-storyline-cli validate-image /path/to/image.jpg
+storydump-cli validate-image /path/to/image.jpg
 ```
 
 ### Queue Management
 
 ```bash
 # Create posting schedule (uses category ratios)
-storyline-cli create-schedule --days 7
+storydump-cli create-schedule --days 7
 
 # Process pending posts
-storyline-cli process-queue
+storydump-cli process-queue
 
 # Force process next post (development testing)
-storyline-cli process-queue --force
+storydump-cli process-queue --force
 
 # View queue
-storyline-cli list-queue
+storydump-cli list-queue
 
 # Reset queue (clear all pending posts)
-storyline-cli reset-queue
+storydump-cli reset-queue
 ```
 
 ### Category Management
 
 ```bash
 # List categories and their posting ratios
-storyline-cli list-categories
+storydump-cli list-categories
 
 # Update category posting ratios (interactive prompts)
-storyline-cli update-category-mix
+storydump-cli update-category-mix
 
 # View ratio history (Type 2 SCD)
-storyline-cli category-mix-history --limit 10
+storydump-cli category-mix-history --limit 10
 ```
 
 ### User Management
 
 ```bash
 # List users
-storyline-cli list-users
+storydump-cli list-users
 
 # Promote user to admin
-storyline-cli promote-user <telegram_user_id> --role admin
+storydump-cli promote-user <telegram_user_id> --role admin
 ```
 
 ### Health Check
 
 ```bash
 # Check system health
-storyline-cli check-health
+storydump-cli check-health
 ```
 
 ## Telegram Bot Commands
@@ -242,13 +242,13 @@ pytest -m unit
 pytest -m integration
 
 # Force process next post (development testing)
-storyline-cli process-queue --force
+storydump-cli process-queue --force
 ```
 
 ### Project Structure
 
 ```
-storyline-ai/
+storydump/
 ├── src/                    # Main application code
 │   ├── config/            # Configuration management
 │   ├── models/            # Database models

@@ -4,7 +4,7 @@ import { ArrowRight, Clock } from "lucide-react"
 import { Checklist } from "@/components/setup/checklist"
 
 export const metadata: Metadata = {
-  title: "Getting Started — Storyline AI",
+  title: "Getting Started — Storydump",
   robots: { index: false, follow: false },
 }
 
@@ -21,7 +21,7 @@ export default function SetupOverview() {
   return (
     <div>
       <h1 className="text-3xl font-bold tracking-tight">
-        Getting Started with Storyline AI
+        Getting Started with Storydump
       </h1>
       <p className="mt-4 text-lg text-muted-foreground">
         Before connecting to the Telegram bot, you&apos;ll need to set up a few

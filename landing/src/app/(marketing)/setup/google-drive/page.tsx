@@ -7,7 +7,7 @@ import { Screenshot } from "@/components/setup/screenshot"
 import { CopyButton } from "@/components/setup/copy-button"
 
 export const metadata: Metadata = {
-  title: "Google Drive Setup — Storyline AI",
+  title: "Google Drive Setup — Storydump",
   robots: { index: false, follow: false },
 }
 
@@ -19,7 +19,7 @@ export default function GoogleDriveSetup() {
       </h1>
       <p className="mt-4 text-lg text-muted-foreground">
         Create a Google Cloud project with the Drive API enabled and OAuth
-        credentials so Storyline can read your media files.
+        credentials so Storydump can read your media files.
       </p>
 
       <div className="mt-10 space-y-10">
@@ -35,7 +35,7 @@ export default function GoogleDriveSetup() {
               </span>
             </li>
             <li>
-              Name it something recognizable (e.g., &quot;Storyline AI&quot;)
+              Name it something recognizable (e.g., &quot;Storydump&quot;)
             </li>
             <li>Click Create</li>
           </ol>
@@ -139,7 +139,7 @@ export default function GoogleDriveSetup() {
 
         <StepCard number={5} title="Verify it's working">
           <p>
-            You should now have two values ready for the Storyline setup wizard:
+            You should now have two values ready for the Storydump setup wizard:
           </p>
           <ul className="mt-2 list-inside list-disc space-y-1">
             <li>

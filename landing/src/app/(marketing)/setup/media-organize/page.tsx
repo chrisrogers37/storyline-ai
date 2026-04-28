@@ -5,7 +5,7 @@ import { StepCard } from "@/components/setup/step-card"
 import { Callout } from "@/components/setup/callout"
 
 export const metadata: Metadata = {
-  title: "Organize Your Media — Storyline AI",
+  title: "Organize Your Media — Storydump",
   robots: { index: false, follow: false },
 }
 
@@ -16,14 +16,14 @@ export default function MediaOrganize() {
         Organizing Your Media
       </h1>
       <p className="mt-4 text-lg text-muted-foreground">
-        Storyline reads media from your Google Drive. How you organize your
+        Storydump reads media from your Google Drive. How you organize your
         folders determines your content categories and posting mix.
       </p>
 
       <div className="mt-10 space-y-10">
         <StepCard number={1} title="Folder structure = categories">
           <p>
-            Storyline treats each subfolder in your root media folder as a
+            Storydump treats each subfolder in your root media folder as a
             category. Here&apos;s the recommended structure:
           </p>
           <pre className="mt-3 overflow-x-auto rounded-lg bg-muted p-4 text-sm">
@@ -61,14 +61,14 @@ export default function MediaOrganize() {
             </li>
           </ul>
           <Callout type="tip" className="mt-3">
-            Don&apos;t worry about getting everything perfect. Storyline
+            Don&apos;t worry about getting everything perfect. Storydump
             validates each file and will tell you which ones need attention.
           </Callout>
         </StepCard>
 
         <StepCard number={3} title="Category mixing">
           <p>
-            Storyline distributes posts across your categories based on ratios
+            Storydump distributes posts across your categories based on ratios
             you define. For example:
           </p>
           <ul className="mt-2 list-inside list-disc space-y-1">
@@ -94,7 +94,7 @@ export default function MediaOrganize() {
             </li>
           </ul>
           <p className="mt-2">
-            Storyline tracks what&apos;s been posted and cycles through your
+            Storydump tracks what&apos;s been posted and cycles through your
             library evenly — never-posted content always goes first.
           </p>
         </StepCard>
@@ -106,11 +106,11 @@ export default function MediaOrganize() {
               Telegram
             </li>
             <li>
-              Remove content you&apos;d never want to post — Storyline will try
+              Remove content you&apos;d never want to post — Storydump will try
               to post everything in the folder
             </li>
             <li>
-              You can add or remove files anytime — Storyline syncs
+              You can add or remove files anytime — Storydump syncs
               automatically
             </li>
           </ul>

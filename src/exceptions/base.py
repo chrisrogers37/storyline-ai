@@ -1,9 +1,9 @@
-"""Base exception classes for Storyline AI."""
+"""Base exception classes for Storydump."""
 
 
-class StorylineError(Exception):
+class StorydumpError(Exception):
     """
-    Base exception for all Storyline errors.
+    Base exception for all Storydump errors.
 
     All custom exceptions in the application should inherit from this class
     to enable consistent error handling and catching.

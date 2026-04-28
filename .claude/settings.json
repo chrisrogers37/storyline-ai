@@ -10,12 +10,12 @@
       "Bash(pip*)",
       "Bash(pytest*)",
       "Bash(ruff*)",
-      "Bash(storyline-cli index-media*)",
-      "Bash(storyline-cli list-*)",
-      "Bash(storyline-cli check-health*)",
-      "Bash(storyline-cli validate-image*)",
-      "Bash(storyline-cli category-mix-history*)",
-      "Bash(storyline-cli instagram-status*)",
+      "Bash(storydump-cli index-media*)",
+      "Bash(storydump-cli list-*)",
+      "Bash(storydump-cli check-health*)",
+      "Bash(storydump-cli validate-image*)",
+      "Bash(storydump-cli category-mix-history*)",
+      "Bash(storydump-cli instagram-status*)",
       "Bash(source venv*)",
       "Bash(. venv*)",
       "Bash(git status*)",
@@ -51,10 +51,10 @@
       "Edit(documentation/**/*.md)"
     ],
     "deny": [
-      "Bash(storyline-cli process-queue*)",
-      "Bash(storyline-cli create-schedule*)",
-      "Bash(storyline-cli reset-queue*)",
-      "Bash(storyline-cli instagram-auth*)",
+      "Bash(storydump-cli process-queue*)",
+      "Bash(storydump-cli create-schedule*)",
+      "Bash(storydump-cli reset-queue*)",
+      "Bash(storydump-cli instagram-auth*)",
       "Bash(python -m src.main*)",
       "Bash(python src/main.py*)"
     ]

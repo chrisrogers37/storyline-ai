@@ -1,4 +1,4 @@
--- Storyline AI Database Schema
+-- Storydump Database Schema
 -- Phase 1: Core Tables
 
 -- Enable UUID extension

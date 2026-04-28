@@ -466,7 +466,7 @@ def build_webapp_button(
     Group chats use a signed URL token (opens in browser).
 
     Args:
-        text: Button label text (e.g., "Open Storyline", "Open Dashboard")
+        text: Button label text (e.g., "Open Storydump", "Open Dashboard")
         webapp_url: The base webapp URL including query params
         chat_type: Telegram chat type string (from update.effective_chat.type)
         chat_id: Telegram chat ID (for URL token signing)

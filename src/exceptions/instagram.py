@@ -2,10 +2,10 @@
 
 from typing import Optional
 
-from src.exceptions.base import StorylineError
+from src.exceptions.base import StorydumpError
 
 
-class InstagramAPIError(StorylineError):
+class InstagramAPIError(StorydumpError):
     """
     General Instagram API error.
 
@@ -74,7 +74,7 @@ class TokenExpiredError(InstagramAPIError):
         super().__init__(message, **kwargs)
 
 
-class MediaUploadError(StorylineError):
+class MediaUploadError(StorydumpError):
     """
     Cloud storage upload failed.
 

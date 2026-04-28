@@ -12,7 +12,7 @@ ENV_FILE ?= .env
 # Database connection variables
 DB_HOST ?= localhost
 DB_PORT ?= 5432
-DB_NAME ?= storyline_ai
+DB_NAME ?= storydump
 DB_USER ?= $(USER)
 DB_PASSWORD ?=
 
@@ -29,7 +29,7 @@ RED    := \033[0;31m
 NC     := \033[0m # No Color
 
 help: ## Show this help message
-	@echo "$(GREEN)Storyline AI - Makefile Commands$(NC)"
+	@echo "$(GREEN)Storydump - Makefile Commands$(NC)"
 	@echo ""
 	@echo "$(YELLOW)Usage:$(NC)"
 	@echo "  make <target>"
@@ -128,7 +128,7 @@ check-db: ## Check if database exists and is accessible
 
 check-health: ## Run application health checks
 	@echo "$(GREEN)Running health checks...$(NC)"
-	storyline-cli check-health
+	storydump-cli check-health
 
 index-media: ## Index media files from MEDIA_DIR
 	@echo "$(GREEN)Indexing media files...$(NC)"
@@ -136,23 +136,23 @@ index-media: ## Index media files from MEDIA_DIR
 		echo "$(YELLOW)Usage: make index-media DIR=path/to/media$(NC)"; \
 		exit 1; \
 	fi
-	storyline-cli index-media $(DIR)
+	storydump-cli index-media $(DIR)
 
 create-schedule: ## Create posting schedule (default: 7 days)
 	@echo "$(GREEN)Creating posting schedule...$(NC)"
-	storyline-cli create-schedule --days $(or $(DAYS),7)
+	storydump-cli create-schedule --days $(or $(DAYS),7)
 
 list-queue: ## List pending queue items
-	storyline-cli list-queue
+	storydump-cli list-queue
 
 list-media: ## List indexed media items
-	storyline-cli list-media --limit $(or $(LIMIT),50)
+	storydump-cli list-media --limit $(or $(LIMIT),50)
 
 list-users: ## List all users
-	storyline-cli list-users
+	storydump-cli list-users
 
 run: ## Run the main application
-	@echo "$(GREEN)Starting Storyline AI...$(NC)"
+	@echo "$(GREEN)Starting Storydump...$(NC)"
 	python -m src.main
 
 dev: ## Run in development mode with environment validation
@@ -167,7 +167,7 @@ dev: ## Run in development mode with environment validation
 
 logs: ## View application logs (tail -f)
 	@echo "$(GREEN)Tailing logs...$(NC)"
-	tail -f logs/storyline.log
+	tail -f logs/app.log
 
 db-shell: ## Open PostgreSQL shell for application database
 	@echo "$(GREEN)Opening database shell...$(NC)"

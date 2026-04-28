@@ -242,7 +242,7 @@ class TelegramService(BaseService):
 
         # Register commands with Telegram for autocomplete menu
         commands = [
-            BotCommand("start", "Open Storyline (setup & config)"),
+            BotCommand("start", "Open Storydump (setup & config)"),
             BotCommand("status", "System health & media overview"),
             BotCommand("setup", "Quick settings & toggles"),
             BotCommand("next", "Send next post now"),

@@ -30,7 +30,7 @@ class TelegramLifecycleHandler:
                 data = dash.get_user_instances(self.service.admin_chat_id)
 
             instances = data["instances"]
-            lines = ["🟢 *Storyline AI Started*\n"]
+            lines = ["🟢 *Storydump Started*\n"]
 
             if instances:
                 lines.append("Your instances:")
@@ -76,7 +76,7 @@ class TelegramLifecycleHandler:
             uptime_str = f"{hours}h {minutes}m"
 
             message = (
-                f"🔴 *Storyline AI Stopped*\n\n"
+                f"🔴 *Storydump Stopped*\n\n"
                 f"📊 *Session Summary:*\n"
                 f"├─ Uptime: {uptime_str}\n"
                 f"├─ Posts sent: {posts_sent}\n"

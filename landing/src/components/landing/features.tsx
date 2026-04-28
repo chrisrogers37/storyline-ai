@@ -41,7 +41,7 @@ const features = [
     icon: Shield,
     title: "Self-Hosted Media",
     description:
-      "Your images stay in your cloud storage. Storyline orchestrates — it never owns your content.",
+      "Your images stay in your cloud storage. Storydump orchestrates — it never owns your content.",
   },
 ]
 

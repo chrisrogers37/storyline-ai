@@ -5,7 +5,7 @@ const steps = [
     number: 1,
     title: "Connect Your Drive",
     description:
-      "Link your Google Drive folder. Storyline indexes your media and keeps everything in sync automatically.",
+      "Link your Google Drive folder. Storydump indexes your media and keeps everything in sync automatically.",
     icon: Cloud,
   },
   {

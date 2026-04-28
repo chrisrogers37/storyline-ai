@@ -4,7 +4,7 @@ import { Sidebar } from "@/components/dashboard/sidebar";
 import { DashboardHeader } from "@/components/dashboard/header";
 
 export const metadata = {
-  title: "Dashboard — Storyline AI",
+  title: "Dashboard — Storydump",
 };
 
 export default async function DashboardLayout({

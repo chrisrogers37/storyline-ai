@@ -1,6 +1,6 @@
-"""Storyline AI exception classes."""
+"""Storydump exception classes."""
 
-from src.exceptions.base import StorylineError
+from src.exceptions.base import StorydumpError
 from src.exceptions.google_drive import (
     GoogleDriveError,
     GoogleDriveAuthError,
@@ -20,7 +20,7 @@ from src.exceptions.backfill import (
 )
 
 __all__ = [
-    "StorylineError",
+    "StorydumpError",
     "GoogleDriveError",
     "GoogleDriveAuthError",
     "GoogleDriveRateLimitError",

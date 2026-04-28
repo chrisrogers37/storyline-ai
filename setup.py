@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 from src import __version__
 
 setup(
-    name="storyline-ai",
+    name="storydump",
     version=__version__,
     description="Instagram Story Automation System with Telegram Integration",
     author="Your Name",
@@ -31,7 +31,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "storyline-cli=cli.main:cli",
+            "storydump-cli=cli.main:cli",
         ],
     },
     python_requires=">=3.10",

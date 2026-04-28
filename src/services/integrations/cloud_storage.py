@@ -63,7 +63,7 @@ class CloudStorageService(BaseService):
         file_path: Optional[str] = None,
         file_bytes: Optional[bytes] = None,
         filename: Optional[str] = None,
-        folder: str = "storyline",
+        folder: str = "storydump",
         public_id: Optional[str] = None,
     ) -> dict:
         """
@@ -264,7 +264,7 @@ class CloudStorageService(BaseService):
             logger.error(f"Error fetching Cloudinary resource: {e}")
             return None
 
-    def cleanup_expired(self, folder: str = "storyline") -> int:
+    def cleanup_expired(self, folder: str = "storydump") -> int:
         """
         Remove uploads older than retention period.
 

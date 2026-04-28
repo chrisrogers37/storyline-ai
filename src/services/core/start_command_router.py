@@ -143,16 +143,16 @@ class StartCommandRouter:
             )
 
             if onboarding_done:
-                button_text = "Open Storyline"
+                button_text = "Open Storydump"
                 message_text = (
-                    "Welcome back to *Storyline AI*!\n\n"
+                    "Welcome back to *Storydump*!\n\n"
                     "Tap the button below to view your dashboard "
                     "and manage your settings."
                 )
             else:
                 button_text = "Open Setup Wizard"
                 message_text = (
-                    "Welcome to *Storyline AI*!\n\n"
+                    "Welcome to *Storydump*!\n\n"
                     "Let's get you set up. Tap the button below to "
                     "connect your accounts and configure your posting schedule."
                 )
@@ -173,7 +173,7 @@ class StartCommandRouter:
             )
         else:
             await update.message.reply_text(
-                "👋 *Storyline AI Bot*\n\n"
+                "👋 *Storydump Bot*\n\n"
                 "Commands:\n"
                 "/status - System health & overview\n"
                 "/next - Force send next post\n"
@@ -225,7 +225,7 @@ class StartCommandRouter:
             data = dash.get_user_instances(update.effective_user.id)
 
         instances = data["instances"]
-        lines = ["Welcome back to *Storyline AI*\\!\n\nYour instances:"]
+        lines = ["Welcome back to *Storydump*\\!\n\nYour instances:"]
 
         keyboard_rows = []
         for i, inst in enumerate(instances, 1):
@@ -270,7 +270,7 @@ class StartCommandRouter:
         context.user_data["onboarding_session_id"] = str(session.id)
 
         await update.message.reply_text(
-            "Welcome to *Storyline AI*\\! Let's set up your first posting instance\\.\n\n"
+            "Welcome to *Storydump*\\! Let's set up your first posting instance\\.\n\n"
             "What do you want to call this instance?\n"
             '_\\(e\\.g\\. "TL Enterprises", "Personal Brand"\\)_',
             parse_mode="MarkdownV2",

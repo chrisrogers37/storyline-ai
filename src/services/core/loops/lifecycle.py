@@ -26,7 +26,7 @@ def validate_and_log_startup() -> None:
     Exits the process if configuration is invalid.
     """
     logger.info("=" * 60)
-    logger.info("Storyline AI - Instagram Story Automation System")
+    logger.info("Storydump - Instagram Story Automation System")
     logger.info("=" * 60)
 
     is_valid, errors = ConfigValidator.validate_all()

@@ -1,4 +1,4 @@
-"""FastAPI application for Storyline AI OAuth flows and Mini App."""
+"""FastAPI application for Storydump OAuth flows and Mini App."""
 
 from pathlib import Path
 
@@ -12,8 +12,8 @@ from src.api.routes.onboarding import router as onboarding_router
 from src.config.settings import settings
 
 app = FastAPI(
-    title="Storyline AI API",
-    description="OAuth and API endpoints for Storyline AI",
+    title="Storydump API",
+    description="OAuth and API endpoints for Storydump",
     version="0.1.0",
 )
 

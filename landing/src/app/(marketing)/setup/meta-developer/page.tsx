@@ -7,7 +7,7 @@ import { Screenshot } from "@/components/setup/screenshot"
 import { CopyButton } from "@/components/setup/copy-button"
 
 export const metadata: Metadata = {
-  title: "Meta Developer Setup — Storyline AI",
+  title: "Meta Developer Setup — Storydump",
   robots: { index: false, follow: false },
 }
 
@@ -56,7 +56,7 @@ export default function MetaDeveloperSetup() {
               Consumer, not None)
             </li>
             <li>
-              App name: anything you like (e.g., &quot;Storyline AI&quot; or
+              App name: anything you like (e.g., &quot;Storydump&quot; or
               &quot;My Story Bot&quot;)
             </li>
             <li>App contact email: your email address</li>
@@ -103,7 +103,7 @@ export default function MetaDeveloperSetup() {
 
         <StepCard number={5} title="Generate an access token">
           <p>
-            Storyline handles OAuth for you during the Telegram setup wizard, so
+            Storydump handles OAuth for you during the Telegram setup wizard, so
             your app just needs the right permissions configured. The required
             scopes are:
           </p>
@@ -178,7 +178,7 @@ export default function MetaDeveloperSetup() {
             </li>
           </ul>
           <Callout type="tip" className="mt-3">
-            If you only plan to use Storyline for your own account(s),
+            If you only plan to use Storydump for your own account(s),
             Development Mode is sufficient — you don&apos;t strictly need App
             Review. But it&apos;s recommended for stability.
           </Callout>
@@ -216,7 +216,7 @@ export default function MetaDeveloperSetup() {
               <span className="font-medium text-foreground">App Secret</span>
             </li>
             <li>
-              You&apos;ll enter these during Storyline&apos;s Telegram setup
+              You&apos;ll enter these during Storydump&apos;s Telegram setup
             </li>
           </ol>
           <Screenshot caption="App Settings showing App ID and App Secret" />
@@ -262,7 +262,7 @@ export default function MetaDeveloperSetup() {
                 &quot;Token expires after 60 days&quot;
               </p>
               <p>
-                Storyline handles token auto-refresh automatically. You
+                Storydump handles token auto-refresh automatically. You
                 don&apos;t need to manually renew tokens.
               </p>
             </div>

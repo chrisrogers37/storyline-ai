@@ -6,7 +6,7 @@ import { Callout } from "@/components/setup/callout"
 import { Screenshot } from "@/components/setup/screenshot"
 
 export const metadata: Metadata = {
-  title: "Instagram Account Setup — Storyline AI",
+  title: "Instagram Account Setup — Storydump",
   robots: { index: false, follow: false },
 }
 

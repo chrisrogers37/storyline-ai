@@ -11,30 +11,30 @@ Domain-specific rules are in `.claude/rules/` and load automatically when workin
 
 ### NEVER run these commands:
 ```bash
-storyline-cli process-queue          # Posts to Instagram/Telegram
-storyline-cli process-queue --force  # Posts to Instagram/Telegram
+storydump-cli process-queue          # Posts to Instagram/Telegram
+storydump-cli process-queue --force  # Posts to Instagram/Telegram
 python -m src.main                   # Starts posting scheduler
-storyline-cli create-schedule        # Modifies production schedule
-storyline-cli reset-queue            # Modifies production queue
-storyline-cli instagram-auth         # Modifies authentication
+storydump-cli create-schedule        # Modifies production schedule
+storydump-cli reset-queue            # Modifies production queue
+storydump-cli instagram-auth         # Modifies authentication
 ```
 
 ### SAFE commands you CAN run:
 ```bash
-storyline-cli list-queue             # Reading/inspection only
-storyline-cli list-media
-storyline-cli list-categories
-storyline-cli list-users
-storyline-cli check-health
-storyline-cli instagram-status
-storyline-cli validate-image <path>
-storyline-cli category-mix-history
-storyline-cli sync-media
-storyline-cli sync-status
-storyline-cli backfill-instagram --dry-run
-storyline-cli backfill-status
-storyline-cli pool-health
-storyline-cli dedup-media            # Dry-run by default (--apply mutates)
+storydump-cli list-queue             # Reading/inspection only
+storydump-cli list-media
+storydump-cli list-categories
+storydump-cli list-users
+storydump-cli check-health
+storydump-cli instagram-status
+storydump-cli validate-image <path>
+storydump-cli category-mix-history
+storydump-cli sync-media
+storydump-cli sync-status
+storydump-cli backfill-instagram --dry-run
+storydump-cli backfill-status
+storydump-cli pool-health
+storydump-cli dedup-media            # Dry-run by default (--apply mutates)
 pytest                               # Tests - always safe
 ```
 
@@ -61,7 +61,7 @@ pytest                               # Tests - always safe
 
 ## Project Overview
 
-**Storyline AI** is a self-hosted Instagram Story scheduling and automation system with Telegram-based team collaboration.
+**Storydump** is a self-hosted Instagram Story scheduling and automation system with Telegram-based team collaboration.
 
 **Core Philosophy**: Phased deployment — 100% manual posting (Phase 1), optional Instagram API automation (Phase 2), web UI (Phase 3).
 
@@ -85,10 +85,10 @@ python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt && pip install -e .
 
 # Common tasks
-storyline-cli check-health
-storyline-cli queue-preview
-storyline-cli list-categories
-storyline-cli update-category-mix
+storydump-cli check-health
+storydump-cli queue-preview
+storydump-cli list-categories
+storydump-cli update-category-mix
 
 # Testing
 pytest                          # All tests

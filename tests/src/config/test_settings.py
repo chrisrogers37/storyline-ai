@@ -19,7 +19,7 @@ class TestSettingsDefaults:
         assert Settings.model_fields["DB_PORT"].default == 5432
 
     def test_db_name_defaults(self):
-        assert Settings.model_fields["DB_NAME"].default == "storyline_ai"
+        assert Settings.model_fields["DB_NAME"].default == "storydump"
 
     def test_posts_per_day_defaults_to_3(self):
         assert Settings.model_fields["POSTS_PER_DAY"].default == 3
@@ -80,9 +80,9 @@ class TestSettingsDatabaseUrl:
             "TELEGRAM_BOT_TOKEN": "test-token-123",
             "TELEGRAM_CHANNEL_ID": -1001234567,
             "ADMIN_TELEGRAM_CHAT_ID": 12345,
-            "DB_USER": "storyline_user",
-            "DB_NAME": "storyline_ai",
-            "TEST_DB_NAME": "storyline_ai_test",
+            "DB_USER": "storydump_user",
+            "DB_NAME": "storydump",
+            "TEST_DB_NAME": "storydump_test",
         }
         defaults.update(overrides)
         return Settings(_env_file=None, **defaults)
@@ -92,19 +92,19 @@ class TestSettingsDatabaseUrl:
         url = s.database_url
         assert "secret123" in url
         assert url.startswith("postgresql://")
-        assert "storyline_user" in url
-        assert "storyline_ai" in url
+        assert "storydump_user" in url
+        assert "storydump" in url
 
     def test_database_url_without_password(self):
         s = self._make_settings(DB_PASSWORD="")
         url = s.database_url
         assert ":@" not in url
-        assert "storyline_user@" in url
+        assert "storydump_user@" in url
 
     def test_test_database_url_uses_test_db_name(self):
         s = self._make_settings(DB_PASSWORD="secret")
         url = s.test_database_url
-        assert "storyline_ai_test" in url
+        assert "storydump_test" in url
         assert url != s.database_url
 
     def test_database_url_includes_host_and_port(self):

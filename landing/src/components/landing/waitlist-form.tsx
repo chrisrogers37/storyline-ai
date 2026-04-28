@@ -12,7 +12,7 @@ interface WaitlistFormProps {
 }
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const STORAGE_KEY = "storyline-waitlist-registered"
+const STORAGE_KEY = "storydump-waitlist-registered"
 
 type FormStatus = "idle" | "submitting" | "success" | "error" | "duplicate"
 
@@ -116,7 +116,7 @@ export function WaitlistForm({
             </>
           )}
           <a
-            href="https://t.me/storyline_ai"
+            href="https://t.me/storydump_bot"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-block text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground transition-colors"

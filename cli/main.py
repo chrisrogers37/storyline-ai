@@ -39,7 +39,7 @@ console = Console()
 @click.group()
 @click.version_option(version=__version__)
 def cli():
-    """Storyline AI - Instagram Story Automation System"""
+    """Storydump - Instagram Story Automation System"""
     pass
 
 

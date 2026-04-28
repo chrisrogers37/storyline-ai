@@ -7,7 +7,7 @@ from src.exceptions.backfill import (
     BackfillMediaExpiredError,
     BackfillMediaNotFoundError,
 )
-from src.exceptions.base import StorylineError
+from src.exceptions.base import StorydumpError
 
 
 @pytest.mark.unit
@@ -26,10 +26,10 @@ class TestBackfillExceptions:
         assert str(error) == "General failure"
         assert error.instagram_media_id is None
 
-    def test_backfill_error_inherits_from_storyline_error(self):
-        """BackfillError is a StorylineError."""
+    def test_backfill_error_inherits_from_storydump_error(self):
+        """BackfillError is a StorydumpError."""
         error = BackfillError("test")
-        assert isinstance(error, StorylineError)
+        assert isinstance(error, StorydumpError)
 
     def test_backfill_media_expired_error(self):
         """BackfillMediaExpiredError inherits from BackfillError."""

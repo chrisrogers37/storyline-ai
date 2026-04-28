@@ -123,12 +123,12 @@ URL tokens bake in `chat_id` and are valid for 1 hour. If a user is removed from
 ```
 User sends /start in DM
   ↓
-Bot: "Welcome to Storyline AI! Let's set up your first posting instance."
+Bot: "Welcome to Storydump! Let's set up your first posting instance."
   ↓
 Step 1: "What do you want to call this instance?" → user types "TL Enterprises"
   ↓
 Step 2: "Add me to the group chat where your team will review posts."
-        [Button: "Add to Group Chat" → t.me/StorylineAIBot?startgroup=setup_{session_id}]
+        [Button: "Add to Group Chat" → t.me/storydump_bot?startgroup=setup_{session_id}]
         "Bot already in your group? Run /link in that group."
   ↓
 Bot is added to group → my_chat_member event fires → auto-links pending session

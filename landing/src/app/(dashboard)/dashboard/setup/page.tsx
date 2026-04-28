@@ -4,7 +4,7 @@ import { backendPost } from "@/lib/backend";
 import { SetupWizard } from "@/components/dashboard/setup-wizard";
 
 export const metadata = {
-  title: "Setup — Storyline AI",
+  title: "Setup — Storydump",
 };
 
 export default async function SetupPage() {

@@ -2,10 +2,10 @@
 
 from typing import Optional
 
-from src.exceptions.base import StorylineError
+from src.exceptions.base import StorydumpError
 
 
-class GoogleDriveError(StorylineError):
+class GoogleDriveError(StorydumpError):
     """General Google Drive API error."""
 
     def __init__(

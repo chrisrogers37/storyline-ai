@@ -1,4 +1,4 @@
-# Project Mission — Storyline AI
+# Project Mission — Storydump
 
 ## What this project is
 A social media automation platform that manages the full content lifecycle — from sourcing and scheduling to posting and performance analysis. Currently a Telegram bot for Instagram Stories with Google Drive as the content hub. Supports multi-account management for small teams.
