@@ -1,6 +1,6 @@
 # Cloud Deployment Guide
 
-Deploy Storyline AI to cloud infrastructure (Railway + Neon) for multi-tenant SaaS operation.
+Deploy Storydump to cloud infrastructure (Railway + Neon) for multi-tenant SaaS operation.
 
 **Estimated time:** 2-3 hours for complete setup
 **Prerequisites:** GitHub account, Railway account, Neon account
@@ -41,7 +41,7 @@ External APIs:
 ### Create a Neon Project
 
 1. Sign up at [console.neon.tech](https://console.neon.tech)
-2. Create a new project (name: `storyline-ai`)
+2. Create a new project (name: `storydump`)
 3. Note your connection details from the dashboard
 
 ### Run Schema Setup
@@ -49,7 +49,7 @@ External APIs:
 Connect via `psql` using the Neon connection string:
 
 ```bash
-psql "postgresql://storyline_user:PASSWORD@ep-xxx.region.neon.tech/storyline_ai?sslmode=require"
+psql "postgresql://storydump_user:PASSWORD@ep-xxx.region.neon.tech/storydump?sslmode=require"
 ```
 
 Run the base schema and all migrations in order:
@@ -94,7 +94,7 @@ The defaults (pool_size=10, max_overflow=20) are too aggressive for Neon free ti
 
 ### Two-Process Architecture
 
-Storyline AI requires **two processes** on Railway:
+Storydump requires **two processes** on Railway:
 
 1. **Worker** (`python -m src.main`): Telegram bot + scheduler + background loops
 2. **Web** (`uvicorn src.api.app:app`): OAuth callbacks + onboarding Mini App
@@ -139,7 +139,7 @@ Configure these in the Railway dashboard for **both** services:
 
 | Variable | Description | Example |
 |---|---|---|
-| `DATABASE_URL` | Full Neon connection string (includes SSL) | `postgresql://user:pass@ep-xxx.neon.tech/storyline_ai?sslmode=require` |
+| `DATABASE_URL` | Full Neon connection string (includes SSL) | `postgresql://user:pass@ep-xxx.neon.tech/storydump?sslmode=require` |
 | `TELEGRAM_BOT_TOKEN` | From BotFather | `123456:ABC-DEF1234ghIkl` |
 | `TELEGRAM_CHANNEL_ID` | Your Telegram channel (negative) | `-1001234567890` |
 | `ADMIN_TELEGRAM_CHAT_ID` | Your personal chat ID | `123456789` |
@@ -154,8 +154,8 @@ If not using `DATABASE_URL`, set individual components:
 |---|---|---|
 | `DB_HOST` | Neon endpoint | `ep-cool-morning-123456.us-east-2.aws.neon.tech` |
 | `DB_PORT` | Database port | `5432` |
-| `DB_NAME` | Database name | `storyline_ai` |
-| `DB_USER` | Database user | `storyline_user` |
+| `DB_NAME` | Database name | `storydump` |
+| `DB_USER` | Database user | `storydump_user` |
 | `DB_PASSWORD` | Database password | `neon_generated_password` |
 | `DB_SSLMODE` | SSL mode (required for Neon) | `require` |
 | `DB_POOL_SIZE` | Connection pool size | `3` (Neon free tier) |
@@ -205,7 +205,7 @@ If not using `DATABASE_URL`, set individual components:
 3. `/setcommands` to register commands:
 
 ```
-start - Open Storyline (setup & config)
+start - Open Storydump (setup & config)
 status - System health & media overview
 setup - Quick settings & toggles
 queue - View upcoming posts

@@ -117,7 +117,7 @@ export default function GoogleDriveSetup() {
             <li>Add an authorized redirect URI:</li>
           </ol>
           <div className="mt-2">
-            <CopyButton value="https://storyline-ai-production.up.railway.app/auth/google-drive/callback" />
+            <CopyButton value="https://storydump-production.up.railway.app/auth/google-drive/callback" />
           </div>
           <ol className="mt-2 list-inside list-decimal space-y-1" start={4}>
             <li>Click Create</li>

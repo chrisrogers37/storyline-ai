@@ -1,6 +1,6 @@
 # Testing Guide
 
-This document explains how testing works in the Storyline AI project.
+This document explains how testing works in the Storydump project.
 
 **Current test count**: 1,417 tests across 77 test files as of v1.6.0
 
@@ -31,7 +31,7 @@ The test suite **automatically creates and manages its own PostgreSQL test datab
 
 1. **Setup Phase** (once per test run):
    - Connects to PostgreSQL using credentials from `.env.test`
-   - Creates `storyline_ai_test` database if it doesn't exist
+   - Creates `storydump_test` database if it doesn't exist
    - Creates all tables using SQLAlchemy models
 
 2. **Test Execution** (for each test):
@@ -52,7 +52,7 @@ DB_HOST=localhost
 DB_PORT=5432
 DB_USER=postgres              # Must have CREATE DATABASE permission
 DB_PASSWORD=postgres
-TEST_DB_NAME=storyline_ai_test  # The database to auto-create
+TEST_DB_NAME=storydump_test  # The database to auto-create
 
 # Test values for required settings
 TELEGRAM_BOT_TOKEN=test_bot_token
@@ -73,12 +73,12 @@ def setup_test_database():
     Session-scoped fixture - runs once per test session.
 
     1. Connects to 'postgres' database
-    2. Creates 'storyline_ai_test' database
+    2. Creates 'storydump_test' database
     3. Creates all tables via SQLAlchemy
     4. Yields engine to tests
     5. Drops everything after tests complete
     """
-    create_test_database()  # CREATE DATABASE storyline_ai_test
+    create_test_database()  # CREATE DATABASE storydump_test
 
     engine = create_engine(settings.test_database_url)
     Base.metadata.create_all(engine)  # CREATE TABLE users, media_items, etc.
@@ -86,7 +86,7 @@ def setup_test_database():
     yield engine
 
     Base.metadata.drop_all(engine)  # DROP TABLE ...
-    drop_test_database()            # DROP DATABASE storyline_ai_test
+    drop_test_database()            # DROP DATABASE storydump_test
 
 
 @pytest.fixture(scope="function")
@@ -357,10 +357,10 @@ The `DB_USER` in `.env.test` lacks permissions:
 # Edit .env.test: DB_USER=postgres
 
 # Option 2: Grant permissions to your user
-psql -U postgres -c "ALTER USER storyline_user CREATEDB;"
+psql -U postgres -c "ALTER USER storydump_user CREATEDB;"
 ```
 
-### "FATAL: database 'storyline_ai_test' does not exist"
+### "FATAL: database 'storydump_test' does not exist"
 
 This shouldn't happen since the test suite creates it automatically. If you see this:
 - Check PostgreSQL is running: `pg_ctl status`
@@ -392,7 +392,7 @@ pytest --pdb -x  # Stops at first failure, before cleanup
 
 Then connect in another terminal:
 ```bash
-psql -U postgres -d storyline_ai_test
+psql -U postgres -d storydump_test
 ```
 
 ---

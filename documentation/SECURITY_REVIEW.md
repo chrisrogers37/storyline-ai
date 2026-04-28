@@ -1,4 +1,4 @@
-# Security Review - Storyline AI
+# Security Review - Storydump
 
 **Date**: 2026-01-11 (Updated 2026-02-15)
 **Reviewer**: AI Security Audit
@@ -222,7 +222,7 @@ async def handle_pause(self, update, context):
 
 2. **Consider Adding Optional Admin-Only Mode**
    - If you want to restrict certain commands later, the codebase already supports role-based access
-   - Users can be promoted to admin via `storyline-cli promote-user <id> --role admin`
+   - Users can be promoted to admin via `storydump-cli promote-user <id> --role admin`
    - See code example in Section 2 above for implementation
 
 3. **Add Security Best Practices Documentation**

@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Post-signup experience** (#260) — Replaced dead-end "We'll be in touch" confirmation with enriched post-signup block: sets timeline expectations (within a week), gives a micro-task (prepare Google Drive folder), and adds Telegram community link to move signups from "registered" to "engaged."
 - **Social proof stats bar and trust badges** (#258) — Added stats bar (stories posted, content managed, active creators) between Hero and How It Works sections. Added trust badges below hero CTA with lock/Instagram/key icons addressing top 3 signup objections (content stays in Drive, official API, no password required).
-- **Competitive positioning section** (#259) — Added "Why not just use Buffer?" comparison table between Features and Pricing, contrasting Storyline vs Buffer/Later across 5 dimensions. Added positioning line to hero: "The Instagram Story tool that lives in Telegram — not another dashboard."
+- **Competitive positioning section** (#259) — Added "Why not just use Buffer?" comparison table between Features and Pricing, contrasting Storydump vs Buffer/Later across 5 dimensions. Added positioning line to hero: "The Instagram Story tool that lives in Telegram — not another dashboard."
 
 ### Fixed
 
@@ -675,7 +675,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`/status` enhanced with setup completion reporting** - Now shows setup status at the top: Instagram connection, Google Drive connection, media library, schedule config, and delivery mode. Users with missing configuration see a hint to run `/start`.
 - **`/settings` renamed to `/setup`** - Primary command is now `/setup` with `/settings` kept as an alias. Bot command list updated: `/setup` = "Quick settings + open full setup wizard", `/settings` = "Alias for /setup". Header changed from "Bot Settings" to "Quick Setup".
 - **Delivery language replaces pause/resume language** - All user-facing text reframed around "Delivery ON/OFF" instead of "Paused/Active/Running". Affects `/pause`, `/resume`, `/status`, `/help`, `/settings` toggle, and resume callback messages.
-- **`/start` command always opens Mini App** - Returning users now see an "Open Storyline" button linking to a visual dashboard instead of a text command list. Text fallback retained when `OAUTH_REDIRECT_BASE_URL` is not configured.
+- **`/start` command always opens Mini App** - Returning users now see an "Open Storydump" button linking to a visual dashboard instead of a text command list. Text fallback retained when `OAUTH_REDIRECT_BASE_URL` is not configured.
 
 ### Removed
 
@@ -1901,11 +1901,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Posting Mode**: 100% manual via Telegram
 - **Instagram API**: Not required for Phase 1
 
-[Unreleased]: https://github.com/chrisrogers37/storyline-ai/compare/v1.6.0...HEAD
-[1.6.0]: https://github.com/chrisrogers37/storyline-ai/compare/v1.5.0...v1.6.0
-[1.5.0]: https://github.com/chrisrogers37/storyline-ai/compare/v1.4.0...v1.5.0
-[1.4.0]: https://github.com/chrisrogers37/storyline-ai/compare/v1.3.0...v1.4.0
-[1.3.0]: https://github.com/chrisrogers37/storyline-ai/compare/v1.2.0...v1.3.0
-[1.2.0]: https://github.com/chrisrogers37/storyline-ai/compare/v1.0.1...v1.2.0
-[1.0.1]: https://github.com/chrisrogers37/storyline-ai/compare/v1.0.0...v1.0.1
-[1.0.0]: https://github.com/chrisrogers37/storyline-ai/releases/tag/v1.0.0
+[Unreleased]: https://github.com/chrisrogers37/storydump/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/chrisrogers37/storydump/compare/v1.5.0...v1.6.0
+[1.5.0]: https://github.com/chrisrogers37/storydump/compare/v1.4.0...v1.5.0
+[1.4.0]: https://github.com/chrisrogers37/storydump/compare/v1.3.0...v1.4.0
+[1.3.0]: https://github.com/chrisrogers37/storydump/compare/v1.2.0...v1.3.0
+[1.2.0]: https://github.com/chrisrogers37/storydump/compare/v1.0.1...v1.2.0
+[1.0.1]: https://github.com/chrisrogers37/storydump/compare/v1.0.0...v1.0.1
+[1.0.0]: https://github.com/chrisrogers37/storydump/releases/tag/v1.0.0

@@ -73,7 +73,7 @@ With 21 total slots and 70/30 ratio:
 Show all categories with media counts and posting ratios.
 
 ```bash
-storyline-cli list-categories
+storydump-cli list-categories
 ```
 
 Output:
@@ -88,7 +88,7 @@ Categories (2 found):
 Interactively update posting ratios.
 
 ```bash
-storyline-cli update-category-mix
+storydump-cli update-category-mix
 ```
 
 Prompts:
@@ -102,7 +102,7 @@ What % would you like 'merch'? 30
 View history of ratio changes (Type 2 SCD).
 
 ```bash
-storyline-cli category-mix-history --limit 10
+storydump-cli category-mix-history --limit 10
 ```
 
 ### 5. Enhanced Existing Commands
@@ -149,10 +149,10 @@ Run the migration scripts:
 
 ```bash
 # Add category column
-psql -d storyline_ai -f scripts/migrations/001_add_category_column.sql
+psql -d storydump -f scripts/migrations/001_add_category_column.sql
 
 # Create ratio table
-psql -d storyline_ai -f scripts/migrations/002_add_category_post_case_mix.sql
+psql -d storydump -f scripts/migrations/002_add_category_post_case_mix.sql
 ```
 
 ### For Fresh Installations
@@ -220,7 +220,7 @@ make reset-db
 
 2. **Index media with category extraction:**
    ```bash
-   storyline-cli index-media /path/to/media/stories
+   storydump-cli index-media /path/to/media/stories
    ```
 
 3. **Configure posting ratios when prompted:**
@@ -232,7 +232,7 @@ make reset-db
 
 4. **Create schedule (uses ratios automatically):**
    ```bash
-   storyline-cli create-schedule --days 7
+   storydump-cli create-schedule --days 7
 
    ✓ Schedule created!
      Scheduled: 21
@@ -243,7 +243,7 @@ make reset-db
 
 5. **View queue with categories:**
    ```bash
-   storyline-cli list-queue
+   storydump-cli list-queue
    ```
 
 ## Technical Notes
