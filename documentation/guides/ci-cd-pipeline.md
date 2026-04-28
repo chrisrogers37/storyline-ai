@@ -2,7 +2,7 @@
 
 ## Overview
 
-Storyline AI uses GitHub Actions for continuous integration and Railway for continuous deployment. Since the project is hosted on a public repository, all CI runs on GitHub's cloud runners (`ubuntu-latest`).
+Storydump uses GitHub Actions for continuous integration and Railway for continuous deployment. Since the project is hosted on a public repository, all CI runs on GitHub's cloud runners (`ubuntu-latest`).
 
 ---
 
@@ -86,7 +86,7 @@ railway logs --service worker
 railway logs --service web
 
 # Verify health after deploy
-railway shell --service worker -c "storyline-cli check-health"
+railway shell --service worker -c "storydump-cli check-health"
 ```
 
 ---
@@ -108,7 +108,7 @@ See: [GitHub's security warning about self-hosted runners](https://docs.github.c
 
 ### GitHub Secrets (for CI only)
 
-Go to: `https://github.com/chrisrogers37/storyline-ai/settings/secrets/actions`
+Go to: `https://github.com/chrisrogers37/storydump/settings/secrets/actions`
 
 | Secret | Purpose | Notes |
 |--------|---------|-------|

@@ -30,7 +30,7 @@ Create a backup script on your local machine or a CI runner:
 ```bash
 #!/bin/bash
 # backup_db.sh
-BACKUP_DIR="$HOME/backups/storyline"
+BACKUP_DIR="$HOME/backups/storydump"
 RETENTION_DAYS=30
 
 mkdir -p "$BACKUP_DIR"

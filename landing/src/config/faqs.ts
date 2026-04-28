@@ -1,8 +1,8 @@
 export const faqs = [
   {
-    question: "What is Storyline AI?",
+    question: "What is Storydump?",
     answer:
-      "Storyline AI is an Instagram Story scheduling tool that automatically rotates your content library. Connect your Google Drive, set a posting schedule, and approve each story via Telegram before it goes live.",
+      "Storydump is an Instagram Story scheduling tool that automatically rotates your content library. Connect your Google Drive, set a posting schedule, and approve each story via Telegram before it goes live.",
   },
   {
     question: "Why Telegram instead of a web dashboard?",
@@ -12,12 +12,12 @@ export const faqs = [
   {
     question: "Do I need to give you my Instagram password?",
     answer:
-      "No. Storyline uses the official Instagram Graph API with OAuth, so you authenticate directly with Meta. We never see or store your Instagram password.",
+      "No. Storydump uses the official Instagram Graph API with OAuth, so you authenticate directly with Meta. We never see or store your Instagram password.",
   },
   {
     question: "What content types are supported?",
     answer:
-      "Instagram Stories support JPG, PNG, and GIF images. Storyline validates and optimizes each image to meet Instagram's specifications (9:16 aspect ratio, max 100MB) before posting.",
+      "Instagram Stories support JPG, PNG, and GIF images. Storydump validates and optimizes each image to meet Instagram's specifications (9:16 aspect ratio, max 100MB) before posting.",
   },
   {
     question: "Can I manage multiple Instagram accounts?",
@@ -32,11 +32,11 @@ export const faqs = [
   {
     question: "Is my content stored on your servers?",
     answer:
-      "No. Your media stays in your Google Drive. Storyline reads from your drive to schedule posts, but your files are never permanently stored on our infrastructure.",
+      "No. Your media stays in your Google Drive. Storydump reads from your drive to schedule posts, but your files are never permanently stored on our infrastructure.",
   },
   {
     question: "Who built this?",
     answer:
-      "Storyline AI is built by Chris Rogers. Have questions or feedback? Reach out at christophertrogers37@gmail.com.",
+      "Storydump is built by Chris Rogers. Have questions or feedback? Reach out at christophertrogers37@gmail.com.",
   },
 ]

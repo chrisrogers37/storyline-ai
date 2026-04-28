@@ -1,6 +1,6 @@
 # Deployment Checklist
 
-This checklist covers everything you need to do **outside of code** to get Storyline AI running in production on Railway + Neon.
+This checklist covers everything you need to do **outside of code** to get Storydump running in production on Railway + Neon.
 
 ## Prerequisites
 
@@ -19,14 +19,14 @@ This checklist covers everything you need to do **outside of code** to get Story
 - [ ] Open Telegram and search for **@BotFather**
 - [ ] Send `/newbot` to BotFather
 - [ ] Follow prompts:
-  - Choose bot name (e.g., "Storyline AI Bot")
-  - Choose bot username (e.g., "storyline_yourcompany_bot")
+  - Choose bot name (e.g., "Storydump Bot")
+  - Choose bot username (e.g., "storydump_yourcompany_bot")
 - [ ] **Save the bot token** (looks like `123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11`)
 
 ### Create Telegram Channel
 
 - [ ] Create a new Telegram channel (not group)
-  - Name it (e.g., "Storyline Queue - Internal")
+  - Name it (e.g., "Storydump Queue - Internal")
   - Set to Private (only your team can see)
 - [ ] Add your bot as an administrator:
   1. Go to channel info
@@ -67,14 +67,14 @@ ADMIN_TELEGRAM_CHAT_ID=123456789
 ### Create Neon Project
 
 - [ ] Sign up at [console.neon.tech](https://console.neon.tech)
-- [ ] Create a new project (name: `storyline-ai`)
+- [ ] Create a new project (name: `storydump`)
 - [ ] Note your connection string from the dashboard
 
 ### Initialize Schema
 
 ```bash
 # Set your Neon connection string
-export DATABASE_URL="postgresql://user:pass@ep-xxx.neon.tech/storyline_ai?sslmode=require"
+export DATABASE_URL="postgresql://user:pass@ep-xxx.neon.tech/storydump?sslmode=require"
 
 # Run base schema
 psql "$DATABASE_URL" -f scripts/setup_database.sql
@@ -103,7 +103,7 @@ DB_MAX_OVERFLOW=2
 
 **Deliverables:**
 ```
-DATABASE_URL=postgresql://user:pass@ep-xxx.neon.tech/storyline_ai?sslmode=require
+DATABASE_URL=postgresql://user:pass@ep-xxx.neon.tech/storydump?sslmode=require
 ```
 
 ---
@@ -166,7 +166,7 @@ Set these on **both** services in the Railway dashboard:
 
 ```bash
 # Required
-DATABASE_URL=postgresql://user:pass@ep-xxx.neon.tech/storyline_ai?sslmode=require
+DATABASE_URL=postgresql://user:pass@ep-xxx.neon.tech/storydump?sslmode=require
 TELEGRAM_BOT_TOKEN=123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
 TELEGRAM_CHANNEL_ID=-1001234567890
 ADMIN_TELEGRAM_CHAT_ID=123456789
@@ -211,21 +211,21 @@ curl https://your-app.up.railway.app/health
 
 ```bash
 # Via Railway shell
-railway shell --service worker -c "storyline-cli sync-media"
-railway shell --service worker -c "storyline-cli list-media"
+railway shell --service worker -c "storydump-cli sync-media"
+railway shell --service worker -c "storydump-cli list-media"
 ```
 
 ### Create Initial Schedule
 
 ```bash
-railway shell --service worker -c "storyline-cli create-schedule --days 7"
+railway shell --service worker -c "storydump-cli create-schedule --days 7"
 # Creates 7 days of scheduled posts
 ```
 
 ### Verify Queue
 
 ```bash
-railway shell --service worker -c "storyline-cli list-queue"
+railway shell --service worker -c "storydump-cli list-queue"
 # Should show scheduled items
 ```
 
@@ -248,10 +248,10 @@ Each team member needs to:
 
 ```bash
 # Get their Telegram user ID
-railway shell --service worker -c "storyline-cli list-users"
+railway shell --service worker -c "storydump-cli list-users"
 
 # Promote
-railway shell --service worker -c "storyline-cli promote-user <telegram_user_id> --role admin"
+railway shell --service worker -c "storydump-cli promote-user <telegram_user_id> --role admin"
 ```
 
 ---
@@ -266,14 +266,14 @@ Neon provides automatic point-in-time recovery on paid plans.
 
 ```bash
 # Dump from Neon
-pg_dump "$DATABASE_URL" -F c -f ~/backups/storyline_$(date +%Y%m%d).dump
+pg_dump "$DATABASE_URL" -F c -f ~/backups/storydump_$(date +%Y%m%d).dump
 ```
 
 ### Test Restore
 
 ```bash
 # Restore to a test database
-pg_restore -d "$TEST_DATABASE_URL" ~/backups/storyline_YYYYMMDD.dump
+pg_restore -d "$TEST_DATABASE_URL" ~/backups/storydump_YYYYMMDD.dump
 ```
 
 See [backup-restore.md](../operations/backup-restore.md) for full backup procedures.
@@ -340,7 +340,7 @@ Phase 1 is **manual posting**, so prepare your workflow:
   - Verify `DRY_RUN_MODE=true` in Railway env vars
   - Verify notifications arrive in Telegram
   - Test "Posted" and "Skip" buttons
-  - Check queue via `storyline-cli list-queue`
+  - Check queue via `storydump-cli list-queue`
 
 - [ ] **Day 1 Afternoon:**
   - Set `DRY_RUN_MODE=false` in Railway env vars
@@ -404,7 +404,7 @@ railway logs --service worker
 
 ### Weekly
 - [ ] Add new media to Google Drive folder
-- [ ] Run media sync: `/sync` in Telegram or `storyline-cli sync-media`
+- [ ] Run media sync: `/sync` in Telegram or `storydump-cli sync-media`
 - [ ] Check health: `/status` in Telegram
 
 ### Monthly
@@ -414,8 +414,8 @@ railway logs --service worker
 - [ ] Review team permissions
 
 ### As Needed
-- [ ] Create new schedule: `storyline-cli create-schedule --days 7`
-- [ ] Promote team members: `storyline-cli promote-user <id> --role admin`
+- [ ] Create new schedule: `storydump-cli create-schedule --days 7`
+- [ ] Promote team members: `storydump-cli promote-user <id> --role admin`
 - [ ] Clear old queue items if needed
 
 ---
@@ -446,7 +446,7 @@ psql "$DATABASE_URL" -c "SELECT version();"
 ### No Notifications Arriving
 ```bash
 # Check queue has items
-railway shell --service worker -c "storyline-cli list-queue"
+railway shell --service worker -c "storydump-cli list-queue"
 
 # Check service is running
 railway logs --service worker

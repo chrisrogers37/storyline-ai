@@ -97,7 +97,7 @@ Browser → Next.js API Route (BFF) → FastAPI Backend
 - BFF routes under `src/app/api/v1/` mirror FastAPI endpoints
 - Each BFF route: extract `telegram_user_id` from session → generate URL token → call FastAPI → return response
 - Use a shared `api-client.ts` server-side utility with `fetch()` to call FastAPI
-- FastAPI base URL from `STORYDUMP_API_URL` env var
+- FastAPI base URL from `STORYLINE_API_URL` env var
 
 **Alternative considered:** Direct client-side calls to FastAPI with CORS. Rejected — exposes auth token generation to client, complicates session management, requires CORS changes on FastAPI.
 
@@ -198,7 +198,7 @@ src/app/
 - `TELEGRAM_BOT_TOKEN` — already exists, needed for hash validation
 - `TELEGRAM_BOT_USERNAME` — for Login Widget configuration
 - `JWT_SECRET` — signing key for session JWTs
-- `STORYDUMP_API_URL` — FastAPI base URL (e.g., `https://storyline-ai-production.up.railway.app`)
+- `STORYDUMP_API_URL` — FastAPI base URL (e.g., `https://storydump-production.up.railway.app`)
 
 ### PR 1.2: App Shell + Dashboard Layout
 
@@ -646,7 +646,7 @@ This is **not needed for Phase 1-3** but would be required for team management f
 |----------|-------|---------|
 | `TELEGRAM_BOT_USERNAME` | 1 | Login Widget configuration |
 | `JWT_SECRET` | 1 | Session JWT signing key |
-| `STORYDUMP_API_URL` | 1 | FastAPI backend URL (Railway) |
+| `STORYLINE_API_URL` | 1 | FastAPI backend URL (Railway) |
 | `ALLOW_SIGNUP` | 1 | `false` for invite-only, `true` for open registration |
 
 ### Existing Variables (already on Vercel)
@@ -694,7 +694,7 @@ FastAPI CORS needs to add the Vercel deployment URL:
 ```python
 allow_origins=[
     settings.OAUTH_REDIRECT_BASE_URL,
-    "https://storydump.vercel.app",  # or custom domain
+    "https://storyline-ai.vercel.app",  # or custom domain
     "http://localhost:3000",             # local dev
 ]
 ```
@@ -742,7 +742,7 @@ However, since we're using the BFF pattern, CORS is only needed if we later deci
 
 ## Open Questions
 
-1. **Custom domain?** Should the web app be at `app.storydump.app` or stay on the Vercel default domain? Affects OAuth redirect URIs and Login Widget configuration.
+1. **Custom domain?** Should the web app be at `app.storyline-ai.com` or stay on the Vercel default domain? Affects OAuth redirect URIs and Login Widget configuration.
 
 2. **Chart library preference?** Plan assumes Recharts. Alternatives: Chart.js (lighter), Nivo (more beautiful), Tremor (shadcn-native). Worth a quick spike.
 

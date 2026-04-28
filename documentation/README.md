@@ -1,6 +1,6 @@
-# Storyline AI Documentation
+# Storydump Documentation
 
-Welcome to the Storyline AI documentation hub. All project documentation is organized here by purpose.
+Welcome to the Storydump documentation hub. All project documentation is organized here by purpose.
 
 **Last Updated**: 2026-03-28
 **Current Version**: v1.6.0

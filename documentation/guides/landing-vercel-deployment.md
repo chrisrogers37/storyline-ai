@@ -12,9 +12,9 @@ Set these in **Vercel → Project Settings → Environment Variables**:
 | `TELEGRAM_BOT_TOKEN` | Server | Telegram bot token — used for auth verification and waitlist notifications |
 | `ADMIN_TELEGRAM_CHAT_ID` | Server | Chat ID to receive waitlist signup notifications |
 | `JWT_SECRET` | Server | Random 32+ character string for signing session tokens |
-| `BACKEND_URL` | Server | FastAPI backend URL (e.g. `https://storyline-api.up.railway.app`) |
-| `NEXT_PUBLIC_SITE_URL` | Client | Public site URL (e.g. `https://storyline.ai`) |
-| `NEXT_PUBLIC_TELEGRAM_BOT_NAME` | Client | Bot username without `@` (e.g. `storyline_ai_bot`) — required for the Telegram Login Widget on `/login` |
+| `BACKEND_URL` | Server | FastAPI backend URL (e.g. `https://storydump-api.up.railway.app`) |
+| `NEXT_PUBLIC_SITE_URL` | Client | Public site URL (e.g. `https://storydump.app`) |
+| `NEXT_PUBLIC_TELEGRAM_BOT_NAME` | Client | Bot username without `@` (e.g. `storydump_bot`) — required for the Telegram Login Widget on `/login` |
 
 ### Client vs Server Variables
 
