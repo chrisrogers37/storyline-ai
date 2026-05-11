@@ -617,9 +617,9 @@ class TestEnhancedSetupState:
             mock_svc = service_ctx(MockSetupState)
             mock_svc.get_setup_state.return_value = setup_state
 
-            response = client.post(
+            response = client.get(
                 "/api/onboarding/init",
-                json={"init_data": "test", "chat_id": CHAT_ID},
+                params={"init_data": "test", "chat_id": CHAT_ID},
             )
 
         assert response.status_code == 200
@@ -663,9 +663,9 @@ class TestEnhancedSetupState:
             mock_svc = service_ctx(MockSetupState)
             mock_svc.get_setup_state.return_value = setup_state
 
-            response = client.post(
+            response = client.get(
                 "/api/onboarding/init",
-                json={"init_data": "test", "chat_id": CHAT_ID},
+                params={"init_data": "test", "chat_id": CHAT_ID},
             )
 
         assert response.status_code == 200
@@ -712,9 +712,9 @@ class TestEnhancedSetupState:
             mock_svc = service_ctx(MockSetupState)
             mock_svc.get_setup_state.return_value = setup_state
 
-            response = client.post(
+            response = client.get(
                 "/api/onboarding/init",
-                json={"init_data": "test", "chat_id": CHAT_ID},
+                params={"init_data": "test", "chat_id": CHAT_ID},
             )
 
         assert response.status_code == 200

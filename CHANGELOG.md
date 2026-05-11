@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Dashboard Settings page showed hardcoded fallback values instead of real per-chat settings** — `/api/onboarding/init` was declared `@router.post`, but the dashboard's SSR fetched it via GET through `backendFetchJson`, which silently received 405 and returned null. The Settings page then fell through to `?? 3` / `?? 9` / `?? 22` hardcoded defaults. Changed `/init` to GET (read-only with idempotent side effect), refactored the client `postApi("init")` caller in the setup wizard to `getApi("init")`, and updated tests accordingly.
 - **Landing `/login` Telegram widget failed to render** — Added `'unsafe-eval'` to the `/login` Content-Security-Policy. `telegram-widget.js` evaluates the `data-onauth` handler via `eval()`, which the previous CSP blocked; `initWidget` aborted before inserting the iframe, leaving users on the "Telegram widget didn't load" fallback. CSP relaxation is scoped to `/login` only.
 - **Google Drive OAuth "valid for 0 hours" message** — Removed misleading token expiry detail from Telegram notification since tokens auto-refresh. Cleaned up unused `expires_in_hours` from OAuth return dict.
 

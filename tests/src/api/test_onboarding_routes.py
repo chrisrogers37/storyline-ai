@@ -51,13 +51,13 @@ def _mock_setup_state(**overrides):
 
 
 # =============================================================================
-# POST /api/onboarding/init
+# GET /api/onboarding/init
 # =============================================================================
 
 
 @pytest.mark.unit
 class TestOnboardingInit:
-    """Test POST /api/onboarding/init."""
+    """Test GET /api/onboarding/init."""
 
     def test_init_returns_setup_state(self, client):
         """Valid initData returns chat_id, user, and setup_state."""
@@ -69,9 +69,9 @@ class TestOnboardingInit:
             ) as MockSettingsService,
         ):
             service_ctx(MockSettingsService)
-            response = client.post(
+            response = client.get(
                 "/api/onboarding/init",
-                json={"init_data": "test", "chat_id": CHAT_ID},
+                params={"init_data": "test", "chat_id": CHAT_ID},
             )
 
         assert response.status_code == 200
@@ -95,9 +95,9 @@ class TestOnboardingInit:
             ) as MockSettingsService,
         ):
             service_ctx(MockSettingsService)
-            response = client.post(
+            response = client.get(
                 "/api/onboarding/init",
-                json={"init_data": "test", "chat_id": CHAT_ID},
+                params={"init_data": "test", "chat_id": CHAT_ID},
             )
 
         data = response.json()
@@ -118,9 +118,9 @@ class TestOnboardingInit:
             ) as MockSettingsService,
         ):
             service_ctx(MockSettingsService)
-            response = client.post(
+            response = client.get(
                 "/api/onboarding/init",
-                json={"init_data": "test", "chat_id": CHAT_ID},
+                params={"init_data": "test", "chat_id": CHAT_ID},
             )
 
         data = response.json()
@@ -141,9 +141,9 @@ class TestOnboardingInit:
             ) as MockSettingsService,
         ):
             service_ctx(MockSettingsService)
-            response = client.post(
+            response = client.get(
                 "/api/onboarding/init",
-                json={"init_data": "test", "chat_id": CHAT_ID},
+                params={"init_data": "test", "chat_id": CHAT_ID},
             )
 
         data = response.json()
@@ -156,9 +156,9 @@ class TestOnboardingInit:
             "src.api.routes.onboarding.helpers.validate_init_data",
             side_effect=ValueError("Invalid initData signature"),
         ):
-            response = client.post(
+            response = client.get(
                 "/api/onboarding/init",
-                json={"init_data": "bad-data", "chat_id": CHAT_ID},
+                params={"init_data": "bad-data", "chat_id": CHAT_ID},
             )
 
         assert response.status_code == 401
@@ -180,9 +180,9 @@ class TestOnboardingInit:
             ) as MockSettingsService,
         ):
             service_ctx(MockSettingsService)
-            response = client.post(
+            response = client.get(
                 "/api/onboarding/init",
-                json={"init_data": "test", "chat_id": CHAT_ID},
+                params={"init_data": "test", "chat_id": CHAT_ID},
             )
 
         data = response.json()
@@ -202,9 +202,9 @@ class TestOnboardingInit:
             ) as MockSettingsService,
         ):
             svc = service_ctx(MockSettingsService)
-            response = client.post(
+            response = client.get(
                 "/api/onboarding/init",
-                json={"init_data": "test", "chat_id": CHAT_ID},
+                params={"init_data": "test", "chat_id": CHAT_ID},
             )
 
         assert response.status_code == 200
@@ -228,9 +228,9 @@ class TestOnboardingInit:
             ) as MockSettingsService,
         ):
             service_ctx(MockSettingsService)
-            response = client.post(
+            response = client.get(
                 "/api/onboarding/init",
-                json={"init_data": "test", "chat_id": CHAT_ID},
+                params={"init_data": "test", "chat_id": CHAT_ID},
             )
 
         assert response.status_code == 200
@@ -256,9 +256,9 @@ class TestOnboardingInit:
             ) as MockSettingsService,
         ):
             service_ctx(MockSettingsService)
-            response = client.post(
+            response = client.get(
                 "/api/onboarding/init",
-                json={"init_data": "test", "chat_id": CHAT_ID},
+                params={"init_data": "test", "chat_id": CHAT_ID},
             )
 
         assert response.status_code == 200
@@ -683,9 +683,9 @@ class TestOnboardingChatIdVerification:
             "chat_id": 999,
         }
         with mock_validate(return_value=user_with_chat):
-            response = client.post(
+            response = client.get(
                 "/api/onboarding/init",
-                json={"init_data": "test", "chat_id": CHAT_ID},
+                params={"init_data": "test", "chat_id": CHAT_ID},
             )
 
         assert response.status_code == 403
@@ -706,9 +706,9 @@ class TestOnboardingChatIdVerification:
             ) as MockSettingsService,
         ):
             service_ctx(MockSettingsService)
-            response = client.post(
+            response = client.get(
                 "/api/onboarding/init",
-                json={"init_data": "test", "chat_id": CHAT_ID},
+                params={"init_data": "test", "chat_id": CHAT_ID},
             )
 
         assert response.status_code == 200
@@ -723,9 +723,9 @@ class TestOnboardingChatIdVerification:
             ) as MockSettingsService,
         ):
             service_ctx(MockSettingsService)
-            response = client.post(
+            response = client.get(
                 "/api/onboarding/init",
-                json={"init_data": "test", "chat_id": CHAT_ID},
+                params={"init_data": "test", "chat_id": CHAT_ID},
             )
 
         assert response.status_code == 200

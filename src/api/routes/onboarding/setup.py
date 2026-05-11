@@ -20,7 +20,6 @@ from .helpers import (
 )
 from .models import (
     CompleteRequest,
-    InitRequest,
     MediaFolderRequest,
     ScheduleRequest,
     StartIndexingRequest,
@@ -29,23 +28,28 @@ from .models import (
 router = APIRouter(tags=["onboarding"])
 
 
-@router.post("/init")
-async def onboarding_init(request: InitRequest) -> dict:
-    """Validate initData and return current setup state for this chat."""
-    user_info = _validate_request(request.init_data, request.chat_id)
+@router.get("/init")
+async def onboarding_init(init_data: str, chat_id: int) -> dict:
+    """Validate initData and return current setup state for this chat.
 
-    setup_state = _get_setup_state(request.chat_id)
+    GET so server components can fetch it via backendFetchJson (which
+    issues GET); the BFF proxy already forwards the same method, so
+    client-side callers must use getApi("init") rather than postApi.
+    """
+    user_info = _validate_request(init_data, chat_id)
 
-    # Set initial onboarding step if not yet started
+    setup_state = _get_setup_state(chat_id)
+
+    # Set initial onboarding step if not yet started (idempotent)
     if not setup_state.get("onboarding_completed") and not setup_state.get(
         "onboarding_step"
     ):
         with SettingsService() as settings_service:
-            settings_service.set_onboarding_step(request.chat_id, "welcome")
+            settings_service.set_onboarding_step(chat_id, "welcome")
         setup_state["onboarding_step"] = "welcome"
 
     return {
-        "chat_id": request.chat_id,
+        "chat_id": chat_id,
         "user": user_info,
         "setup_state": setup_state,
     }

@@ -78,7 +78,7 @@ export function SetupWizard({ initialState }: SetupWizardProps) {
   async function refreshState() {
     setError(null);
     try {
-      const data = await postApi("init");
+      const data = await getApi("init");
       if (data?.setup_state) {
         setState(data.setup_state);
         if (data.setup_state.schedule_configured && data.setup_state.onboarding_completed) {
