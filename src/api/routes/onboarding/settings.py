@@ -42,6 +42,7 @@ async def onboarding_toggle_setting(request: ToggleSettingRequest) -> dict:
         "enable_instagram_api",
         "show_verbose_notifications",
         "media_sync_enabled",
+        "enable_ai_captions",
     }
     if request.setting_name not in allowed_settings:
         raise HTTPException(

@@ -15,8 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Storydump rebrand in docs and CI** — Updated remaining `storyline` references to `storydump` across operational docs, planning docs, CI workflow, and onboarding UI.
 
+### Changed
+
+- **Instagram API kill-switch is now per-chat, not global** — `InstagramCredentialManager.is_configured()` previously short-circuited on `settings.ENABLE_INSTAGRAM_API` regardless of the per-chat DB toggle. Now reads `chat_settings.enable_instagram_api` first and only falls back to the env value when no chat_settings row exists (which shouldn't happen because `SettingsService` bootstraps a row on first access). Matches how dashboard/Telegram toggles already represent the setting.
+
 ### Added
 
+- **AI Captions toggle exposed in dashboard Settings** — `chat_settings.enable_ai_captions` was a DB-only orphan (no UI). Added to the Toggles section in the General tab, threaded through the `/init` setup state, and added to the `toggle-setting` allowlist so it can be flipped from the web.
 - **Preview tiles on /dashboard/media** — Media-library tiles now render the Google Drive `thumbnailLink` as an inline preview image instead of just a MIME-type label. New `media_items.thumbnail_url` column (migration 028) is populated by `MediaSyncService` from Drive's `thumbnailLink` field; `media-grid.tsx` shows `<img>` when the URL is present and falls back to the MIME label on error or for items without one (local uploads). Existing 4554 items backfill on next sync because the identifier-match handler now detects null→url drift and writes through.
 - **Content Mix UI in dashboard Settings** — New "Content Mix" card in the General tab that reads `category_post_case_mix` for the active chat and lets users set per-category posting weights via sliders (sum-to-100 validation). Pre-seeds proportional to library composition when no explicit mix exists, surfaces a banner explaining that the scheduler defaults to unfiltered random in that state. Added `POST /api/onboarding/category-mix` (read) and `POST /api/onboarding/update-category-mix` (write) endpoints, both wrapping the existing `CategoryMixRepository`. BFF allowlist updated.
 - **Sign-in link in landing page footer** — Subtle "Sign in" link for existing users to access `/login` without a prominent CTA.

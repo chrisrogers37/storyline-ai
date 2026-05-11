@@ -92,21 +92,31 @@ class InstagramCredentialManager:
 
     def is_configured(self, telegram_chat_id: Optional[int] = None) -> bool:
         """
-        Check if Instagram API is properly configured.
+        Check if Instagram API is properly configured for a given chat.
 
-        Supports both multi-account mode and legacy .env mode.
+        Per-chat first: respects `chat_settings.enable_instagram_api` so
+        each tenant can opt in/out independently. Falls back to the
+        deployment-wide `settings.ENABLE_INSTAGRAM_API` only when no
+        chat-specific row exists (which shouldn't happen in normal flow
+        because SettingsService bootstraps a row on first access).
 
         Args:
             telegram_chat_id: Chat to check (uses ADMIN chat if not specified)
         """
-        if not settings.ENABLE_INSTAGRAM_API:
-            return False
-
         if not settings.FACEBOOK_APP_ID:
             return False
 
         if telegram_chat_id is None:
             telegram_chat_id = settings.ADMIN_TELEGRAM_CHAT_ID
+
+        chat_settings = self.service.settings_service.get_settings_if_exists(
+            telegram_chat_id
+        )
+        if chat_settings is not None:
+            if not chat_settings.enable_instagram_api:
+                return False
+        elif not settings.ENABLE_INSTAGRAM_API:
+            return False
 
         # Check for multi-account configuration
         active_account = self.service.account_service.get_active_account(

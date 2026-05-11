@@ -48,6 +48,7 @@ export default async function SettingsPage() {
               show_verbose_notifications:
                 setup.show_verbose_notifications ?? false,
               media_sync_enabled: setup.media_sync_enabled ?? false,
+              enable_ai_captions: setup.enable_ai_captions ?? false,
             }}
           />
         </TabsContent>

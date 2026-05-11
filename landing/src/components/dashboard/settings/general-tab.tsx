@@ -27,6 +27,7 @@ interface GeneralSettings {
   enable_instagram_api: boolean;
   show_verbose_notifications: boolean;
   media_sync_enabled: boolean;
+  enable_ai_captions: boolean;
 }
 
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => ({
@@ -38,6 +39,7 @@ const TOGGLES: { key: keyof GeneralSettings; label: string; description: string 
   { key: "is_paused", label: "Pause Posting", description: "Temporarily stop all scheduled posts" },
   { key: "dry_run_mode", label: "Dry Run Mode", description: "Simulate posting without publishing" },
   { key: "enable_instagram_api", label: "Instagram API", description: "Use Instagram API for direct posting" },
+  { key: "enable_ai_captions", label: "AI Captions", description: "Auto-generate captions with Claude" },
   { key: "show_verbose_notifications", label: "Verbose Notifications", description: "Show detailed Telegram notifications" },
   { key: "media_sync_enabled", label: "Media Sync", description: "Auto-sync media from connected sources" },
 ];

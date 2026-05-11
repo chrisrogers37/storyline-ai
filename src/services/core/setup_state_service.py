@@ -71,6 +71,7 @@ class SetupStateService(BaseService):
             "enable_instagram_api": chat_settings.enable_instagram_api,
             "show_verbose_notifications": chat_settings.show_verbose_notifications,
             "media_sync_enabled": chat_settings.media_sync_enabled,
+            "enable_ai_captions": chat_settings.enable_ai_captions,
             # Activity
             "in_flight_count": activity["in_flight_count"],
             "last_post_at": activity["last_post_at"],

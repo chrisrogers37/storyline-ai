@@ -134,11 +134,33 @@ class TestInstagramAPIService:
         assert instagram_service.is_configured() is True
 
     @patch("src.services.integrations.instagram_credentials.settings")
-    def test_is_configured_missing_enable_flag(self, mock_settings, instagram_service):
-        """Test is_configured returns False when feature disabled."""
+    def test_is_configured_chat_disabled(self, mock_settings, instagram_service):
+        """Test is_configured returns False when the chat's per-chat toggle is off.
+
+        Per-chat `chat_settings.enable_instagram_api` is the source of truth;
+        the env `ENABLE_INSTAGRAM_API` is only the bootstrap default for new
+        chats and the fallback when no chat_settings row exists.
+        """
+        mock_settings.ENABLE_INSTAGRAM_API = True
+        mock_settings.INSTAGRAM_ACCOUNT_ID = "12345"
+        mock_settings.FACEBOOK_APP_ID = "67890"
+
+        chat_settings = Mock(enable_instagram_api=False)
+        instagram_service.settings_service.get_settings_if_exists.return_value = (
+            chat_settings
+        )
+
+        assert instagram_service.is_configured() is False
+
+    @patch("src.services.integrations.instagram_credentials.settings")
+    def test_is_configured_falls_back_to_env_when_no_chat_row(
+        self, mock_settings, instagram_service
+    ):
+        """When chat_settings doesn't exist, env ENABLE_INSTAGRAM_API gates."""
         mock_settings.ENABLE_INSTAGRAM_API = False
         mock_settings.INSTAGRAM_ACCOUNT_ID = "12345"
         mock_settings.FACEBOOK_APP_ID = "67890"
+        instagram_service.settings_service.get_settings_if_exists.return_value = None
 
         assert instagram_service.is_configured() is False
 
