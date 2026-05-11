@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Content Mix UI in dashboard Settings** — New "Content Mix" card in the General tab that reads `category_post_case_mix` for the active chat and lets users set per-category posting weights via sliders (sum-to-100 validation). Pre-seeds proportional to library composition when no explicit mix exists, surfaces a banner explaining that the scheduler defaults to unfiltered random in that state. Added `POST /api/onboarding/category-mix` (read) and `POST /api/onboarding/update-category-mix` (write) endpoints, both wrapping the existing `CategoryMixRepository`. BFF allowlist updated.
 - **Sign-in link in landing page footer** — Subtle "Sign in" link for existing users to access `/login` without a prominent CTA.
 - **Analytics and conversion tracking** (#279) — Integrated Plausible Analytics for privacy-friendly page views, referrer tracking, and custom events. Tracks waitlist signups, form errors, FAQ expansions, and comparison table views. Captures UTM parameters (source, medium, campaign) with waitlist submissions for attribution. Controlled via `NEXT_PUBLIC_PLAUSIBLE_DOMAIN` env var — omit to disable.
 - **SEO optimization** (#280) — Enhanced meta tags with keywords, canonical URL, and robots directives. Added dynamically generated OG image (1200x630) via Next.js ImageResponse API. Created sitemap.xml route and robots.txt. Added JSON-LD structured data for SoftwareApplication and FAQPage schemas. Updated site URL to storydump.app.

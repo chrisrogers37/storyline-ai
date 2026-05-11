@@ -63,3 +63,11 @@ class AddAccountRequest(BaseModel):
     display_name: str = Field(min_length=1, max_length=100)
     instagram_account_id: str = Field(min_length=1, max_length=50, pattern=r"^\d+$")
     access_token: str = Field(min_length=1, max_length=1024)
+
+
+class UpdateCategoryMixRequest(BaseModel):
+    init_data: str
+    chat_id: int
+    ratios: dict[str, float] = Field(
+        description="Per-category ratios; must sum to 1.0 (within 1e-6 tolerance).",
+    )

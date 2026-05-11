@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { postApi } from "@/lib/dashboard-api";
+import { CategoryMixCard } from "./category-mix-card";
 
 interface GeneralSettings {
   posts_per_day: number;
@@ -158,6 +159,8 @@ export function GeneralTab({ settings }: { settings: GeneralSettings }) {
           </Button>
         </CardContent>
       </Card>
+
+      <CategoryMixCard />
 
       <Card>
         <CardHeader>

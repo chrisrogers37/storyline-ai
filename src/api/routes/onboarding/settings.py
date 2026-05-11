@@ -14,6 +14,9 @@ from src.services.core.settings_service import SettingsService
 from src.services.integrations.google_drive_oauth import GoogleDriveOAuthService
 from src.utils.logger import logger
 
+from src.repositories.category_mix_repository import CategoryMixRepository
+from src.repositories.media_repository import MediaRepository
+
 from .helpers import _validate_request, service_error_handler
 from .models import (
     AddAccountRequest,
@@ -21,6 +24,7 @@ from .models import (
     RemoveAccountRequest,
     SwitchAccountRequest,
     ToggleSettingRequest,
+    UpdateCategoryMixRequest,
     UpdateSettingRequest,
 )
 
@@ -275,3 +279,97 @@ async def onboarding_add_account(request: AddAccountRequest) -> dict:
             "instagram_username": account.instagram_username,
             "is_update": is_update,
         }
+
+
+@router.post("/category-mix")
+async def onboarding_get_category_mix(request: InitRequest) -> dict:
+    """Read the current category mix and library composition for this chat.
+
+    Returns one entry per category present in the chat's active library.
+    `configured_ratio` is None for any category without a current row in
+    `category_post_case_mix` — the UI uses that to distinguish "no mix
+    set, scheduler is unfiltered random" from "explicit 0%".
+    """
+    _validate_request(request.init_data, request.chat_id)
+
+    with SettingsService() as settings_service, service_error_handler():
+        chat_settings = settings_service.get_settings(request.chat_id)
+        chat_settings_id = str(chat_settings.id)
+
+    with MediaRepository() as media_repo:
+        library_counts = media_repo.count_by_category(chat_settings_id=chat_settings_id)
+
+    with CategoryMixRepository() as mix_repo:
+        current = mix_repo.get_current_mix_as_dict(chat_settings_id=chat_settings_id)
+        has_explicit_mix = mix_repo.has_current_mix(chat_settings_id=chat_settings_id)
+
+    categories = sorted(set(library_counts.keys()) | set(current.keys()))
+    return {
+        "has_explicit_mix": has_explicit_mix,
+        "categories": [
+            {
+                "name": name,
+                "library_count": int(library_counts.get(name, 0)),
+                "configured_ratio": (float(current[name]) if name in current else None),
+            }
+            for name in categories
+        ],
+    }
+
+
+@router.post("/update-category-mix")
+async def onboarding_update_category_mix(request: UpdateCategoryMixRequest) -> dict:
+    """Replace the category mix with new ratios (Type 2 SCD: expires + creates).
+
+    Validation (sum=1.0 within tolerance, non-negative ratios, no unknown
+    categories) is enforced by CategoryMixRepository.set_mix. Returns the
+    refreshed mix in the same shape as the GET endpoint so the UI can
+    update in place.
+    """
+    _validate_request(request.init_data, request.chat_id)
+
+    if not request.ratios:
+        raise HTTPException(status_code=400, detail="ratios must be non-empty")
+
+    with SettingsService() as settings_service, service_error_handler():
+        chat_settings = settings_service.get_settings(request.chat_id)
+        chat_settings_id = str(chat_settings.id)
+
+    with MediaRepository() as media_repo:
+        library_counts = media_repo.count_by_category(chat_settings_id=chat_settings_id)
+
+    known_categories = set(library_counts.keys())
+    unknown = sorted(set(request.ratios.keys()) - known_categories)
+    if unknown:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown categories not present in library: {', '.join(unknown)}",
+        )
+
+    from decimal import Decimal
+
+    decimal_ratios = {k: Decimal(str(v)) for k, v in request.ratios.items()}
+
+    with CategoryMixRepository() as mix_repo:
+        try:
+            mix_repo.set_mix(
+                ratios=decimal_ratios,
+                chat_settings_id=chat_settings_id,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        current = mix_repo.get_current_mix_as_dict(chat_settings_id=chat_settings_id)
+
+    categories = sorted(set(library_counts.keys()) | set(current.keys()))
+    return {
+        "has_explicit_mix": True,
+        "categories": [
+            {
+                "name": name,
+                "library_count": int(library_counts.get(name, 0)),
+                "configured_ratio": (float(current[name]) if name in current else None),
+            }
+            for name in categories
+        ],
+    }
