@@ -277,18 +277,29 @@ class MediaSyncService(BaseService):
         if not existing:
             return False
 
+        thumbnail_changed = (
+            file_info.thumbnail_url is not None
+            and existing.thumbnail_url != file_info.thumbnail_url
+        )
         if existing.file_name != file_info.name:
             file_path = self._build_file_path(ctx.source_type, file_info)
             self.media_repo.update_source_info(
                 media_id=str(existing.id),
                 file_name=file_info.name,
                 file_path=file_path,
+                thumbnail_url=file_info.thumbnail_url,
             )
             ctx.result.updated += 1
             logger.info(
                 f"[MediaSyncService] Updated name: "
                 f"{existing.file_name} -> {file_info.name}"
             )
+        elif thumbnail_changed:
+            self.media_repo.update_source_info(
+                media_id=str(existing.id),
+                thumbnail_url=file_info.thumbnail_url,
+            )
+            ctx.result.unchanged += 1
         else:
             ctx.result.unchanged += 1
         return True
@@ -314,6 +325,7 @@ class MediaSyncService(BaseService):
             file_name=file_info.name,
             file_path=file_path,
             source_identifier=file_info.identifier,
+            thumbnail_url=file_info.thumbnail_url,
         )
         ctx.result.updated += 1
         logger.info(
@@ -362,6 +374,7 @@ class MediaSyncService(BaseService):
             category=file_info.folder,
             source_type=ctx.source_type,
             source_identifier=file_info.identifier,
+            thumbnail_url=file_info.thumbnail_url,
         )
         ctx.result.new += 1
         logger.info(

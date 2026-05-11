@@ -49,7 +49,9 @@ class GoogleDriveProvider(MediaSourceProvider):
         "video/quicktime",
     }
 
-    FILE_FIELDS = "id, name, mimeType, size, modifiedTime, md5Checksum, parents"
+    FILE_FIELDS = (
+        "id, name, mimeType, size, modifiedTime, md5Checksum, parents, thumbnailLink"
+    )
     LIST_FIELDS = f"nextPageToken, files({FILE_FIELDS})"
     PAGE_SIZE = 100
 
@@ -376,6 +378,7 @@ class GoogleDriveProvider(MediaSourceProvider):
                 folder=folder_name,
                 modified_at=modified_at,
                 hash=file_meta.get("md5Checksum"),
+                thumbnail_url=file_meta.get("thumbnailLink"),
             )
         except (ValueError, KeyError, TypeError) as e:
             logger.warning(f"Could not build file info for Drive file: {e}")

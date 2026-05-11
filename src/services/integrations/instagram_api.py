@@ -133,24 +133,18 @@ class InstagramAPIService(BaseService):
                 )
 
             try:
-                # Step 1: Create media container
-                container_id = await self._create_media_container(
-                    token=token,
-                    account_id=account_id,
-                    media_url=media_url,
-                    media_type=media_type,
-                )
-
-                logger.info(f"Created media container: {container_id}")
-
-                # Step 2: Poll until FINISHED
-                await self._wait_for_container_ready(token, container_id)
-
-                # Step 3: Publish
-                story_id = await self._publish_container(
-                    token=token,
-                    account_id=account_id,
-                    container_id=container_id,
+                # Hard wall-clock cap on the whole 3-step flow so a single
+                # hung Instagram call can't camp on DB connections / pool
+                # slots indefinitely (was observed at 7+ minutes per failed
+                # post, exhausting the connection pool).
+                story_id, container_id = await asyncio.wait_for(
+                    self._post_story_steps(
+                        token=token,
+                        account_id=account_id,
+                        media_url=media_url,
+                        media_type=media_type,
+                    ),
+                    timeout=180.0,
                 )
 
                 logger.info(f"Published Instagram Story: {story_id}")
@@ -175,9 +169,41 @@ class InstagramAPIService(BaseService):
 
                 return result
 
+            except asyncio.TimeoutError:
+                logger.error(
+                    "Instagram post exceeded 180s wall-clock cap "
+                    f"(account={account_username}). Aborting to release "
+                    "DB connections."
+                )
+                raise InstagramAPIError("Instagram post timed out after 180 seconds")
             except httpx.RequestError as e:
                 logger.error(f"Network error posting to Instagram: {e}")
                 raise InstagramAPIError(f"Network error: {e}")
+
+    async def _post_story_steps(
+        self,
+        token: str,
+        account_id: str,
+        media_url: str,
+        media_type: str,
+    ) -> tuple[str, str]:
+        """Run the 3-step Instagram story flow. Returns (story_id, container_id)."""
+        container_id = await self._create_media_container(
+            token=token,
+            account_id=account_id,
+            media_url=media_url,
+            media_type=media_type,
+        )
+        logger.info(f"Created media container: {container_id}")
+
+        await self._wait_for_container_ready(token, container_id)
+
+        story_id = await self._publish_container(
+            token=token,
+            account_id=account_id,
+            container_id=container_id,
+        )
+        return story_id, container_id
 
     async def _create_media_container(
         self,
@@ -227,7 +253,7 @@ class InstagramAPIService(BaseService):
                         "fields": "status_code,status",
                         "access_token": token,
                     },
-                    timeout=30.0,
+                    timeout=10.0,
                 )
 
                 self._check_response_errors(response)

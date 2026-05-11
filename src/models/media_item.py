@@ -60,6 +60,12 @@ class MediaItem(Base):
     cloud_uploaded_at = Column(DateTime)  # When uploaded to cloud
     cloud_expires_at = Column(DateTime)  # When cloud URL expires
 
+    # Dashboard preview tile thumbnail
+    # For Drive items: Google's thumbnailLink (signed lh3.googleusercontent.com
+    # URL that works without further auth; refreshed on each sync).
+    # Null for local uploads.
+    thumbnail_url = Column(Text)
+
     # Instagram backfill tracking (Phase 05 Cloud Media)
     instagram_media_id = Column(
         Text, unique=True, index=True

@@ -194,6 +194,7 @@ class MediaRepository(BaseRepository):
         file_path: Optional[str] = None,
         file_name: Optional[str] = None,
         source_identifier: Optional[str] = None,
+        thumbnail_url: Optional[str] = None,
     ) -> MediaItem:
         """Update source-related fields for a media item (rename/move tracking).
 
@@ -205,6 +206,7 @@ class MediaRepository(BaseRepository):
             file_path: New file path (synthetic path for cloud sources)
             file_name: New display filename
             source_identifier: New provider-specific identifier
+            thumbnail_url: New CDN thumbnail URL (Drive thumbnailLink rotates)
 
         Returns:
             Updated MediaItem
@@ -217,6 +219,8 @@ class MediaRepository(BaseRepository):
                 media_item.file_name = file_name
             if source_identifier is not None:
                 media_item.source_identifier = source_identifier
+            if thumbnail_url is not None:
+                media_item.thumbnail_url = thumbnail_url
             media_item.updated_at = datetime.utcnow()
             self.db.commit()
             self.db.refresh(media_item)
@@ -324,6 +328,7 @@ class MediaRepository(BaseRepository):
         source_type: str = "local",
         source_identifier: Optional[str] = None,
         chat_settings_id: Optional[str] = None,
+        thumbnail_url: Optional[str] = None,
     ) -> MediaItem:
         """Create a new media item."""
         media_item = MediaItem(
@@ -342,6 +347,7 @@ class MediaRepository(BaseRepository):
             source_type=source_type,
             source_identifier=source_identifier or file_path,
             chat_settings_id=chat_settings_id,
+            thumbnail_url=thumbnail_url,
         )
         self.db.add(media_item)
         self.db.commit()

@@ -18,6 +18,10 @@ class MediaFileInfo:
         folder: Category/folder name (e.g., "memes"), or None if at root
         modified_at: Last modification timestamp, or None if unavailable
         hash: Provider-side content hash if available, or None
+        thumbnail_url: Optional public-ish CDN URL for a small preview image.
+            Google Drive populates this from `thumbnailLink`; local provider
+            leaves it None. May expire (typically ~weeks) — refreshed on
+            each sync.
     """
 
     identifier: str
@@ -27,6 +31,7 @@ class MediaFileInfo:
     folder: Optional[str] = None
     modified_at: Optional[datetime] = None
     hash: Optional[str] = None
+    thumbnail_url: Optional[str] = None
 
 
 class MediaSourceProvider(ABC):

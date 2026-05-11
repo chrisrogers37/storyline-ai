@@ -60,6 +60,7 @@ class MediaDashboardQueries:
                             else None
                         ),
                         "source_type": item.source_type,
+                        "thumbnail_url": item.thumbnail_url,
                         "created_at": item.created_at.isoformat(),
                     }
                 )

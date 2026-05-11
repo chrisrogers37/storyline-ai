@@ -21,6 +21,7 @@ interface MediaItem {
   times_posted: number;
   last_posted_at: string | null;
   source_type: string;
+  thumbnail_url: string | null;
   created_at: string;
 }
 
@@ -139,8 +140,23 @@ export function MediaGrid({
         ) : (
           data.items.map((item) => (
             <Card key={item.id} className="overflow-hidden">
-              <div className="bg-muted h-32 flex items-center justify-center text-muted-foreground">
-                <span className="text-xs uppercase tracking-wider">
+              <div className="bg-muted h-32 relative flex items-center justify-center text-muted-foreground overflow-hidden">
+                {item.thumbnail_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={item.thumbnail_url}
+                    alt={item.file_name}
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                    className="absolute inset-0 h-full w-full object-cover"
+                    onError={(e) => {
+                      // If the signed CDN URL expired or is blocked, fall back
+                      // to the MIME label so we don't show a broken-image icon.
+                      (e.currentTarget as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                ) : null}
+                <span className="text-xs uppercase tracking-wider pointer-events-none">
                   {item.mime_type?.split("/")[1] || "file"}
                 </span>
               </div>
