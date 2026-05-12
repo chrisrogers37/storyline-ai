@@ -21,7 +21,7 @@ interface MediaItem {
   times_posted: number;
   last_posted_at: string | null;
   source_type: string;
-  thumbnail_url: string | null;
+  has_thumbnail: boolean;
   created_at: string;
 }
 
@@ -141,17 +141,17 @@ export function MediaGrid({
           data.items.map((item) => (
             <Card key={item.id} className="overflow-hidden">
               <div className="bg-muted h-32 relative flex items-center justify-center text-muted-foreground overflow-hidden">
-                {item.thumbnail_url ? (
+                {item.has_thumbnail ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={item.thumbnail_url}
+                    src={`/api/dashboard/media/${item.id}/thumbnail`}
                     alt={item.file_name}
                     loading="lazy"
-                    referrerPolicy="no-referrer"
                     className="absolute inset-0 h-full w-full object-cover"
                     onError={(e) => {
-                      // If the signed CDN URL expired or is blocked, fall back
-                      // to the MIME label so we don't show a broken-image icon.
+                      // Proxy returns 404 when the stored Drive URL has
+                      // rotated; the next sync refreshes it. Fall back to
+                      // the MIME label rather than a broken-image icon.
                       (e.currentTarget as HTMLImageElement).style.display = "none";
                     }}
                   />

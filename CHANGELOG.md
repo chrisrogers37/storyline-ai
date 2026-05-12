@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Storydump rebrand in docs and CI** — Updated remaining `storyline` references to `storydump` across operational docs, planning docs, CI workflow, and onboarding UI.
 
+### Security
+
+- **Thumbnails proxied through authenticated endpoint** — `media-library` API previously returned the raw Google Drive `lh3.googleusercontent.com` thumbnail URL, which acts as an "anyone with the link" share for the duration of the signature. A logged-in user could copy a thumbnail link and share it with anyone. The response now exposes only a `has_thumbnail` boolean; the actual bytes are served by `GET /api/onboarding/media/{id}/thumbnail` which validates session, scopes the lookup to the requesting chat, fetches from Drive server-side, validates the upstream content-type, and streams back with `Cache-Control: private, max-age=3600`. Frontend updated to point `<img>` tags at the proxy path. Original Drive files were never exposed; only the small thumbnail.
+
 ### Changed
 
 - **Instagram API kill-switch is now per-chat, not global** — `InstagramCredentialManager.is_configured()` previously short-circuited on `settings.ENABLE_INSTAGRAM_API` regardless of the per-chat DB toggle. Now reads `chat_settings.enable_instagram_api` first and only falls back to the env value when no chat_settings row exists (which shouldn't happen because `SettingsService` bootstraps a row on first access). Matches how dashboard/Telegram toggles already represent the setting.

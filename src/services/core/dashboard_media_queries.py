@@ -60,7 +60,10 @@ class MediaDashboardQueries:
                             else None
                         ),
                         "source_type": item.source_type,
-                        "thumbnail_url": item.thumbnail_url,
+                        # Boolean flag only — the raw Drive CDN URL never
+                        # leaves the server. UI fetches the image through
+                        # the authenticated proxy endpoint.
+                        "has_thumbnail": bool(item.thumbnail_url),
                         "created_at": item.created_at.isoformat(),
                     }
                 )

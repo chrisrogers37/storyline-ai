@@ -26,6 +26,7 @@ const ALLOWED_PATHS = [
   "audit-log",
   "category-mix",
   "history-detail",
+  "media",
   "media-library",
   "media-stats",
   "queue-detail",

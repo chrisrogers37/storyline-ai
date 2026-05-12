@@ -1385,3 +1385,149 @@ class TestAddAccount:
 
         assert response.status_code == 502
         assert "Instagram API" in response.json()["detail"]
+
+
+# =============================================================================
+# GET /api/onboarding/media/{media_id}/thumbnail
+# =============================================================================
+
+
+@pytest.fixture
+def thumb_mocks():
+    """Patch SettingsService / MediaRepository / httpx.AsyncClient for the proxy.
+
+    Yields the three patched classes so the test can attach upstream
+    responses. `mock_validate()` is included so each test doesn't have to
+    re-enter that context manually.
+    """
+    with (
+        mock_validate(),
+        patch("src.api.routes.onboarding.dashboard.SettingsService") as MS,
+        patch("src.api.routes.onboarding.dashboard.MediaRepository") as MR,
+        patch("src.api.routes.onboarding.dashboard.httpx.AsyncClient") as MH,
+    ):
+        yield MS, MR, MH
+
+
+def _wire_thumbnail_mocks(MockSettings, MockRepo, MockHttpx, media_item, upstream):
+    """Wire SettingsService → chat_settings, Repo → media_item, httpx → upstream."""
+    chat_settings = _mock_settings_obj()
+    service_ctx(MockSettings).get_settings.return_value = chat_settings
+
+    repo = MockRepo.return_value.__enter__.return_value
+    repo.get_by_id.return_value = media_item
+
+    if upstream is not None:
+        MockHttpx.return_value.__aenter__.return_value.get.return_value = upstream
+
+    return chat_settings, repo
+
+
+@pytest.mark.unit
+class TestMediaThumbnailProxy:
+    """Test GET /api/onboarding/media/{media_id}/thumbnail."""
+
+    MEDIA_ID = "00000000-0000-0000-0000-000000000001"
+    UPSTREAM_URL = "https://lh3.googleusercontent.com/abc=w200"
+    PNG_BYTES = b"\x89PNG\r\n\x1a\n_fake_image_bytes"
+
+    def _get(self, client):
+        return client.get(
+            f"/api/onboarding/media/{self.MEDIA_ID}/thumbnail",
+            params={"init_data": "test", "chat_id": CHAT_ID},
+        )
+
+    def test_returns_image_bytes(self, client, thumb_mocks):
+        """Returns proxied image content with image/jpeg media type."""
+        MS, MR, MH = thumb_mocks
+        upstream = Mock(
+            status_code=200,
+            content=self.PNG_BYTES,
+            headers={"content-type": "image/jpeg"},
+        )
+        _, repo = _wire_thumbnail_mocks(
+            MS, MR, MH, Mock(thumbnail_url=self.UPSTREAM_URL), upstream
+        )
+        response = self._get(client)
+
+        assert response.status_code == 200
+        assert response.content == self.PNG_BYTES
+        assert response.headers["content-type"] == "image/jpeg"
+        assert "private" in response.headers["cache-control"]
+        # Tenant scoping was applied
+        assert repo.get_by_id.call_args.kwargs["chat_settings_id"] is not None
+
+    def test_returns_404_when_item_missing(self, client, thumb_mocks):
+        """Repo returns None (wrong chat or nonexistent) → 404."""
+        MS, MR, MH = thumb_mocks
+        _wire_thumbnail_mocks(MS, MR, MH, None, None)
+        response = self._get(client)
+
+        assert response.status_code == 404
+        # Upstream not called when item missing
+        MH.return_value.__aenter__.return_value.get.assert_not_called()
+
+    def test_returns_404_when_thumbnail_url_null(self, client, thumb_mocks):
+        """Item exists but thumbnail_url is null (e.g. local upload) → 404."""
+        MS, MR, MH = thumb_mocks
+        _wire_thumbnail_mocks(MS, MR, MH, Mock(thumbnail_url=None), None)
+        response = self._get(client)
+
+        assert response.status_code == 404
+
+    def test_returns_502_when_upstream_non_image(self, client, thumb_mocks):
+        """Upstream returned 200 but not image/*  → 502 (don't echo arbitrary bytes)."""
+        MS, MR, MH = thumb_mocks
+        upstream = Mock(
+            status_code=200,
+            content=b"<html>error</html>",
+            headers={"content-type": "text/html"},
+        )
+        _wire_thumbnail_mocks(
+            MS, MR, MH, Mock(thumbnail_url=self.UPSTREAM_URL), upstream
+        )
+        response = self._get(client)
+
+        assert response.status_code == 502
+
+    def test_returns_502_when_upstream_network_error(self, client, thumb_mocks):
+        """httpx.RequestError → 502 (Drive unreachable, not a 404)."""
+        import httpx as httpx_lib
+
+        MS, MR, MH = thumb_mocks
+        _wire_thumbnail_mocks(MS, MR, MH, Mock(thumbnail_url=self.UPSTREAM_URL), None)
+        MH.return_value.__aenter__.return_value.get.side_effect = (
+            httpx_lib.ConnectError("Connection refused")
+        )
+        response = self._get(client)
+
+        assert response.status_code == 502
+
+    def test_returns_upstream_status_for_stale_url(self, client, thumb_mocks):
+        """Drive returns 404/410 when thumbnailLink rotated — propagate status."""
+        MS, MR, MH = thumb_mocks
+        upstream = Mock(status_code=404, content=b"", headers={"content-type": ""})
+        _wire_thumbnail_mocks(
+            MS, MR, MH, Mock(thumbnail_url=self.UPSTREAM_URL), upstream
+        )
+        response = self._get(client)
+
+        assert response.status_code == 404
+
+    def test_unauthorized_when_invalid_token(self, client):
+        """Bad init_data → 401, no DB or upstream calls."""
+        from fastapi import HTTPException
+
+        with (
+            patch(
+                "src.api.routes.onboarding.helpers._validate_request",
+                side_effect=HTTPException(status_code=401, detail="invalid"),
+            ),
+            patch("src.api.routes.onboarding.dashboard.MediaRepository") as MR,
+            patch("src.api.routes.onboarding.dashboard.httpx.AsyncClient") as MH,
+        ):
+            response = self._get(client)
+
+        assert response.status_code == 401
+        MR.assert_not_called()
+        MH.assert_not_called()

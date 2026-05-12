@@ -4,7 +4,9 @@ import hashlib
 import mimetypes
 from pathlib import Path
 
+import httpx
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.responses import Response
 
 from src.repositories.audit_repository import AuditRepository
 from src.repositories.chat_settings_repository import ChatSettingsRepository
@@ -15,8 +17,15 @@ from src.services.core.dashboard_service import DashboardService
 from src.services.core.health_check import HealthCheckService
 from src.services.core.instagram_account_service import InstagramAccountService
 from src.services.core.settings_service import SettingsService
+from src.utils.logger import logger
 
 from .helpers import _validate_request
+
+# Browser cache TTL for proxied thumbnails. Long enough to keep dashboard
+# scrolling fast; short enough that rotated Drive URLs aren't pinned past
+# the next sync cycle (sync runs every 300s, so 1 hour is a safe ceiling).
+THUMBNAIL_CACHE_SECONDS = 3600
+THUMBNAIL_FETCH_TIMEOUT_SECONDS = 10
 
 router = APIRouter(tags=["onboarding"])
 
@@ -507,3 +516,53 @@ async def onboarding_audit_log(
                 for e in entries
             ],
         }
+
+
+@router.get("/media/{media_id}/thumbnail")
+async def onboarding_media_thumbnail(
+    media_id: str,
+    init_data: str,
+    chat_id: int,
+) -> Response:
+    """Proxy a Drive thumbnail through this authenticated endpoint.
+
+    `media_items.thumbnail_url` stores Google's signed
+    `lh3.googleusercontent.com` URL, which acts as an "anyone with the link"
+    share for the duration of the signature. Returning it to the browser
+    would let a logged-in user copy a link that works without further auth.
+    Instead we fetch server-side, require chat membership, and stream the
+    bytes back from storydump.app so cookies gate every read.
+    """
+    _validate_request(init_data, chat_id)
+
+    with SettingsService() as settings_service:
+        chat_settings = settings_service.get_settings(chat_id)
+        chat_settings_id = str(chat_settings.id)
+
+    with MediaRepository() as media_repo:
+        item = media_repo.get_by_id(media_id, chat_settings_id=chat_settings_id)
+        if item is None or not item.thumbnail_url:
+            raise HTTPException(status_code=404, detail="Not found")
+        upstream_url = item.thumbnail_url
+
+    try:
+        async with httpx.AsyncClient(timeout=THUMBNAIL_FETCH_TIMEOUT_SECONDS) as client:
+            upstream = await client.get(upstream_url)
+    except httpx.RequestError as exc:
+        logger.warning(f"Thumbnail proxy upstream error for {media_id}: {exc}")
+        raise HTTPException(status_code=502, detail="Upstream fetch failed") from exc
+
+    if upstream.status_code != 200:
+        # Drive thumbnailLinks rotate; a 404/410 here means the URL is
+        # stale. Next sync (≤5 min) refreshes it.
+        raise HTTPException(status_code=upstream.status_code, detail="Upstream error")
+
+    content_type = upstream.headers.get("content-type", "")
+    if not content_type.startswith("image/"):
+        raise HTTPException(status_code=502, detail="Unexpected upstream content type")
+
+    return Response(
+        content=upstream.content,
+        media_type=content_type,
+        headers={"Cache-Control": f"private, max-age={THUMBNAIL_CACHE_SECONDS}"},
+    )
