@@ -38,7 +38,17 @@ async def _scheduler_tick(
     Returns the list of active chats discovered this tick (used by health checks).
     """
     # Discard queue items abandoned in 'processing' for over 24h.
-    discarded = queue_repo.discard_abandoned_processing()
+    # queue_repo is a standalone repository (not owned by a BaseService), so
+    # the outer loop's cleanup_transactions() doesn't roll it back on error.
+    # Without this guard a single failed query would leave the session in a
+    # broken transaction and every subsequent tick would PendingRollbackError
+    # for the lifetime of the worker — observed in production.
+    try:
+        discarded = queue_repo.discard_abandoned_processing()
+    except Exception:
+        queue_repo.rollback()
+        raise
+
     if discarded > 0:
         logger.warning(f"Discarded {discarded} abandoned processing item(s) (>24h old)")
 

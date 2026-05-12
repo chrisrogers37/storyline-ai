@@ -54,6 +54,18 @@ class ConfigValidator:
         # Validate Telegram config
         if not settings.TELEGRAM_BOT_TOKEN:
             errors.append("TELEGRAM_BOT_TOKEN is required")
+        else:
+            # Probe Telegram for token validity. Without this, python-telegram-bot's
+            # lazy validation means a rotated/revoked token only surfaces on the
+            # first polling attempt, often masked as a generic outage. We saw
+            # exactly this in production: token rotated externally, env not
+            # updated, "app feels down" for hours. A 1s HTTP call at boot
+            # surfaces it within seconds.
+            token_error = ConfigValidator._check_telegram_token(
+                settings.TELEGRAM_BOT_TOKEN
+            )
+            if token_error:
+                errors.append(token_error)
 
         if not settings.TELEGRAM_CHANNEL_ID:
             errors.append("TELEGRAM_CHANNEL_ID is required")
@@ -85,6 +97,40 @@ class ConfigValidator:
 
         is_valid = len(errors) == 0
         return is_valid, errors
+
+    @staticmethod
+    def _check_telegram_token(token: str) -> Optional[str]:
+        """Call Telegram's getMe to verify the token is accepted.
+
+        Returns an error string if the token is rejected; None if accepted
+        or if the check itself is inconclusive (network error, etc. — we
+        don't want to block startup on a transient network blip).
+        """
+        import requests
+
+        try:
+            resp = requests.get(
+                f"https://api.telegram.org/bot{token}/getMe", timeout=3.0
+            )
+        except requests.RequestException as exc:
+            logger.warning(
+                f"Telegram getMe check failed inconclusively ({type(exc).__name__}); "
+                "continuing startup. Token validity will be checked again on first poll."
+            )
+            return None
+
+        if resp.status_code == 200:
+            return None
+        if resp.status_code == 401:
+            return (
+                "TELEGRAM_BOT_TOKEN rejected by Telegram (HTTP 401). "
+                "Token is invalid or has been revoked — rotate via @BotFather "
+                "and update the env var."
+            )
+        return (
+            f"Telegram getMe returned HTTP {resp.status_code}; "
+            "token may be invalid or Telegram is degraded."
+        )
 
     @staticmethod
     def check_schema_version() -> None:

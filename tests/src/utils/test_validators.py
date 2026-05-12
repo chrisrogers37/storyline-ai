@@ -10,9 +10,10 @@ from src.utils.validators import ConfigValidator
 class TestConfigValidator:
     """Test suite for ConfigValidator."""
 
+    @patch("src.utils.validators.ConfigValidator._check_telegram_token", return_value=None)
     @patch("src.utils.validators.settings")
     @patch("src.utils.validators.Path")
-    def test_validate_all_valid_config(self, mock_path, mock_settings):
+    def test_validate_all_valid_config(self, mock_path, mock_settings, _mock_tg):
         """Test validate_all with valid configuration."""
         # Set up valid config
         mock_settings.POSTS_PER_DAY = 3
@@ -257,9 +258,12 @@ class TestConfigValidator:
         assert is_valid is False
         assert any("MEDIA_DIR" in error for error in errors)
 
+    @patch("src.utils.validators.ConfigValidator._check_telegram_token", return_value=None)
     @patch("src.utils.validators.settings")
     @patch("src.utils.validators.Path")
-    def test_validate_all_media_dir_auto_created(self, mock_path, mock_settings):
+    def test_validate_all_media_dir_auto_created(
+        self, mock_path, mock_settings, _mock_tg
+    ):
         """Test validation passes when media dir can be auto-created."""
         mock_settings.POSTS_PER_DAY = 3
         mock_settings.POSTING_HOURS_START = 14
@@ -438,3 +442,43 @@ class TestCheckSchemaVersion:
 
         mock_logger.warning.assert_called_once()
         assert "Schema version check failed" in mock_logger.warning.call_args[0][0]
+
+
+@pytest.mark.unit
+class TestCheckTelegramToken:
+    """Test ConfigValidator._check_telegram_token (boot-time getMe probe)."""
+
+    @patch("requests.get")
+    def test_returns_none_when_token_accepted(self, mock_get):
+        """HTTP 200 from Telegram means the token is good."""
+        mock_get.return_value = MagicMock(status_code=200)
+
+        assert ConfigValidator._check_telegram_token("anything") is None
+
+    @patch("requests.get")
+    def test_returns_error_on_401(self, mock_get):
+        """HTTP 401 means the token is revoked/invalid — flag it loudly."""
+        mock_get.return_value = MagicMock(status_code=401)
+
+        error = ConfigValidator._check_telegram_token("anything")
+        assert error is not None
+        assert "401" in error
+        assert "rotate" in error.lower() or "revoked" in error.lower()
+
+    @patch("requests.get")
+    def test_returns_error_on_other_4xx_5xx(self, mock_get):
+        """Other non-200 statuses also fail validation."""
+        mock_get.return_value = MagicMock(status_code=500)
+
+        error = ConfigValidator._check_telegram_token("anything")
+        assert error is not None
+        assert "500" in error
+
+    @patch("requests.get")
+    def test_returns_none_on_network_error(self, mock_get):
+        """Network errors are inconclusive — don't block startup on a blip."""
+        import requests as requests_lib
+
+        mock_get.side_effect = requests_lib.ConnectTimeout("timeout")
+
+        assert ConfigValidator._check_telegram_token("anything") is None

@@ -307,6 +307,46 @@ class TestSchedulerLoop:
             SERVICE_RUNS_RETENTION_DAYS
         )
 
+    @pytest.mark.asyncio
+    async def test_scheduler_loop_rolls_back_queue_repo_on_discard_error(self):
+        """If queue_repo.discard_abandoned_processing raises, the session is
+        rolled back so the next tick doesn't PendingRollbackError. This was a
+        real production incident: one bad query left the standalone queue_repo
+        in a broken transaction and every subsequent tick errored for hours.
+        """
+        scheduler_service = Mock()
+        scheduler_service.process_slot = AsyncMock(return_value={"posted": False})
+        scheduler_service.cleanup_transactions = Mock()
+
+        posting_service = Mock()
+        posting_service.cleanup_transactions = Mock()
+
+        settings_service = Mock()
+        settings_service.get_all_active_chats.return_value = []
+        settings_service.cleanup_transactions = Mock()
+
+        with (
+            patch(f"{_SCHEDULER}.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch(f"{_SCHEDULER}.QueueRepository") as mock_queue_repo_cls,
+            patch(f"{_SCHEDULER}.ServiceRunRepository"),
+        ):
+            queue_repo = mock_queue_repo_cls.return_value
+            queue_repo.discard_abandoned_processing.side_effect = RuntimeError(
+                "simulated DB error"
+            )
+            queue_repo.rollback = Mock()
+            mock_sleep.side_effect = StopAsyncIteration
+
+            try:
+                await run_scheduler_loop(
+                    scheduler_service, posting_service, settings_service
+                )
+            except StopAsyncIteration:
+                pass
+
+        # Session was rolled back so the next tick starts clean.
+        queue_repo.rollback.assert_called_once()
+
 
 @pytest.mark.unit
 class TestMediaSyncLoop:

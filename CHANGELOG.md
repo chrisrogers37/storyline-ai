@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Storydump rebrand in docs and CI** — Updated remaining `storyline` references to `storydump` across operational docs, planning docs, CI workflow, and onboarding UI.
 
+### Fixed
+
+- **Scheduler tick poisoning standalone `queue_repo` session** — `_scheduler_tick` calls `queue_repo.discard_abandoned_processing()` before iterating chats. `queue_repo` is instantiated standalone (not owned by a BaseService), so the outer loop's `cleanup_transactions()` doesn't roll it back on error. A single transient DB failure was leaving the session in a broken transaction and every subsequent tick threw `PendingRollbackError` for the lifetime of the worker (observed in production after the token-rotation incident). Wrapped the call in try/except + `queue_repo.rollback()`.
+
+### Added
+
+- **Boot-time Telegram token validity check** — `ConfigValidator.validate_all()` now calls `https://api.telegram.org/bot{token}/getMe` at startup and fails loudly on HTTP 401. Without this, python-telegram-bot's lazy validation meant a rotated/revoked token only surfaced on the first polling attempt and looked like a generic "app feels down" outage. Inconclusive results (network errors) are non-blocking so a transient blip doesn't crash startup.
+
 ### Security
 
 - **Thumbnails proxied through authenticated endpoint** — `media-library` API previously returned the raw Google Drive `lh3.googleusercontent.com` thumbnail URL, which acts as an "anyone with the link" share for the duration of the signature. A logged-in user could copy a thumbnail link and share it with anyone. The response now exposes only a `has_thumbnail` boolean; the actual bytes are served by `GET /api/onboarding/media/{id}/thumbnail` which validates session, scopes the lookup to the requesting chat, fetches from Drive server-side, validates the upstream content-type, and streams back with `Cache-Control: private, max-age=3600`. Frontend updated to point `<img>` tags at the proxy path. Original Drive files were never exposed; only the small thumbnail.
