@@ -47,6 +47,10 @@ class ChatSettings(Base):
     posting_hours_start = Column(Integer, default=14)
     posting_hours_end = Column(Integer, default=2)
 
+    # Per-chat lock TTLs (NULL = use REPOST_TTL_DAYS / SKIP_TTL_DAYS env defaults)
+    repost_ttl_days = Column(Integer, nullable=True)
+    skip_ttl_days = Column(Integer, nullable=True)
+
     # JIT scheduler: when the last post was sent to Telegram for this tenant.
     # Used by is_slot_due() to determine when the next slot should fire.
     # NULL = no post sent yet (treat as "slot is due immediately").

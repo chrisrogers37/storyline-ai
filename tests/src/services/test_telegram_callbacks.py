@@ -604,6 +604,7 @@ class TestCompleteQueueAction:
 
         mock_queue_item = Mock()
         mock_queue_item.media_item_id = media_id
+        mock_queue_item.telegram_chat_id = -100123
         mock_queue_item.created_at = datetime.utcnow()
         mock_queue_item.scheduled_for = datetime.utcnow()
         service.queue_repo.get_by_id.return_value = mock_queue_item
@@ -630,8 +631,10 @@ class TestCompleteQueueAction:
         )
 
         service.media_repo.increment_times_posted.assert_not_called()
+        # TTL is resolved server-side (per-chat or env fallback) — caller
+        # passes only the chat scope.
         service.lock_service.create_lock.assert_called_once_with(
-            str(media_id), ttl_days=45, lock_reason="skip"
+            str(media_id), lock_reason="skip", telegram_chat_id=-100123
         )
         service.user_repo.increment_posts.assert_not_called()
         service.queue_repo.delete.assert_called_once_with(queue_id)

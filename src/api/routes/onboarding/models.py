@@ -42,7 +42,7 @@ class UpdateSettingRequest(BaseModel):
     init_data: str
     chat_id: int
     setting_name: str
-    value: int = Field(ge=0, le=50)
+    value: int = Field(ge=0, le=365)
 
 
 class SwitchAccountRequest(BaseModel):

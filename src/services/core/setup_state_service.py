@@ -62,6 +62,8 @@ class SetupStateService(BaseService):
             "posts_per_day": chat_settings.posts_per_day,
             "posting_hours_start": chat_settings.posting_hours_start,
             "posting_hours_end": chat_settings.posting_hours_end,
+            "repost_ttl_days": chat_settings.repost_ttl_days,
+            "skip_ttl_days": chat_settings.skip_ttl_days,
             # Onboarding
             "onboarding_completed": chat_settings.onboarding_completed,
             "onboarding_step": chat_settings.onboarding_step,

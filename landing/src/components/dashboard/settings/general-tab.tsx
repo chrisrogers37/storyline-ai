@@ -17,6 +17,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { postApi } from "@/lib/dashboard-api";
 import { CategoryMixCard } from "./category-mix-card";
+import { RepostCadenceCard } from "./repost-cadence-card";
 
 interface GeneralSettings {
   posts_per_day: number;
@@ -28,6 +29,8 @@ interface GeneralSettings {
   show_verbose_notifications: boolean;
   media_sync_enabled: boolean;
   enable_ai_captions: boolean;
+  repost_ttl_days: number | null;
+  skip_ttl_days: number | null;
 }
 
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => ({
@@ -163,6 +166,12 @@ export function GeneralTab({ settings }: { settings: GeneralSettings }) {
       </Card>
 
       <CategoryMixCard />
+
+      <RepostCadenceCard
+        repostTtlDays={settings.repost_ttl_days}
+        skipTtlDays={settings.skip_ttl_days}
+        onError={setError}
+      />
 
       <Card>
         <CardHeader>

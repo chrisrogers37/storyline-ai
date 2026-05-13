@@ -18,6 +18,32 @@ class MediaLockService(BaseService):
         super().__init__()
         self.lock_repo = LockRepository()
         self.audit_repo = AuditRepository()
+        self._settings_repo = None  # lazy — many callers don't need it
+
+    def _resolve_ttl(self, lock_reason: str, telegram_chat_id: Optional[int]) -> int:
+        """Resolve TTL days for a lock, preferring per-chat overrides."""
+        env_default = (
+            settings.SKIP_TTL_DAYS
+            if lock_reason == "skip"
+            else settings.REPOST_TTL_DAYS
+        )
+        if telegram_chat_id is None:
+            return env_default
+
+        if self._settings_repo is None:
+            # Imported lazily to avoid a circular dep between media_lock and
+            # the chat_settings repo (which sits below this service).
+            from src.repositories.chat_settings_repository import (
+                ChatSettingsRepository,
+            )
+
+            self._settings_repo = ChatSettingsRepository()
+
+        chat = self._settings_repo.get_by_chat_id(telegram_chat_id)
+        if chat is None:
+            return env_default
+        per_chat = chat.skip_ttl_days if lock_reason == "skip" else chat.repost_ttl_days
+        return per_chat if per_chat is not None else env_default
 
     def create_lock(
         self,
@@ -25,22 +51,27 @@ class MediaLockService(BaseService):
         ttl_days: Optional[int] = None,
         lock_reason: str = "recent_post",
         created_by_user_id: Optional[str] = None,
+        telegram_chat_id: Optional[int] = None,
     ) -> bool:
         """
         Create a TTL lock for a media item.
 
         Args:
             media_item_id: ID of media item to lock
-            ttl_days: Days to lock (default: from settings, None for permanent)
+            ttl_days: Days to lock. Explicit None for permanent_reject.
+                When omitted, resolves to the per-chat override
+                (`chat_settings.repost_ttl_days` for 'recent_post',
+                `chat_settings.skip_ttl_days` for 'skip') if the caller
+                passed `telegram_chat_id`, falling back to the env defaults.
             lock_reason: Reason for lock ('recent_post', 'skip', 'manual_hold', 'seasonal', 'permanent_reject')
             created_by_user_id: User who created the lock (optional)
+            telegram_chat_id: Chat scope for per-chat TTL lookup.
 
         Returns:
             True if lock created successfully
         """
-        # Default to settings if not specified (but allow explicit None for permanent locks)
         if ttl_days is None and lock_reason != "permanent_reject":
-            ttl_days = settings.REPOST_TTL_DAYS
+            ttl_days = self._resolve_ttl(lock_reason, telegram_chat_id)
 
         # Check if already locked
         if self.is_locked(media_item_id):

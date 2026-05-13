@@ -49,6 +49,8 @@ export default async function SettingsPage() {
                 setup.show_verbose_notifications ?? false,
               media_sync_enabled: setup.media_sync_enabled ?? false,
               enable_ai_captions: setup.enable_ai_captions ?? false,
+              repost_ttl_days: setup.repost_ttl_days ?? null,
+              skip_ttl_days: setup.skip_ttl_days ?? null,
             }}
           />
         </TabsContent>

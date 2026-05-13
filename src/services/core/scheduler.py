@@ -381,7 +381,9 @@ class SchedulerService(BaseService):
         from src.services.core.media_lock import MediaLockService
 
         lock_service = MediaLockService()
-        lock_service.create_lock(media_id)
+        lock_service.create_lock(
+            media_id, telegram_chat_id=chat_settings.telegram_chat_id
+        )
 
         self.queue_repo.delete(queue_id)
 

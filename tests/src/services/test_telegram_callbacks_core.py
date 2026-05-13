@@ -250,6 +250,7 @@ class TestExecuteCompleteDbOps:
 
         queue_item = Mock(
             media_item_id="media-1",
+            telegram_chat_id=-100123,
             created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
             scheduled_for=datetime(2026, 1, 2, tzinfo=timezone.utc),
             chat_settings_id="cs-1",
@@ -263,32 +264,37 @@ class TestExecuteCompleteDbOps:
         core.service.media_repo.increment_times_posted.assert_called_once_with(
             "media-1"
         )
-        core.service.lock_service.create_lock.assert_called_once_with("media-1")
+        # Lock now passes chat_id so MediaLockService can look up the per-chat TTL
+        core.service.lock_service.create_lock.assert_called_once_with(
+            "media-1", telegram_chat_id=-100123
+        )
         core.service.user_repo.increment_posts.assert_called_once_with("user-1")
         core.service.queue_repo.delete.assert_called_once_with("q-1")
 
     def test_skipped_creates_skip_lock(self, core):
-        """For 'skipped' status: create lock with skip TTL, no post increment."""
+        """For 'skipped' status: create skip lock, no post increment.
+
+        TTL is resolved server-side from chat_settings.skip_ttl_days (per-chat)
+        with REPOST/SKIP env defaults as fallback, so the caller no longer
+        passes ttl_days directly — it just identifies the chat.
+        """
         self._setup_shared_session(core)
         media_item = Mock()
         core.service.media_repo.get_by_id.return_value = media_item
 
         queue_item = Mock(
             media_item_id="media-1",
+            telegram_chat_id=-100123,
             created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
             scheduled_for=datetime(2026, 1, 2, tzinfo=timezone.utc),
             chat_settings_id="cs-1",
         )
         user = Mock(id="user-1", telegram_username="u")
 
-        with patch(
-            "src.services.core.telegram_callbacks_core.settings"
-        ) as mock_settings:
-            mock_settings.SKIP_TTL_DAYS = 7
-            core._execute_complete_db_ops("q-1", queue_item, user, "skipped", False)
+        core._execute_complete_db_ops("q-1", queue_item, user, "skipped", False)
 
         core.service.lock_service.create_lock.assert_called_once_with(
-            "media-1", ttl_days=7, lock_reason="skip"
+            "media-1", lock_reason="skip", telegram_chat_id=-100123
         )
         core.service.media_repo.increment_times_posted.assert_not_called()
         core.service.user_repo.increment_posts.assert_not_called()

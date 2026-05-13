@@ -888,9 +888,9 @@ class TestRecordSuccessfulPost:
         handler.service.media_repo.increment_times_posted.assert_called_once_with(
             str(ctx.queue_item.media_item_id)
         )
-        # 3. Create lock
+        # 3. Create lock — chat_id passed so per-chat TTL can be applied
         handler.service.lock_service.create_lock.assert_called_once_with(
-            str(ctx.queue_item.media_item_id)
+            str(ctx.queue_item.media_item_id), telegram_chat_id=ctx.chat_id
         )
         # 4. Delete queue item
         handler.service.queue_repo.delete.assert_called_once_with(ctx.queue_id)

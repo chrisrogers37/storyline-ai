@@ -66,7 +66,13 @@ async def onboarding_update_setting(request: UpdateSettingRequest) -> dict:
     """Update a numeric setting (posts_per_day, posting hours) from dashboard."""
     _validate_request(request.init_data, request.chat_id)
 
-    allowed_settings = {"posts_per_day", "posting_hours_start", "posting_hours_end"}
+    allowed_settings = {
+        "posts_per_day",
+        "posting_hours_start",
+        "posting_hours_end",
+        "repost_ttl_days",
+        "skip_ttl_days",
+    }
     if request.setting_name not in allowed_settings:
         raise HTTPException(
             status_code=400,

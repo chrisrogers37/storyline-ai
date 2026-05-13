@@ -8,7 +8,6 @@ from telegram import InlineKeyboardMarkup
 
 from contextlib import contextmanager
 
-from src.config.settings import settings
 from src.repositories.history_repository import HistoryCreateParams
 from src.utils.logger import logger
 from src.utils.resilience import telegram_edit_with_retry
@@ -166,13 +165,16 @@ class TelegramCallbackCore:
                 self.service.media_repo.increment_times_posted(
                     str(queue_item.media_item_id)
                 )
-                self.service.lock_service.create_lock(str(queue_item.media_item_id))
+                self.service.lock_service.create_lock(
+                    str(queue_item.media_item_id),
+                    telegram_chat_id=queue_item.telegram_chat_id,
+                )
                 self.service.user_repo.increment_posts(str(user.id))
             elif status == "skipped":
                 self.service.lock_service.create_lock(
                     str(queue_item.media_item_id),
-                    ttl_days=settings.SKIP_TTL_DAYS,
                     lock_reason="skip",
+                    telegram_chat_id=queue_item.telegram_chat_id,
                 )
 
             self.service.queue_repo.delete(queue_id)

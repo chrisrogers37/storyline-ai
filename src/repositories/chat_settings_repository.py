@@ -54,6 +54,8 @@ class ChatSettingsRepository(BaseRepository):
             posts_per_day=env_settings.POSTS_PER_DAY,
             posting_hours_start=env_settings.POSTING_HOURS_START,
             posting_hours_end=env_settings.POSTING_HOURS_END,
+            repost_ttl_days=env_settings.REPOST_TTL_DAYS,
+            skip_ttl_days=env_settings.SKIP_TTL_DAYS,
             show_verbose_notifications=True,
             media_sync_enabled=env_settings.MEDIA_SYNC_ENABLED,
             onboarding_completed=True,

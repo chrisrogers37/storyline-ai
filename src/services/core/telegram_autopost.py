@@ -471,7 +471,10 @@ class TelegramAutopostHandler:
         self.service.media_repo.increment_times_posted(
             str(ctx.queue_item.media_item_id)
         )
-        self.service.lock_service.create_lock(str(ctx.queue_item.media_item_id))
+        self.service.lock_service.create_lock(
+            str(ctx.queue_item.media_item_id),
+            telegram_chat_id=ctx.chat_id,
+        )
         self.service.queue_repo.delete(ctx.queue_id)
         self.service.user_repo.increment_posts(str(ctx.user.id))
 
