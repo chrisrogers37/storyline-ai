@@ -655,9 +655,7 @@ class TestMediaSyncServiceSettingsResolution:
     def test_sync_uses_overridden_source_type(
         self, mock_factory, mock_settings, sync_service
     ):
-        """Passing source_type overrides settings.MEDIA_SOURCE_TYPE."""
-        mock_settings.MEDIA_SOURCE_TYPE = "local"
-        mock_settings.MEDIA_SOURCE_ROOT = "folder_id"
+        """Caller-provided source_type + source_root bypass the per-chat lookup."""
         mock_settings.MEDIA_DIR = "/media"
         mock_settings.TELEGRAM_CHANNEL_ID = -100123456789
 
@@ -667,7 +665,10 @@ class TestMediaSyncServiceSettingsResolution:
         mock_provider.list_files.return_value = []
         sync_service.media_repo.get_active_by_source_type.return_value = []
 
-        sync_service.sync(source_type="google_drive")
+        # Both source_type and source_root must be explicit to skip the
+        # chat_settings lookup branch (sync() goes through SettingsService
+        # whenever either is None).
+        sync_service.sync(source_type="google_drive", source_root="folder_id")
 
         mock_factory.create.assert_called_once_with(
             "google_drive",

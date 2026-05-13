@@ -46,8 +46,7 @@ class TestChatSettingsRepository:
 
         assert result is None
 
-    @patch("src.repositories.chat_settings_repository.env_settings")
-    def test_get_or_create_returns_existing(self, mock_env, settings_repo, mock_db):
+    def test_get_or_create_returns_existing(self, settings_repo, mock_db):
         """Test get_or_create returns existing record without creating."""
         mock_settings = Mock(spec=ChatSettings)
         mock_db.query.return_value.filter.return_value.first.return_value = (
@@ -59,16 +58,13 @@ class TestChatSettingsRepository:
         assert result is mock_settings
         mock_db.add.assert_not_called()
 
-    @patch("src.repositories.chat_settings_repository.env_settings")
-    def test_get_or_create_bootstraps_from_env(self, mock_env, settings_repo, mock_db):
-        """Test get_or_create creates new record from .env defaults."""
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+    def test_get_or_create_bootstraps_from_code_defaults(
+        self, settings_repo, mock_db
+    ):
+        """Test get_or_create creates a new record from src.config.defaults."""
+        from src.config import defaults
 
-        mock_env.DRY_RUN_MODE = True
-        mock_env.ENABLE_INSTAGRAM_API = False
-        mock_env.POSTS_PER_DAY = 3
-        mock_env.POSTING_HOURS_START = 9
-        mock_env.POSTING_HOURS_END = 22
+        mock_db.query.return_value.filter.return_value.first.return_value = None
 
         settings_repo.get_or_create(-100123)
 
@@ -79,8 +75,12 @@ class TestChatSettingsRepository:
         added_obj = mock_db.add.call_args[0][0]
         assert isinstance(added_obj, ChatSettings)
         assert added_obj.telegram_chat_id == -100123
-        assert added_obj.dry_run_mode is True
-        assert added_obj.posts_per_day == 3
+        assert added_obj.dry_run_mode is defaults.DEFAULT_DRY_RUN_MODE
+        assert added_obj.posts_per_day == defaults.DEFAULT_POSTS_PER_DAY
+        assert (
+            added_obj.posting_hours_start == defaults.DEFAULT_POSTING_HOURS_START
+        )
+        assert added_obj.caption_style == defaults.DEFAULT_CAPTION_STYLE
         assert added_obj.onboarding_completed is True
 
     def test_update_modifies_fields(self, settings_repo, mock_db):

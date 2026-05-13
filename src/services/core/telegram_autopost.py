@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-from src.config.settings import settings
 from src.exceptions.instagram import (
     InstagramAPIError,
     MediaUploadError,
@@ -575,7 +574,7 @@ class TelegramAutopostHandler:
 
         reply_markup = build_queue_action_keyboard(
             ctx.queue_id,
-            enable_instagram_api=settings.ENABLE_INSTAGRAM_API,
+            enable_instagram_api=bool(ctx.chat_settings.enable_instagram_api),
             error_recovery=True,
         )
 

@@ -87,127 +87,10 @@ class TestConfigValidator:
         assert is_valid is False
         assert any("TELEGRAM_CHANNEL_ID" in error for error in errors)
 
-    @patch("src.utils.validators.settings")
-    @patch("src.utils.validators.Path")
-    def test_validate_all_invalid_posts_per_day_zero(self, mock_path, mock_settings):
-        """Test validation fails with invalid posts per day (zero)."""
-        mock_settings.POSTS_PER_DAY = 0  # Invalid
-        mock_settings.POSTING_HOURS_START = 14
-        mock_settings.POSTING_HOURS_END = 2
-        mock_settings.REPOST_TTL_DAYS = 30
-        mock_settings.TELEGRAM_BOT_TOKEN = "123456:ABC"
-        mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
-        mock_settings.ADMIN_TELEGRAM_CHAT_ID = 123456789
-        mock_settings.ENABLE_INSTAGRAM_API = False
-        mock_settings.DB_NAME = "storydump"
-        mock_settings.MEDIA_DIR = "/media/stories"
-
-        mock_path_instance = MagicMock()
-        mock_path_instance.exists.return_value = True
-        mock_path.return_value = mock_path_instance
-
-        is_valid, errors = ConfigValidator.validate_all()
-
-        assert is_valid is False
-        assert any("POSTS_PER_DAY" in error for error in errors)
-
-    @patch("src.utils.validators.settings")
-    @patch("src.utils.validators.Path")
-    def test_validate_all_invalid_posts_per_day_too_high(
-        self, mock_path, mock_settings
-    ):
-        """Test validation fails with posts per day > 10."""
-        mock_settings.POSTS_PER_DAY = 15  # Invalid (> 10)
-        mock_settings.POSTING_HOURS_START = 14
-        mock_settings.POSTING_HOURS_END = 2
-        mock_settings.REPOST_TTL_DAYS = 30
-        mock_settings.TELEGRAM_BOT_TOKEN = "123456:ABC"
-        mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
-        mock_settings.ADMIN_TELEGRAM_CHAT_ID = 123456789
-        mock_settings.ENABLE_INSTAGRAM_API = False
-        mock_settings.DB_NAME = "storydump"
-        mock_settings.MEDIA_DIR = "/media/stories"
-
-        mock_path_instance = MagicMock()
-        mock_path_instance.exists.return_value = True
-        mock_path.return_value = mock_path_instance
-
-        is_valid, errors = ConfigValidator.validate_all()
-
-        assert is_valid is False
-        assert any("POSTS_PER_DAY" in error for error in errors)
-
-    @patch("src.utils.validators.settings")
-    @patch("src.utils.validators.Path")
-    def test_validate_all_invalid_posting_hours_start(self, mock_path, mock_settings):
-        """Test validation fails with invalid hours start."""
-        mock_settings.POSTS_PER_DAY = 3
-        mock_settings.POSTING_HOURS_START = 25  # Invalid (> 23)
-        mock_settings.POSTING_HOURS_END = 2
-        mock_settings.REPOST_TTL_DAYS = 30
-        mock_settings.TELEGRAM_BOT_TOKEN = "123456:ABC"
-        mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
-        mock_settings.ADMIN_TELEGRAM_CHAT_ID = 123456789
-        mock_settings.ENABLE_INSTAGRAM_API = False
-        mock_settings.DB_NAME = "storydump"
-        mock_settings.MEDIA_DIR = "/media/stories"
-
-        mock_path_instance = MagicMock()
-        mock_path_instance.exists.return_value = True
-        mock_path.return_value = mock_path_instance
-
-        is_valid, errors = ConfigValidator.validate_all()
-
-        assert is_valid is False
-        assert any("POSTING_HOURS_START" in error for error in errors)
-
-    @patch("src.utils.validators.settings")
-    @patch("src.utils.validators.Path")
-    def test_validate_all_invalid_posting_hours_end(self, mock_path, mock_settings):
-        """Test validation fails with invalid hours end."""
-        mock_settings.POSTS_PER_DAY = 3
-        mock_settings.POSTING_HOURS_START = 14
-        mock_settings.POSTING_HOURS_END = 30  # Invalid (> 23)
-        mock_settings.REPOST_TTL_DAYS = 30
-        mock_settings.TELEGRAM_BOT_TOKEN = "123456:ABC"
-        mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
-        mock_settings.ADMIN_TELEGRAM_CHAT_ID = 123456789
-        mock_settings.ENABLE_INSTAGRAM_API = False
-        mock_settings.DB_NAME = "storydump"
-        mock_settings.MEDIA_DIR = "/media/stories"
-
-        mock_path_instance = MagicMock()
-        mock_path_instance.exists.return_value = True
-        mock_path.return_value = mock_path_instance
-
-        is_valid, errors = ConfigValidator.validate_all()
-
-        assert is_valid is False
-        assert any("POSTING_HOURS_END" in error for error in errors)
-
-    @patch("src.utils.validators.settings")
-    @patch("src.utils.validators.Path")
-    def test_validate_all_invalid_repost_ttl(self, mock_path, mock_settings):
-        """Test validation fails with invalid repost TTL."""
-        mock_settings.POSTS_PER_DAY = 3
-        mock_settings.POSTING_HOURS_START = 14
-        mock_settings.POSTING_HOURS_END = 2
-        mock_settings.REPOST_TTL_DAYS = 0  # Invalid (< 1)
-        mock_settings.TELEGRAM_BOT_TOKEN = "123456:ABC"
-        mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
-        mock_settings.ADMIN_TELEGRAM_CHAT_ID = 123456789
-        mock_settings.ENABLE_INSTAGRAM_API = False
-        mock_settings.DB_NAME = "storydump"
-        mock_settings.MEDIA_DIR = "/media/stories"
-
-        mock_path_instance = MagicMock()
-        mock_path_instance.exists.return_value = True
-        mock_path.return_value = mock_path_instance
-
-        is_valid, errors = ConfigValidator.validate_all()
-
-        assert is_valid is False
-        assert any("REPOST_TTL_DAYS" in error for error in errors)
+    # NOTE: Tests for per-chat env validation (POSTS_PER_DAY, POSTING_HOURS_*,
+    # REPOST_TTL_DAYS) were removed in the env→DB migration. Validation for
+    # those values now lives at the API/service write boundary
+    # (see test_onboarding_routes.py::TestUpdateSetting and SettingsService).
 
     @patch("src.utils.validators.settings")
     @patch("src.utils.validators.Path")
@@ -291,56 +174,11 @@ class TestConfigValidator:
         assert len(errors) == 0
         mock_path_instance.mkdir.assert_called_once_with(parents=True, exist_ok=True)
 
-    @patch("src.utils.validators.settings")
-    @patch("src.utils.validators.Path")
-    def test_validate_all_instagram_api_missing_cloudinary(
-        self, mock_path, mock_settings
-    ):
-        """Test validation fails when Instagram API enabled but Cloudinary missing."""
-        mock_settings.POSTS_PER_DAY = 3
-        mock_settings.POSTING_HOURS_START = 14
-        mock_settings.POSTING_HOURS_END = 2
-        mock_settings.REPOST_TTL_DAYS = 30
-        mock_settings.TELEGRAM_BOT_TOKEN = "123456:ABC"
-        mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
-        mock_settings.ADMIN_TELEGRAM_CHAT_ID = 123456789
-        mock_settings.ENABLE_INSTAGRAM_API = True  # Enabled
-        mock_settings.CLOUDINARY_CLOUD_NAME = ""  # Missing
-        mock_settings.DB_NAME = "storydump"
-        mock_settings.MEDIA_DIR = "/media/stories"
-
-        mock_path_instance = MagicMock()
-        mock_path_instance.exists.return_value = True
-        mock_path.return_value = mock_path_instance
-
-        is_valid, errors = ConfigValidator.validate_all()
-
-        assert is_valid is False
-        assert any("Cloudinary" in error for error in errors)
-
-    @patch("src.utils.validators.settings")
-    @patch("src.utils.validators.Path")
-    def test_validate_all_multiple_errors(self, mock_path, mock_settings):
-        """Test validate_all collects multiple errors."""
-        mock_settings.POSTS_PER_DAY = 0  # Invalid
-        mock_settings.POSTING_HOURS_START = 25  # Invalid
-        mock_settings.POSTING_HOURS_END = 2
-        mock_settings.REPOST_TTL_DAYS = 30
-        mock_settings.TELEGRAM_BOT_TOKEN = ""  # Missing
-        mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
-        mock_settings.ADMIN_TELEGRAM_CHAT_ID = 123456789
-        mock_settings.ENABLE_INSTAGRAM_API = False
-        mock_settings.DB_NAME = "storydump"
-        mock_settings.MEDIA_DIR = "/media/stories"
-
-        mock_path_instance = MagicMock()
-        mock_path_instance.exists.return_value = True
-        mock_path.return_value = mock_path_instance
-
-        is_valid, errors = ConfigValidator.validate_all()
-
-        assert is_valid is False
-        assert len(errors) >= 3  # At least 3 errors
+    # Cloudinary-gate validation was removed in the env→DB migration —
+    # ENABLE_INSTAGRAM_API is per-chat now, so a global "are we using IG?"
+    # gate is no longer meaningful.
+    # multiple_errors test exercised per-chat envs that are now validated
+    # at write time on the API boundary, not at boot.
 
 
 @pytest.mark.unit

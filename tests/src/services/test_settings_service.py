@@ -384,28 +384,20 @@ class TestSettingsArchitecture:
 
 @pytest.mark.unit
 class TestEnvFallback:
-    """Tests for .env fallback behavior when no DB record exists."""
+    """Tests for code-default bootstrap when no DB record exists."""
 
-    @patch("src.repositories.chat_settings_repository.env_settings")
-    def test_repository_bootstraps_from_env(self, mock_env_settings):
-        """Repository should create settings from .env on first access."""
-        mock_env_settings.DRY_RUN_MODE = True
-        mock_env_settings.ENABLE_INSTAGRAM_API = False
-        mock_env_settings.POSTS_PER_DAY = 5
-        mock_env_settings.POSTING_HOURS_START = 10
-        mock_env_settings.POSTING_HOURS_END = 22
+    def test_repository_bootstraps_from_code_defaults(self):
+        """Repository should create settings from src.config.defaults on first access."""
+        from src.config import defaults
 
-        # Create mock db session
         mock_db = MagicMock()
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = None  # No existing record
-
         mock_db.query.return_value = mock_query
 
         repo = ChatSettingsRepository()
         repo._db = mock_db
 
-        # Mock db.add to capture the created object
         created_settings = None
 
         def capture_add(obj):
@@ -413,18 +405,16 @@ class TestEnvFallback:
             created_settings = obj
 
         mock_db.add.side_effect = capture_add
-
-        # Mock refresh to do nothing
         mock_db.refresh = MagicMock()
 
-        # This should create from .env
         repo.get_or_create(-1001234567890)
 
-        # Verify .env values were used
         mock_db.add.assert_called_once()
-        assert created_settings.dry_run_mode
-        assert not created_settings.enable_instagram_api
-        assert created_settings.posts_per_day == 5
+        assert created_settings.dry_run_mode is defaults.DEFAULT_DRY_RUN_MODE
+        assert created_settings.enable_instagram_api is (
+            defaults.DEFAULT_ENABLE_INSTAGRAM_API
+        )
+        assert created_settings.posts_per_day == defaults.DEFAULT_POSTS_PER_DAY
 
 
 # =============================================================================
@@ -944,13 +934,13 @@ class TestSettingsServiceMediaSource:
         assert source_type == "google_drive"
         assert source_root == "folder_abc"
 
-    @patch("src.config.settings.settings")
-    def test_get_media_source_config_falls_back_to_env(
-        self, mock_env, settings_service
+    def test_get_media_source_config_falls_back_to_code_default(
+        self, settings_service
     ):
-        """NULL per-chat values fall back to env vars."""
-        mock_env.MEDIA_SOURCE_TYPE = "local"
-        mock_env.MEDIA_SOURCE_ROOT = "/env/path"
+        """NULL per-chat source_type falls back to defaults.DEFAULT_MEDIA_SOURCE_TYPE;
+        NULL per-chat source_root surfaces as None (no env fallback).
+        """
+        from src.config import defaults
 
         mock_settings = Mock(spec=ChatSettings)
         mock_settings.media_source_type = None
@@ -959,15 +949,11 @@ class TestSettingsServiceMediaSource:
 
         source_type, source_root = settings_service.get_media_source_config(-100)
 
-        assert source_type == "local"
-        assert source_root == "/env/path"
+        assert source_type == defaults.DEFAULT_MEDIA_SOURCE_TYPE
+        assert source_root is None
 
-    @patch("src.config.settings.settings")
-    def test_get_media_source_config_partial_override(self, mock_env, settings_service):
-        """One per-chat value set, the other NULL -- mixed resolution."""
-        mock_env.MEDIA_SOURCE_TYPE = "local"
-        mock_env.MEDIA_SOURCE_ROOT = "/default"
-
+    def test_get_media_source_config_partial_override(self, settings_service):
+        """Per-chat type set, root NULL — type used, root returns None."""
         mock_settings = Mock(spec=ChatSettings)
         mock_settings.media_source_type = "google_drive"
         mock_settings.media_source_root = None
@@ -976,7 +962,7 @@ class TestSettingsServiceMediaSource:
         source_type, source_root = settings_service.get_media_source_config(-100)
 
         assert source_type == "google_drive"
-        assert source_root == "/default"
+        assert source_root is None
 
     def test_get_settings_display_includes_media_source_fields(self, settings_service):
         """get_settings_display includes media_source_type and media_source_root."""

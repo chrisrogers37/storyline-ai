@@ -9,9 +9,6 @@ from src.config.settings import Settings
 class TestSettingsDefaults:
     """Tests for Settings default values via model field definitions."""
 
-    def test_enable_instagram_api_defaults_false(self):
-        assert Settings.model_fields["ENABLE_INSTAGRAM_API"].default is False
-
     def test_db_host_defaults_to_localhost(self):
         assert Settings.model_fields["DB_HOST"].default == "localhost"
 
@@ -20,21 +17,6 @@ class TestSettingsDefaults:
 
     def test_db_name_defaults(self):
         assert Settings.model_fields["DB_NAME"].default == "storydump"
-
-    def test_posts_per_day_defaults_to_3(self):
-        assert Settings.model_fields["POSTS_PER_DAY"].default == 3
-
-    def test_posting_hours_start_defaults_to_14(self):
-        assert Settings.model_fields["POSTING_HOURS_START"].default == 14
-
-    def test_posting_hours_end_defaults_to_2(self):
-        assert Settings.model_fields["POSTING_HOURS_END"].default == 2
-
-    def test_repost_ttl_days_defaults_to_30(self):
-        assert Settings.model_fields["REPOST_TTL_DAYS"].default == 30
-
-    def test_dry_run_mode_defaults_to_false(self):
-        assert Settings.model_fields["DRY_RUN_MODE"].default is False
 
     def test_log_level_defaults_to_info(self):
         assert Settings.model_fields["LOG_LEVEL"].default == "INFO"
@@ -45,17 +27,8 @@ class TestSettingsDefaults:
     def test_cloud_upload_retention_hours_defaults_to_24(self):
         assert Settings.model_fields["CLOUD_UPLOAD_RETENTION_HOURS"].default == 24
 
-    def test_media_sync_enabled_defaults_to_false(self):
-        assert Settings.model_fields["MEDIA_SYNC_ENABLED"].default is False
-
     def test_media_sync_interval_defaults_to_300(self):
         assert Settings.model_fields["MEDIA_SYNC_INTERVAL_SECONDS"].default == 300
-
-    def test_media_source_type_defaults_to_local(self):
-        assert Settings.model_fields["MEDIA_SOURCE_TYPE"].default == "local"
-
-    def test_caption_style_defaults_to_enhanced(self):
-        assert Settings.model_fields["CAPTION_STYLE"].default == "enhanced"
 
     def test_cloud_storage_provider_defaults_to_cloudinary(self):
         assert Settings.model_fields["CLOUD_STORAGE_PROVIDER"].default == "cloudinary"

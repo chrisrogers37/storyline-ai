@@ -42,21 +42,15 @@ def validate_and_log_startup() -> None:
 
 
 def log_service_summary() -> None:
-    """Log a summary of active services and configuration after startup."""
+    """Log a summary of active services and configuration after startup.
+
+    Per-chat values (posts/day, posting hours, dry run, IG API, media
+    sync) now live on chat_settings \u2014 they vary per tenant and aren't
+    meaningful to print here. Only system-wide knobs are logged.
+    """
     logger.info("\u2713 All services started (JIT scheduler)")
     logger.info(
-        f"\u2713 Phase: {'Hybrid (API + Telegram)' if settings.ENABLE_INSTAGRAM_API else 'Telegram-Only'}"
-    )
-    logger.info(f"\u2713 Dry run mode: {settings.DRY_RUN_MODE}")
-    if settings.MEDIA_SYNC_ENABLED:
-        logger.info(
-            f"\u2713 Media sync: {settings.MEDIA_SOURCE_TYPE} "
-            f"(every {settings.MEDIA_SYNC_INTERVAL_SECONDS}s)"
-        )
-    else:
-        logger.info("\u2713 Media sync: disabled")
-    logger.info(f"\u2713 Posts per day: {settings.POSTS_PER_DAY}")
-    logger.info(
-        f"\u2713 Posting hours: {settings.POSTING_HOURS_START}-{settings.POSTING_HOURS_END} UTC"
+        f"\u2713 Media sync loop: every {settings.MEDIA_SYNC_INTERVAL_SECONDS}s "
+        "(per-chat enable in chat_settings.media_sync_enabled)"
     )
     logger.info("=" * 60)

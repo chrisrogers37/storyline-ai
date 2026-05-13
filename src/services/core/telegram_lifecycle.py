@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from src.config.settings import settings
+from src.config import defaults
 from src.services.core.dashboard_service import DashboardService
 from src.services.core.telegram_utils import escape_markdown, format_last_post
 from src.utils.logger import logger
@@ -24,18 +24,18 @@ class TelegramLifecycleHandler:
         """Resolve the per-admin-chat lifecycle-notifications preference.
 
         Reads ``chat_settings.send_lifecycle_notifications`` for the admin
-        chat; falls back to the env default when the chat row or column
-        value is missing (e.g. first boot before bootstrap, or chats from
-        before migration 030).
+        chat; falls back to the hardcoded code default when the chat row
+        or column value is missing (first boot before bootstrap, or rows
+        from before migration 030).
         """
         try:
             chat = self.service.settings_service.get_settings_if_exists(
                 self.service.admin_chat_id
             )
         except Exception:  # noqa: BLE001 — never block startup on a DB hiccup
-            return bool(settings.SEND_LIFECYCLE_NOTIFICATIONS)
+            return defaults.DEFAULT_SEND_LIFECYCLE_NOTIFICATIONS
         if chat is None or chat.send_lifecycle_notifications is None:
-            return bool(settings.SEND_LIFECYCLE_NOTIFICATIONS)
+            return defaults.DEFAULT_SEND_LIFECYCLE_NOTIFICATIONS
         return bool(chat.send_lifecycle_notifications)
 
     async def send_startup_notification(self):

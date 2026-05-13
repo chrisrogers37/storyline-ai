@@ -19,9 +19,6 @@ def mock_telegram_service():
     with (
         patch("src.services.core.telegram_service.settings") as mock_settings,
         patch(
-            "src.services.core.telegram_notification.settings"
-        ) as mock_notif_settings,
-        patch(
             "src.services.core.telegram_service.UserRepository"
         ) as mock_user_repo_class,
         patch(
@@ -51,10 +48,6 @@ def mock_telegram_service():
     ):
         mock_settings.TELEGRAM_BOT_TOKEN = "123456:ABC-DEF1234ghIkl"
         mock_settings.TELEGRAM_CHANNEL_ID = -1001234567890
-        mock_settings.CAPTION_STYLE = "enhanced"
-        mock_settings.SEND_LIFECYCLE_NOTIFICATIONS = False
-        # Also set on notification module settings (caption logic lives there now)
-        mock_notif_settings.CAPTION_STYLE = "enhanced"
 
         service = TelegramService()
 
@@ -508,9 +501,7 @@ class TestInlineAccountSelector:
         mock_active_account.display_name = "Main Account"
         mock_active_account.instagram_username = "mainaccount"
 
-        with patch("src.services.core.telegram_notification.settings") as mock_settings:
-            mock_settings.CAPTION_STYLE = "enhanced"
-            caption = mock_telegram_service._build_caption(
+        caption = mock_telegram_service._build_caption(
                 mock_media_item,
                 queue_item=None,
                 active_account=mock_active_account,
@@ -527,9 +518,7 @@ class TestInlineAccountSelector:
         mock_media_item.link_url = None
         mock_media_item.tags = []
 
-        with patch("src.services.core.telegram_notification.settings") as mock_settings:
-            mock_settings.CAPTION_STYLE = "enhanced"
-            caption = mock_telegram_service._build_caption(
+        caption = mock_telegram_service._build_caption(
                 mock_media_item,
                 queue_item=None,
                 active_account=None,  # No active account
@@ -727,9 +716,7 @@ class TestVerboseEnhancedCaption:
         mock_media.link_url = None
         mock_media.tags = []
 
-        with patch("src.services.core.telegram_notification.settings") as mock_settings:
-            mock_settings.CAPTION_STYLE = "enhanced"
-            caption = mock_telegram_service._build_caption(
+        caption = mock_telegram_service._build_caption(
                 mock_media, verbose=True, active_account=None
             )
 
@@ -745,9 +732,7 @@ class TestVerboseEnhancedCaption:
         mock_media.link_url = None
         mock_media.tags = []
 
-        with patch("src.services.core.telegram_notification.settings") as mock_settings:
-            mock_settings.CAPTION_STYLE = "enhanced"
-            caption = mock_telegram_service._build_caption(
+        caption = mock_telegram_service._build_caption(
                 mock_media, verbose=False, active_account=None
             )
 
@@ -766,9 +751,7 @@ class TestVerboseEnhancedCaption:
         mock_account = Mock()
         mock_account.display_name = "My Brand"
 
-        with patch("src.services.core.telegram_notification.settings") as mock_settings:
-            mock_settings.CAPTION_STYLE = "enhanced"
-            caption = mock_telegram_service._build_caption(
+        caption = mock_telegram_service._build_caption(
                 mock_media, verbose=False, active_account=mock_account
             )
 
@@ -790,9 +773,7 @@ class TestVerboseSimpleCaption:
         mock_media.link_url = None
         mock_media.tags = []
 
-        with patch("src.services.core.telegram_notification.settings") as mock_settings:
-            mock_settings.CAPTION_STYLE = "simple"
-            caption = mock_telegram_service._build_caption(
+        caption = mock_telegram_service._build_caption(
                 mock_media, verbose=True, active_account=None
             )
 
@@ -810,9 +791,7 @@ class TestVerboseSimpleCaption:
         mock_media.link_url = None
         mock_media.tags = []
 
-        with patch("src.services.core.telegram_notification.settings") as mock_settings:
-            mock_settings.CAPTION_STYLE = "simple"
-            caption = mock_telegram_service._build_caption(
+        caption = mock_telegram_service._build_caption(
                 mock_media, verbose=False, active_account=None
             )
 
@@ -832,9 +811,7 @@ class TestVerboseSimpleCaption:
         mock_account = Mock()
         mock_account.display_name = "Brand Account"
 
-        with patch("src.services.core.telegram_notification.settings") as mock_settings:
-            mock_settings.CAPTION_STYLE = "simple"
-            caption = mock_telegram_service._build_caption(
+        caption = mock_telegram_service._build_caption(
                 mock_media, verbose=True, active_account=mock_account
             )
 

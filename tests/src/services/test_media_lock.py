@@ -31,9 +31,7 @@ class TestMediaLockService:
         media_id = str(uuid4())
         lock_service.lock_repo.is_locked.return_value = False
 
-        with patch("src.services.core.media_lock.settings") as mock_settings:
-            mock_settings.REPOST_TTL_DAYS = 30
-            result = lock_service.create_lock(media_id, ttl_days=30)
+        result = lock_service.create_lock(media_id, ttl_days=30)
 
         assert result is True
         lock_service.lock_repo.create.assert_called_once()
@@ -85,16 +83,17 @@ class TestMediaLockService:
 
     def test_lock_after_posting(self, lock_service):
         """Test creating lock after posting media."""
+        from src.config import defaults
+
         media_id = str(uuid4())
         lock_service.lock_repo.is_locked.return_value = False
 
-        with patch("src.services.core.media_lock.settings") as mock_settings:
-            mock_settings.REPOST_TTL_DAYS = 30
-            result = lock_service.create_lock(media_id)
+        result = lock_service.create_lock(media_id)
 
         assert result is True
         lock_service.lock_repo.create.assert_called_once()
         call_kwargs = lock_service.lock_repo.create.call_args.kwargs
         assert call_kwargs["media_item_id"] == media_id
         assert call_kwargs["lock_reason"] == "recent_post"
-        assert call_kwargs["ttl_days"] == 30
+        # No telegram_chat_id passed → falls back to code default.
+        assert call_kwargs["ttl_days"] == defaults.DEFAULT_REPOST_TTL_DAYS

@@ -14,9 +14,6 @@ class Settings(BaseSettings):
     # Meta Graph API
     META_GRAPH_API_VERSION: str = "v21.0"
 
-    # Phase Control (bootstrap only — runtime value in chat_settings)
-    ENABLE_INSTAGRAM_API: bool = False
-
     # Database Configuration
     DATABASE_URL: Optional[str] = None  # Full URL (overrides DB_* components if set)
     DB_HOST: str = "localhost"
@@ -33,13 +30,6 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str
     TELEGRAM_CHANNEL_ID: int
     ADMIN_TELEGRAM_CHAT_ID: int
-
-    # Posting Schedule Configuration (bootstrap only — runtime value in chat_settings)
-    POSTS_PER_DAY: int = 3
-    POSTING_HOURS_START: int = 14  # UTC
-    POSTING_HOURS_END: int = 2  # UTC (next day)
-    REPOST_TTL_DAYS: int = 30
-    SKIP_TTL_DAYS: int = 45
 
     # Media Configuration
     MEDIA_DIR: str = "/tmp/media"
@@ -75,20 +65,14 @@ class Settings(BaseSettings):
     # Security (Phase 2 - required for token encryption)
     ENCRYPTION_KEY: Optional[str] = None  # Fernet key for encrypting tokens in DB
 
-    # Media Sync Engine (bootstrap only — runtime value in chat_settings)
-    MEDIA_SYNC_ENABLED: bool = False
+    # Media Sync (loop cadence is system-wide; per-chat enable lives in chat_settings)
     MEDIA_SYNC_INTERVAL_SECONDS: int = 300  # 5 minutes
-    MEDIA_SOURCE_TYPE: str = "local"  # bootstrap only — runtime in chat_settings
-    MEDIA_SOURCE_ROOT: str = ""  # bootstrap only — runtime in chat_settings
 
-    # Development Settings (bootstrap only — runtime value in chat_settings)
-    DRY_RUN_MODE: bool = False
+    # Logging
     LOG_LEVEL: str = "INFO"
 
-    # Phase 1.5 Settings - Telegram Enhancements
-    SEND_LIFECYCLE_NOTIFICATIONS: bool = True
+    # Instagram username for deep links (still env — wired into widget URLs)
     INSTAGRAM_USERNAME: Optional[str] = None
-    CAPTION_STYLE: str = "enhanced"  # or 'simple'
 
     # AI Caption Generation
     ANTHROPIC_API_KEY: Optional[str] = None

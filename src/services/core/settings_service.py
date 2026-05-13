@@ -270,9 +270,10 @@ class SettingsService(BaseService):
     ) -> tuple[Optional[str], Optional[str]]:
         """Get resolved media source configuration for a chat.
 
-        Resolution order:
-        1. Per-chat value from chat_settings (if not NULL)
-        2. Global env var fallback
+        Per-chat DB value is the only source of truth. `media_source_type`
+        falls back to the code default (`local`) for chats whose source
+        was never set; `media_source_root` returns None and the caller is
+        expected to surface "no source configured" rather than auto-guess.
 
         Args:
             telegram_chat_id: Telegram chat/channel ID
@@ -280,12 +281,14 @@ class SettingsService(BaseService):
         Returns:
             Tuple of (source_type, source_root)
         """
-        from src.config.settings import settings as env_settings
+        from src.config import defaults
 
         chat_settings = self.get_settings(telegram_chat_id)
 
-        source_type = chat_settings.media_source_type or env_settings.MEDIA_SOURCE_TYPE
-        source_root = chat_settings.media_source_root or env_settings.MEDIA_SOURCE_ROOT
+        source_type = (
+            chat_settings.media_source_type or defaults.DEFAULT_MEDIA_SOURCE_TYPE
+        )
+        source_root = chat_settings.media_source_root  # None ⇒ unconfigured
 
         return source_type, source_root
 

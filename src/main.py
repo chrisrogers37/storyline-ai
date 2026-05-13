@@ -5,7 +5,6 @@ import signal
 import sys
 from time import time
 
-from src.config.settings import settings
 from src.services.core.loops.guarded import guarded
 from src.services.core.loops.lifecycle import (
     log_service_summary,
@@ -38,10 +37,9 @@ async def main_async():
     lock_service = MediaLockService()
     settings_service = SettingsService()
 
-    # Initialize media sync (if enabled)
-    sync_service = None
-    if settings.MEDIA_SYNC_ENABLED:
-        sync_service = MediaSyncService()
+    # Media sync runs unconditionally — the loop iterates per-chat and skips
+    # chats with media_sync_enabled=False. No env gate.
+    sync_service = MediaSyncService()
 
     await telegram_service.initialize()
     scheduler_service.telegram_service = telegram_service

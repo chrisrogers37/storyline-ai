@@ -31,25 +31,15 @@ class ConfigValidator:
         """
         Validate all configuration settings.
 
+        Per-chat values (posts_per_day, posting hours, lock TTLs, etc.)
+        now live on `chat_settings` and are validated at write time by
+        the API + service layer; the boot-time validator only checks
+        infrastructure / deployment-level env settings.
+
         Returns:
             (is_valid, error_messages)
         """
         errors = []
-
-        # Validate posting schedule
-        if settings.POSTS_PER_DAY < 1 or settings.POSTS_PER_DAY > 10:
-            errors.append("POSTS_PER_DAY must be between 1 and 10")
-
-        # Handle wrap-around posting hours (e.g., 22-2 means 22:00 to 02:00 next day)
-        if settings.POSTING_HOURS_START < 0 or settings.POSTING_HOURS_START > 23:
-            errors.append("POSTING_HOURS_START must be between 0-23 (UTC)")
-
-        if settings.POSTING_HOURS_END < 0 or settings.POSTING_HOURS_END > 23:
-            errors.append("POSTING_HOURS_END must be between 0-23 (UTC)")
-
-        # Validate repost TTL
-        if settings.REPOST_TTL_DAYS < 1:
-            errors.append("REPOST_TTL_DAYS must be at least 1")
 
         # Validate Telegram config
         if not settings.TELEGRAM_BOT_TOKEN:
@@ -72,13 +62,6 @@ class ConfigValidator:
 
         if not settings.ADMIN_TELEGRAM_CHAT_ID:
             errors.append("ADMIN_TELEGRAM_CHAT_ID is required")
-
-        # Validate Instagram config (if API enabled)
-        if settings.ENABLE_INSTAGRAM_API:
-            if not settings.CLOUDINARY_CLOUD_NAME:
-                errors.append(
-                    "Cloudinary config required when ENABLE_INSTAGRAM_API=true"
-                )
 
         # Validate database config
         if not settings.DB_NAME:

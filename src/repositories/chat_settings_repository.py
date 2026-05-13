@@ -7,15 +7,16 @@ from sqlalchemy import or_
 
 from src.repositories.base_repository import BaseRepository
 from src.models.chat_settings import ChatSettings
-from src.config.settings import settings as env_settings
+from src.config import defaults
 
 
 class ChatSettingsRepository(BaseRepository):
     """
     Repository for ChatSettings CRUD operations.
 
-    Implements .env fallback: If no DB record exists, creates one
-    from current .env values on first access.
+    First access bootstraps a row from `src.config.defaults` (hardcoded
+    starting values). The DB is the runtime source of truth — no env
+    fallback after bootstrap.
     """
 
     def get_by_chat_id(self, telegram_chat_id: int) -> Optional[ChatSettings]:
@@ -44,22 +45,24 @@ class ChatSettingsRepository(BaseRepository):
             self.end_read_transaction()
             return existing
 
-        # Bootstrap from .env values — mark as onboarded since these
-        # are fully-configured deployment defaults, not wizard-created chats.
+        # Bootstrap from hardcoded code-level defaults. Mark onboarded so
+        # the scheduler's get_all_active() picks the row up — matches the
+        # invariant migration 027 backfilled (bootstrapped rows count as
+        # deployment-ready, not half-setup).
         chat_settings = ChatSettings(
             telegram_chat_id=telegram_chat_id,
-            dry_run_mode=env_settings.DRY_RUN_MODE,
-            enable_instagram_api=env_settings.ENABLE_INSTAGRAM_API,
+            dry_run_mode=defaults.DEFAULT_DRY_RUN_MODE,
+            enable_instagram_api=defaults.DEFAULT_ENABLE_INSTAGRAM_API,
             is_paused=False,
-            posts_per_day=env_settings.POSTS_PER_DAY,
-            posting_hours_start=env_settings.POSTING_HOURS_START,
-            posting_hours_end=env_settings.POSTING_HOURS_END,
-            repost_ttl_days=env_settings.REPOST_TTL_DAYS,
-            skip_ttl_days=env_settings.SKIP_TTL_DAYS,
-            caption_style=env_settings.CAPTION_STYLE,
-            send_lifecycle_notifications=env_settings.SEND_LIFECYCLE_NOTIFICATIONS,
-            show_verbose_notifications=True,
-            media_sync_enabled=env_settings.MEDIA_SYNC_ENABLED,
+            posts_per_day=defaults.DEFAULT_POSTS_PER_DAY,
+            posting_hours_start=defaults.DEFAULT_POSTING_HOURS_START,
+            posting_hours_end=defaults.DEFAULT_POSTING_HOURS_END,
+            repost_ttl_days=defaults.DEFAULT_REPOST_TTL_DAYS,
+            skip_ttl_days=defaults.DEFAULT_SKIP_TTL_DAYS,
+            caption_style=defaults.DEFAULT_CAPTION_STYLE,
+            send_lifecycle_notifications=defaults.DEFAULT_SEND_LIFECYCLE_NOTIFICATIONS,
+            show_verbose_notifications=defaults.DEFAULT_SHOW_VERBOSE_NOTIFICATIONS,
+            media_sync_enabled=defaults.DEFAULT_MEDIA_SYNC_ENABLED,
             onboarding_completed=True,
         )
         self.db.add(chat_settings)

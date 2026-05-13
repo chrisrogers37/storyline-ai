@@ -50,9 +50,7 @@ class TestBuildCaption:
             tags=[],
         )
 
-        with patch("src.services.core.telegram_notification.settings") as mock_settings:
-            mock_settings.CAPTION_STYLE = "enhanced"
-            result = notification_service._build_caption(media, active_account=None)
+        result = notification_service._build_caption(media, active_account=None, caption_style="enhanced")
 
         # Enhanced caption includes "Account: Not set" for no account
         assert "Account: Not set" in result
@@ -69,11 +67,9 @@ class TestBuildCaption:
             id="12345678-abcd",
         )
 
-        with patch("src.services.core.telegram_notification.settings") as mock_settings:
-            mock_settings.CAPTION_STYLE = "simple"
-            result = notification_service._build_caption(
-                media, verbose=True, active_account=None
-            )
+        result = notification_service._build_caption(
+            media, verbose=True, active_account=None, caption_style="simple"
+        )
 
         # Simple caption includes file info when verbose
         assert "File: test.jpg" in result
@@ -89,9 +85,7 @@ class TestBuildCaption:
         )
         account = Mock(display_name="Main Account")
 
-        with patch("src.services.core.telegram_notification.settings") as mock_settings:
-            mock_settings.CAPTION_STYLE = "enhanced"
-            result = notification_service._build_caption(media, active_account=account)
+        result = notification_service._build_caption(media, active_account=account, caption_style="enhanced")
 
         assert "Account: Main Account" in result
 
@@ -105,9 +99,7 @@ class TestBuildCaption:
             tags=[],
         )
 
-        with patch("src.services.core.telegram_notification.settings") as mock_settings:
-            mock_settings.CAPTION_STYLE = "enhanced"
-            result = notification_service._build_caption(media, active_account=None)
+        result = notification_service._build_caption(media, active_account=None, caption_style="enhanced")
 
         assert "Account: Not set" in result
 
@@ -627,11 +619,7 @@ class TestSendNotification:
         ) as mock_factory:
             mock_factory.get_provider_for_media_item.return_value = mock_provider
 
-            with patch(
-                "src.services.core.telegram_notification.settings"
-            ) as mock_settings:
-                mock_settings.CAPTION_STYLE = "enhanced"
-                result = await notification_service.send_notification(queue_item_id)
+            result = await notification_service.send_notification(queue_item_id)
 
         assert result is True
         mock_telegram_service.bot.send_photo.assert_called_once()
@@ -669,11 +657,7 @@ class TestSendNotification:
         ) as mock_factory:
             mock_factory.get_provider_for_media_item.return_value = mock_provider
 
-            with patch(
-                "src.services.core.telegram_notification.settings"
-            ) as mock_settings:
-                mock_settings.CAPTION_STYLE = "enhanced"
-                result = await notification_service.send_notification("some-id")
+            result = await notification_service.send_notification("some-id")
 
         assert result is False
 
@@ -709,11 +693,8 @@ class TestSendNotification:
         ) as mock_factory:
             mock_factory.get_provider_for_media_item.return_value = mock_provider
 
-            with patch(
-                "src.services.core.telegram_notification.settings"
-            ) as mock_settings:
-                mock_settings.CAPTION_STYLE = "enhanced"
-                with pytest.raises(GoogleDriveAuthError, match="Token expired"):
+
+            with pytest.raises(GoogleDriveAuthError, match="Token expired"):
                     await notification_service.send_notification("some-id")
 
     async def test_refresh_error_converted_to_google_drive_auth_error(
@@ -756,11 +737,8 @@ class TestSendNotification:
         ) as mock_factory:
             mock_factory.get_provider_for_media_item.return_value = mock_provider
 
-            with patch(
-                "src.services.core.telegram_notification.settings"
-            ) as mock_settings:
-                mock_settings.CAPTION_STYLE = "enhanced"
-                with pytest.raises(GoogleDriveAuthError, match="expired or revoked"):
+
+            with pytest.raises(GoogleDriveAuthError, match="expired or revoked"):
                     await notification_service.send_notification("some-id")
 
     async def test_non_auth_error_still_returns_false(
@@ -795,11 +773,7 @@ class TestSendNotification:
         ) as mock_factory:
             mock_factory.get_provider_for_media_item.return_value = mock_provider
 
-            with patch(
-                "src.services.core.telegram_notification.settings"
-            ) as mock_settings:
-                mock_settings.CAPTION_STYLE = "enhanced"
-                result = await notification_service.send_notification("some-id")
+            result = await notification_service.send_notification("some-id")
 
         assert result is False
 

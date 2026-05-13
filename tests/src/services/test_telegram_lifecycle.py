@@ -14,6 +14,12 @@ def mock_service():
     service = Mock()
     service.admin_chat_id = 12345
     service.bot = AsyncMock()
+    # Default: lifecycle notifications enabled (admin chat row says so).
+    # Individual tests override `send_lifecycle_notifications=False` to
+    # exercise the skip path.
+    service.settings_service.get_settings_if_exists.return_value = Mock(
+        send_lifecycle_notifications=True
+    )
     return service
 
 
@@ -30,15 +36,14 @@ def handler(mock_service):
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestSendStartupNotification:
-    @patch("src.services.core.telegram_lifecycle.settings")
-    async def test_skips_when_notifications_disabled(self, mock_settings, handler):
-        mock_settings.SEND_LIFECYCLE_NOTIFICATIONS = False
+    async def test_skips_when_notifications_disabled(self, handler):
+        handler.service.settings_service.get_settings_if_exists.return_value = Mock(
+            send_lifecycle_notifications=False
+        )
         await handler.send_startup_notification()
         handler.service.bot.send_message.assert_not_called()
 
-    @patch("src.services.core.telegram_lifecycle.settings")
-    async def test_shows_instance_list(self, mock_settings, handler):
-        mock_settings.SEND_LIFECYCLE_NOTIFICATIONS = True
+    async def test_shows_instance_list(self, handler):
 
         mock_dash = Mock()
         mock_dash.get_user_instances.return_value = {
@@ -70,9 +75,7 @@ class TestSendStartupNotification:
         assert "50 media" in text
         assert "Started" in text
 
-    @patch("src.services.core.telegram_lifecycle.settings")
-    async def test_no_instances(self, mock_settings, handler):
-        mock_settings.SEND_LIFECYCLE_NOTIFICATIONS = True
+    async def test_no_instances(self, handler):
 
         mock_dash = Mock()
         mock_dash.get_user_instances.return_value = {"instances": []}
@@ -88,9 +91,7 @@ class TestSendStartupNotification:
         text = handler.service.bot.send_message.call_args[1]["text"]
         assert "No instances configured" in text
 
-    @patch("src.services.core.telegram_lifecycle.settings")
-    async def test_multiple_instances(self, mock_settings, handler):
-        mock_settings.SEND_LIFECYCLE_NOTIFICATIONS = True
+    async def test_multiple_instances(self, handler):
 
         mock_dash = Mock()
         mock_dash.get_user_instances.return_value = {

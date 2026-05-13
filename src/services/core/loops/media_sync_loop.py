@@ -25,9 +25,8 @@ async def media_sync_loop(
         telegram_service: Optional TelegramService for error notifications
     """
     logger.info(
-        f"Starting media sync loop "
-        f"(interval: {settings.MEDIA_SYNC_INTERVAL_SECONDS}s, "
-        f"source: {settings.MEDIA_SOURCE_TYPE})"
+        f"Starting media sync loop (interval: {settings.MEDIA_SYNC_INTERVAL_SECONDS}s, "
+        "source: per-chat)"
     )
 
     # Track consecutive failures for notification suppression

@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta, timezone
 
 from src.services.base_service import BaseService
+from src.services.core.settings_service import SettingsService
 from src.repositories.queue_repository import QueueRepository
 from src.repositories.history_repository import HistoryRepository
 from src.repositories.base_repository import BaseRepository
@@ -117,15 +118,12 @@ class HealthCheckService(BaseService):
         return {"healthy": True, "message": "Telegram configuration OK"}
 
     def _check_instagram_api(self) -> dict:
-        """Check Instagram API health."""
-        # If Instagram API is disabled, report as healthy but disabled
-        if not settings.ENABLE_INSTAGRAM_API:
-            return {
-                "healthy": True,
-                "message": "Disabled via config",
-                "enabled": False,
-            }
+        """Check Instagram API health.
 
+        Per-chat enable lives in chat_settings; this check reports whether
+        the deployment-level credentials are present so the API *could*
+        be used. Health is independent of any one chat's opt-in.
+        """
         # Check configuration
         if not settings.INSTAGRAM_ACCOUNT_ID:
             return {
@@ -255,21 +253,30 @@ class HealthCheckService(BaseService):
             return {"healthy": False, "message": f"Recent posts check error: {str(e)}"}
 
     def _check_media_sync(self) -> dict:
-        """Check media sync health including provider connectivity."""
-        if not settings.MEDIA_SYNC_ENABLED:
-            return {
-                "healthy": True,
-                "message": "Disabled via config",
-                "enabled": False,
-            }
+        """Check media sync health including provider connectivity.
 
+        Uses the admin chat's per-chat config as the deployment's
+        representative — media sync is per-chat, but the admin chat is
+        the most useful tenant to surface in a system health summary.
+        """
         try:
             from src.services.core.media_sync import MediaSyncService
             from src.services.media_sources.factory import MediaSourceFactory
 
-            # Check provider connectivity
-            source_type = settings.MEDIA_SOURCE_TYPE
-            source_root = settings.MEDIA_SOURCE_ROOT
+            with SettingsService() as settings_service:
+                admin_chat = settings_service.get_settings_if_exists(
+                    settings.ADMIN_TELEGRAM_CHAT_ID
+                )
+
+            if admin_chat is None or not admin_chat.media_sync_enabled:
+                return {
+                    "healthy": True,
+                    "message": "Disabled for admin chat",
+                    "enabled": False,
+                }
+
+            source_type = admin_chat.media_source_type or "local"
+            source_root = admin_chat.media_source_root
             if source_type == "local" and not source_root:
                 source_root = settings.MEDIA_DIR
 

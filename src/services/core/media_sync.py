@@ -5,6 +5,7 @@ from typing import Optional
 
 from sqlalchemy.exc import SQLAlchemyError
 
+from src.config import defaults
 from src.config.settings import settings
 from src.repositories.media_repository import MediaRepository
 from src.services.base_service import BaseService
@@ -115,9 +116,8 @@ class MediaSyncService(BaseService):
             finally:
                 settings_service.close()
 
-        resolved_type = source_type or settings.MEDIA_SOURCE_TYPE
-        resolved_root = source_root or settings.MEDIA_SOURCE_ROOT
-
+        resolved_type = source_type or defaults.DEFAULT_MEDIA_SOURCE_TYPE
+        resolved_root = source_root  # None ⇒ unconfigured; caller decides
         if resolved_type == "local" and not resolved_root:
             resolved_root = settings.MEDIA_DIR
 
@@ -164,8 +164,8 @@ class MediaSyncService(BaseService):
         """Run a full media sync against the configured provider.
 
         Args:
-            source_type: Override settings.MEDIA_SOURCE_TYPE
-            source_root: Override settings.MEDIA_SOURCE_ROOT
+            source_type: Override chat_settings.media_source_type
+            source_root: Override chat_settings.media_source_root
             triggered_by: Who triggered ('system', 'cli', 'scheduler')
             telegram_chat_id: If provided, look up per-chat media source config
 

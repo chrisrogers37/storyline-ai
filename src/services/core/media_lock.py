@@ -7,7 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from src.services.base_service import BaseService
 from src.repositories.audit_repository import AuditRepository
 from src.repositories.lock_repository import LockRepository
-from src.config.settings import settings
+from src.config import defaults
 from src.utils.logger import logger
 
 
@@ -21,14 +21,16 @@ class MediaLockService(BaseService):
         self._settings_repo = None  # lazy — many callers don't need it
 
     def _resolve_ttl(self, lock_reason: str, telegram_chat_id: Optional[int]) -> int:
-        """Resolve TTL days for a lock, preferring per-chat overrides."""
-        env_default = (
-            settings.SKIP_TTL_DAYS
+        """Resolve TTL days for a lock from chat_settings, falling back to
+        hardcoded defaults for legacy rows that predate migration 029.
+        """
+        code_default = (
+            defaults.DEFAULT_SKIP_TTL_DAYS
             if lock_reason == "skip"
-            else settings.REPOST_TTL_DAYS
+            else defaults.DEFAULT_REPOST_TTL_DAYS
         )
         if telegram_chat_id is None:
-            return env_default
+            return code_default
 
         if self._settings_repo is None:
             # Imported lazily to avoid a circular dep between media_lock and
@@ -41,9 +43,9 @@ class MediaLockService(BaseService):
 
         chat = self._settings_repo.get_by_chat_id(telegram_chat_id)
         if chat is None:
-            return env_default
+            return code_default
         per_chat = chat.skip_ttl_days if lock_reason == "skip" else chat.repost_ttl_days
-        return per_chat if per_chat is not None else env_default
+        return per_chat if per_chat is not None else code_default
 
     def create_lock(
         self,
