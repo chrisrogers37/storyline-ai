@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { postApi, getApi } from "@/lib/dashboard-api";
+import { CategoryMixCard } from "@/components/dashboard/settings/category-mix-card";
 
 interface SetupState {
   instagram_connected: boolean;
@@ -50,6 +51,7 @@ const STEPS = [
   { title: "Configure Media Folder", description: "Point to the Google Drive folder containing your media." },
   { title: "Index Media", description: "Scan and categorize your media files." },
   { title: "Set Schedule", description: "Configure how often and when to post." },
+  { title: "Content Mix", description: "Choose how your categories are weighted in the rotation." },
   { title: "Complete", description: "Review your setup and start posting." },
 ];
 
@@ -187,7 +189,10 @@ export function SetupWizard({ initialState }: SetupWizardProps) {
       case 2: return state.media_folder_configured;
       case 3: return state.media_indexed;
       case 4: return scheduleSaved;
+      // Content Mix is optional — scheduler falls back to library-proportional
+      // when unset. Don't block Next on it.
       case 5: return true;
+      case 6: return true;
       default: return false;
     }
   }
@@ -199,7 +204,8 @@ export function SetupWizard({ initialState }: SetupWizardProps) {
       case 2: return state.media_folder_configured;
       case 3: return state.media_indexed;
       case 4: return scheduleSaved;
-      case 5: return state.onboarding_completed;
+      case 5: return true;
+      case 6: return state.onboarding_completed;
       default: return false;
     }
   }
@@ -387,6 +393,17 @@ export function SetupWizard({ initialState }: SetupWizardProps) {
 
           {step === 5 && (
             <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Adjust the share each category gets in the rotation, or skip
+                this step to let the scheduler pick proportional to your
+                library. You can change this any time from Settings.
+              </p>
+              <CategoryMixCard />
+            </div>
+          )}
+
+          {step === 6 && (
+            <div className="space-y-3">
               <SummaryRow label="Instagram" connected={state.instagram_connected} />
               <SummaryRow label="Google Drive" connected={state.gdrive_connected} />
               <SummaryRow label="Media folder" connected={state.media_folder_configured} detail={state.media_folder_configured ? `${state.media_count} files` : undefined} />
@@ -415,7 +432,7 @@ export function SetupWizard({ initialState }: SetupWizardProps) {
                 Skip
               </Button>
             )}
-            {step < 5 ? (
+            {step < 6 ? (
               <Button
                 onClick={() => setStep((s) => s + 1)}
                 disabled={!canAdvance()}
@@ -507,6 +524,7 @@ function inferStep(state: SetupState): number {
   if (!state.gdrive_connected) return 1;
   if (!state.media_folder_configured) return 2;
   if (!state.media_indexed) return 3;
-  if (!state.onboarding_completed) return 4;
-  return 5;
+  if (!state.schedule_configured) return 4;
+  if (!state.onboarding_completed) return 5;
+  return 6;
 }
