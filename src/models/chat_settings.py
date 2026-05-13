@@ -51,6 +51,14 @@ class ChatSettings(Base):
     repost_ttl_days = Column(Integer, nullable=True)
     skip_ttl_days = Column(Integer, nullable=True)
 
+    # Caption rendering style ('enhanced' = emoji-rich, 'simple' = plain text).
+    # NULL = use CAPTION_STYLE env default.
+    caption_style = Column(String(20), nullable=True)
+
+    # Whether the worker pushes startup/shutdown lifecycle notifications to
+    # this chat. NULL = use SEND_LIFECYCLE_NOTIFICATIONS env default.
+    send_lifecycle_notifications = Column(Boolean, nullable=True)
+
     # JIT scheduler: when the last post was sent to Telegram for this tenant.
     # Used by is_slot_due() to determine when the next slot should fire.
     # NULL = no post sent yet (treat as "slot is due immediately").

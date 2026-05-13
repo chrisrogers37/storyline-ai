@@ -51,6 +51,9 @@ export default async function SettingsPage() {
               enable_ai_captions: setup.enable_ai_captions ?? false,
               repost_ttl_days: setup.repost_ttl_days ?? null,
               skip_ttl_days: setup.skip_ttl_days ?? null,
+              caption_style: setup.caption_style ?? null,
+              send_lifecycle_notifications:
+                setup.send_lifecycle_notifications ?? null,
             }}
           />
         </TabsContent>

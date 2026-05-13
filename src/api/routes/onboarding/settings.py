@@ -26,6 +26,7 @@ from .models import (
     ToggleSettingRequest,
     UpdateCategoryMixRequest,
     UpdateSettingRequest,
+    UpdateStringSettingRequest,
 )
 
 router = APIRouter(tags=["onboarding"])
@@ -43,6 +44,7 @@ async def onboarding_toggle_setting(request: ToggleSettingRequest) -> dict:
         "show_verbose_notifications",
         "media_sync_enabled",
         "enable_ai_captions",
+        "send_lifecycle_notifications",
     }
     if request.setting_name not in allowed_settings:
         raise HTTPException(
@@ -78,6 +80,47 @@ async def onboarding_update_setting(request: UpdateSettingRequest) -> dict:
             status_code=400,
             detail=f"Setting '{request.setting_name}' cannot be updated from dashboard. "
             f"Allowed: {', '.join(sorted(allowed_settings))}",
+        )
+
+    with SettingsService() as settings_service, service_error_handler():
+        settings_service.update_setting(
+            request.chat_id, request.setting_name, request.value
+        )
+        return {
+            "setting_name": request.setting_name,
+            "new_value": request.value,
+        }
+
+
+@router.post("/update-string-setting")
+async def onboarding_update_string_setting(
+    request: UpdateStringSettingRequest,
+) -> dict:
+    """Update a string-typed per-chat setting (e.g. caption_style).
+
+    Whitelisted separately from numeric `update-setting` so neither path
+    has to dispatch on the value type. Each setting has its own allowed
+    value list to keep input validation tight at the API boundary.
+    """
+    _validate_request(request.init_data, request.chat_id)
+
+    allowed_values = {
+        "caption_style": {"enhanced", "simple"},
+    }
+    if request.setting_name not in allowed_values:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Setting '{request.setting_name}' cannot be updated from dashboard. "
+            f"Allowed: {', '.join(sorted(allowed_values))}",
+        )
+    if request.value not in allowed_values[request.setting_name]:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Invalid value for {request.setting_name}: "
+                f"{request.value!r}. Allowed: "
+                f"{', '.join(sorted(allowed_values[request.setting_name]))}"
+            ),
         )
 
     with SettingsService() as settings_service, service_error_handler():

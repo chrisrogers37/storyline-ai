@@ -34,6 +34,7 @@ const ALLOWED_PATHS = [
   "system-status",
   "toggle-setting",
   "update-setting",
+  "update-string-setting",
   "update-category-mix",
   "switch-account",
   "sync-media",

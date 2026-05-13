@@ -45,6 +45,13 @@ class UpdateSettingRequest(BaseModel):
     value: int = Field(ge=0, le=365)
 
 
+class UpdateStringSettingRequest(BaseModel):
+    init_data: str
+    chat_id: int
+    setting_name: str
+    value: str = Field(min_length=1, max_length=50)
+
+
 class SwitchAccountRequest(BaseModel):
     init_data: str
     chat_id: int

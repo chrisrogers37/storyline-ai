@@ -1,5 +1,7 @@
 """Notification sending and caption building for Telegram."""
 
+from typing import Optional
+
 from src.config.settings import settings
 from src.exceptions.google_drive import GoogleDriveAuthError
 from src.services.core.telegram_utils import escape_markdown as _escape_md
@@ -102,6 +104,7 @@ class TelegramNotificationService:
             force_sent=force_sent,
             verbose=verbose,
             active_account=active_account,
+            caption_style=chat_settings.caption_style or settings.CAPTION_STYLE,
         )
 
         # Get account count for keyboard cycle behavior
@@ -180,10 +183,17 @@ class TelegramNotificationService:
         force_sent: bool = False,
         verbose: bool = True,
         active_account=None,
+        caption_style: Optional[str] = None,
     ) -> str:
-        """Build caption for Telegram message with enhanced or simple formatting."""
+        """Build caption for Telegram message with enhanced or simple formatting.
 
-        if settings.CAPTION_STYLE == "enhanced":
+        `caption_style` is the per-chat preference (already resolved to a
+        concrete value by the caller, falling back to the env default).
+        Defaults to settings.CAPTION_STYLE for the few legacy callers that
+        still build captions outside a chat context.
+        """
+        style = caption_style or settings.CAPTION_STYLE
+        if style == "enhanced":
             return self._build_enhanced_caption(
                 media_item,
                 queue_item,

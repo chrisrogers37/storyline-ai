@@ -27,9 +27,16 @@ TOGGLEABLE_SETTINGS = {
     "show_verbose_notifications",
     "media_sync_enabled",
     "enable_ai_captions",
+    "send_lifecycle_notifications",
 }
-NUMERIC_SETTINGS = {"posts_per_day", "posting_hours_start", "posting_hours_end"}
-TEXT_SETTINGS = {"media_source_type", "media_source_root"}
+NUMERIC_SETTINGS = {
+    "posts_per_day",
+    "posting_hours_start",
+    "posting_hours_end",
+    "repost_ttl_days",
+    "skip_ttl_days",
+}
+TEXT_SETTINGS = {"media_source_type", "media_source_root", "caption_style"}
 
 
 class SettingsService(BaseService):

@@ -17,6 +17,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { postApi } from "@/lib/dashboard-api";
 import { CategoryMixCard } from "./category-mix-card";
+import { CaptionStyleCard } from "./caption-style-card";
 import { RepostCadenceCard } from "./repost-cadence-card";
 
 interface GeneralSettings {
@@ -29,8 +30,10 @@ interface GeneralSettings {
   show_verbose_notifications: boolean;
   media_sync_enabled: boolean;
   enable_ai_captions: boolean;
+  send_lifecycle_notifications: boolean | null;
   repost_ttl_days: number | null;
   skip_ttl_days: number | null;
+  caption_style: string | null;
 }
 
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => ({
@@ -44,6 +47,7 @@ const TOGGLES: { key: keyof GeneralSettings; label: string; description: string 
   { key: "enable_instagram_api", label: "Instagram API", description: "Use Instagram API for direct posting" },
   { key: "enable_ai_captions", label: "AI Captions", description: "Auto-generate captions with Claude" },
   { key: "show_verbose_notifications", label: "Verbose Notifications", description: "Show detailed Telegram notifications" },
+  { key: "send_lifecycle_notifications", label: "Lifecycle Notifications", description: "Receive startup/shutdown messages from the worker" },
   { key: "media_sync_enabled", label: "Media Sync", description: "Auto-sync media from connected sources" },
 ];
 
@@ -164,6 +168,8 @@ export function GeneralTab({ settings }: { settings: GeneralSettings }) {
           </Button>
         </CardContent>
       </Card>
+
+      <CaptionStyleCard captionStyle={settings.caption_style} onError={setError} />
 
       <CategoryMixCard />
 

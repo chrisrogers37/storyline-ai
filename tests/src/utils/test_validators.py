@@ -10,7 +10,9 @@ from src.utils.validators import ConfigValidator
 class TestConfigValidator:
     """Test suite for ConfigValidator."""
 
-    @patch("src.utils.validators.ConfigValidator._check_telegram_token", return_value=None)
+    @patch(
+        "src.utils.validators.ConfigValidator._check_telegram_token", return_value=None
+    )
     @patch("src.utils.validators.settings")
     @patch("src.utils.validators.Path")
     def test_validate_all_valid_config(self, mock_path, mock_settings, _mock_tg):
@@ -258,7 +260,9 @@ class TestConfigValidator:
         assert is_valid is False
         assert any("MEDIA_DIR" in error for error in errors)
 
-    @patch("src.utils.validators.ConfigValidator._check_telegram_token", return_value=None)
+    @patch(
+        "src.utils.validators.ConfigValidator._check_telegram_token", return_value=None
+    )
     @patch("src.utils.validators.settings")
     @patch("src.utils.validators.Path")
     def test_validate_all_media_dir_auto_created(
