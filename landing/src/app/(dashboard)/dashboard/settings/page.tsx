@@ -65,6 +65,8 @@ export default async function SettingsPage() {
             gdriveEmail={setup.gdrive_email ?? null}
             mediaCount={setup.media_count ?? 0}
             mediaSyncEnabled={setup.media_sync_enabled ?? false}
+            mediaSourceType={setup.media_source_type ?? null}
+            mediaSourceRoot={setup.media_source_root ?? null}
           />
         </TabsContent>
       </Tabs>

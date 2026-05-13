@@ -58,6 +58,8 @@ class SetupStateService(BaseService):
             "media_folder_id": media["folder_id"],
             "media_indexed": media["indexed"],
             "media_count": media["count"],
+            "media_source_type": chat_settings.media_source_type,
+            "media_source_root": chat_settings.media_source_root,
             # Schedule
             "posts_per_day": chat_settings.posts_per_day,
             "posting_hours_start": chat_settings.posting_hours_start,

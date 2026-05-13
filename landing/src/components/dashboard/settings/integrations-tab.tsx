@@ -12,6 +12,8 @@ interface IntegrationsTabProps {
   gdriveEmail: string | null;
   mediaCount: number;
   mediaSyncEnabled: boolean;
+  mediaSourceType: string | null;
+  mediaSourceRoot: string | null;
 }
 
 export function IntegrationsTab({
@@ -19,6 +21,8 @@ export function IntegrationsTab({
   gdriveEmail,
   mediaCount,
   mediaSyncEnabled,
+  mediaSourceType,
+  mediaSourceRoot,
 }: IntegrationsTabProps) {
   const router = useRouter();
   const [syncing, setSyncing] = useState(false);
@@ -142,6 +146,29 @@ export function IntegrationsTab({
               </p>
             </div>
           </div>
+          {(mediaSourceType || mediaSourceRoot) && (
+            <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
+              <div className="flex items-baseline gap-2">
+                <span className="text-muted-foreground">Source</span>
+                <span className="font-medium capitalize">
+                  {mediaSourceType?.replace(/_/g, " ") ?? "—"}
+                </span>
+              </div>
+              {mediaSourceRoot && (
+                <div className="flex items-baseline gap-2">
+                  <span className="text-muted-foreground">
+                    {mediaSourceType === "google_drive" ? "Folder ID" : "Path"}
+                  </span>
+                  <code className="font-mono text-xs break-all">
+                    {mediaSourceRoot}
+                  </code>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground pt-1">
+                Change this from the Setup Wizard&apos;s media step.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
