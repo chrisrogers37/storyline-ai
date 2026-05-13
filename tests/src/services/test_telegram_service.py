@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch, AsyncMock
 from datetime import datetime
 from uuid import uuid4
 
+from src.config import defaults
 from src.config.settings import settings
 from src.services.core.telegram_service import TelegramService
 from src.services.core.telegram_callbacks import TelegramCallbackHandlers
@@ -160,7 +161,7 @@ class TestButtonLayout:
             ],
             [
                 InlineKeyboardButton(
-                    "📱 Open Instagram", url=settings.INSTAGRAM_DEEPLINK_URL
+                    "📱 Open Instagram", url=defaults.DEFAULT_INSTAGRAM_DEEPLINK_URL
                 ),
             ],
             [
@@ -559,7 +560,7 @@ class TestInlineAccountSelector:
             ],
             [
                 InlineKeyboardButton(
-                    "📱 Open Instagram", url=settings.INSTAGRAM_DEEPLINK_URL
+                    "📱 Open Instagram", url=defaults.DEFAULT_INSTAGRAM_DEEPLINK_URL
                 ),
             ],
         ]

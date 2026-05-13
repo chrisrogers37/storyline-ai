@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
-from src.config.settings import settings as app_settings
+from src.config import defaults
 from src.utils.logger import logger
 from src.utils.webapp_auth import generate_url_token
 
@@ -264,7 +264,7 @@ def build_queue_action_keyboard(
     instagram_url = (
         "https://www.instagram.com/"
         if error_recovery
-        else app_settings.INSTAGRAM_DEEPLINK_URL
+        else defaults.DEFAULT_INSTAGRAM_DEEPLINK_URL
     )
     keyboard.append(
         [

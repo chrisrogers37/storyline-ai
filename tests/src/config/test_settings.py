@@ -34,8 +34,6 @@ class TestSettingsDefaults:
         assert Settings.model_fields["CLOUD_STORAGE_PROVIDER"].default == "cloudinary"
 
     def test_optional_fields_default_to_none(self):
-        assert Settings.model_fields["INSTAGRAM_ACCOUNT_ID"].default is None
-        assert Settings.model_fields["INSTAGRAM_ACCESS_TOKEN"].default is None
         assert Settings.model_fields["FACEBOOK_APP_ID"].default is None
         assert Settings.model_fields["FACEBOOK_APP_SECRET"].default is None
         assert Settings.model_fields["CLOUDINARY_CLOUD_NAME"].default is None

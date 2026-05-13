@@ -81,29 +81,11 @@ class TestTokenRefreshService:
 
         assert result is None
 
-    @patch("src.services.integrations.token_refresh.settings")
-    def test_get_token_fallback_to_env(self, mock_settings, token_service):
-        """Test get_token falls back to .env when not in database."""
+    def test_get_token_no_token_in_db(self, token_service):
+        """Test get_token returns None when no token exists in DB."""
         token_service.token_repo.get_token.return_value = None
-        mock_settings.INSTAGRAM_ACCESS_TOKEN = "env_token_value"
 
-        # Mock bootstrap_from_env to not actually do anything
-        token_service.bootstrap_from_env = Mock(return_value=True)
-
-        result = token_service.get_token("instagram")
-
-        assert result == "env_token_value"
-        token_service.bootstrap_from_env.assert_called_once_with("instagram")
-
-    @patch("src.services.integrations.token_refresh.settings")
-    def test_get_token_no_token_anywhere(self, mock_settings, token_service):
-        """Test get_token returns None when no token exists."""
-        token_service.token_repo.get_token.return_value = None
-        mock_settings.INSTAGRAM_ACCESS_TOKEN = None
-
-        result = token_service.get_token("instagram")
-
-        assert result is None
+        assert token_service.get_token("instagram") is None
 
     def test_get_token_custom_token_type(self, token_service, mock_db_token):
         """Test get_token with custom token type."""
@@ -116,61 +98,9 @@ class TestTokenRefreshService:
             "instagram", "refresh_token"
         )
 
-    # ==================== bootstrap_from_env Tests ====================
-
-    @patch("src.services.integrations.token_refresh.settings")
-    def test_bootstrap_from_env_success(self, mock_settings, token_service):
-        """Test successful bootstrap from environment."""
-        mock_settings.INSTAGRAM_ACCESS_TOKEN = "env_token"
-        token_service._encryption.encrypt.return_value = "encrypted_env_token"
-
-        result = token_service.bootstrap_from_env("instagram")
-
-        assert result is True
-        token_service._encryption.encrypt.assert_called_once_with("env_token")
-        token_service.token_repo.create_or_update.assert_called_once()
-
-        # Verify the call arguments
-        call_kwargs = token_service.token_repo.create_or_update.call_args[1]
-        assert call_kwargs["service_name"] == "instagram"
-        assert call_kwargs["token_type"] == "access_token"
-        assert call_kwargs["token_value"] == "encrypted_env_token"
-        assert "issued_at" in call_kwargs
-        assert "expires_at" in call_kwargs
-        assert "metadata" in call_kwargs
-        assert call_kwargs["metadata"]["bootstrapped_from"] == "env"
-
-    @patch("src.services.integrations.token_refresh.settings")
-    def test_bootstrap_from_env_no_env_token(self, mock_settings, token_service):
-        """Test bootstrap returns False when no env token."""
-        mock_settings.INSTAGRAM_ACCESS_TOKEN = None
-
-        result = token_service.bootstrap_from_env("instagram")
-
-        assert result is False
-        token_service.token_repo.create_or_update.assert_not_called()
-
-    @patch("src.services.integrations.token_refresh.settings")
-    def test_bootstrap_from_env_expiry_calculation(self, mock_settings, token_service):
-        """Test that bootstrap sets 60-day expiry."""
-        mock_settings.INSTAGRAM_ACCESS_TOKEN = "token"
-        token_service._encryption.encrypt.return_value = "encrypted"
-
-        before_call = datetime.now(timezone.utc)
-        token_service.bootstrap_from_env("instagram")
-        after_call = datetime.now(timezone.utc)
-
-        call_kwargs = token_service.token_repo.create_or_update.call_args[1]
-        expires_at = call_kwargs["expires_at"]
-        issued_at = call_kwargs["issued_at"]
-
-        # Verify issued_at is within the call window
-        assert before_call <= issued_at <= after_call
-
-        # Verify 60-day expiry
-        expected_expiry_min = before_call + timedelta(days=60)
-        expected_expiry_max = after_call + timedelta(days=60)
-        assert expected_expiry_min <= expires_at <= expected_expiry_max
+    # NOTE: bootstrap_from_env / _get_env_token tests removed in PR-7 —
+    # tokens live exclusively in api_tokens (encrypted) and arrive via
+    # the OAuth callback. No env fallback path exists anymore.
 
     # ==================== check_token_health Tests ====================
 
@@ -221,24 +151,9 @@ class TestTokenRefreshService:
         assert result["valid"] is True
         assert result["needs_refresh"] is False
 
-    @patch("src.services.integrations.token_refresh.settings")
-    def test_check_token_health_env_fallback(self, mock_settings, token_service):
-        """Test health check when token only in .env."""
+    def test_check_token_health_no_token(self, token_service):
+        """Test health check when no token exists in DB."""
         token_service.token_repo.get_token.return_value = None
-        mock_settings.INSTAGRAM_ACCESS_TOKEN = "env_token"
-
-        result = token_service.check_token_health("instagram")
-
-        assert result["valid"] is True
-        assert result["exists"] is True
-        assert result["source"] == "env"
-        assert result["needs_bootstrap"] is True
-
-    @patch("src.services.integrations.token_refresh.settings")
-    def test_check_token_health_no_token(self, mock_settings, token_service):
-        """Test health check when no token exists."""
-        token_service.token_repo.get_token.return_value = None
-        mock_settings.INSTAGRAM_ACCESS_TOKEN = None
 
         result = token_service.check_token_health("instagram")
 
@@ -457,29 +372,4 @@ class TestTokenRefreshService:
             hours_until_expiry=TokenRefreshService.REFRESH_BUFFER_HOURS
         )
 
-    # ==================== _get_env_token Tests ====================
-
-    @patch("src.services.integrations.token_refresh.settings")
-    def test_get_env_token_instagram(self, mock_settings, token_service):
-        """Test getting Instagram token from env."""
-        mock_settings.INSTAGRAM_ACCESS_TOKEN = "instagram_env_token"
-
-        result = token_service._get_env_token("instagram", "access_token")
-
-        assert result == "instagram_env_token"
-
-    @patch("src.services.integrations.token_refresh.settings")
-    def test_get_env_token_unknown_service(self, mock_settings, token_service):
-        """Test getting token for unknown service returns None."""
-        result = token_service._get_env_token("unknown_service", "access_token")
-
-        assert result is None
-
-    @patch("src.services.integrations.token_refresh.settings")
-    def test_get_env_token_wrong_token_type(self, mock_settings, token_service):
-        """Test getting wrong token type returns None."""
-        mock_settings.INSTAGRAM_ACCESS_TOKEN = "token"
-
-        result = token_service._get_env_token("instagram", "refresh_token")
-
-        assert result is None
+    # _get_env_token tests removed in PR-7 — env-fallback path is gone.

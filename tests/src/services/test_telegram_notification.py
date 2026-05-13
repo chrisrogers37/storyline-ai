@@ -4,6 +4,7 @@ import pytest
 from unittest.mock import Mock, AsyncMock, patch
 from uuid import uuid4
 
+from src.config import defaults
 from src.config.settings import settings
 from src.exceptions.google_drive import GoogleDriveAuthError
 from src.services.core.telegram_notification import (
@@ -503,7 +504,7 @@ class TestBuildKeyboard:
         for row in result.inline_keyboard:
             for button in row:
                 if "Instagram" in button.text:
-                    assert button.url == settings.INSTAGRAM_DEEPLINK_URL
+                    assert button.url == defaults.DEFAULT_INSTAGRAM_DEEPLINK_URL
                     return
 
         pytest.fail("Open Instagram button not found")

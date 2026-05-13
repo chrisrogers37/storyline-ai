@@ -306,16 +306,23 @@ class TestInstagramAPIService:
             await instagram_service.post_story("https://example.com/image.jpg")
 
     @pytest.mark.asyncio
-    @patch("src.services.integrations.instagram_credentials.settings")
     @patch("src.services.integrations.instagram_api.settings")
-    async def test_post_story_success(
-        self, mock_api_settings, mock_cred_settings, instagram_service
-    ):
+    async def test_post_story_success(self, mock_api_settings, instagram_service):
         """Test successful story posting."""
         mock_api_settings.INSTAGRAM_POSTS_PER_HOUR = 25
-        mock_cred_settings.INSTAGRAM_ACCOUNT_ID = "12345678"
         instagram_service.history_repo.count_by_method.return_value = 0
-        instagram_service.token_service.get_token.return_value = "valid_token"
+        # Multi-account: active account row + token record in DB
+        active_account = Mock(
+            id="acct-uuid",
+            instagram_account_id="12345678",
+            instagram_username="testaccount",
+        )
+        instagram_service.account_service.get_active_account.return_value = (
+            active_account
+        )
+        token_record = Mock(is_expired=False, token_value="encrypted")
+        instagram_service.token_repo.get_token_for_account.return_value = token_record
+        instagram_service.encryption.decrypt.return_value = "valid_token"
 
         # Mock container creation
         create_response = Mock()
@@ -351,16 +358,24 @@ class TestInstagramAPIService:
         assert "timestamp" in result
 
     @pytest.mark.asyncio
-    @patch("src.services.integrations.instagram_credentials.settings")
     @patch("src.services.integrations.instagram_api.settings")
     async def test_post_story_network_error(
-        self, mock_api_settings, mock_cred_settings, instagram_service
+        self, mock_api_settings, instagram_service
     ):
         """Test post_story handles network errors."""
         mock_api_settings.INSTAGRAM_POSTS_PER_HOUR = 25
-        mock_cred_settings.INSTAGRAM_ACCOUNT_ID = "12345678"
         instagram_service.history_repo.count_by_method.return_value = 0
-        instagram_service.token_service.get_token.return_value = "valid_token"
+        active_account = Mock(
+            id="acct-uuid",
+            instagram_account_id="12345678",
+            instagram_username="testaccount",
+        )
+        instagram_service.account_service.get_active_account.return_value = (
+            active_account
+        )
+        token_record = Mock(is_expired=False, token_value="encrypted")
+        instagram_service.token_repo.get_token_for_account.return_value = token_record
+        instagram_service.encryption.decrypt.return_value = "valid_token"
 
         with patch(
             "src.services.integrations.instagram_api.httpx.AsyncClient"

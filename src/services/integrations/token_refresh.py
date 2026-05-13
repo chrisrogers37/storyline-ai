@@ -77,92 +77,23 @@ class TokenRefreshService(BaseService):
         Raises:
             TokenExpiredError: If token exists but is expired
         """
-        # Check database first
+        # DB is the only source of truth. Tokens land here via the OAuth
+        # callback (instagram_login_oauth.py / oauth.py).
         db_token = self.token_repo.get_token(service, token_type)
 
         if db_token:
-            # Check if expired
             if db_token.is_expired:
                 logger.warning(f"Token for {service}/{token_type} has expired")
                 raise TokenExpiredError(
                     f"Token for {service} has expired. Please refresh or re-authenticate."
                 )
-
-            # Decrypt and return
             try:
                 return self.encryption.decrypt(db_token.token_value)
             except ValueError as e:
                 logger.error(f"Failed to decrypt token for {service}: {e}")
                 return None
 
-        # Fallback to .env settings
-        env_token = self._get_env_token(service, token_type)
-
-        if env_token:
-            logger.info(f"Using {service} token from .env (will bootstrap to DB)")
-            # Bootstrap to database for future use
-            self.bootstrap_from_env(service)
-            return env_token
-
         return None
-
-    def _get_env_token(self, service: str, token_type: str) -> Optional[str]:
-        """Get token from environment settings."""
-        if service == "instagram" and token_type == "access_token":
-            return settings.INSTAGRAM_ACCESS_TOKEN
-        # Add other services here as needed
-        return None
-
-    def bootstrap_from_env(self, service: str) -> bool:
-        """
-        Copy token from .env to database for automatic refresh management.
-
-        This should be called once when first setting up a service,
-        or automatically when get_token() finds .env token but no DB token.
-
-        Args:
-            service: Service name to bootstrap
-
-        Returns:
-            True if bootstrap successful
-        """
-        with self.track_execution(
-            method_name="bootstrap_from_env",
-            input_params={"service": service},
-        ) as run_id:
-            env_token = self._get_env_token(service, "access_token")
-
-            if not env_token:
-                logger.warning(f"No .env token found for {service}")
-                self.set_result_summary(
-                    run_id, {"success": False, "reason": "no_env_token"}
-                )
-                return False
-
-            # Encrypt the token
-            encrypted = self.encryption.encrypt(env_token)
-
-            # Meta long-lived tokens expire after 60 days
-            # We don't know the exact issue date, so assume issued now
-            issued_at = datetime.now(timezone.utc)
-            expires_at = issued_at + timedelta(days=60)
-
-            # Store in database
-            self.token_repo.create_or_update(
-                service_name=service,
-                token_type="access_token",
-                token_value=encrypted,
-                issued_at=issued_at,
-                expires_at=expires_at,
-                metadata={
-                    "bootstrapped_from": "env",
-                    "bootstrapped_at": issued_at.isoformat(),
-                },
-            )
-
-            logger.info(f"Bootstrapped {service} token from .env to database")
-            self.set_result_summary(run_id, {"success": True, "service": service})
-            return True
 
     def _get_refresh_endpoint(self, instagram_account_id: Optional[str]) -> str:
         """Return the correct token refresh URL based on account auth method.
@@ -430,21 +361,6 @@ class TokenRefreshService(BaseService):
         db_token = self.token_repo.get_token(service, "access_token")
 
         if not db_token:
-            # Check .env fallback
-            env_token = self._get_env_token(service, "access_token")
-            if env_token:
-                return {
-                    "valid": True,
-                    "exists": True,
-                    "source": "env",
-                    "expires_at": None,
-                    "expires_in_hours": None,
-                    "needs_refresh": False,
-                    "needs_bootstrap": True,
-                    "last_refreshed": None,
-                    "error": None,
-                }
-
             return {
                 "valid": False,
                 "exists": False,

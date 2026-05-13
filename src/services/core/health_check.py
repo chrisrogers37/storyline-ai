@@ -121,17 +121,10 @@ class HealthCheckService(BaseService):
         """Check Instagram API health.
 
         Per-chat enable lives in chat_settings; this check reports whether
-        the deployment-level credentials are present so the API *could*
-        be used. Health is independent of any one chat's opt-in.
+        the deployment-level Meta app credentials are present and a valid
+        token exists for the admin chat's active account. Health is
+        independent of any other chat's opt-in.
         """
-        # Check configuration
-        if not settings.INSTAGRAM_ACCOUNT_ID:
-            return {
-                "healthy": False,
-                "message": "INSTAGRAM_ACCOUNT_ID not configured",
-                "enabled": True,
-            }
-
         if not settings.FACEBOOK_APP_ID:
             return {
                 "healthy": False,

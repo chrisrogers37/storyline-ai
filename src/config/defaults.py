@@ -38,3 +38,9 @@ DEFAULT_CAPTION_STYLE = "enhanced"  # or "simple"
 
 # Media source (NULL/None forces the user through the setup wizard)
 DEFAULT_MEDIA_SOURCE_TYPE = "local"
+
+# Instagram deep-link fallback used by the bot keyboard's "Open Instagram"
+# button when an active account has no `instagram_username` set. The
+# plain instagram.com URL works on every device; a per-username deep
+# link (instagram://user?username=...) is preferred when available.
+DEFAULT_INSTAGRAM_DEEPLINK_URL = "https://www.instagram.com/"

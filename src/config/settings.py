@@ -38,15 +38,13 @@ class Settings(BaseSettings):
     BACKUP_DIR: str = "/backup/storydump"
     BACKUP_RETENTION_DAYS: int = 30
 
-    # Instagram API Configuration (Phase 2 Only)
-    INSTAGRAM_ACCOUNT_ID: Optional[str] = None
-    INSTAGRAM_ACCESS_TOKEN: Optional[str] = None
+    # Meta app registration (deployment-level; one app, many tenants).
+    # Per-tenant account selection lives in `instagram_accounts` + `api_tokens`.
     FACEBOOK_APP_ID: Optional[str] = None  # Facebook Login OAuth (legacy)
     FACEBOOK_APP_SECRET: Optional[str] = None  # Facebook Login OAuth (legacy)
     INSTAGRAM_APP_ID: Optional[str] = None  # Instagram Login OAuth (preferred)
     INSTAGRAM_APP_SECRET: Optional[str] = None  # Instagram Login OAuth (preferred)
     OAUTH_REDIRECT_BASE_URL: Optional[str] = None  # e.g., "https://api.storydump.app"
-    INSTAGRAM_DEEPLINK_URL: str = "https://www.instagram.com/"
 
     # Google Drive OAuth (Phase 05 Multi-Tenant)
     GOOGLE_CLIENT_ID: Optional[str] = None
@@ -70,9 +68,6 @@ class Settings(BaseSettings):
 
     # Logging
     LOG_LEVEL: str = "INFO"
-
-    # Instagram username for deep links (still env — wired into widget URLs)
-    INSTAGRAM_USERNAME: Optional[str] = None
 
     # AI Caption Generation
     ANTHROPIC_API_KEY: Optional[str] = None

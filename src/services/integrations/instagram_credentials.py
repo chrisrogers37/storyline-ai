@@ -80,28 +80,17 @@ class InstagramCredentialManager:
                 f"No valid token for active account {active_account.display_name}"
             )
 
-        # Fallback to legacy .env mode (for backward compatibility)
-        legacy_token = self.service.token_service.get_token("instagram")
-        legacy_account_id = settings.INSTAGRAM_ACCOUNT_ID
-
-        if legacy_token and legacy_account_id:
-            logger.debug("Using legacy .env Instagram configuration")
-            return (legacy_token, legacy_account_id, None)
-
         return (None, None, None)
 
     def is_configured(self, telegram_chat_id: Optional[int] = None) -> bool:
         """
         Check if Instagram API is properly configured for a given chat.
 
-        DB is the source of truth: `chat_settings.enable_instagram_api`
-        decides per-chat. New chats are bootstrapped with the code
-        default (`DEFAULT_ENABLE_INSTAGRAM_API=False`), so a chat with
-        no row at all is treated as not configured.
-
-        FACEBOOK_APP_ID and INSTAGRAM_ACCOUNT_ID stay env-driven —
-        those are deployment infrastructure (Meta app registration),
-        not per-chat preferences.
+        Requires:
+        - The deployment has a Meta app registered (FACEBOOK_APP_ID env).
+        - The chat has Instagram API enabled in `chat_settings`.
+        - An active `instagram_accounts` row is selected for the chat
+          (via `chat_settings.active_instagram_account_id`).
 
         Args:
             telegram_chat_id: Chat to check (uses ADMIN chat if not specified)
@@ -118,19 +107,16 @@ class InstagramCredentialManager:
         if chat_settings is None or not chat_settings.enable_instagram_api:
             return False
 
-        # Multi-account first
-        active_account = self.service.account_service.get_active_account(
-            telegram_chat_id
+        return (
+            self.service.account_service.get_active_account(telegram_chat_id)
+            is not None
         )
-        if active_account:
-            return True
 
-        # Legacy single-tenant fallback (env-configured account ID)
-        return bool(settings.INSTAGRAM_ACCOUNT_ID)
-
-    def validate_instagram_account_id(self) -> dict:
+    def validate_instagram_account_id(
+        self, telegram_chat_id: Optional[int] = None
+    ) -> dict:
         """
-        Validate that the account ID is configured and appears to be numeric.
+        Validate that the active account's Instagram ID looks well-formed.
 
         Note: Instagram Business Account IDs come in various formats:
         - Some start with '17841' and are 17 digits
@@ -140,26 +126,28 @@ class InstagramCredentialManager:
         Returns:
             dict with 'valid', 'account_id', 'reason'
         """
-        account_id = settings.INSTAGRAM_ACCOUNT_ID
+        if telegram_chat_id is None:
+            telegram_chat_id = settings.ADMIN_TELEGRAM_CHAT_ID
 
-        if not account_id:
+        active_account = self.service.account_service.get_active_account(
+            telegram_chat_id
+        )
+        if active_account is None:
             return {
                 "valid": False,
                 "account_id": None,
-                "reason": "INSTAGRAM_ACCOUNT_ID not configured",
+                "reason": "No active Instagram account selected for this chat",
             }
 
-        account_id_str = str(account_id)
+        account_id_str = str(active_account.instagram_account_id or "")
 
-        # Basic validation: should be numeric
         if not account_id_str.isdigit():
             return {
                 "valid": False,
-                "account_id": account_id_str,
-                "reason": f"Account ID {account_id_str} is not numeric",
+                "account_id": account_id_str or None,
+                "reason": f"Account ID {account_id_str!r} is not numeric",
             }
 
-        # Length check (informational only - IDs vary from 15-17+ digits)
         if len(account_id_str) < self.service.MIN_ACCOUNT_ID_LENGTH:
             return {
                 "valid": False,
@@ -325,15 +313,9 @@ class InstagramCredentialManager:
         checks["token_exists"] = token is not None
 
         if not account_id:
-            # Check if using legacy mode
-            if settings.INSTAGRAM_ACCOUNT_ID:
-                errors.append(
-                    "Active account not selected in database, and no valid token for legacy .env config"
-                )
-            else:
-                errors.append(
-                    "No Instagram account configured. Use /settings to select one or add via CLI."
-                )
+            errors.append(
+                "No Instagram account configured. Use /settings to select one or add via CLI."
+            )
 
         if not token:
             errors.append(
