@@ -30,6 +30,20 @@ export function Footer() {
           >
             Sign in
           </Link>
+          {" "}&middot;{" "}
+          <Link
+            href="/privacy"
+            className="underline underline-offset-4 hover:text-foreground"
+          >
+            Privacy
+          </Link>
+          {" "}&middot;{" "}
+          <Link
+            href="/terms"
+            className="underline underline-offset-4 hover:text-foreground"
+          >
+            Terms
+          </Link>
         </p>
       </div>
     </footer>
