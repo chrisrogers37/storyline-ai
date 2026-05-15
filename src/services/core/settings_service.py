@@ -315,6 +315,18 @@ class SettingsService(BaseService):
         """
         return self.settings_repo.update(telegram_chat_id, last_post_sent_at=sent_at)
 
+    def set_gdrive_alerted_at(
+        self, telegram_chat_id: int, alerted_at: Optional[datetime]
+    ) -> "ChatSettings":
+        """Set or clear the Google Drive disconnect alert timestamp.
+
+        Pass a datetime to record that we have already alerted (suppresses
+        future alerts until the value is cleared). Pass None to clear,
+        which the OAuth reconnect callback does so the next disconnect
+        is allowed to alert again.
+        """
+        return self.settings_repo.update(telegram_chat_id, gdrive_alerted_at=alerted_at)
+
     def get_all_active_chats(self) -> List[ChatSettings]:
         """Get all eligible active chat settings.
 

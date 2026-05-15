@@ -64,6 +64,12 @@ class ChatSettings(Base):
     # NULL = no post sent yet (treat as "slot is due immediately").
     last_post_sent_at = Column(DateTime(timezone=True), nullable=True)
 
+    # When we last sent a "Google Drive Disconnected" alert for this chat.
+    # NULL = eligible to alert on the next auth error. Set on send, cleared
+    # by the OAuth reconnect callback so the alert behaves as a state
+    # transition rather than a recurring event.
+    gdrive_alerted_at = Column(DateTime(timezone=True), nullable=True)
+
     # Notification settings
     show_verbose_notifications = Column(Boolean, default=True)
 
