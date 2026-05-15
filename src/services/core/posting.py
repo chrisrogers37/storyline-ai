@@ -1,6 +1,6 @@
 """Posting service - Google Drive auth alerts and posting utilities."""
 
-import time
+from datetime import datetime, timezone
 from typing import Optional
 
 from src.services.base_service import BaseService
@@ -15,12 +15,9 @@ class PostingService(BaseService):
 
     The main scheduling and sending logic has moved to SchedulerService
     (JIT model). PostingService retains the Google Drive auth alert
-    (rate-limited proactive notification) used by the scheduler loop
-    when a GoogleDriveAuthError is encountered.
+    (state-transition notification) used by the scheduler loop when a
+    GoogleDriveAuthError is encountered.
     """
-
-    # Rate-limit auth alerts to 1 per hour (class-level shared across instances)
-    _last_gdrive_alert_time: float = 0.0
 
     def __init__(self):
         super().__init__()
@@ -30,22 +27,28 @@ class PostingService(BaseService):
     async def send_gdrive_auth_alert(
         self, telegram_chat_id: Optional[int] = None
     ) -> None:
-        """Send a proactive Google Drive reconnect alert to Telegram.
+        """Send a Google Drive reconnect alert to Telegram.
 
-        Rate-limited to at most once per hour to avoid spamming the channel.
+        Gated on chat_settings.gdrive_alerted_at: fires once per disconnect
+        event and stays silent until the OAuth reconnect callback clears
+        the flag. State lives in Postgres so it survives worker restarts
+        and is correctly scoped per chat.
         """
-        now = time.monotonic()
-        if (
-            PostingService._last_gdrive_alert_time > 0
-            and now - PostingService._last_gdrive_alert_time < 3600
-        ):
-            logger.debug("Skipping Google Drive auth alert (rate-limited)")
-            return
-
-        PostingService._last_gdrive_alert_time = now
-
         chat_id = telegram_chat_id or settings.ADMIN_TELEGRAM_CHAT_ID
         if not chat_id:
+            return
+
+        chat_settings = self.settings_service.get_settings_if_exists(chat_id)
+        if chat_settings is None:
+            logger.debug(
+                f"Skipping Google Drive auth alert: no chat_settings for {chat_id}"
+            )
+            return
+        if chat_settings.gdrive_alerted_at is not None:
+            logger.debug(
+                f"Skipping Google Drive auth alert for {chat_id}: "
+                "already alerted, awaiting reconnect"
+            )
             return
 
         try:
@@ -84,7 +87,10 @@ class PostingService(BaseService):
                 parse_mode="Markdown",
                 reply_markup=reply_markup,
             )
-            logger.info("Sent Google Drive auth alert to Telegram")
+            logger.info(f"Sent Google Drive auth alert to chat {chat_id}")
 
         except Exception as e:  # noqa: BLE001 — best-effort alert
             logger.error(f"Failed to send Google Drive auth alert: {e}")
+            return
+
+        self.settings_service.set_gdrive_alerted_at(chat_id, datetime.now(timezone.utc))

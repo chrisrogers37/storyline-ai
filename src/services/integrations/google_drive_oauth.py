@@ -195,6 +195,10 @@ class GoogleDriveOAuthService(BaseService):
                     metadata={"email": email},
                 )
 
+            # Rearm the disconnect-alert state machine: a new auth error
+            # after reconnect is a new disconnect event and should alert.
+            self.settings_repo.update(telegram_chat_id, gdrive_alerted_at=None)
+
             logger.info(
                 f"Google Drive OAuth: stored tokens for {email} "
                 f"(chat {telegram_chat_id})"

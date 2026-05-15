@@ -216,6 +216,10 @@ class TestGDriveExchangeAndStore:
         assert result["email"] == "user@gmail.com"
         # Should store both access and refresh tokens
         assert service.token_repo.create_or_update_for_chat.call_count == 2
+        # Rearms the disconnect-alert state machine for this chat
+        service.settings_repo.update.assert_called_once_with(
+            -100123, gdrive_alerted_at=None
+        )
 
     @pytest.mark.asyncio
     async def test_exchange_without_refresh_token(self, service):

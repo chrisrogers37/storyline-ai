@@ -1,10 +1,12 @@
-"""Tests for PostingService (JIT model).
+"""Tests for PostingService.
 
-PostingService has been simplified to only handle Google Drive auth alerts.
-The main scheduling and sending logic now lives in SchedulerService.
+PostingService is now only responsible for the Google Drive disconnect
+alert. The alert is gated on chat_settings.gdrive_alerted_at — fires once
+per disconnect event and stays silent until the OAuth reconnect callback
+clears the flag.
 """
 
-import time
+from datetime import datetime, timezone
 
 import pytest
 from unittest.mock import AsyncMock, Mock, patch
@@ -24,40 +26,29 @@ def posting_service():
         return service
 
 
+def _chat_settings(alerted_at=None):
+    """Build a mock ChatSettings with the given gdrive_alerted_at."""
+    cs = Mock()
+    cs.gdrive_alerted_at = alerted_at
+    return cs
+
+
 @pytest.mark.unit
 class TestSendGdriveAuthAlert:
-    """Tests for PostingService.send_gdrive_auth_alert()."""
+    """send_gdrive_auth_alert behaves as a state-transition notification."""
 
     @pytest.mark.asyncio
     @patch("src.services.core.posting.settings")
-    async def test_rate_limited_skips_send(self, mock_settings, posting_service):
-        """send_gdrive_auth_alert is rate-limited to once per hour."""
+    async def test_sends_and_persists_timestamp_when_flag_null(
+        self, mock_settings, posting_service
+    ):
+        """First auth error in a disconnect event sends the alert and persists."""
         mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
         mock_settings.OAUTH_REDIRECT_BASE_URL = "https://example.com"
         posting_service.telegram_service.bot_token = "test-token"
-
-        # Set last alert time to now (simulate recent alert)
-        PostingService._last_gdrive_alert_time = time.monotonic()
-
-        with patch("telegram.Bot") as MockBot:
-            await posting_service.send_gdrive_auth_alert(-100123)
-
-        # Should NOT have sent because rate-limited
-        MockBot.assert_not_called()
-
-        # Reset for other tests
-        PostingService._last_gdrive_alert_time = 0.0
-
-    @pytest.mark.asyncio
-    @patch("src.services.core.posting.settings")
-    async def test_sends_when_not_rate_limited(self, mock_settings, posting_service):
-        """send_gdrive_auth_alert sends when not recently sent."""
-        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
-        mock_settings.OAUTH_REDIRECT_BASE_URL = "https://example.com"
-        posting_service.telegram_service.bot_token = "test-token"
-
-        # Ensure not rate-limited
-        PostingService._last_gdrive_alert_time = 0.0
+        posting_service.settings_service.get_settings_if_exists.return_value = (
+            _chat_settings(alerted_at=None)
+        )
 
         mock_bot_instance = AsyncMock()
         with patch("telegram.Bot", return_value=mock_bot_instance):
@@ -68,8 +59,46 @@ class TestSendGdriveAuthAlert:
         assert "Disconnected" in call_kwargs["text"]
         assert call_kwargs["reply_markup"] is not None
 
-        # Reset for other tests
-        PostingService._last_gdrive_alert_time = 0.0
+        posting_service.settings_service.set_gdrive_alerted_at.assert_called_once()
+        args, _ = posting_service.settings_service.set_gdrive_alerted_at.call_args
+        assert args[0] == -100123
+        assert isinstance(args[1], datetime)
+
+    @pytest.mark.asyncio
+    @patch("src.services.core.posting.settings")
+    async def test_skips_send_when_flag_already_set(
+        self, mock_settings, posting_service
+    ):
+        """Second auth error within the same disconnect event is suppressed."""
+        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
+        mock_settings.OAUTH_REDIRECT_BASE_URL = "https://example.com"
+        posting_service.telegram_service.bot_token = "test-token"
+        posting_service.settings_service.get_settings_if_exists.return_value = (
+            _chat_settings(alerted_at=datetime(2026, 5, 14, tzinfo=timezone.utc))
+        )
+
+        with patch("telegram.Bot") as MockBot:
+            await posting_service.send_gdrive_auth_alert(-100123)
+
+        MockBot.assert_not_called()
+        posting_service.settings_service.set_gdrive_alerted_at.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch("src.services.core.posting.settings")
+    async def test_skips_send_when_no_chat_settings(
+        self, mock_settings, posting_service
+    ):
+        """Unknown chat (no chat_settings row) is silently skipped."""
+        mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
+        mock_settings.OAUTH_REDIRECT_BASE_URL = "https://example.com"
+        posting_service.telegram_service.bot_token = "test-token"
+        posting_service.settings_service.get_settings_if_exists.return_value = None
+
+        with patch("telegram.Bot") as MockBot:
+            await posting_service.send_gdrive_auth_alert(-100123)
+
+        MockBot.assert_not_called()
+        posting_service.settings_service.set_gdrive_alerted_at.assert_not_called()
 
     @pytest.mark.asyncio
     @patch("src.services.core.posting.settings")
@@ -78,8 +107,9 @@ class TestSendGdriveAuthAlert:
         mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100999
         mock_settings.OAUTH_REDIRECT_BASE_URL = "https://example.com"
         posting_service.telegram_service.bot_token = "test-token"
-
-        PostingService._last_gdrive_alert_time = 0.0
+        posting_service.settings_service.get_settings_if_exists.return_value = (
+            _chat_settings(alerted_at=None)
+        )
 
         mock_bot_instance = AsyncMock()
         with patch("telegram.Bot", return_value=mock_bot_instance):
@@ -87,8 +117,9 @@ class TestSendGdriveAuthAlert:
 
         call_kwargs = mock_bot_instance.send_message.call_args.kwargs
         assert call_kwargs["chat_id"] == -100999
-
-        PostingService._last_gdrive_alert_time = 0.0
+        posting_service.settings_service.get_settings_if_exists.assert_called_once_with(
+            -100999
+        )
 
     @pytest.mark.asyncio
     @patch("src.services.core.posting.settings")
@@ -99,8 +130,9 @@ class TestSendGdriveAuthAlert:
         mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
         mock_settings.OAUTH_REDIRECT_BASE_URL = None
         posting_service.telegram_service.bot_token = "test-token"
-
-        PostingService._last_gdrive_alert_time = 0.0
+        posting_service.settings_service.get_settings_if_exists.return_value = (
+            _chat_settings(alerted_at=None)
+        )
 
         mock_bot_instance = AsyncMock()
         with patch("telegram.Bot", return_value=mock_bot_instance):
@@ -108,8 +140,6 @@ class TestSendGdriveAuthAlert:
 
         call_kwargs = mock_bot_instance.send_message.call_args.kwargs
         assert call_kwargs["reply_markup"] is None
-
-        PostingService._last_gdrive_alert_time = 0.0
 
     @pytest.mark.asyncio
     @patch("src.services.core.posting.settings")
@@ -120,29 +150,28 @@ class TestSendGdriveAuthAlert:
         mock_settings.ADMIN_TELEGRAM_CHAT_ID = None
         posting_service.telegram_service.bot_token = "test-token"
 
-        PostingService._last_gdrive_alert_time = 0.0
-
         with patch("telegram.Bot") as MockBot:
             await posting_service.send_gdrive_auth_alert()
 
         MockBot.assert_not_called()
-
-        PostingService._last_gdrive_alert_time = 0.0
+        posting_service.settings_service.get_settings_if_exists.assert_not_called()
 
     @pytest.mark.asyncio
     @patch("src.services.core.posting.settings")
-    async def test_send_failure_caught(self, mock_settings, posting_service):
-        """Exceptions during send are caught (not re-raised)."""
+    async def test_send_failure_does_not_persist_flag(
+        self, mock_settings, posting_service
+    ):
+        """If the Telegram send fails, the flag is NOT set — allow retry next tick."""
         mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100123
         mock_settings.OAUTH_REDIRECT_BASE_URL = "https://example.com"
         posting_service.telegram_service.bot_token = "test-token"
-
-        PostingService._last_gdrive_alert_time = 0.0
+        posting_service.settings_service.get_settings_if_exists.return_value = (
+            _chat_settings(alerted_at=None)
+        )
 
         mock_bot_instance = AsyncMock()
         mock_bot_instance.send_message.side_effect = RuntimeError("Network error")
         with patch("telegram.Bot", return_value=mock_bot_instance):
-            # Should not raise
             await posting_service.send_gdrive_auth_alert(-100123)
 
-        PostingService._last_gdrive_alert_time = 0.0
+        posting_service.settings_service.set_gdrive_alerted_at.assert_not_called()

@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Google Drive disconnect alert now behaves as a state transition, not a recurring hourly event** — `PostingService.send_gdrive_auth_alert` used to suppress duplicates via a class-level monotonic timestamp with a 3600s window. Because the JIT scheduler attempts a posting tick whenever a slot is due (~hourly for typical configs), the cooldown lapsed just before each new attempt and the alert re-fired forever until reconnect (observed: TL Stories chat, 9:04 AM → 8:28 PM, ~62 min cadence). Replaced with a persisted `chat_settings.gdrive_alerted_at` column (migration 031): the alert fires once on the first auth error of a disconnect event, stays silent until the OAuth reconnect callback clears the flag, and is restart-safe + per-chat scoped. Removed the `_last_gdrive_alert_time` class variable entirely.
 - **Scheduler tick poisoning standalone `queue_repo` session** — `_scheduler_tick` calls `queue_repo.discard_abandoned_processing()` before iterating chats. `queue_repo` is instantiated standalone (not owned by a BaseService), so the outer loop's `cleanup_transactions()` doesn't roll it back on error. A single transient DB failure was leaving the session in a broken transaction and every subsequent tick threw `PendingRollbackError` for the lifetime of the worker (observed in production after the token-rotation incident). Wrapped the call in try/except + `queue_repo.rollback()`.
 
 ### Added
