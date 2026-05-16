@@ -261,8 +261,11 @@ def is_token_stale(token) -> bool:
     Shared utility used by SetupStateService and available for import
     elsewhere to avoid duplicating the staleness heuristic.
     """
-    if token.expires_at and token.expires_at < datetime.now(timezone.utc) - timedelta(
-        days=TOKEN_STALE_DAYS
-    ):
-        return True
-    return False
+    if not token.expires_at:
+        return False
+    # api_tokens.expires_at is stored as naive DateTime (assumed UTC) — coerce
+    # before comparing to an aware datetime, otherwise Python raises TypeError.
+    expires_at = token.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    return expires_at < datetime.now(timezone.utc) - timedelta(days=TOKEN_STALE_DAYS)
