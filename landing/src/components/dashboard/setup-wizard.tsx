@@ -77,6 +77,11 @@ export function SetupWizard({ initialState, initialAccounts = [] }: SetupWizardP
   const [accounts, setAccounts] = useState<InstagramAccount[]>(initialAccounts);
   const [accountActionId, setAccountActionId] = useState<string | null>(null);
 
+  // Single source of truth for "Instagram connected" in this component.
+  // setup_state.instagram_connected can drift from the accounts list between
+  // refreshes; the user-visible list is what we gate Next/Complete on.
+  const instagramConnected = accounts.length > 0;
+
   const [folderUrl, setFolderUrl] = useState("");
   const [folderResult, setFolderResult] = useState<{ file_count: number; categories: string[] } | null>(null);
   const [indexResult, setIndexResult] = useState<{ new: number; updated: number; errors: number } | null>(null);
@@ -119,15 +124,17 @@ export function SetupWizard({ initialState, initialAccounts = [] }: SetupWizardP
 
   async function handleRefreshConnection() {
     setLoading(true);
+    // allSettled so an init failure doesn't skip the accounts refresh and
+    // vice versa — the two endpoints have independent failure modes.
     try {
-      await refreshState();
-      await refreshAccounts();
+      await Promise.allSettled([refreshState(), refreshAccounts()]);
     } finally {
       setLoading(false);
     }
   }
 
   async function refreshAccounts() {
+    setError(null);
     try {
       const data = await getApi("accounts");
       if (data?.accounts) setAccounts(data.accounts);
@@ -218,7 +225,7 @@ export function SetupWizard({ initialState, initialAccounts = [] }: SetupWizardP
 
   function canAdvance(): boolean {
     switch (step) {
-      case 0: return state.instagram_connected;
+      case 0: return instagramConnected;
       case 1: return state.gdrive_connected;
       case 2: return state.media_folder_configured;
       case 3: return state.media_indexed;
@@ -233,7 +240,7 @@ export function SetupWizard({ initialState, initialAccounts = [] }: SetupWizardP
 
   function isStepComplete(s: number): boolean {
     switch (s) {
-      case 0: return state.instagram_connected;
+      case 0: return instagramConnected;
       case 1: return state.gdrive_connected;
       case 2: return state.media_folder_configured;
       case 3: return state.media_indexed;
@@ -438,7 +445,7 @@ export function SetupWizard({ initialState, initialAccounts = [] }: SetupWizardP
 
           {step === 6 && (
             <div className="space-y-3">
-              <SummaryRow label="Instagram" connected={state.instagram_connected} />
+              <SummaryRow label="Instagram" connected={instagramConnected} />
               <SummaryRow label="Google Drive" connected={state.gdrive_connected} />
               <SummaryRow label="Media folder" connected={state.media_folder_configured} detail={state.media_folder_configured ? `${state.media_count} files` : undefined} />
               <SummaryRow label="Media indexed" connected={state.media_indexed} />
@@ -474,7 +481,7 @@ export function SetupWizard({ initialState, initialAccounts = [] }: SetupWizardP
                 Next
               </Button>
             ) : (
-              <Button onClick={handleComplete} disabled={loading || !state.instagram_connected}>
+              <Button onClick={handleComplete} disabled={loading || !instagramConnected}>
                 {loading ? <Loader2 className="size-4 animate-spin" /> : null}
                 Complete Setup
               </Button>
