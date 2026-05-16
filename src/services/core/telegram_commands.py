@@ -16,6 +16,7 @@ from src.services.core.telegram_utils import (
     escape_markdownv2,
     format_last_post,
 )
+from src.utils.datetime_utils import ensure_utc
 from src.utils.logger import logger
 
 if TYPE_CHECKING:
@@ -204,12 +205,9 @@ class TelegramCommandHandlers:
 
             interval_seconds = (window_hours * 3600) / chat_settings.posts_per_day
 
-            last_sent = chat_settings.last_post_sent_at
+            last_sent = ensure_utc(chat_settings.last_post_sent_at)
             if not last_sent:
                 return "Due now"
-
-            if last_sent.tzinfo is None:
-                last_sent = last_sent.replace(tzinfo=timezone.utc)
 
             next_due = last_sent + timedelta(seconds=interval_seconds)
             now = datetime.now(timezone.utc)

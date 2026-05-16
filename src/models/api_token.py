@@ -1,6 +1,6 @@
 """API token model for OAuth token storage."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 import uuid
 
@@ -9,6 +9,7 @@ from sqlalchemy.dialects.postgresql import UUID, ARRAY, JSONB
 from sqlalchemy.orm import relationship
 
 from src.config.database import Base
+from src.utils.datetime_utils import ensure_utc
 
 
 class ApiToken(Base):
@@ -88,13 +89,15 @@ class ApiToken(Base):
     @property
     def is_expired(self) -> bool:
         """Check if the token has expired."""
-        if self.expires_at is None:
+        expires_at = ensure_utc(self.expires_at)
+        if expires_at is None:
             return False
-        return datetime.utcnow() > self.expires_at
+        return datetime.now(timezone.utc) > expires_at
 
     def hours_until_expiry(self) -> Optional[float]:
         """Get hours until token expires, or None if no expiry."""
-        if self.expires_at is None:
+        expires_at = ensure_utc(self.expires_at)
+        if expires_at is None:
             return None
-        delta = self.expires_at - datetime.utcnow()
+        delta = expires_at - datetime.now(timezone.utc)
         return max(0, delta.total_seconds() / 3600)

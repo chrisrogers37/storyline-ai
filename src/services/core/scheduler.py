@@ -14,6 +14,7 @@ from src.repositories.history_repository import HistoryRepository
 from src.repositories.lock_repository import LockRepository
 from src.repositories.category_mix_repository import CategoryMixRepository
 from src.config.settings import settings
+from src.utils.datetime_utils import ensure_utc
 from src.utils.logger import logger
 
 
@@ -62,11 +63,7 @@ class SchedulerService(BaseService):
         window_hours = self._posting_window_hours(chat_settings)
         interval_seconds = (window_hours * 3600) / chat_settings.posts_per_day
 
-        last_sent = chat_settings.last_post_sent_at
-        if last_sent:
-            # DB may return naive UTC; normalize to aware
-            if last_sent.tzinfo is None:
-                last_sent = last_sent.replace(tzinfo=timezone.utc)
+        last_sent = ensure_utc(chat_settings.last_post_sent_at)
         if last_sent and (now - last_sent).total_seconds() < interval_seconds:
             return False  # Too soon
 

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`ensure_utc(dt)` datetime helper** (`src/utils/datetime_utils.py`) — single source of truth for "naive datetime → UTC-aware" coercion. Returns `None` unchanged; passes already-aware datetimes through without re-allocating. Replaces 5 copies of the same inline idiom in `setup_state_service.py`, `telegram_commands.py`, `scheduler.py`, `dashboard_history_queries.py`, and `telegram_utils.py`. Also used in `ApiToken.is_expired` and `ApiToken.hours_until_expiry`, which previously compared `expires_at` to a naive `datetime.utcnow()` — that latent bug never surfaced because both sides happened to be naive, but it would have broken the moment either side became aware (e.g., a future column migration to `DateTime(timezone=True)`). Closes #335.
+
 ### Removed
 
 - **Stale documentation archive** — Deleted `documentation/archive/` directory containing 82 historical planning docs (Jan-Mar 2026) that are no longer relevant to current development. Reduces repo clutter by ~51,000 lines.

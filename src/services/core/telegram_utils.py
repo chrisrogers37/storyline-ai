@@ -42,9 +42,9 @@ def format_last_post(last_post_at: str | None) -> str:
         return "never"
     from datetime import datetime, timezone
 
-    posted = datetime.fromisoformat(last_post_at)
-    if posted.tzinfo is None:
-        posted = posted.replace(tzinfo=timezone.utc)
+    from src.utils.datetime_utils import ensure_utc
+
+    posted = ensure_utc(datetime.fromisoformat(last_post_at))
     diff = datetime.now(timezone.utc) - posted
     days = diff.days
     if days > 0:
