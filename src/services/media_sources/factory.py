@@ -124,7 +124,20 @@ class MediaSourceFactory:
         source_type = media_item.source_type or "local"
         if source_type == "upload":
             source_type = "local"
-        return cls.create(source_type, telegram_chat_id=telegram_chat_id)
+
+        kwargs: dict = {"telegram_chat_id": telegram_chat_id}
+        if source_type == "google_drive" and telegram_chat_id is not None:
+            # GoogleDriveProvider requires root_folder_id at construction time
+            # (used for list_files). Resolve it from chat_settings here so
+            # the per-tenant OAuth path doesn't fall through to the
+            # service-account fallback and report a misleading auth error.
+            from src.services.core.settings_service import SettingsService
+
+            chat_settings = SettingsService().get_settings_if_exists(telegram_chat_id)
+            if chat_settings and chat_settings.media_source_root:
+                kwargs["root_folder_id"] = chat_settings.media_source_root
+
+        return cls.create(source_type, **kwargs)
 
     @classmethod
     def register_provider(
