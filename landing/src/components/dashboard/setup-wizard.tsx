@@ -41,8 +41,16 @@ interface SetupState {
   onboarding_completed: boolean;
 }
 
+interface InstagramAccount {
+  id: string;
+  display_name: string;
+  instagram_username: string;
+  is_active: boolean;
+}
+
 interface SetupWizardProps {
   initialState: SetupState;
+  initialAccounts?: InstagramAccount[];
 }
 
 const STEPS = [
@@ -60,12 +68,14 @@ const hourOptions = Array.from({ length: 24 }, (_, i) => ({
   label: `${i === 0 ? "12" : i > 12 ? String(i - 12) : String(i)}:00 ${i < 12 ? "AM" : "PM"}`,
 }));
 
-export function SetupWizard({ initialState }: SetupWizardProps) {
+export function SetupWizard({ initialState, initialAccounts = [] }: SetupWizardProps) {
   const router = useRouter();
   const [state, setState] = useState<SetupState>(initialState);
   const [step, setStep] = useState(() => inferStep(initialState));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [accounts, setAccounts] = useState<InstagramAccount[]>(initialAccounts);
+  const [accountActionId, setAccountActionId] = useState<string | null>(null);
 
   const [folderUrl, setFolderUrl] = useState("");
   const [folderResult, setFolderResult] = useState<{ file_count: number; categories: string[] } | null>(null);
@@ -111,8 +121,32 @@ export function SetupWizard({ initialState }: SetupWizardProps) {
     setLoading(true);
     try {
       await refreshState();
+      await refreshAccounts();
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function refreshAccounts() {
+    try {
+      const data = await getApi("accounts");
+      if (data?.accounts) setAccounts(data.accounts);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load accounts");
+    }
+  }
+
+  async function handleSwitchAccount(accountId: string) {
+    setError(null);
+    setAccountActionId(accountId);
+    try {
+      await postApi("switch-account", { account_id: accountId });
+      await refreshAccounts();
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to switch account");
+    } finally {
+      setAccountActionId(null);
     }
   }
 
@@ -259,13 +293,13 @@ export function SetupWizard({ initialState }: SetupWizardProps) {
           )}
 
           {step === 0 && (
-            <OAuthStep
-              label="Instagram"
-              connected={state.instagram_connected}
-              username={state.instagram_username}
+            <InstagramConnectStep
+              accounts={accounts}
               loading={loading}
+              accountActionId={accountActionId}
               onConnect={() => handleOAuth("instagram")}
               onRefresh={handleRefreshConnection}
+              onSwitch={handleSwitchAccount}
             />
           )}
 
@@ -448,6 +482,84 @@ export function SetupWizard({ initialState }: SetupWizardProps) {
           </div>
         </CardFooter>
       </Card>
+    </div>
+  );
+}
+
+function InstagramConnectStep({
+  accounts,
+  loading,
+  accountActionId,
+  onConnect,
+  onRefresh,
+  onSwitch,
+}: {
+  accounts: InstagramAccount[];
+  loading: boolean;
+  accountActionId: string | null;
+  onConnect: () => void;
+  onRefresh: () => void;
+  onSwitch: (accountId: string) => void;
+}) {
+  const hasAccounts = accounts.length > 0;
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-medium">Status:</span>
+        {hasAccounts ? (
+          <Badge className="bg-green-500/15 text-green-600 border-green-500/25">
+            {accounts.length} {accounts.length === 1 ? "account" : "accounts"} connected
+          </Badge>
+        ) : (
+          <Badge variant="secondary">Not connected</Badge>
+        )}
+      </div>
+
+      {hasAccounts && (
+        <div className="space-y-2">
+          {accounts.map((account) => (
+            <div
+              key={account.id}
+              className="flex items-center justify-between gap-3 rounded-md border p-3"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="font-medium truncate">{account.display_name}</p>
+                  {account.is_active && (
+                    <Badge variant="secondary" className="bg-green-100 text-green-800">
+                      Active
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  @{account.instagram_username}
+                </p>
+              </div>
+              {!account.is_active && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onSwitch(account.id)}
+                  disabled={accountActionId === account.id}
+                >
+                  {accountActionId === account.id ? "Switching..." : "Switch"}
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <Button onClick={onConnect} disabled={loading} variant={hasAccounts ? "outline" : "default"}>
+          {loading ? <Loader2 className="size-4 animate-spin" /> : <ExternalLink className="size-4" />}
+          {hasAccounts ? "Connect another account" : "Connect Instagram"}
+        </Button>
+        <Button variant="outline" onClick={onRefresh} disabled={loading}>
+          {loading ? <Loader2 className="size-4 animate-spin" /> : null}
+          Refresh
+        </Button>
+      </div>
     </div>
   );
 }
