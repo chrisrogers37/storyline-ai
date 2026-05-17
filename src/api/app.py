@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from src.api.rate_limit import limiter
 from src.api.routes.oauth import router as oauth_router
@@ -20,6 +21,10 @@ app = FastAPI(
     description="OAuth and API endpoints for Storydump",
     version="0.1.0",
 )
+
+# Proxy headers — trust X-Forwarded-For/Proto from Railway's load balancer
+# so request.client.host returns the real client IP, not the proxy IP.
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
 
 # Rate limiting — 30 req/min per IP global default (see src/api/rate_limit.py)
 app.state.limiter = limiter
