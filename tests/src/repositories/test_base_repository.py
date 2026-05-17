@@ -24,14 +24,26 @@ class TestBaseRepository:
             repo._db = mock_db
             return repo
 
-    def test_init_creates_session(self):
-        """Test that __init__ creates a database session from get_db()."""
+    def test_init_does_not_open_session(self):
+        """Test that __init__ does NOT open a database session (lazy initialization)."""
+        with patch("src.repositories.base_repository.get_db") as mock_get_db:
+            repo = BaseRepository()
+
+        mock_get_db.assert_not_called()
+        assert repo._db is None
+        assert repo._db_generator is None
+
+    def test_db_property_opens_session_lazily(self):
+        """Test that first .db access opens the session."""
         mock_session = MagicMock()
+        mock_session.is_active = True
         with patch("src.repositories.base_repository.get_db") as mock_get_db:
             mock_get_db.return_value = iter([mock_session])
             repo = BaseRepository()
-
-        assert repo._db is mock_session
+            assert repo._db is None
+            result = repo.db
+            assert result is mock_session
+            mock_get_db.assert_called_once()
 
     def test_db_property_returns_session(self, repo, mock_db):
         """Test that db property returns the session."""
@@ -94,6 +106,26 @@ class TestBaseRepository:
         # Should NOT raise
         repo.end_read_transaction()
         mock_db.rollback.assert_called_once()
+
+    def test_close_noop_when_session_never_opened(self):
+        """Test that close() is a no-op when session was never opened."""
+        repo = BaseRepository()
+        repo.close()  # Should not raise
+
+    def test_commit_noop_when_session_never_opened(self):
+        """Test that commit() is a no-op when session was never opened."""
+        repo = BaseRepository()
+        repo.commit()  # Should not raise
+
+    def test_rollback_noop_when_session_never_opened(self):
+        """Test that rollback() is a no-op when session was never opened."""
+        repo = BaseRepository()
+        repo.rollback()  # Should not raise
+
+    def test_end_read_transaction_noop_when_session_never_opened(self):
+        """Test that end_read_transaction() is a no-op when session was never opened."""
+        repo = BaseRepository()
+        repo.end_read_transaction()  # Should not raise
 
     def test_close_calls_session_close(self, repo, mock_db):
         """Test that close() calls session.close()."""
