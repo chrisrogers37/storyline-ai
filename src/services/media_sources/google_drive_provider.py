@@ -2,6 +2,7 @@
 
 import hashlib
 import io
+import time
 from datetime import datetime
 from typing import Optional
 
@@ -10,6 +11,12 @@ from google.oauth2.service_account import Credentials as ServiceAccountCredentia
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseDownload
+from tenacity import (
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+    before_sleep_log,
+)
 
 from src.exceptions import (
     GoogleDriveAuthError,
@@ -19,6 +26,55 @@ from src.exceptions import (
 )
 from src.services.media_sources.base_provider import MediaFileInfo, MediaSourceProvider
 from src.utils.logger import logger
+
+import logging
+
+# Retry 3x with exponential backoff: ~1s, ~2s, ~4s
+_RETRY_MAX_ATTEMPTS = 3
+_RETRY_MULTIPLIER = 1
+_RETRY_MAX_WAIT = 10
+_DOWNLOAD_TIMEOUT_SECONDS = 300
+
+
+def _is_retryable(exc: BaseException) -> bool:
+    """Return True for transient errors that should trigger a retry."""
+    if isinstance(exc, HttpError):
+        return exc.resp.status in (429, 500, 502, 503, 504)
+    return isinstance(exc, (ConnectionError, TimeoutError, OSError))
+
+
+def _get_retry_after(exc: HttpError) -> Optional[float]:
+    """Extract Retry-After header from a 429 response, if present."""
+    if exc.resp.status != 429:
+        return None
+    retry_after = exc.resp.get("retry-after")
+    if retry_after:
+        try:
+            return float(retry_after)
+        except (ValueError, TypeError):
+            pass
+    return None
+
+
+def _wait_for_retry(retry_state):
+    """Use Retry-After header for 429s, otherwise exponential backoff."""
+    exc = retry_state.outcome.exception()
+    if isinstance(exc, HttpError) and exc.resp.status == 429:
+        retry_after = _get_retry_after(exc)
+        if retry_after:
+            return retry_after
+    # Exponential backoff: 1s, 2s, 4s...
+    return min(2 ** (retry_state.attempt_number - 1), _RETRY_MAX_WAIT)
+
+
+# Shared retry decorator for API calls
+_api_retry = retry(
+    retry=retry_if_exception(_is_retryable),
+    stop=stop_after_attempt(_RETRY_MAX_ATTEMPTS),
+    wait=_wait_for_retry,
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+    reraise=True,
+)
 
 
 class GoogleDriveProvider(MediaSourceProvider):
@@ -117,15 +173,25 @@ class GoogleDriveProvider(MediaSourceProvider):
             return []
 
     def download_file(self, file_identifier: str) -> bytes:
-        """Download file content from Google Drive by file ID."""
+        """Download file content from Google Drive by file ID.
+
+        Retries transient errors and enforces a timeout on the chunk loop.
+        """
         try:
             request = self.service.files().get_media(fileId=file_identifier)
             buffer = io.BytesIO()
             downloader = MediaIoBaseDownload(buffer, request)
 
             done = False
+            start_time = time.monotonic()
             while not done:
-                status, done = downloader.next_chunk()
+                elapsed = time.monotonic() - start_time
+                if elapsed > _DOWNLOAD_TIMEOUT_SECONDS:
+                    raise TimeoutError(
+                        f"Download of {file_identifier} timed out after "
+                        f"{_DOWNLOAD_TIMEOUT_SECONDS}s"
+                    )
+                status, done = self._download_chunk_with_retry(downloader)
                 if status:
                     logger.debug(
                         f"Download progress for {file_identifier}: "
@@ -146,10 +212,10 @@ class GoogleDriveProvider(MediaSourceProvider):
     def get_file_info(self, file_identifier: str) -> Optional[MediaFileInfo]:
         """Get metadata for a Google Drive file without downloading."""
         try:
-            file_meta = (
-                self.service.files()
-                .get(fileId=file_identifier, fields=self.FILE_FIELDS)
-                .execute()
+            file_meta = self._execute_with_retry(
+                self.service.files().get(
+                    fileId=file_identifier, fields=self.FILE_FIELDS
+                )
             )
 
             if file_meta.get("mimeType") not in self.SUPPORTED_MIME_TYPES:
@@ -166,7 +232,9 @@ class GoogleDriveProvider(MediaSourceProvider):
     def file_exists(self, file_identifier: str) -> bool:
         """Check if a file exists and is accessible on Google Drive."""
         try:
-            self.service.files().get(fileId=file_identifier, fields="id").execute()
+            self._execute_with_retry(
+                self.service.files().get(fileId=file_identifier, fields="id")
+            )
             return True
         except HttpError:
             return False
@@ -183,9 +251,9 @@ class GoogleDriveProvider(MediaSourceProvider):
     def is_configured(self) -> bool:
         """Check if credentials are valid and root folder is accessible."""
         try:
-            self.service.files().get(
-                fileId=self.root_folder_id, fields="id, name"
-            ).execute()
+            self._execute_with_retry(
+                self.service.files().get(fileId=self.root_folder_id, fields="id, name")
+            )
             return True
         except Exception as e:  # noqa: BLE001 — config check must not crash
             logger.error(f"Google Drive is_configured check failed: {e}")
@@ -195,10 +263,10 @@ class GoogleDriveProvider(MediaSourceProvider):
         """Get content hash using Drive's md5Checksum (avoids downloading).
         Falls back to SHA256 of downloaded content if md5Checksum unavailable."""
         try:
-            file_meta = (
-                self.service.files()
-                .get(fileId=file_identifier, fields="id, md5Checksum")
-                .execute()
+            file_meta = self._execute_with_retry(
+                self.service.files().get(
+                    fileId=file_identifier, fields="id, md5Checksum"
+                )
             )
 
             md5 = file_meta.get("md5Checksum")
@@ -221,6 +289,24 @@ class GoogleDriveProvider(MediaSourceProvider):
             )
             raise
 
+    # ==================== Retry Helpers ====================
+
+    @staticmethod
+    @_api_retry
+    def _execute_with_retry(request):
+        """Execute a Drive API request with retry on transient errors.
+
+        Retry-After header is respected via the custom wait function
+        (_wait_for_retry) in the tenacity decorator.
+        """
+        return request.execute()
+
+    @staticmethod
+    @_api_retry
+    def _download_chunk_with_retry(downloader: MediaIoBaseDownload):
+        """Execute a single download chunk with retry on transient errors."""
+        return downloader.next_chunk()
+
     # ==================== Private Helpers ====================
 
     def _list_files_in_folder(
@@ -236,15 +322,13 @@ class GoogleDriveProvider(MediaSourceProvider):
         page_token = None
 
         while True:
-            response = (
-                self.service.files()
-                .list(
+            response = self._execute_with_retry(
+                self.service.files().list(
                     q=query,
                     fields=self.LIST_FIELDS,
                     pageSize=self.PAGE_SIZE,
                     pageToken=page_token,
                 )
-                .execute()
             )
 
             for file_meta in response.get("files", []):
@@ -270,15 +354,13 @@ class GoogleDriveProvider(MediaSourceProvider):
         page_token = None
 
         while True:
-            response = (
-                self.service.files()
-                .list(
+            response = self._execute_with_retry(
+                self.service.files().list(
                     q=query,
                     fields="nextPageToken, files(id, name)",
                     pageSize=self.PAGE_SIZE,
                     pageToken=page_token,
                 )
-                .execute()
             )
 
             for folder_meta in response.get("files", []):
@@ -307,10 +389,8 @@ class GoogleDriveProvider(MediaSourceProvider):
             f"and trashed=false"
         )
 
-        response = (
-            self.service.files()
-            .list(q=query, fields="files(id, name)", pageSize=1)
-            .execute()
+        response = self._execute_with_retry(
+            self.service.files().list(q=query, fields="files(id, name)", pageSize=1)
         )
 
         files = response.get("files", [])
@@ -336,10 +416,8 @@ class GoogleDriveProvider(MediaSourceProvider):
             return self._folder_cache[parent_id]
 
         try:
-            folder_meta = (
-                self.service.files()
-                .get(fileId=parent_id, fields="id, name, parents")
-                .execute()
+            folder_meta = self._execute_with_retry(
+                self.service.files().get(fileId=parent_id, fields="id, name, parents")
             )
             folder_name = folder_meta["name"]
             self._folder_cache[parent_id] = folder_name
@@ -402,11 +480,13 @@ class GoogleDriveProvider(MediaSourceProvider):
                 f"Resource not found: {reason}", status_code=status
             )
         elif status == 429:
+            retry_after = _get_retry_after(error)
+            seconds = retry_after if retry_after else 60
             logger.warning(f"Google Drive rate limit in {context}: {reason}")
             raise GoogleDriveRateLimitError(
                 f"Rate limit exceeded: {reason}",
                 status_code=status,
-                retry_after_seconds=60,
+                retry_after_seconds=int(seconds),
             )
         else:
             logger.error(f"Google Drive API error ({status}) in {context}: {reason}")

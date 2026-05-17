@@ -21,6 +21,7 @@ rich==15.0.0
 
 # Utilities
 python-dateutil==2.9.0.post0
+tenacity==9.1.2
 
 # Cloud Storage (Phase 2)
 cloudinary==1.44.2
