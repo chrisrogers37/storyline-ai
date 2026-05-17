@@ -457,3 +457,115 @@ class TokenRefreshService(BaseService):
         return self.token_repo.get_expiring_tokens(
             hours_until_expiry=self.REFRESH_BUFFER_HOURS
         )
+
+    async def revoke_tokens(
+        self,
+        service_name: str,
+        instagram_account_id: Optional[str] = None,
+        chat_settings_id: Optional[str] = None,
+        skip_provider: bool = False,
+    ) -> dict:
+        """
+        Revoke tokens for a service by calling provider APIs then marking revoked_at.
+
+        For compromised tokens: call the provider's revocation endpoint first
+        (best-effort — the token may already be invalid), then set revoked_at
+        in the database so the token is excluded from all future queries.
+
+        Args:
+            service_name: 'instagram' or 'google_drive'
+            instagram_account_id: Scope to a specific Instagram account
+            chat_settings_id: Scope to a specific tenant (Google Drive)
+            skip_provider: If True, skip calling provider revoke APIs
+
+        Returns:
+            dict with revoked count and provider revocation results
+        """
+        with self.track_execution(
+            method_name="revoke_tokens",
+            input_params={
+                "service": service_name,
+                "account_id": instagram_account_id,
+                "chat_settings_id": chat_settings_id,
+            },
+        ) as run_id:
+            tokens = self.token_repo.revoke_tokens_for_service(
+                service_name=service_name,
+                instagram_account_id=instagram_account_id,
+                chat_settings_id=chat_settings_id,
+            )
+
+            if not tokens:
+                result = {"revoked": 0, "provider_results": []}
+                self.set_result_summary(run_id, result)
+                return result
+
+            provider_results = []
+            if not skip_provider:
+                for token in tokens:
+                    try:
+                        raw_value = self.encryption.decrypt(token.token_value)
+                        revoke_result = await self._call_provider_revoke(
+                            service_name, raw_value
+                        )
+                        provider_results.append(revoke_result)
+                    except Exception as e:  # noqa: BLE001 — best-effort, don't block DB revocation
+                        provider_results.append(
+                            {"token_type": token.token_type, "error": str(e)}
+                        )
+
+            result = {
+                "revoked": len(tokens),
+                "provider_results": provider_results,
+            }
+
+            logger.info(
+                f"Revoked {len(tokens)} token(s) for {service_name}"
+                + (
+                    f" (provider calls: {len(provider_results)})"
+                    if provider_results
+                    else ""
+                )
+            )
+
+            self.set_result_summary(run_id, result)
+            return result
+
+    async def _call_provider_revoke(self, service_name: str, token_value: str) -> dict:
+        """Call the provider's token revocation API (best-effort)."""
+        if service_name == "instagram":
+            return await self._revoke_instagram_token(token_value)
+        elif service_name == "google_drive":
+            return await self._revoke_google_token(token_value)
+        return {"status": "no_provider_api", "service": service_name}
+
+    async def _revoke_instagram_token(self, token_value: str) -> dict:
+        """Revoke an Instagram/Meta token via DELETE /me/permissions."""
+        url = f"{settings.meta_graph_base}/me/permissions"
+        async with httpx.AsyncClient() as client:
+            response = await client.delete(
+                url,
+                params={"access_token": token_value},
+                timeout=15.0,
+            )
+            return {
+                "service": "instagram",
+                "status_code": response.status_code,
+                "success": response.status_code == 200,
+            }
+
+    async def _revoke_google_token(self, token_value: str) -> dict:
+        """Revoke a Google OAuth token via POST /revoke."""
+        url = "https://oauth2.googleapis.com/revoke"
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                url,
+                data={"token": token_value},
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                timeout=15.0,
+            )
+            return {
+                "service": "google_drive",
+                "status_code": response.status_code,
+                "success": response.status_code == 200,
+            }

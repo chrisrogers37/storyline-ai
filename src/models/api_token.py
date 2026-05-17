@@ -65,6 +65,9 @@ class ApiToken(Base):
         JSONB, nullable=True
     )  # Service-specific data (e.g., account_id)
 
+    # Revocation (set when token is compromised; filtered out of all queries)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+
     # Audit timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -84,7 +87,13 @@ class ApiToken(Base):
 
     def __repr__(self):
         expires_info = f"expires {self.expires_at}" if self.expires_at else "no expiry"
-        return f"<ApiToken {self.service_name}/{self.token_type} ({expires_info})>"
+        revoked = " REVOKED" if self.revoked_at else ""
+        return f"<ApiToken {self.service_name}/{self.token_type} ({expires_info}{revoked})>"
+
+    @property
+    def is_revoked(self) -> bool:
+        """Check if the token has been revoked."""
+        return self.revoked_at is not None
 
     @property
     def is_expired(self) -> bool:
