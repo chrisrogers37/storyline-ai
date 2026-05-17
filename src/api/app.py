@@ -1,5 +1,6 @@
 """FastAPI application for Storydump OAuth flows and Mini App."""
 
+import time
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -15,6 +16,8 @@ from src.api.rate_limit import limiter
 from src.api.routes.oauth import router as oauth_router
 from src.api.routes.onboarding import router as onboarding_router
 from src.config.settings import settings
+
+_START_TIME = time.time()
 
 app = FastAPI(
     title="Storydump API",
@@ -52,6 +55,16 @@ if STATIC_DIR.exists():
 # Register routes
 app.include_router(oauth_router, prefix="/auth")
 app.include_router(onboarding_router, prefix="/api/onboarding")
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for Railway. No auth required."""
+    return {
+        "status": "ok",
+        "version": app.version,
+        "uptime_seconds": int(time.time() - _START_TIME),
+    }
 
 
 @app.get("/webapp/onboarding")
