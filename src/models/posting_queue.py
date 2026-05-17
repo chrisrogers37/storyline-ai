@@ -36,7 +36,7 @@ class PostingQueue(Base):
     scheduled_for = Column(DateTime, nullable=False, index=True)
     status = Column(
         String(50), default="pending", nullable=False, index=True
-    )  # 'pending', 'processing'
+    )  # 'pending', 'processing', 'failed'
 
     # Telegram tracking (for manual posts)
     telegram_message_id = Column(BigInteger)
@@ -54,7 +54,9 @@ class PostingQueue(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
-        CheckConstraint("status IN ('pending', 'processing')", name="check_status"),
+        CheckConstraint(
+            "status IN ('pending', 'processing', 'failed')", name="check_status"
+        ),
     )
 
     def __repr__(self):

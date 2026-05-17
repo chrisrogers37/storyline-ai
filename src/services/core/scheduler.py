@@ -369,48 +369,122 @@ class SchedulerService(BaseService):
             )
             return result
 
-    async def _send_to_telegram(self, queue_item, force_sent: bool = False) -> bool:
-        """Claim queue item and send to Telegram.
+    # Track consecutive send failures for systemic-issue detection
+    _consecutive_send_failures: int = 0
+    _SEND_MAX_RETRIES: int = 3
+    _SEND_RETRY_DELAY_SECONDS: float = 5.0
+    _CONSECUTIVE_FAILURE_CRITICAL_THRESHOLD: int = 3
 
-        Claims (status → processing) BEFORE sending to prevent duplicate
+    async def _send_to_telegram(self, queue_item, force_sent: bool = False) -> bool:
+        """Claim queue item and send to Telegram with retry.
+
+        Claims (status -> processing) BEFORE sending to prevent duplicate
         sends if the scheduler fires again before Telegram responds.
 
-        On failure: deletes the queue item immediately so the media becomes
-        eligible again. The delete_stale_pending() cleanup handles items
-        orphaned by crashes/restarts as defense-in-depth.
+        On failure: retries up to 3 times with 5s backoff. On final failure,
+        marks the queue item as 'failed' and records to posting_history with
+        the error message. Never silently deletes the queue item.
+
+        GoogleDriveAuthError is not retried (auth won't self-heal).
         """
+        import asyncio
+
         queue_item_id = str(queue_item.id)
-        try:
-            self.queue_repo.update_status(queue_item_id, "processing")
-            success = await self.telegram_service.send_notification(
-                queue_item_id, force_sent=force_sent
-            )
-            if not success:
-                logger.error(
-                    f"Failed to send Telegram notification for {queue_item_id}"
+        self.queue_repo.update_status(queue_item_id, "processing")
+
+        last_error: Optional[str] = None
+
+        for attempt in range(1, self._SEND_MAX_RETRIES + 1):
+            try:
+                success = await self.telegram_service.send_notification(
+                    queue_item_id, force_sent=force_sent
                 )
-                self.queue_repo.delete(queue_item_id)
+                if success:
+                    logger.info(f"Sent Telegram notification for {queue_item_id}")
+                    self._consecutive_send_failures = 0
+                    return True
+
+                last_error = "send_notification returned False"
+
+            except GoogleDriveAuthError:
+                # Auth errors won't self-heal — fail immediately, don't retry
+                logger.error(
+                    f"Google Drive auth error for {queue_item_id} — "
+                    "marking failed (not retryable)"
+                )
+                self._record_send_failure(
+                    queue_item, "GoogleDriveAuthError: credentials invalid"
+                )
+                raise
+
+            except Exception as e:  # noqa: BLE001
+                last_error = str(e)
+
+            # Log retry or final failure
+            if attempt < self._SEND_MAX_RETRIES:
+                logger.warning(
+                    f"Telegram send failed for {queue_item_id} "
+                    f"(attempt {attempt}/{self._SEND_MAX_RETRIES}): {last_error}"
+                )
+                await asyncio.sleep(self._SEND_RETRY_DELAY_SECONDS)
             else:
-                logger.info(f"Sent Telegram notification for {queue_item_id}")
-            return success
+                logger.warning(
+                    f"Telegram send failed for {queue_item_id} after "
+                    f"{self._SEND_MAX_RETRIES} attempts: {last_error}"
+                )
 
-        except GoogleDriveAuthError:
-            logger.error(
-                f"Google Drive auth error for {queue_item_id} — deleting queue item"
+        # All retries exhausted — record failure
+        self._record_send_failure(queue_item, last_error)
+        return False
+
+    def _record_send_failure(self, queue_item, error_message: Optional[str]) -> None:
+        """Mark queue item as failed and record to posting_history."""
+        from src.repositories.history_repository import HistoryCreateParams
+
+        queue_item_id = str(queue_item.id)
+        now = datetime.now(timezone.utc)
+
+        # Mark queue item as failed (don't delete — preserves evidence)
+        try:
+            self.queue_repo.update_status(queue_item_id, "failed")
+        except Exception:  # noqa: BLE001 — best-effort
+            logger.error(f"Failed to mark queue item {queue_item_id} as failed")
+
+        # Record to posting_history
+        try:
+            self.history_repo.create(
+                HistoryCreateParams(
+                    media_item_id=str(queue_item.media_item_id),
+                    queue_item_id=queue_item_id,
+                    queue_created_at=queue_item.created_at or now,
+                    queue_deleted_at=now,
+                    scheduled_for=queue_item.scheduled_for or now,
+                    posted_at=now,
+                    status="failed",
+                    success=False,
+                    posting_method="telegram_manual",
+                    chat_settings_id=(
+                        str(queue_item.chat_settings_id)
+                        if queue_item.chat_settings_id
+                        else None
+                    ),
+                    error_message=error_message,
+                )
             )
-            try:
-                self.queue_repo.delete(queue_item_id)
-            except Exception:  # noqa: BLE001 — best-effort cleanup
-                pass
-            raise
+        except Exception as e:  # noqa: BLE001 — best-effort
+            logger.error(f"Failed to record posting_history for {queue_item_id}: {e}")
 
-        except Exception as e:
-            logger.error(f"Error sending to Telegram: {e}")
-            try:
-                self.queue_repo.delete(queue_item_id)
-            except Exception:  # noqa: BLE001 — best-effort cleanup
-                pass
-            return False
+        # Track consecutive failures for systemic issue detection
+        self._consecutive_send_failures += 1
+        if (
+            self._consecutive_send_failures
+            >= self._CONSECUTIVE_FAILURE_CRITICAL_THRESHOLD
+        ):
+            logger.critical(
+                f"SYSTEMIC FAILURE: {self._consecutive_send_failures} consecutive "
+                f"Telegram send failures — possible revoked bot token or "
+                f"network outage. Last error: {error_message}"
+            )
 
     def _auto_approve(
         self,

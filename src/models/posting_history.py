@@ -65,6 +65,9 @@ class PostingHistory(Base):
         index=True,
     )
 
+    # Error details (for failed posts)
+    error_message = Column(Text, nullable=True)
+
     # Metadata
     created_at = Column(DateTime, default=datetime.utcnow)
 

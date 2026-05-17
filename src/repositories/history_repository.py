@@ -34,6 +34,7 @@ class HistoryCreateParams:
     posted_by_user_id: Optional[str] = None
     posted_by_telegram_username: Optional[str] = None
     chat_settings_id: Optional[str] = None
+    error_message: Optional[str] = None
 
 
 class HistoryRepository(BaseRepository):

@@ -18,6 +18,7 @@ def scheduler_service_mocked():
         service = SchedulerService()
         service.media_repo = Mock()
         service.queue_repo = Mock()
+        service.history_repo = Mock()
         service.lock_repo = Mock()
         service.category_mix_repo = Mock()
         service.settings_service = Mock()
@@ -25,6 +26,7 @@ def scheduler_service_mocked():
         service.service_run_repo = Mock()
         service.service_name = "SchedulerService"
         service.SCHEDULE_JITTER_MINUTES = 30
+        service._consecutive_send_failures = 0
         service.track_execution = mock_track_execution
         service.set_result_summary = Mock()
         return service
@@ -383,27 +385,84 @@ class TestSendToTelegram:
         )
 
     @pytest.mark.asyncio
-    async def test_failure_deletes_queue_item(self, scheduler_service_mocked):
-        """Deletes queue item when send_notification returns False."""
+    async def test_failure_retries_then_marks_failed(self, scheduler_service_mocked):
+        """Retries 3 times on failure, then marks queue item as failed."""
         service = scheduler_service_mocked
-        queue_item = Mock(id=uuid4())
+        queue_item = Mock(
+            id=uuid4(),
+            media_item_id=uuid4(),
+            chat_settings_id=uuid4(),
+            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            scheduled_for=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
         service.telegram_service.send_notification = AsyncMock(return_value=False)
 
-        result = await service._send_to_telegram(queue_item)
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            result = await service._send_to_telegram(queue_item)
 
         assert result is False
-        service.queue_repo.update_status.assert_called_once_with(
-            str(queue_item.id), "processing"
-        )
-        service.queue_repo.delete.assert_called_once_with(str(queue_item.id))
+        assert service.telegram_service.send_notification.call_count == 3
+        service.queue_repo.update_status.assert_any_call(str(queue_item.id), "failed")
+        service.queue_repo.delete.assert_not_called()
+        service.history_repo.create.assert_called_once()
+        params = service.history_repo.create.call_args[0][0]
+        assert params.status == "failed"
+        assert params.success is False
+        assert params.error_message == "send_notification returned False"
 
     @pytest.mark.asyncio
-    async def test_google_drive_auth_error_deletes_and_reraises(
-        self, scheduler_service_mocked
-    ):
-        """GoogleDriveAuthError deletes queue item and re-raises."""
+    async def test_success_after_retry(self, scheduler_service_mocked):
+        """Succeeds on second attempt after first failure."""
         service = scheduler_service_mocked
-        queue_item = Mock(id=uuid4())
+        queue_item = Mock(id=uuid4(), media_item_id=uuid4())
+        service.telegram_service.send_notification = AsyncMock(
+            side_effect=[False, True]
+        )
+        service._consecutive_send_failures = 1
+
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            result = await service._send_to_telegram(queue_item)
+
+        assert result is True
+        assert service.telegram_service.send_notification.call_count == 2
+        assert service._consecutive_send_failures == 0
+        service.history_repo.create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_exception_retries_then_marks_failed(self, scheduler_service_mocked):
+        """Exceptions trigger retries, then mark failed."""
+        service = scheduler_service_mocked
+        queue_item = Mock(
+            id=uuid4(),
+            media_item_id=uuid4(),
+            chat_settings_id=None,
+            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            scheduled_for=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+        service.telegram_service.send_notification = AsyncMock(
+            side_effect=RuntimeError("Network error")
+        )
+
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            result = await service._send_to_telegram(queue_item)
+
+        assert result is False
+        assert service.telegram_service.send_notification.call_count == 3
+        service.queue_repo.update_status.assert_any_call(str(queue_item.id), "failed")
+        params = service.history_repo.create.call_args[0][0]
+        assert params.error_message == "Network error"
+
+    @pytest.mark.asyncio
+    async def test_google_drive_auth_error_no_retry(self, scheduler_service_mocked):
+        """GoogleDriveAuthError fails immediately without retrying."""
+        service = scheduler_service_mocked
+        queue_item = Mock(
+            id=uuid4(),
+            media_item_id=uuid4(),
+            chat_settings_id=None,
+            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            scheduled_for=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
         service.telegram_service.send_notification = AsyncMock(
             side_effect=GoogleDriveAuthError("Token expired")
         )
@@ -411,36 +470,48 @@ class TestSendToTelegram:
         with pytest.raises(GoogleDriveAuthError, match="Token expired"):
             await service._send_to_telegram(queue_item)
 
-        # Should have deleted the queue item (auth broken, retry won't help)
-        service.queue_repo.delete.assert_called_once_with(str(queue_item.id))
+        assert service.telegram_service.send_notification.call_count == 1
+        service.queue_repo.update_status.assert_any_call(str(queue_item.id), "failed")
+        service.history_repo.create.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_generic_exception_deletes_queue_item(self, scheduler_service_mocked):
-        """Generic exceptions are caught, queue item deleted, returns False."""
+    async def test_consecutive_failures_logs_critical(self, scheduler_service_mocked):
+        """3+ consecutive failures triggers CRITICAL log."""
         service = scheduler_service_mocked
-        queue_item = Mock(id=uuid4())
-        service.telegram_service.send_notification = AsyncMock(
-            side_effect=RuntimeError("Network error")
+        service._consecutive_send_failures = 2
+
+        queue_item = Mock(
+            id=uuid4(),
+            media_item_id=uuid4(),
+            chat_settings_id=None,
+            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            scheduled_for=datetime(2026, 1, 1, tzinfo=timezone.utc),
         )
+        service.telegram_service.send_notification = AsyncMock(return_value=False)
 
-        result = await service._send_to_telegram(queue_item)
-
-        assert result is False
-        service.queue_repo.delete.assert_called_once_with(str(queue_item.id))
-
-    @pytest.mark.asyncio
-    async def test_delete_failure_suppressed(self, scheduler_service_mocked):
-        """If delete itself fails, the original exception still propagates."""
-        service = scheduler_service_mocked
-        queue_item = Mock(id=uuid4())
-        service.telegram_service.send_notification = AsyncMock(
-            side_effect=GoogleDriveAuthError("Auth fail")
-        )
-        # Make the delete raise too
-        service.queue_repo.delete.side_effect = Exception("DB down")
-
-        with pytest.raises(GoogleDriveAuthError, match="Auth fail"):
+        with (
+            patch("asyncio.sleep", new_callable=AsyncMock),
+            patch("src.services.core.scheduler.logger") as mock_logger,
+        ):
             await service._send_to_telegram(queue_item)
+
+        assert service._consecutive_send_failures == 3
+        mock_logger.critical.assert_called_once()
+        call_msg = mock_logger.critical.call_args[0][0]
+        assert "SYSTEMIC FAILURE" in call_msg
+        assert "3 consecutive" in call_msg
+
+    @pytest.mark.asyncio
+    async def test_success_resets_consecutive_failures(self, scheduler_service_mocked):
+        """Successful send resets the consecutive failure counter."""
+        service = scheduler_service_mocked
+        service._consecutive_send_failures = 5
+        queue_item = Mock(id=uuid4())
+        service.telegram_service.send_notification = AsyncMock(return_value=True)
+
+        await service._send_to_telegram(queue_item)
+
+        assert service._consecutive_send_failures == 0
 
 
 # ------------------------------------------------------------------
