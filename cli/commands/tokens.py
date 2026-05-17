@@ -127,3 +127,72 @@ def revoke_tokens(service, account_id, chat_id, skip_provider):
         f"\n[dim]Re-authenticate via the normal OAuth flow to issue "
         f"fresh tokens for {service}.[/dim]"
     )
+
+
+@click.command(name="rotate-keys")
+def rotate_keys():
+    """Re-encrypt all stored tokens with the current primary encryption key.
+
+    Reads all encrypted token values from api_tokens, decrypts each with
+    MultiFernet (tries all keys in ENCRYPTION_KEYS), and re-encrypts with
+    the primary (first) key.
+
+    Rotation workflow:
+      1. Generate a new key: python -c "from src.utils.encryption import TokenEncryption; print(TokenEncryption.generate_key())"
+      2. Prepend it to ENCRYPTION_KEYS in .env: ENCRYPTION_KEYS=NEW_KEY,OLD_KEY
+      3. Deploy (new tokens use the new key; old tokens still decrypt)
+      4. Run: storydump-cli rotate-keys
+      5. Remove OLD_KEY from ENCRYPTION_KEYS
+    """
+    from src.repositories.token_repository import TokenRepository
+    from src.models.api_token import ApiToken
+    from src.utils.encryption import TokenEncryption
+
+    encryption = TokenEncryption()
+    token_repo = TokenRepository()
+
+    # Fetch all tokens (including revoked — they still have encrypted values)
+    tokens = token_repo.db.query(ApiToken).all()
+
+    if not tokens:
+        console.print("[yellow]No tokens found in database.[/yellow]")
+        token_repo.close()
+        return
+
+    console.print(f"Found {len(tokens)} token(s) to rotate.")
+
+    rotated = 0
+    skipped = 0
+    failed = 0
+
+    for token in tokens:
+        try:
+            new_value = encryption.rotate(token.token_value)
+            if new_value != token.token_value:
+                token.token_value = new_value
+                rotated += 1
+            else:
+                skipped += 1
+        except ValueError as e:
+            console.print(
+                f"[red]Failed to rotate {token.service_name}/{token.token_type} "
+                f"(id={token.id}): {e}[/red]"
+            )
+            failed += 1
+
+    if rotated > 0:
+        token_repo.db.commit()
+
+    token_repo.close()
+
+    console.print(f"\n[green]Rotated: {rotated}[/green]")
+    if skipped:
+        console.print(f"[dim]Already on primary key: {skipped}[/dim]")
+    if failed:
+        console.print(f"[red]Failed: {failed}[/red]")
+
+    if failed == 0 and rotated > 0:
+        console.print(
+            "\n[dim]All tokens now use the primary key. "
+            "Old keys can be removed from ENCRYPTION_KEYS.[/dim]"
+        )

@@ -62,6 +62,9 @@ class Settings(BaseSettings):
 
     # Security (Phase 2 - required for token encryption)
     ENCRYPTION_KEY: Optional[str] = None  # Fernet key for encrypting tokens in DB
+    ENCRYPTION_KEYS: Optional[str] = (
+        None  # Comma-separated Fernet keys (newest first) for key rotation
+    )
 
     # Media Sync (loop cadence is system-wide; per-chat enable lives in chat_settings)
     MEDIA_SYNC_INTERVAL_SECONDS: int = 300  # 5 minutes

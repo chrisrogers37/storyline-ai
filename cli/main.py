@@ -30,7 +30,7 @@ from cli.commands.media import (
 )
 from cli.commands.queue import reset_queue, list_queue, queue_preview
 from cli.commands.sync import sync_media, sync_status
-from cli.commands.tokens import revoke_tokens
+from cli.commands.tokens import revoke_tokens, rotate_keys
 from cli.commands.users import list_users, promote_user
 from src import __version__
 
@@ -73,6 +73,7 @@ cli.add_command(backfill_status)
 cli.add_command(dedup_media)
 cli.add_command(pool_health)
 cli.add_command(revoke_tokens)
+cli.add_command(rotate_keys)
 
 
 if __name__ == "__main__":
