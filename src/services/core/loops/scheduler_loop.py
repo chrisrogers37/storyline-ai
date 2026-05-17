@@ -32,8 +32,15 @@ async def _scheduler_tick(
     posting_service: PostingService,
     settings_service,
     queue_repo: QueueRepository,
+    *,
+    first_tick: bool = False,
 ) -> list:
     """Process one scheduler tick: discard stale queue items, process due slots.
+
+    Args:
+        first_tick: True on the first tick after worker startup.
+            Passed to process_slot so catch-up posts reset to now
+            instead of advancing gradually.
 
     Returns the list of active chats discovered this tick (used by health checks).
     """
@@ -75,7 +82,9 @@ async def _scheduler_tick(
         for chat in active_chats:
             chat_id = chat.telegram_chat_id
             try:
-                result = await scheduler_service.process_slot(telegram_chat_id=chat_id)
+                result = await scheduler_service.process_slot(
+                    telegram_chat_id=chat_id, first_tick=first_tick
+                )
 
                 if result.get("posted"):
                     session_state.posts_sent += 1
@@ -249,6 +258,7 @@ async def run_scheduler_loop(
     pool_check_tick_counter = 0
     pool_alert_last_sent: dict[int, float] = {}
     token_alert_last_sent: dict[int, float] = {}
+    is_first_tick = True
 
     while True:
         record_heartbeat("scheduler")
@@ -257,8 +267,13 @@ async def run_scheduler_loop(
         active_chats = []
         try:
             active_chats = await _scheduler_tick(
-                scheduler_service, posting_service, settings_service, queue_repo
+                scheduler_service,
+                posting_service,
+                settings_service,
+                queue_repo,
+                first_tick=is_first_tick,
             )
+            is_first_tick = False
         except Exception as e:
             logger.error(f"Error in scheduler loop: {e}", exc_info=True)
         finally:

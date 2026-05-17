@@ -70,15 +70,23 @@ class SchedulerService(BaseService):
         # Pick category for this slot
         return self._pick_category_for_slot()
 
-    def _compute_catchup_sent_at(self, chat_settings) -> Optional[datetime]:
+    def _compute_catchup_sent_at(
+        self, chat_settings, *, first_tick: bool = False
+    ) -> Optional[datetime]:
         """If behind by >= 2 intervals, return the timestamp to advance to.
 
-        Instead of jumping last_post_sent_at to now (which skips missed
-        slots), advance by one interval so the next tick re-evaluates and
-        catches up gradually — one post per tick.
+        On a normal tick, advances by one interval so the next tick
+        re-evaluates and catches up gradually — one post per tick.
+
+        On the first tick after startup, returns None (use now) so the
+        post counts as current.  This prevents redeploy churn from
+        starving the schedule: even if deploys restart the worker every
+        few minutes, each startup fires one immediate post that resets
+        the timer to now.
 
         Returns:
-            datetime to use as last_post_sent_at, or None for normal behavior.
+            datetime to use as last_post_sent_at, or None for normal
+            behavior (set to now).
         """
         last_sent = ensure_utc(chat_settings.last_post_sent_at)
         if not last_sent:
@@ -90,8 +98,17 @@ class SchedulerService(BaseService):
         elapsed = (now - last_sent).total_seconds()
 
         if elapsed >= 2 * interval_seconds:
-            catchup_to = last_sent + timedelta(seconds=interval_seconds)
             missed_slots = int(elapsed / interval_seconds) - 1
+            if first_tick:
+                logger.info(
+                    f"[catchup] First tick after startup, behind by "
+                    f"{missed_slots} slot(s) "
+                    f"(last_sent={last_sent.isoformat()}, "
+                    f"elapsed={elapsed:.0f}s). "
+                    f"Posting immediately, resetting to now"
+                )
+                return None
+            catchup_to = last_sent + timedelta(seconds=interval_seconds)
             logger.info(
                 f"[catchup] Behind by {missed_slots} slot(s) "
                 f"(last_sent={last_sent.isoformat()}, "
@@ -103,7 +120,9 @@ class SchedulerService(BaseService):
 
         return None
 
-    async def process_slot(self, telegram_chat_id: int) -> dict:
+    async def process_slot(
+        self, telegram_chat_id: int, *, first_tick: bool = False
+    ) -> dict:
         """Process a single scheduler tick for a tenant.
 
         This is the main entry point called by the scheduler loop every
@@ -111,6 +130,11 @@ class SchedulerService(BaseService):
 
         Args:
             telegram_chat_id: Tenant to check
+            first_tick: True on the first tick after worker startup.
+                When catching up, the first tick posts immediately
+                (last_post_sent_at = now) instead of advancing
+                gradually, so redeploy churn doesn't starve the
+                schedule.
 
         Returns:
             Dict with keys: posted (bool), reason (str), and optionally
@@ -128,9 +152,11 @@ class SchedulerService(BaseService):
         if slot_result is False:
             return {"posted": False, "reason": "not_due"}
 
-        # Catch-up: if behind by >= 2 intervals, advance by one interval
-        # instead of jumping to now. Next tick re-evaluates.
-        sent_at_override = self._compute_catchup_sent_at(chat_settings)
+        # Catch-up: on first tick, post immediately (reset to now).
+        # On subsequent ticks, advance by one interval per tick.
+        sent_at_override = self._compute_catchup_sent_at(
+            chat_settings, first_tick=first_tick
+        )
 
         category = slot_result if isinstance(slot_result, str) else None
         return await self._select_and_send(

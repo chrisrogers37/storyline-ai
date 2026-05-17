@@ -57,10 +57,14 @@ class TestSchedulerLoop:
             except StopAsyncIteration:
                 pass
 
-        # Should have called process_slot for each chat
+        # Should have called process_slot for each chat (first_tick=True on first tick)
         assert scheduler_service.process_slot.call_count == 2
-        scheduler_service.process_slot.assert_any_call(telegram_chat_id=-100111)
-        scheduler_service.process_slot.assert_any_call(telegram_chat_id=-100222)
+        scheduler_service.process_slot.assert_any_call(
+            telegram_chat_id=-100111, first_tick=True
+        )
+        scheduler_service.process_slot.assert_any_call(
+            telegram_chat_id=-100222, first_tick=True
+        )
 
     @pytest.mark.asyncio
     async def test_scheduler_loop_no_calls_when_no_tenants(self):
@@ -346,6 +350,49 @@ class TestSchedulerLoop:
 
         # Session was rolled back so the next tick starts clean.
         queue_repo.rollback.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_first_tick_flag_is_true_then_false(self):
+        """first_tick=True on first tick, False on subsequent ticks."""
+        scheduler_service = Mock()
+        scheduler_service.process_slot = AsyncMock(return_value={"posted": False})
+        scheduler_service.cleanup_transactions = Mock()
+
+        posting_service = Mock()
+        posting_service.cleanup_transactions = Mock()
+
+        chat1 = Mock(telegram_chat_id=-100111)
+        settings_service = Mock()
+        settings_service.get_all_active_chats.return_value = [chat1]
+        settings_service.cleanup_transactions = Mock()
+
+        tick_count = 0
+
+        async def counting_sleep(seconds):
+            nonlocal tick_count
+            tick_count += 1
+            if tick_count >= 2:
+                raise StopAsyncIteration
+
+        with (
+            patch(f"{_SCHEDULER}.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            patch(f"{_SCHEDULER}.QueueRepository") as mock_queue_repo_cls,
+            patch(f"{_SCHEDULER}.ServiceRunRepository"),
+        ):
+            mock_queue_repo_cls.return_value.discard_abandoned_processing.return_value = 0
+            mock_sleep.side_effect = counting_sleep
+            try:
+                await run_scheduler_loop(
+                    scheduler_service, posting_service, settings_service
+                )
+            except StopAsyncIteration:
+                pass
+
+        # Two ticks = two calls
+        assert scheduler_service.process_slot.call_count == 2
+        calls = scheduler_service.process_slot.call_args_list
+        assert calls[0].kwargs["first_tick"] is True
+        assert calls[1].kwargs["first_tick"] is False
 
 
 @pytest.mark.unit
