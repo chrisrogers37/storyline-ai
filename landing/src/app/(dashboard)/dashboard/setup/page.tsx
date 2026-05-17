@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
-import { backendPost } from "@/lib/backend";
+import { backendPost, backendFetchJson } from "@/lib/backend";
 import { SetupWizard } from "@/components/dashboard/setup-wizard";
 
 export const metadata = {
@@ -13,8 +13,11 @@ export default async function SetupPage() {
 
   const { activeChatId, userId } = session;
 
-  const res = await backendPost("init", activeChatId!, userId);
-  const data = res.ok ? await res.json() : null;
+  const [initRes, accountsData] = await Promise.all([
+    backendPost("init", activeChatId!, userId),
+    backendFetchJson("accounts", activeChatId!, userId, { revalidate: 60 }),
+  ]);
+  const data = initRes.ok ? await initRes.json() : null;
 
   const setupState = data?.setup_state ?? {
     instagram_connected: false,
@@ -38,7 +41,10 @@ export default async function SetupPage() {
           Connect your accounts and configure posting to get started.
         </p>
       </div>
-      <SetupWizard initialState={setupState} />
+      <SetupWizard
+        initialState={setupState}
+        initialAccounts={accountsData?.accounts ?? []}
+      />
     </div>
   );
 }
