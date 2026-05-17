@@ -63,6 +63,7 @@ class ChatSettingsRepository(BaseRepository):
             send_lifecycle_notifications=defaults.DEFAULT_SEND_LIFECYCLE_NOTIFICATIONS,
             show_verbose_notifications=defaults.DEFAULT_SHOW_VERBOSE_NOTIFICATIONS,
             media_sync_enabled=defaults.DEFAULT_MEDIA_SYNC_ENABLED,
+            posting_timezone=defaults.DEFAULT_POSTING_TIMEZONE,
             onboarding_completed=True,
         )
         self.db.add(chat_settings)

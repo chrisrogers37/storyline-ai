@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Union
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import random
 
 
@@ -492,11 +493,16 @@ class SchedulerService(BaseService):
         Posting hours are in the user's local timezone (chat_settings.posting_timezone).
         Converts UTC now to local time before comparing.
         """
-        from zoneinfo import ZoneInfo
 
         tz_name = getattr(chat_settings, "posting_timezone", None)
         if tz_name:
-            local_now = now.astimezone(ZoneInfo(tz_name))
+            try:
+                local_now = now.astimezone(ZoneInfo(tz_name))
+            except (ZoneInfoNotFoundError, KeyError):
+                logger.warning(
+                    "Invalid posting_timezone %r — falling back to UTC", tz_name
+                )
+                local_now = now
         else:
             local_now = now
 

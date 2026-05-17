@@ -593,6 +593,21 @@ class TestPostingWindowTimezone:
         )
         assert SchedulerService._posting_window_hours(cs) == 12.0
 
+    def test_invalid_timezone_falls_back_to_utc(self):
+        """Invalid timezone string falls back to UTC with a warning."""
+        cs = _make_chat_settings(
+            posting_hours_start=9,
+            posting_hours_end=17,
+            posting_timezone="Not/A_Real_Zone",
+        )
+        # 12:00 UTC — inside 9-17 window when treated as UTC
+        now = datetime(2026, 3, 21, 12, 0, tzinfo=timezone.utc)
+        assert SchedulerService._in_posting_window(now, cs) is True
+
+        # 20:00 UTC — outside 9-17 window when treated as UTC
+        now_outside = datetime(2026, 3, 21, 20, 0, tzinfo=timezone.utc)
+        assert SchedulerService._in_posting_window(now_outside, cs) is False
+
 
 # ------------------------------------------------------------------
 # _pick_category_for_slot
