@@ -487,8 +487,20 @@ class SchedulerService(BaseService):
 
     @staticmethod
     def _in_posting_window(now: datetime, chat_settings) -> bool:
-        """Check if current time is within the posting window."""
-        current_hour = now.hour + now.minute / 60.0
+        """Check if current time is within the posting window.
+
+        Posting hours are in the user's local timezone (chat_settings.posting_timezone).
+        Converts UTC now to local time before comparing.
+        """
+        from zoneinfo import ZoneInfo
+
+        tz_name = getattr(chat_settings, "posting_timezone", None)
+        if tz_name:
+            local_now = now.astimezone(ZoneInfo(tz_name))
+        else:
+            local_now = now
+
+        current_hour = local_now.hour + local_now.minute / 60.0
         start = chat_settings.posting_hours_start
         end = chat_settings.posting_hours_end
 

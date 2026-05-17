@@ -39,6 +39,7 @@ def _make_chat_settings(
     is_paused=False,
     telegram_chat_id=-100123,
     settings_id=None,
+    posting_timezone=None,
 ):
     """Helper to build a mock chat_settings object."""
     cs = Mock()
@@ -49,6 +50,7 @@ def _make_chat_settings(
     cs.is_paused = is_paused
     cs.telegram_chat_id = telegram_chat_id
     cs.id = settings_id or uuid4()
+    cs.posting_timezone = posting_timezone
     return cs
 
 
@@ -516,6 +518,80 @@ class TestPostingWindowHelpers:
         cs = _make_chat_settings(posting_hours_start=0, posting_hours_end=24)
 
         assert SchedulerService._posting_window_hours(cs) == 24.0
+
+
+# ------------------------------------------------------------------
+# Timezone-aware posting window (#351)
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestPostingWindowTimezone:
+    """Tests for timezone-aware posting window."""
+
+    def test_utc_fallback_when_no_timezone(self):
+        """No posting_timezone means hours are compared in UTC."""
+        cs = _make_chat_settings(
+            posting_hours_start=9, posting_hours_end=17, posting_timezone=None
+        )
+        # 12:00 UTC — inside 9-17 UTC window
+        now = datetime(2026, 3, 21, 12, 0, tzinfo=timezone.utc)
+        assert SchedulerService._in_posting_window(now, cs) is True
+
+    def test_timezone_converts_utc_to_local(self):
+        """UTC time is converted to user timezone before comparing."""
+        # Window 9-17 Eastern. At 14:00 UTC = 10:00 ET (inside).
+        cs = _make_chat_settings(
+            posting_hours_start=9,
+            posting_hours_end=17,
+            posting_timezone="America/New_York",
+        )
+        now = datetime(2026, 3, 21, 14, 0, tzinfo=timezone.utc)
+        assert SchedulerService._in_posting_window(now, cs) is True
+
+    def test_timezone_outside_window(self):
+        """UTC time that maps to outside the local window returns False."""
+        # Window 9-17 Eastern. At 23:00 UTC = 19:00 ET (outside).
+        cs = _make_chat_settings(
+            posting_hours_start=9,
+            posting_hours_end=17,
+            posting_timezone="America/New_York",
+        )
+        now = datetime(2026, 3, 21, 23, 0, tzinfo=timezone.utc)
+        assert SchedulerService._in_posting_window(now, cs) is False
+
+    def test_timezone_midnight_crossing(self):
+        """Timezone conversion with midnight-crossing window."""
+        # Window 20-2 Eastern. At 01:00 UTC = 21:00 ET prev day (inside).
+        cs = _make_chat_settings(
+            posting_hours_start=20,
+            posting_hours_end=2,
+            posting_timezone="America/New_York",
+        )
+        now = datetime(2026, 3, 22, 1, 0, tzinfo=timezone.utc)
+        assert SchedulerService._in_posting_window(now, cs) is True
+
+    def test_timezone_europe(self):
+        """Non-US timezone works correctly."""
+        # Window 9-17 Berlin (CET = UTC+1 in winter, CEST = UTC+2 in summer).
+        # March 21 2026 is after DST switch (CEST = UTC+2).
+        # 10:00 UTC = 12:00 CEST (inside 9-17).
+        cs = _make_chat_settings(
+            posting_hours_start=9,
+            posting_hours_end=17,
+            posting_timezone="Europe/Berlin",
+        )
+        now = datetime(2026, 3, 21, 10, 0, tzinfo=timezone.utc)
+        assert SchedulerService._in_posting_window(now, cs) is True
+
+    def test_timezone_does_not_affect_window_hours_calculation(self):
+        """_posting_window_hours is pure arithmetic, unaffected by timezone."""
+        cs = _make_chat_settings(
+            posting_hours_start=9,
+            posting_hours_end=21,
+            posting_timezone="Asia/Tokyo",
+        )
+        assert SchedulerService._posting_window_hours(cs) == 12.0
 
 
 # ------------------------------------------------------------------

@@ -19,8 +19,9 @@ escape hatch for per-chat settings.
 
 # Posting cadence
 DEFAULT_POSTS_PER_DAY = 3
-DEFAULT_POSTING_HOURS_START = 9  # UTC
-DEFAULT_POSTING_HOURS_END = 22  # UTC
+DEFAULT_POSTING_HOURS_START = 9  # User-local time (interpreted via posting_timezone)
+DEFAULT_POSTING_HOURS_END = 22  # User-local time (interpreted via posting_timezone)
+DEFAULT_POSTING_TIMEZONE = "America/New_York"
 
 # Lock TTLs (days)
 DEFAULT_REPOST_TTL_DAYS = 30

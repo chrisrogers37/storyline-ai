@@ -46,6 +46,9 @@ class ChatSettings(Base):
     posts_per_day = Column(Integer, default=3)
     posting_hours_start = Column(Integer, default=14)
     posting_hours_end = Column(Integer, default=2)
+    # IANA timezone for posting window (e.g. "America/New_York").
+    # NULL = UTC for backward compatibility with existing rows.
+    posting_timezone = Column(String(50), nullable=True)
 
     # Per-chat lock TTLs (NULL = use REPOST_TTL_DAYS / SKIP_TTL_DAYS env defaults)
     repost_ttl_days = Column(Integer, nullable=True)
