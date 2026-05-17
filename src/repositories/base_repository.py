@@ -27,12 +27,17 @@ class BaseRepository:
     """
 
     def __init__(self):
+        self._db_generator = None
+        self._db: Optional[Session] = None
+
+    def _open_session(self):
+        """Open a new database session. Called lazily on first .db access."""
         self._db_generator = get_db()
-        self._db: Session = next(self._db_generator)
+        self._db = next(self._db_generator)
 
     @property
     def db(self) -> Session:
-        """Get the database session, ensuring it's in a clean state.
+        """Get the database session, opening one lazily if needed.
 
         Checks the circuit breaker before returning the session. If the
         circuit is open (DB has been failing), raises OperationalError
@@ -44,6 +49,9 @@ class BaseRepository:
                 params=None,
                 orig=None,
             )
+
+        if self._db is None:
+            self._open_session()
 
         # Rollback any failed transaction to reset session state
         try:
@@ -60,12 +68,13 @@ class BaseRepository:
                 self._db.close()
             except Exception as close_err:
                 logger.warning(f"Failed to close broken session: {close_err}")
-            self._db_generator = get_db()
-            self._db = next(self._db_generator)
+            self._open_session()
         return self._db
 
     def commit(self):
         """Commit the current transaction."""
+        if self._db is None:
+            return
         try:
             self._db.commit()
             db_circuit_breaker.record_success()
@@ -77,6 +86,8 @@ class BaseRepository:
 
     def rollback(self):
         """Rollback the current transaction."""
+        if self._db is None:
+            return
         try:
             self._db.rollback()
         except Exception as e:
@@ -92,7 +103,11 @@ class BaseRepository:
 
         If both commit and rollback fail (e.g. dead SSL connection), replaces
         the session entirely so the next operation starts clean.
+
+        No-op if the session was never opened (lazy initialization).
         """
+        if self._db is None:
+            return
         try:
             self._db.commit()
         except Exception as commit_err:
@@ -111,8 +126,7 @@ class BaseRepository:
                     self._db.close()
                 except Exception as close_err:
                     logger.warning(f"Failed to close dead session: {close_err}")
-                self._db_generator = get_db()
-                self._db = next(self._db_generator)
+                self._open_session()
 
     def close(self):
         """
@@ -120,14 +134,18 @@ class BaseRepository:
 
         Call this when you're done with the repository to prevent
         connection pool exhaustion.
+
+        No-op if the session was never opened (lazy initialization).
         """
+        if self._db is None:
+            return
         try:
             # Exhaust the generator to trigger the finally block
             # which closes the session
             try:
                 next(self._db_generator)
             except StopIteration:
-                pass  # Expected: generator already exhausted from __init__
+                pass  # Expected: generator already exhausted after first next()
         except Exception as e:
             logger.warning(f"Error closing database session: {e}")
         finally:
@@ -138,6 +156,8 @@ class BaseRepository:
                 # Suppressed: session.close() during cleanup is best-effort.
                 # The session may already be closed or the pool invalidated.
                 logger.debug(f"Suppressed error during session close: {e}")
+            self._db = None
+            self._db_generator = None
 
     def __del__(self):
         """Cleanup when repository is garbage collected."""
