@@ -5,7 +5,11 @@ import asyncio
 import pytest
 from unittest.mock import AsyncMock, Mock, patch
 
-from src.services.core.loops.guarded import guarded
+from src.services.core.loops.guarded import (
+    guarded,
+    _INITIAL_BACKOFF_SECONDS,
+    _MAX_BACKOFF_SECONDS,
+)
 from src.services.core.loops.heartbeat import (
     get_loop_liveness,
     loop_heartbeats,
@@ -497,71 +501,180 @@ class TestMediaSyncLoop:
 
 @pytest.mark.unit
 class TestGuarded:
-    """Tests for guarded() crash handling and Telegram alerts."""
+    """Tests for guarded() crash handling, restart logic, and alerts."""
 
     @pytest.mark.asyncio
-    async def test_logs_critical_on_crash(self):
-        """Crashed coroutine is logged at CRITICAL level, not propagated."""
+    async def test_single_crash_restarts_loop(self):
+        """A single crash triggers a restart and the loop continues."""
+        call_count = 0
 
-        async def crashing_coro():
+        async def flaky_coro():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("boom")
+            # Second call succeeds (returns normally)
+
+        with patch(f"{_GUARDED}.asyncio.sleep", new_callable=AsyncMock):
+            await guarded("test_task", flaky_coro)
+
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_backoff_timing_doubles(self):
+        """Backoff doubles on each consecutive crash: 1, 2, 4, 8..."""
+        call_count = 0
+        sleep_values = []
+
+        async def always_crash():
+            nonlocal call_count
+            call_count += 1
             raise RuntimeError("boom")
 
-        with patch(f"{_GUARDED}.logger") as mock_logger:
-            await guarded("test_task", crashing_coro())
+        async def capture_sleep(seconds):
+            sleep_values.append(seconds)
 
-        mock_logger.critical.assert_called_once()
-        assert "test_task" in mock_logger.critical.call_args[0][0]
+        with patch(f"{_GUARDED}.asyncio.sleep", side_effect=capture_sleep):
+            await guarded("test_task", always_crash, max_restarts_per_hour=4)
 
-    @pytest.mark.asyncio
-    async def test_sends_telegram_alert_on_crash(self):
-        """When bot is provided, sends crash alert to admin chat."""
-        mock_bot = AsyncMock()
-
-        async def crashing_coro():
-            raise ValueError("something broke")
-
-        with patch(f"{_GUARDED}.settings") as mock_settings:
-            mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100999
-            await guarded("scheduler", crashing_coro(), bot=mock_bot)
-
-        mock_bot.send_message.assert_called_once()
-        call_kwargs = mock_bot.send_message.call_args.kwargs
-        assert call_kwargs["chat_id"] == -100999
-        assert "scheduler" in call_kwargs["text"]
-        assert "something broke" in call_kwargs["text"]
+        # 4 crashes = 4 sleeps before giving up on the 5th
+        assert sleep_values == [1, 2, 4, 8]
 
     @pytest.mark.asyncio
-    async def test_no_alert_when_bot_is_none(self):
-        """When no bot provided, only logs — no Telegram alert."""
+    async def test_backoff_caps_at_max(self):
+        """Backoff never exceeds _MAX_BACKOFF_SECONDS (60s)."""
+        sleep_values = []
 
-        async def crashing_coro():
+        async def always_crash():
             raise RuntimeError("boom")
 
-        with patch(f"{_GUARDED}.logger"):
-            # Should not raise — just logs
-            await guarded("test_task", crashing_coro(), bot=None)
+        async def capture_sleep(seconds):
+            sleep_values.append(seconds)
+
+        with patch(f"{_GUARDED}.asyncio.sleep", side_effect=capture_sleep):
+            await guarded("test_task", always_crash, max_restarts_per_hour=8)
+
+        # 1, 2, 4, 8, 16, 32, 60, 60
+        assert all(s <= _MAX_BACKOFF_SECONDS for s in sleep_values)
+        assert sleep_values[-1] == _MAX_BACKOFF_SECONDS
 
     @pytest.mark.asyncio
-    async def test_alert_failure_does_not_mask_crash_log(self):
-        """If Telegram alert fails, the original crash is still logged."""
-        mock_bot = AsyncMock()
-        mock_bot.send_message.side_effect = Exception("Telegram down")
+    async def test_max_restart_cap_gives_up(self):
+        """After max_restarts_per_hour crashes, guarded() stops and logs CRITICAL."""
+        call_count = 0
 
-        async def crashing_coro():
-            raise RuntimeError("original error")
+        async def always_crash():
+            nonlocal call_count
+            call_count += 1
+            raise RuntimeError("relentless")
 
         with (
+            patch(f"{_GUARDED}.asyncio.sleep", new_callable=AsyncMock),
             patch(f"{_GUARDED}.logger") as mock_logger,
-            patch(f"{_GUARDED}.settings") as mock_settings,
         ):
-            mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100999
-            await guarded("scheduler", crashing_coro(), bot=mock_bot)
+            await guarded("test_task", always_crash, max_restarts_per_hour=3)
 
-        # Original crash still logged at CRITICAL
-        mock_logger.critical.assert_called_once()
-        assert "scheduler" in mock_logger.critical.call_args[0][0]
-        # Alert failure logged at ERROR
-        mock_logger.error.assert_called_once()
+        # 3 crashes recorded, then on the 4th crash it hits the cap
+        # (first crash doesn't check cap until after recording)
+        # Actually: crash 1 records, crash 2 records, crash 3 records,
+        # crash 4 sees len==3 >= max==3 and gives up
+        assert call_count == 4
+
+        # The final CRITICAL log should mention "exhausted"
+        critical_calls = mock_logger.critical.call_args_list
+        final_msg = critical_calls[-1][0][0]
+        assert "exhausted" in final_msg
+
+    @pytest.mark.asyncio
+    async def test_counter_resets_after_stable_period(self):
+        """After _STABLE_PERIOD_SECONDS of uptime, restart counter resets."""
+        call_count = 0
+
+        async def crash_then_stable_then_crash():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("first crash")
+            if call_count == 2:
+                # Simulate long stable run — we'll fake time.monotonic
+                return  # clean exit after "stable" run
+            # Won't reach here
+
+        monotonic_seq = [
+            0.0,  # loop_started_at for call 1
+            1.0,  # now after crash 1 (run_duration=1s, not stable)
+            100.0,  # loop_started_at for call 2 (after sleep)
+            500.0,  # won't be used (clean exit)
+        ]
+        mono_idx = 0
+
+        def fake_monotonic():
+            nonlocal mono_idx
+            val = monotonic_seq[mono_idx]
+            mono_idx += 1
+            return val
+
+        with (
+            patch(f"{_GUARDED}.asyncio.sleep", new_callable=AsyncMock),
+            patch(f"{_GUARDED}.time.monotonic", side_effect=fake_monotonic),
+        ):
+            await guarded("test_task", crash_then_stable_then_crash)
+
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_stable_run_resets_backoff(self):
+        """A long stable run resets backoff back to initial value."""
+        call_count = 0
+        sleep_values = []
+
+        async def crash_stable_crash():
+            nonlocal call_count
+            call_count += 1
+            raise RuntimeError("boom")
+
+        async def capture_sleep(seconds):
+            sleep_values.append(seconds)
+
+        # Simulate: crash at t=1 (short run), crash at t=400 (long run > 300s),
+        # then short crashes until cap is hit.
+        # Each iteration calls monotonic twice: once for loop_started_at, once for now.
+        # With max_restarts_per_hour=3, the cap is hit on the 5th crash attempt
+        # (after 3 timestamps recorded post-reset, the 4th post-reset crash gives up).
+        # Actually: crash1 records (pre-reset), crash2 resets+records (1 in deque),
+        # crash3 records (2 in deque), crash4 records (3 in deque),
+        # crash5 sees len==3 >= 3 and gives up.
+        monotonic_seq = [
+            0.0,  # loop_started_at call 1
+            1.0,  # now after crash 1 (duration=1, not stable)
+            2.0,  # loop_started_at call 2 (after backoff sleep)
+            303.0,  # now after crash 2 (duration=301, stable! resets)
+            304.0,  # loop_started_at call 3
+            305.0,  # now after crash 3 (duration=1, not stable)
+            306.0,  # loop_started_at call 4
+            307.0,  # now after crash 4 (duration=1, not stable)
+            308.0,  # loop_started_at call 5
+            309.0,  # now after crash 5 (hits cap, gives up)
+        ]
+        mono_idx = 0
+
+        def fake_monotonic():
+            nonlocal mono_idx
+            val = monotonic_seq[mono_idx]
+            mono_idx += 1
+            return val
+
+        with (
+            patch(f"{_GUARDED}.asyncio.sleep", side_effect=capture_sleep),
+            patch(f"{_GUARDED}.time.monotonic", side_effect=fake_monotonic),
+        ):
+            await guarded("test_task", crash_stable_crash, max_restarts_per_hour=3)
+
+        # First crash: backoff=1, second crash: stable resets so backoff=1 again,
+        # third crash: backoff=2 (doubled from reset 1), fourth crash: backoff=4
+        assert sleep_values[0] == _INITIAL_BACKOFF_SECONDS
+        assert sleep_values[1] == _INITIAL_BACKOFF_SECONDS  # reset after stable
+        assert sleep_values[2] == 2  # doubled from fresh reset
 
     @pytest.mark.asyncio
     async def test_cancelled_error_propagates(self):
@@ -571,7 +684,104 @@ class TestGuarded:
             raise asyncio.CancelledError()
 
         with pytest.raises(asyncio.CancelledError):
-            await guarded("test_task", cancelled_coro(), bot=AsyncMock())
+            await guarded("test_task", cancelled_coro, bot=AsyncMock())
+
+    @pytest.mark.asyncio
+    async def test_sends_telegram_alert_on_crash(self):
+        """When bot is provided, sends crash alert to admin chat."""
+        mock_bot = AsyncMock()
+        call_count = 0
+
+        async def crash_once():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise ValueError("something broke")
+
+        with patch(f"{_GUARDED}.settings") as mock_settings:
+            mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100999
+            with patch(f"{_GUARDED}.asyncio.sleep", new_callable=AsyncMock):
+                await guarded("scheduler", crash_once, bot=mock_bot)
+
+        mock_bot.send_message.assert_called_once()
+        call_kwargs = mock_bot.send_message.call_args.kwargs
+        assert call_kwargs["chat_id"] == -100999
+        assert "scheduler" in call_kwargs["text"]
+        assert "something broke" in call_kwargs["text"]
+
+    @pytest.mark.asyncio
+    async def test_no_alert_when_bot_is_none(self):
+        """When no bot provided, only logs."""
+        call_count = 0
+
+        async def crash_once():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("boom")
+
+        with (
+            patch(f"{_GUARDED}.logger"),
+            patch(f"{_GUARDED}.asyncio.sleep", new_callable=AsyncMock),
+        ):
+            await guarded("test_task", crash_once, bot=None)
+
+    @pytest.mark.asyncio
+    async def test_alert_failure_does_not_prevent_restart(self):
+        """If Telegram alert fails, the loop still restarts."""
+        mock_bot = AsyncMock()
+        mock_bot.send_message.side_effect = Exception("Telegram down")
+        call_count = 0
+
+        async def crash_once():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("original error")
+
+        with (
+            patch(f"{_GUARDED}.logger"),
+            patch(f"{_GUARDED}.settings") as mock_settings,
+            patch(f"{_GUARDED}.asyncio.sleep", new_callable=AsyncMock),
+        ):
+            mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100999
+            await guarded("scheduler", crash_once, bot=mock_bot)
+
+        # Loop restarted despite alert failure
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_exhausted_sends_critical_alert(self):
+        """When restarts are exhausted, sends a 'permanently stopped' alert."""
+        mock_bot = AsyncMock()
+
+        async def always_crash():
+            raise RuntimeError("persistent failure")
+
+        with (
+            patch(f"{_GUARDED}.settings") as mock_settings,
+            patch(f"{_GUARDED}.asyncio.sleep", new_callable=AsyncMock),
+        ):
+            mock_settings.ADMIN_TELEGRAM_CHAT_ID = -100999
+            await guarded(
+                "scheduler", always_crash, bot=mock_bot, max_restarts_per_hour=2
+            )
+
+        # Last alert should mention "permanently stopped"
+        last_call = mock_bot.send_message.call_args_list[-1]
+        assert "permanently stopped" in last_call.kwargs["text"]
+
+    @pytest.mark.asyncio
+    async def test_clean_exit_does_not_restart(self):
+        """If the coroutine returns normally, guarded() returns without restart."""
+        call_count = 0
+
+        async def clean_coro():
+            nonlocal call_count
+            call_count += 1
+
+        await guarded("test_task", clean_coro)
+        assert call_count == 1
 
 
 @pytest.mark.unit

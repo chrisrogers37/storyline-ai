@@ -86,14 +86,14 @@ async def main_async():
         asyncio.create_task(
             guarded(
                 "scheduler",
-                run_scheduler_loop(
+                lambda: run_scheduler_loop(
                     scheduler_service, posting_service, settings_service
                 ),
                 bot=bot,
             )
         ),
         asyncio.create_task(
-            guarded("lock_cleanup", cleanup_locks_loop(lock_service), bot=bot)
+            guarded("lock_cleanup", lambda: cleanup_locks_loop(lock_service), bot=bot)
         ),
         asyncio.create_task(telegram_service.start_polling()),
         asyncio.create_task(_health_check_server()),
@@ -109,7 +109,7 @@ async def main_async():
             asyncio.create_task(
                 guarded(
                     "cloud_cleanup",
-                    cleanup_cloud_storage_loop(cloud_service),
+                    lambda: cleanup_cloud_storage_loop(cloud_service),
                     bot=bot,
                 )
             )
@@ -122,7 +122,7 @@ async def main_async():
             asyncio.create_task(
                 guarded(
                     "media_sync",
-                    media_sync_loop(
+                    lambda: media_sync_loop(
                         sync_service,
                         settings_service=settings_service,
                         telegram_service=telegram_service,
@@ -136,7 +136,7 @@ async def main_async():
         asyncio.create_task(
             guarded(
                 "transaction_cleanup",
-                transaction_cleanup_loop(all_services),
+                lambda: transaction_cleanup_loop(all_services),
                 bot=bot,
             )
         )
