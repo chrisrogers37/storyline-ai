@@ -39,6 +39,21 @@ class GoogleDriveOAuthService(BaseService):
     TOKEN_TYPE_ACCESS = "oauth_access"
     TOKEN_TYPE_REFRESH = "oauth_refresh"
 
+    # Scope: drive.readonly is the narrowest scope that supports the current
+    # media sync UX, where users select a pre-existing Drive folder and the app
+    # lists + downloads files from it. Narrower alternatives were evaluated:
+    #
+    #   - drive.file: only sees files created/opened by the app — breaks folder
+    #     browsing since user media predates the app.
+    #   - drive.metadata.readonly: allows listing but not downloading
+    #     (files().get_media() requires read access).
+    #   - drive.metadata.readonly + per-file read: no such composite scope
+    #     exists without the Google Picker API.
+    #
+    # To narrow further: implement Google Picker API for folder selection,
+    # which grants per-file access under drive.file scope. That changes the
+    # onboarding UX from "paste folder ID" to a Picker widget.
+    # Tracked in: https://github.com/chrisrogers37/storydump/issues/327
     REQUIRED_SCOPES = [
         "https://www.googleapis.com/auth/drive.readonly",
         "https://www.googleapis.com/auth/userinfo.email",

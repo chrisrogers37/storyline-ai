@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Pin all dependency versions** — Replaced `>=` version specifiers with exact `==` pins for all unpinned dependencies (cloudinary, google-api-python-client, google-auth, google-auth-oauthlib, fastapi, uvicorn, python-multipart, cryptography, anthropic). Prevents supply chain attacks via silent upgrades and ensures reproducible builds. (#325)
 - **Add rate limiting to API endpoints** — Added SlowAPI middleware with a global default of 30 req/min per IP. Mutation-heavy endpoints (`toggle-setting`, `update-setting`, `update-string-setting`) limited to 10/min; `sync-media` limited to 5/min to prevent Google Drive API abuse. Returns 429 with `Retry-After` header when exceeded. (#324)
+- **Google Drive OAuth scope audit** — Evaluated narrowing `drive.readonly` to `drive.file` or `drive.metadata.readonly`. `drive.readonly` is the minimum viable scope: `drive.file` breaks folder browsing (user media predates the app), `drive.metadata.readonly` blocks file downloads. Documented the tradeoff and the Picker API narrowing path in `google_drive_oauth.py` and `google_drive_provider.py`. (#327)
 
 ### Removed
 
