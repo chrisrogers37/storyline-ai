@@ -1,6 +1,7 @@
 """Main application entry point - runs scheduler + Telegram bot."""
 
 import asyncio
+import os
 import signal
 import sys
 from time import time
@@ -17,6 +18,29 @@ from src.services.core.loops.cloud_cleanup_loop import cleanup_cloud_storage_loo
 from src.services.core.loops.transaction_cleanup_loop import transaction_cleanup_loop
 from src.services.core.loops.media_sync_loop import media_sync_loop
 from src.utils.logger import logger
+
+_HEALTH_RESPONSE = (
+    b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nok"
+)
+
+
+async def _health_check_server():
+    """Minimal HTTP server so Railway's health check gets a 200 on /health."""
+    port = int(os.environ.get("PORT", 8080))
+
+    async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+        try:
+            await reader.readline()  # consume request line
+            writer.write(_HEALTH_RESPONSE)
+            await writer.drain()
+        finally:
+            writer.close()
+            await writer.wait_closed()
+
+    server = await asyncio.start_server(handle, "0.0.0.0", port)
+    logger.info(f"Health check server listening on port {port}")
+    async with server:
+        await server.serve_forever()
 
 
 async def main_async():
@@ -72,6 +96,7 @@ async def main_async():
             guarded("lock_cleanup", cleanup_locks_loop(lock_service), bot=bot)
         ),
         asyncio.create_task(telegram_service.start_polling()),
+        asyncio.create_task(_health_check_server()),
     ]
 
     # Add cloud storage cleanup loop if Cloudinary is configured
