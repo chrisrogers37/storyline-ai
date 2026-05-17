@@ -39,6 +39,8 @@ class GoogleDriveProvider(MediaSourceProvider):
         oauth_credentials: google.oauth2.credentials.Credentials instance.
     """
 
+    # drive.readonly is the narrowest viable scope — see google_drive_oauth.py
+    # REQUIRED_SCOPES comment for the full analysis and narrowing path.
     SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 
     SUPPORTED_MIME_TYPES = {
