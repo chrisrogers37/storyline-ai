@@ -1068,3 +1068,126 @@ class TestCatchupAfterRestart:
         service.settings_service.update_last_post_sent_at.assert_called_once_with(
             cs.telegram_chat_id, override_time
         )
+
+
+# ------------------------------------------------------------------
+# First-tick immediate post after startup (#348)
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestFirstTickImmediatePost:
+    """Tests for first-tick-after-startup behavior that resets to now."""
+
+    def test_first_tick_returns_none_when_behind(self, scheduler_service_mocked):
+        """On first tick, _compute_catchup_sent_at returns None (use now)."""
+        service = scheduler_service_mocked
+        last_sent = datetime(2026, 3, 21, 9, 0, tzinfo=timezone.utc)
+        cs = _make_chat_settings(
+            posting_hours_start=9,
+            posting_hours_end=21,
+            posts_per_day=3,
+            last_post_sent_at=last_sent,
+        )
+
+        with patch("src.services.core.scheduler.datetime") as mock_dt:
+            # 9h since last = behind by 2+ intervals
+            mock_dt.now.return_value = datetime(2026, 3, 21, 18, 0, tzinfo=timezone.utc)
+            result = service._compute_catchup_sent_at(cs, first_tick=True)
+
+        assert result is None
+
+    def test_subsequent_tick_advances_gradually(self, scheduler_service_mocked):
+        """On non-first tick, still advances by one interval (PR #354 behavior)."""
+        service = scheduler_service_mocked
+        from datetime import timedelta
+
+        last_sent = datetime(2026, 3, 21, 9, 0, tzinfo=timezone.utc)
+        cs = _make_chat_settings(
+            posting_hours_start=9,
+            posting_hours_end=21,
+            posts_per_day=3,
+            last_post_sent_at=last_sent,
+        )
+
+        with patch("src.services.core.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = datetime(2026, 3, 21, 18, 0, tzinfo=timezone.utc)
+            result = service._compute_catchup_sent_at(cs, first_tick=False)
+
+        assert result == last_sent + timedelta(hours=4)
+
+    def test_first_tick_no_effect_when_on_schedule(self, scheduler_service_mocked):
+        """first_tick=True doesn't change behavior when not behind."""
+        service = scheduler_service_mocked
+        last_sent = datetime(2026, 3, 21, 10, 0, tzinfo=timezone.utc)
+        cs = _make_chat_settings(
+            posting_hours_start=9,
+            posting_hours_end=21,
+            posts_per_day=3,
+            last_post_sent_at=last_sent,
+        )
+
+        with patch("src.services.core.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = datetime(2026, 3, 21, 13, 0, tzinfo=timezone.utc)
+            result = service._compute_catchup_sent_at(cs, first_tick=True)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_process_slot_first_tick_no_override(self, scheduler_service_mocked):
+        """process_slot with first_tick=True passes sent_at_override=None."""
+        service = scheduler_service_mocked
+        last_sent = datetime(2026, 3, 21, 9, 0, tzinfo=timezone.utc)
+        cs = _make_chat_settings(
+            is_paused=False,
+            posting_hours_start=9,
+            posting_hours_end=21,
+            posts_per_day=3,
+            last_post_sent_at=last_sent,
+        )
+        service.settings_service.get_settings.return_value = cs
+        service._select_and_send = AsyncMock(return_value={"posted": True})
+
+        with patch("src.services.core.scheduler.datetime") as mock_dt:
+            # Behind by 2+ intervals
+            mock_dt.now.return_value = datetime(2026, 3, 21, 18, 0, tzinfo=timezone.utc)
+            service.category_mix_repo.get_current_mix_as_dict.return_value = {}
+            await service.process_slot(telegram_chat_id=-100123, first_tick=True)
+
+        call_kwargs = service._select_and_send.call_args.kwargs
+        # None means "use now" — immediate post, not gradual advance
+        assert call_kwargs["sent_at_override"] is None
+
+    @pytest.mark.asyncio
+    async def test_process_slot_second_tick_advances(self, scheduler_service_mocked):
+        """process_slot without first_tick still advances gradually."""
+        service = scheduler_service_mocked
+        from datetime import timedelta
+
+        last_sent = datetime(2026, 3, 21, 9, 0, tzinfo=timezone.utc)
+        cs = _make_chat_settings(
+            is_paused=False,
+            posting_hours_start=9,
+            posting_hours_end=21,
+            posts_per_day=3,
+            last_post_sent_at=last_sent,
+        )
+        service.settings_service.get_settings.return_value = cs
+        service._select_and_send = AsyncMock(return_value={"posted": True})
+
+        with patch("src.services.core.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = datetime(2026, 3, 21, 18, 0, tzinfo=timezone.utc)
+            service.category_mix_repo.get_current_mix_as_dict.return_value = {}
+            await service.process_slot(telegram_chat_id=-100123, first_tick=False)
+
+        call_kwargs = service._select_and_send.call_args.kwargs
+        assert call_kwargs["sent_at_override"] == last_sent + timedelta(hours=4)
+
+    def test_first_tick_no_effect_when_last_sent_none(self, scheduler_service_mocked):
+        """first_tick doesn't matter when last_post_sent_at is None."""
+        service = scheduler_service_mocked
+        cs = _make_chat_settings(last_post_sent_at=None)
+
+        result = service._compute_catchup_sent_at(cs, first_tick=True)
+
+        assert result is None
