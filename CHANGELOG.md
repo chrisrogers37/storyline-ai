@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Crashed background loop never restarts** — `guarded()` now restarts the wrapped coroutine on crash with exponential backoff (1s, 2s, 4s, ... capped at 60s). Caps at 10 restarts per rolling hour to prevent infinite crash loops from burning resources. Backoff and counters reset after 5 minutes of stable operation. A single scheduler exception no longer permanently kills posting. Closes #364.
+- **Health endpoint doesn't check loop liveness** — The worker's `/health` TCP server returned 200 unconditionally, so Railway kept reporting healthy even when critical loops (scheduler, media sync) had crashed. Now calls `get_loop_liveness()` on each request: returns 200 when all loops are alive, 503 with a JSON body listing which loops are stale (>2x expected interval without a heartbeat). Railway will restart the worker when a loop dies. Closes #361.
 - **Google Drive provider has no retry logic** — Added tenacity-based exponential backoff (3 attempts, 1s/2s/4s) to all Drive API calls. Retries on 429/500/502/503/504 and network errors. Respects the `Retry-After` header on 429 responses instead of hardcoding 60s. Download chunk loop enforces a 5-minute timeout. Closes #352.
 - **Worker process restart-cycling on Railway** — The worker service (Telegram bot + scheduler) had no HTTP endpoint, so Railway's health check (`healthcheckPath = "/health"`) timed out and sent SIGTERM every ~8 minutes, producing 0 posts per cycle. Added a minimal stdlib `asyncio` TCP server to `src/main.py` that binds to `PORT` and returns 200 OK. Runs alongside existing tasks in `asyncio.gather()`, zero new dependencies.
 - **Railway health check killing deployments** — Added `/health` endpoint to the web process (`GET /health` → 200, no auth). Configured `railway.toml` with `healthcheckPath = "/health"` and `healthcheckTimeout = 30` so Railway's health checker hits a real endpoint instead of timing out and tearing down the service. Closes #347, #350.
@@ -141,7 +142,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Telegram login widget missing env var fallback** — `/login` now shows a helpful error message when `NEXT_PUBLIC_TELEGRAM_BOT_NAME` is not configured, instead of an infinite loading spinner.
->>>>>>> b35d15f (feat: add SEO optimization — meta tags, sitemap, structured data, OG image (#280))
 
 ### Fixed — Design Issues (#214–#219)
 

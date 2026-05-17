@@ -798,12 +798,12 @@ class TestLoopLiveness:
         assert "scheduler" in loop_heartbeats
         assert isinstance(loop_heartbeats["scheduler"], float)
 
-    def test_unstarted_loop_reported_as_not_alive(self):
-        """Loops that never sent a heartbeat are reported as not started."""
+    def test_unstarted_loop_reported_as_starting_up(self):
+        """Loops that never sent a heartbeat are alive with 'Starting up'."""
         result = get_loop_liveness()
         assert "scheduler" in result
-        assert result["scheduler"]["alive"] is False
-        assert "Not started" in result["scheduler"]["message"]
+        assert result["scheduler"]["alive"] is True
+        assert "Starting up" in result["scheduler"]["message"]
 
     def test_fresh_heartbeat_reported_as_alive(self):
         """A loop with a recent heartbeat is reported as alive."""

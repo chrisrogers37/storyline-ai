@@ -1,12 +1,14 @@
 """Main application entry point - runs scheduler + Telegram bot."""
 
 import asyncio
+import json
 import os
 import signal
 import sys
 from time import time
 
 from src.services.core.loops.guarded import guarded
+from src.services.core.loops.heartbeat import get_loop_liveness
 from src.services.core.loops.lifecycle import (
     log_service_summary,
     session_state,
@@ -19,19 +21,59 @@ from src.services.core.loops.transaction_cleanup_loop import transaction_cleanup
 from src.services.core.loops.media_sync_loop import media_sync_loop
 from src.utils.logger import logger
 
-_HEALTH_RESPONSE = (
-    b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nok"
-)
+STARTUP_GRACE_SECONDS = 120
+
+
+def _build_health_response() -> bytes:
+    """Build an HTTP response based on loop liveness.
+
+    Returns 200 during the startup grace period (loops haven't ticked yet),
+    200 if all loops are alive, 503 with stale loop details otherwise.
+    """
+    # During startup, loops haven't ticked yet — always report healthy.
+    start = session_state.start_time
+    if start and (time() - start) < STARTUP_GRACE_SECONDS:
+        body = json.dumps({"status": "healthy", "grace_period": True})
+        body_bytes = body.encode()
+        return (
+            f"HTTP/1.1 200 OK\r\n"
+            f"Content-Type: application/json\r\n"
+            f"Content-Length: {len(body_bytes)}\r\n"
+            f"\r\n"
+        ).encode() + body_bytes
+
+    liveness = get_loop_liveness()
+    stale = {name: info for name, info in liveness.items() if not info["alive"]}
+
+    if stale:
+        body = json.dumps({"status": "unhealthy", "stale_loops": stale})
+        status_line = "HTTP/1.1 503 Service Unavailable"
+    else:
+        body = json.dumps({"status": "healthy"})
+        status_line = "HTTP/1.1 200 OK"
+
+    body_bytes = body.encode()
+    return (
+        f"{status_line}\r\n"
+        f"Content-Type: application/json\r\n"
+        f"Content-Length: {len(body_bytes)}\r\n"
+        f"\r\n"
+    ).encode() + body_bytes
 
 
 async def _health_check_server():
-    """Minimal HTTP server so Railway's health check gets a 200 on /health."""
+    """Minimal HTTP server for Railway's health check.
+
+    Returns 200 when all background loops are alive, 503 with details
+    about which loops are stale when any loop has missed its heartbeat
+    window (>2x expected interval).
+    """
     port = int(os.environ.get("PORT", 8080))
 
     async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         try:
             await reader.readline()  # consume request line
-            writer.write(_HEALTH_RESPONSE)
+            writer.write(_build_health_response())
             await writer.drain()
         finally:
             writer.close()
