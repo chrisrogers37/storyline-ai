@@ -31,11 +31,14 @@ FAKE_SERVICE_ACCOUNT_INFO = {
 }
 
 
-def _make_http_error(status: int, reason: str = "error") -> HttpError:
+def _make_http_error(
+    status: int, reason: str = "error", headers: dict = None
+) -> HttpError:
     """Create a mock HttpError with the given status code."""
     resp = Mock()
     resp.status = status
     resp.reason = reason
+    resp.get = Mock(side_effect=lambda k, d=None: (headers or {}).get(k, d))
     return HttpError(resp=resp, content=b"error")
 
 
@@ -481,3 +484,108 @@ class TestGoogleDriveProviderBuildFileInfo:
         assert info is not None
         assert info.modified_at is None
         assert info.hash is None
+
+
+# ==================== Retry Logic Tests (#352) ====================
+
+
+@pytest.mark.unit
+class TestGoogleDriveProviderRetry:
+    """Tests for retry logic on transient errors."""
+
+    def test_retries_on_503_then_succeeds(self, provider, mock_drive_service):
+        """Retries on 503 and succeeds on second attempt."""
+        mock_request = mock_drive_service.files().get()
+        mock_request.execute.side_effect = [
+            _make_http_error(503, "Service Unavailable"),
+            {"id": "file1", "name": "test.jpg"},
+        ]
+
+        result = provider._execute_with_retry(mock_request)
+        assert result == {"id": "file1", "name": "test.jpg"}
+        assert mock_request.execute.call_count == 2
+
+    def test_retries_on_429_then_succeeds(self, provider, mock_drive_service):
+        """Retries on 429 and succeeds on second attempt."""
+        mock_request = mock_drive_service.files().get()
+        mock_request.execute.side_effect = [
+            _make_http_error(429, "Rate Limit", headers={"retry-after": "0.1"}),
+            {"id": "file1"},
+        ]
+
+        result = provider._execute_with_retry(mock_request)
+        assert result == {"id": "file1"}
+        assert mock_request.execute.call_count == 2
+
+    def test_raises_after_max_retries(self, provider, mock_drive_service):
+        """Raises after exhausting retries."""
+        mock_request = mock_drive_service.files().get()
+        mock_request.execute.side_effect = _make_http_error(503, "Service Unavailable")
+
+        with pytest.raises(HttpError):
+            provider._execute_with_retry(mock_request)
+        assert mock_request.execute.call_count == 3
+
+    def test_no_retry_on_404(self, provider, mock_drive_service):
+        """Does not retry on 404 (not transient)."""
+        mock_request = mock_drive_service.files().get()
+        mock_request.execute.side_effect = _make_http_error(404, "Not Found")
+
+        with pytest.raises(HttpError):
+            provider._execute_with_retry(mock_request)
+        assert mock_request.execute.call_count == 1
+
+    def test_no_retry_on_401(self, provider, mock_drive_service):
+        """Does not retry on 401 (auth error, not transient)."""
+        mock_request = mock_drive_service.files().get()
+        mock_request.execute.side_effect = _make_http_error(401, "Unauthorized")
+
+        with pytest.raises(HttpError):
+            provider._execute_with_retry(mock_request)
+        assert mock_request.execute.call_count == 1
+
+    def test_download_chunk_retries_on_transient(self, provider):
+        """Download chunk retry works on transient errors."""
+        mock_downloader = Mock()
+        mock_downloader.next_chunk.side_effect = [
+            _make_http_error(500, "Internal Server Error"),
+            (Mock(progress=lambda: 1.0), True),
+        ]
+
+        status, done = provider._download_chunk_with_retry(mock_downloader)
+        assert done is True
+        assert mock_downloader.next_chunk.call_count == 2
+
+    @patch(
+        "src.services.media_sources.google_drive_provider._DOWNLOAD_TIMEOUT_SECONDS", 0
+    )
+    def test_download_file_timeout(self, provider, mock_drive_service):
+        """Download raises TimeoutError when chunk loop exceeds timeout."""
+        mock_downloader = Mock()
+        mock_downloader.next_chunk.return_value = (Mock(progress=lambda: 0.5), False)
+
+        with patch(
+            "src.services.media_sources.google_drive_provider.MediaIoBaseDownload",
+            return_value=mock_downloader,
+        ):
+            with pytest.raises(TimeoutError, match="timed out"):
+                provider.download_file("file123")
+
+    def test_429_respects_retry_after_header(self, provider, mock_drive_service):
+        """Verifies that 429 with Retry-After uses the header value as wait time."""
+        from src.services.media_sources.google_drive_provider import _wait_for_retry
+
+        mock_request = mock_drive_service.files().get()
+        error_429 = _make_http_error(429, "Rate Limit", headers={"retry-after": "5"})
+        mock_request.execute.side_effect = [error_429, {"id": "file1"}]
+
+        # Verify the wait function extracts Retry-After
+        mock_retry_state = Mock()
+        mock_retry_state.outcome.exception.return_value = error_429
+        mock_retry_state.attempt_number = 1
+        wait_time = _wait_for_retry(mock_retry_state)
+        assert wait_time == 5.0
+
+        # Verify the call succeeds after retry
+        result = provider._execute_with_retry(mock_request)
+        assert result == {"id": "file1"}
