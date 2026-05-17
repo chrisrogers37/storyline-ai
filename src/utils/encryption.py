@@ -114,12 +114,10 @@ class TokenEncryption:
 
     def rotate(self, ciphertext: str) -> str:
         """
-        Re-encrypt a token with the current primary key.
+        Re-encrypts with the primary key unconditionally.
 
-        Decrypts with whichever key works, then re-encrypts with the
-        first key in ENCRYPTION_KEYS. Returns the original ciphertext
-        unchanged if it was already encrypted with the primary key
-        (MultiFernet.rotate handles this).
+        Output ciphertext will differ from input due to fresh IV and
+        timestamp.
 
         Args:
             ciphertext: The encrypted token to re-encrypt

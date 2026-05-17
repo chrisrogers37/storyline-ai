@@ -162,34 +162,40 @@ def rotate_keys():
     console.print(f"Found {len(tokens)} token(s) to rotate.")
 
     rotated = 0
-    skipped = 0
     failed = 0
 
-    for token in tokens:
-        try:
-            new_value = encryption.rotate(token.token_value)
-            if new_value != token.token_value:
-                token.token_value = new_value
+    try:
+        for token in tokens:
+            try:
+                token.token_value = encryption.rotate(token.token_value)
                 rotated += 1
-            else:
-                skipped += 1
-        except ValueError as e:
-            console.print(
-                f"[red]Failed to rotate {token.service_name}/{token.token_type} "
-                f"(id={token.id}): {e}[/red]"
-            )
-            failed += 1
+            except ValueError as e:
+                console.print(
+                    f"[red]Failed to rotate {token.service_name}/{token.token_type} "
+                    f"(id={token.id}): {e}[/red]"
+                )
+                failed += 1
 
-    if rotated > 0:
-        token_repo.db.commit()
+        if rotated > 0:
+            token_repo.db.commit()
+    except Exception:
+        console.print(
+            "\n[red]WARNING: rotation incomplete. Keep all keys in "
+            "ENCRYPTION_KEYS until rotation succeeds.[/red]"
+        )
+        token_repo.db.rollback()
+        token_repo.close()
+        raise
 
     token_repo.close()
 
     console.print(f"\n[green]Rotated: {rotated}[/green]")
-    if skipped:
-        console.print(f"[dim]Already on primary key: {skipped}[/dim]")
     if failed:
         console.print(f"[red]Failed: {failed}[/red]")
+        console.print(
+            "\n[red]WARNING: rotation incomplete. Keep all keys in "
+            "ENCRYPTION_KEYS until rotation succeeds.[/red]"
+        )
 
     if failed == 0 and rotated > 0:
         console.print(
