@@ -1,7 +1,7 @@
 """Token repository - CRUD operations for API tokens."""
 
 from typing import Optional, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from src.repositories.base_repository import BaseRepository
 from src.models.api_token import ApiToken
@@ -20,7 +20,7 @@ class TokenRepository(BaseRepository):
         instagram_account_id: Optional[str] = None,
     ) -> Optional[ApiToken]:
         """
-        Get token by service name, type, and optionally account.
+        Get active (non-revoked) token by service name, type, and optionally account.
 
         Args:
             service_name: Service identifier (e.g., 'instagram')
@@ -33,6 +33,7 @@ class TokenRepository(BaseRepository):
         query = self.db.query(ApiToken).filter(
             ApiToken.service_name == service_name,
             ApiToken.token_type == token_type,
+            ApiToken.revoked_at.is_(None),
         )
 
         # Filter by account if specified
@@ -52,7 +53,7 @@ class TokenRepository(BaseRepository):
         token_type: str = "access_token",
     ) -> Optional[ApiToken]:
         """
-        Get Instagram token for a specific account.
+        Get active Instagram token for a specific account.
 
         Convenience method for multi-account Instagram support.
 
@@ -69,6 +70,7 @@ class TokenRepository(BaseRepository):
                 ApiToken.service_name == "instagram",
                 ApiToken.token_type == token_type,
                 ApiToken.instagram_account_id == instagram_account_id,
+                ApiToken.revoked_at.is_(None),
             )
             .first()
         )
@@ -79,7 +81,7 @@ class TokenRepository(BaseRepository):
         self, token_type: str = "access_token"
     ) -> List[ApiToken]:
         """
-        Get all Instagram tokens (for token refresh iteration).
+        Get all active Instagram tokens (for token refresh iteration).
 
         Args:
             token_type: Token type (default: 'access_token')
@@ -92,6 +94,7 @@ class TokenRepository(BaseRepository):
             .filter(
                 ApiToken.service_name == "instagram",
                 ApiToken.token_type == token_type,
+                ApiToken.revoked_at.is_(None),
             )
             .all()
         )
@@ -113,7 +116,9 @@ class TokenRepository(BaseRepository):
         Create or update a token (UPSERT pattern).
 
         If a token exists for the service/type/account combination, it's updated.
-        Otherwise, a new token is created.
+        Otherwise, a new token is created. Includes revoked tokens in the lookup
+        to avoid unique constraint violations on re-issue — revoked_at is cleared
+        when a token is re-issued.
 
         Args:
             service_name: Service identifier
@@ -131,14 +136,25 @@ class TokenRepository(BaseRepository):
         if issued_at is None:
             issued_at = datetime.utcnow()
 
-        existing = self.get_token(service_name, token_type, instagram_account_id)
+        # Query WITHOUT revoked_at filter — must find the row even if revoked,
+        # otherwise INSERT hits the unique constraint.
+        query = self.db.query(ApiToken).filter(
+            ApiToken.service_name == service_name,
+            ApiToken.token_type == token_type,
+        )
+        if instagram_account_id:
+            query = query.filter(ApiToken.instagram_account_id == instagram_account_id)
+        else:
+            query = query.filter(ApiToken.instagram_account_id.is_(None))
+        existing = query.first()
 
         if existing:
-            # Update existing token
+            # Update existing token (clears revocation on re-issue)
             existing.token_value = token_value
             existing.issued_at = issued_at
             existing.expires_at = expires_at
             existing.last_refreshed_at = datetime.utcnow()
+            existing.revoked_at = None
             if scopes is not None:
                 existing.scopes = scopes
             if metadata is not None:
@@ -191,7 +207,7 @@ class TokenRepository(BaseRepository):
         token_type: str,
         chat_settings_id: str,
     ) -> Optional[ApiToken]:
-        """Get token scoped to a specific tenant (chat).
+        """Get active (non-revoked) token scoped to a specific tenant (chat).
 
         Args:
             service_name: Service identifier (e.g., 'google_drive')
@@ -207,6 +223,7 @@ class TokenRepository(BaseRepository):
                 ApiToken.service_name == service_name,
                 ApiToken.token_type == token_type,
                 ApiToken.chat_settings_id == chat_settings_id,
+                ApiToken.revoked_at.is_(None),
             )
             .first()
         )
@@ -226,6 +243,9 @@ class TokenRepository(BaseRepository):
     ) -> ApiToken:
         """Create or update a token scoped to a specific tenant.
 
+        Includes revoked tokens in the lookup to avoid unique constraint
+        violations on re-issue — revoked_at is cleared when updated.
+
         Args:
             service_name: Service identifier
             token_type: Token type
@@ -242,13 +262,23 @@ class TokenRepository(BaseRepository):
         if issued_at is None:
             issued_at = datetime.utcnow()
 
-        existing = self.get_token_for_chat(service_name, token_type, chat_settings_id)
+        # Query WITHOUT revoked_at filter for UPSERT safety
+        existing = (
+            self.db.query(ApiToken)
+            .filter(
+                ApiToken.service_name == service_name,
+                ApiToken.token_type == token_type,
+                ApiToken.chat_settings_id == chat_settings_id,
+            )
+            .first()
+        )
 
         if existing:
             existing.token_value = token_value
             existing.issued_at = issued_at
             existing.expires_at = expires_at
             existing.last_refreshed_at = datetime.utcnow()
+            existing.revoked_at = None
             if scopes is not None:
                 existing.scopes = scopes
             if metadata is not None:
@@ -293,9 +323,45 @@ class TokenRepository(BaseRepository):
         self.db.commit()
         return count
 
+    def revoke_tokens_for_service(
+        self,
+        service_name: str,
+        instagram_account_id: Optional[str] = None,
+        chat_settings_id: Optional[str] = None,
+    ) -> List[ApiToken]:
+        """Set revoked_at on all active tokens for a service.
+
+        Returns the revoked tokens (with token_value still populated)
+        so callers can call provider revoke APIs before the values
+        become inaccessible.
+
+        Args:
+            service_name: Service identifier
+            instagram_account_id: Scope to a specific Instagram account
+            chat_settings_id: Scope to a specific tenant
+
+        Returns:
+            List of tokens that were revoked
+        """
+        query = self.db.query(ApiToken).filter(
+            ApiToken.service_name == service_name,
+            ApiToken.revoked_at.is_(None),
+        )
+        if instagram_account_id:
+            query = query.filter(ApiToken.instagram_account_id == instagram_account_id)
+        if chat_settings_id:
+            query = query.filter(ApiToken.chat_settings_id == chat_settings_id)
+
+        tokens = query.all()
+        now = datetime.now(timezone.utc)
+        for token in tokens:
+            token.revoked_at = now
+        self.db.commit()
+        return tokens
+
     def get_expiring_tokens(self, hours_until_expiry: int = 168) -> List[ApiToken]:
         """
-        Get all tokens expiring within the specified hours.
+        Get all active tokens expiring within the specified hours.
 
         Default is 168 hours (7 days), used to schedule refresh before expiry.
 
@@ -312,6 +378,7 @@ class TokenRepository(BaseRepository):
                 ApiToken.expires_at.isnot(None),
                 ApiToken.expires_at <= cutoff,
                 ApiToken.expires_at > datetime.utcnow(),  # Not already expired
+                ApiToken.revoked_at.is_(None),
             )
             .order_by(ApiToken.expires_at.asc())
             .all()
