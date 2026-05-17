@@ -238,6 +238,8 @@ class HistoryDashboardQueries:
         import random
         from datetime import datetime, timedelta, timezone
 
+        from src.utils.datetime_utils import ensure_utc
+
         with self.service.track_execution(
             "get_schedule_preview",
             input_params={"telegram_chat_id": telegram_chat_id, "slots": slots},
@@ -257,9 +259,7 @@ class HistoryDashboardQueries:
             interval_seconds = (window_hours * 3600) / ppd if ppd else 3600
 
             now = datetime.now(timezone.utc)
-            last = chat_settings.last_post_sent_at
-            if last and last.tzinfo is None:
-                last = last.replace(tzinfo=timezone.utc)
+            last = ensure_utc(chat_settings.last_post_sent_at)
             next_time = last + timedelta(seconds=interval_seconds) if last else now
 
             configured = self.service.category_mix_repo.get_current_mix_as_dict(
