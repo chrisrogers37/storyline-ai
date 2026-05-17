@@ -6,7 +6,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
+from src.api.rate_limit import limiter
 from src.api.routes.oauth import router as oauth_router
 from src.api.routes.onboarding import router as onboarding_router
 from src.config.settings import settings
@@ -16,6 +20,11 @@ app = FastAPI(
     description="OAuth and API endpoints for Storydump",
     version="0.1.0",
 )
+
+# Rate limiting — 30 req/min per IP global default (see src/api/rate_limit.py)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 # CORS middleware — restrict to our own domain in production
 _cors_origins = (

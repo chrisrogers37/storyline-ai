@@ -1,9 +1,10 @@
 """Settings and schedule action endpoints for onboarding Mini App."""
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy.exc import OperationalError
 
+from src.api.rate_limit import limiter
 from src.config.settings import settings
 
 from src.models.instagram_account import AUTH_METHOD_MANUAL
@@ -33,9 +34,12 @@ router = APIRouter(tags=["onboarding"])
 
 
 @router.post("/toggle-setting")
-async def onboarding_toggle_setting(request: ToggleSettingRequest) -> dict:
+@limiter.limit("10/minute")
+async def onboarding_toggle_setting(
+    request: Request, body: ToggleSettingRequest
+) -> dict:
     """Toggle a boolean setting (is_paused, dry_run_mode) from dashboard."""
-    _validate_request(request.init_data, request.chat_id)
+    _validate_request(body.init_data, body.chat_id)
 
     allowed_settings = {
         "is_paused",
@@ -46,27 +50,28 @@ async def onboarding_toggle_setting(request: ToggleSettingRequest) -> dict:
         "enable_ai_captions",
         "send_lifecycle_notifications",
     }
-    if request.setting_name not in allowed_settings:
+    if body.setting_name not in allowed_settings:
         raise HTTPException(
             status_code=400,
-            detail=f"Setting '{request.setting_name}' cannot be toggled from dashboard. "
+            detail=f"Setting '{body.setting_name}' cannot be toggled from dashboard. "
             f"Allowed: {', '.join(sorted(allowed_settings))}",
         )
 
     with SettingsService() as settings_service, service_error_handler():
-        new_value = settings_service.toggle_setting(
-            request.chat_id, request.setting_name
-        )
+        new_value = settings_service.toggle_setting(body.chat_id, body.setting_name)
         return {
-            "setting_name": request.setting_name,
+            "setting_name": body.setting_name,
             "new_value": new_value,
         }
 
 
 @router.post("/update-setting")
-async def onboarding_update_setting(request: UpdateSettingRequest) -> dict:
+@limiter.limit("10/minute")
+async def onboarding_update_setting(
+    request: Request, body: UpdateSettingRequest
+) -> dict:
     """Update a numeric setting (posts_per_day, posting hours) from dashboard."""
-    _validate_request(request.init_data, request.chat_id)
+    _validate_request(body.init_data, body.chat_id)
 
     allowed_settings = {
         "posts_per_day",
@@ -75,26 +80,25 @@ async def onboarding_update_setting(request: UpdateSettingRequest) -> dict:
         "repost_ttl_days",
         "skip_ttl_days",
     }
-    if request.setting_name not in allowed_settings:
+    if body.setting_name not in allowed_settings:
         raise HTTPException(
             status_code=400,
-            detail=f"Setting '{request.setting_name}' cannot be updated from dashboard. "
+            detail=f"Setting '{body.setting_name}' cannot be updated from dashboard. "
             f"Allowed: {', '.join(sorted(allowed_settings))}",
         )
 
     with SettingsService() as settings_service, service_error_handler():
-        settings_service.update_setting(
-            request.chat_id, request.setting_name, request.value
-        )
+        settings_service.update_setting(body.chat_id, body.setting_name, body.value)
         return {
-            "setting_name": request.setting_name,
-            "new_value": request.value,
+            "setting_name": body.setting_name,
+            "new_value": body.value,
         }
 
 
 @router.post("/update-string-setting")
+@limiter.limit("10/minute")
 async def onboarding_update_string_setting(
-    request: UpdateStringSettingRequest,
+    request: Request, body: UpdateStringSettingRequest
 ) -> dict:
     """Update a string-typed per-chat setting (e.g. caption_style).
 
@@ -102,34 +106,32 @@ async def onboarding_update_string_setting(
     has to dispatch on the value type. Each setting has its own allowed
     value list to keep input validation tight at the API boundary.
     """
-    _validate_request(request.init_data, request.chat_id)
+    _validate_request(body.init_data, body.chat_id)
 
     allowed_values = {
         "caption_style": {"enhanced", "simple"},
     }
-    if request.setting_name not in allowed_values:
+    if body.setting_name not in allowed_values:
         raise HTTPException(
             status_code=400,
-            detail=f"Setting '{request.setting_name}' cannot be updated from dashboard. "
+            detail=f"Setting '{body.setting_name}' cannot be updated from dashboard. "
             f"Allowed: {', '.join(sorted(allowed_values))}",
         )
-    if request.value not in allowed_values[request.setting_name]:
+    if body.value not in allowed_values[body.setting_name]:
         raise HTTPException(
             status_code=400,
             detail=(
-                f"Invalid value for {request.setting_name}: "
-                f"{request.value!r}. Allowed: "
-                f"{', '.join(sorted(allowed_values[request.setting_name]))}"
+                f"Invalid value for {body.setting_name}: "
+                f"{body.value!r}. Allowed: "
+                f"{', '.join(sorted(allowed_values[body.setting_name]))}"
             ),
         )
 
     with SettingsService() as settings_service, service_error_handler():
-        settings_service.update_setting(
-            request.chat_id, request.setting_name, request.value
-        )
+        settings_service.update_setting(body.chat_id, body.setting_name, body.value)
         return {
-            "setting_name": request.setting_name,
-            "new_value": request.value,
+            "setting_name": body.setting_name,
+            "new_value": body.value,
         }
 
 
@@ -181,17 +183,18 @@ async def onboarding_disconnect_gdrive(request: InitRequest) -> dict:
 
 
 @router.post("/sync-media")
-async def onboarding_sync_media(request: InitRequest) -> dict:
+@limiter.limit("5/minute")
+async def onboarding_sync_media(request: Request, body: InitRequest) -> dict:
     """Trigger media sync from the dashboard.
 
     Calls MediaSyncService.sync() with the chat's per-tenant config.
     Returns sync result counts (new, updated, deactivated, etc).
     """
-    _validate_request(request.init_data, request.chat_id)
+    _validate_request(body.init_data, body.chat_id)
 
     with SettingsService() as settings_service:
         source_type, source_root = settings_service.get_media_source_config(
-            request.chat_id
+            body.chat_id
         )
 
     if not source_root:
@@ -206,7 +209,7 @@ async def onboarding_sync_media(request: InitRequest) -> dict:
                 source_type=source_type,
                 source_root=source_root,
                 triggered_by="dashboard",
-                telegram_chat_id=request.chat_id,
+                telegram_chat_id=body.chat_id,
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
