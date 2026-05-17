@@ -204,20 +204,20 @@ class TestExchangeAndStore:
                 service, "_exchange_for_long_lived_token", new_callable=AsyncMock
             ) as mock_long,
             patch.object(
-                service, "_get_instagram_account_info", new_callable=AsyncMock
+                service, "_get_instagram_accounts_info", new_callable=AsyncMock
             ) as mock_info,
         ):
             mock_code.return_value = "short_token"
             mock_long.return_value = ("long_token", 5184000)
-            mock_info.return_value = {
-                "id": "17841234567890",
-                "username": "testuser",
-            }
+            mock_info.return_value = [
+                {"id": "17841234567890", "username": "testuser"},
+            ]
 
             result = await service.exchange_and_store("auth_code", -100123)
 
         assert result["username"] == "testuser"
         assert result["expires_in_days"] == 60
+        assert result["account_count"] == 1
         service.account_service.add_account.assert_called_once()
         call_kwargs = service.account_service.add_account.call_args[1]
         assert call_kwargs["display_name"] == "@testuser"
@@ -240,21 +240,104 @@ class TestExchangeAndStore:
                 service, "_exchange_for_long_lived_token", new_callable=AsyncMock
             ) as mock_long,
             patch.object(
-                service, "_get_instagram_account_info", new_callable=AsyncMock
+                service, "_get_instagram_accounts_info", new_callable=AsyncMock
             ) as mock_info,
         ):
             mock_code.return_value = "short_token"
             mock_long.return_value = ("long_token", 5184000)
-            mock_info.return_value = {
-                "id": "17841234567890",
-                "username": "testuser",
-            }
+            mock_info.return_value = [
+                {"id": "17841234567890", "username": "testuser"},
+            ]
 
             result = await service.exchange_and_store("auth_code", -100123)
 
         service.account_service.update_account_token.assert_called_once()
         service.account_service.add_account.assert_not_called()
         assert result["username"] == "testuser"
+        assert result["account_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_exchange_multiple_accounts_stores_all_first_active(self, service):
+        """When several IG accounts are linked across FB Pages, all are stored
+        and only the first is set active for the chat (#331)."""
+        service.account_service.get_account_by_instagram_id.return_value = None
+        service.account_service.add_account.return_value = Mock()
+
+        with (
+            patch.object(
+                service, "_exchange_code_for_token", new_callable=AsyncMock
+            ) as mock_code,
+            patch.object(
+                service, "_exchange_for_long_lived_token", new_callable=AsyncMock
+            ) as mock_long,
+            patch.object(
+                service, "_get_instagram_accounts_info", new_callable=AsyncMock
+            ) as mock_info,
+        ):
+            mock_code.return_value = "short_token"
+            mock_long.return_value = ("long_token", 5184000)
+            mock_info.return_value = [
+                {"id": "17841000000001", "username": "first"},
+                {"id": "17841000000002", "username": "second"},
+                {"id": "17841000000003", "username": "third"},
+            ]
+
+            result = await service.exchange_and_store("auth_code", -100123)
+
+        assert result["username"] == "first"
+        assert result["account_id"] == "17841000000001"
+        assert result["account_count"] == 3
+        assert service.account_service.add_account.call_count == 3
+
+        calls = service.account_service.add_account.call_args_list
+        assert calls[0][1]["set_as_active"] is True
+        assert calls[0][1]["telegram_chat_id"] == -100123
+        for call in calls[1:]:
+            assert call[1]["set_as_active"] is False
+            assert call[1]["telegram_chat_id"] is None
+
+    @pytest.mark.asyncio
+    async def test_exchange_multiple_accounts_mixed_existing_and_new(self, service):
+        """Existing IGs get update_account_token; new ones get add_account."""
+        existing = Mock()
+
+        def lookup(ig_id):
+            return existing if ig_id == "17841000000002" else None
+
+        service.account_service.get_account_by_instagram_id.side_effect = lookup
+
+        with (
+            patch.object(
+                service, "_exchange_code_for_token", new_callable=AsyncMock
+            ) as mock_code,
+            patch.object(
+                service, "_exchange_for_long_lived_token", new_callable=AsyncMock
+            ) as mock_long,
+            patch.object(
+                service, "_get_instagram_accounts_info", new_callable=AsyncMock
+            ) as mock_info,
+        ):
+            mock_code.return_value = "short_token"
+            mock_long.return_value = ("long_token", 5184000)
+            mock_info.return_value = [
+                {"id": "17841000000001", "username": "first_new"},
+                {"id": "17841000000002", "username": "second_existing"},
+            ]
+
+            await service.exchange_and_store("auth_code", -100123)
+
+        service.account_service.add_account.assert_called_once()
+        assert (
+            service.account_service.add_account.call_args[1]["instagram_username"]
+            == "first_new"
+        )
+        service.account_service.update_account_token.assert_called_once()
+        assert (
+            service.account_service.update_account_token.call_args[1][
+                "instagram_username"
+            ]
+            == "second_existing"
+        )
 
     @pytest.mark.asyncio
     async def test_exchange_no_ig_account_raises(self, service):
@@ -267,12 +350,12 @@ class TestExchangeAndStore:
                 service, "_exchange_for_long_lived_token", new_callable=AsyncMock
             ) as mock_long,
             patch.object(
-                service, "_get_instagram_account_info", new_callable=AsyncMock
+                service, "_get_instagram_accounts_info", new_callable=AsyncMock
             ) as mock_info,
         ):
             mock_code.return_value = "short_token"
             mock_long.return_value = ("long_token", 5184000)
-            mock_info.return_value = None
+            mock_info.return_value = []
 
             with pytest.raises(ValueError, match="Could not find"):
                 await service.exchange_and_store("auth_code", -100123)
@@ -291,15 +374,14 @@ class TestExchangeAndStore:
                 service, "_exchange_for_long_lived_token", new_callable=AsyncMock
             ) as mock_long,
             patch.object(
-                service, "_get_instagram_account_info", new_callable=AsyncMock
+                service, "_get_instagram_accounts_info", new_callable=AsyncMock
             ) as mock_info,
         ):
             mock_code.return_value = "short_token"
             mock_long.return_value = ("long_token", 5184000)
-            mock_info.return_value = {
-                "id": "12345",
-                "username": "testuser",
-            }
+            mock_info.return_value = [
+                {"id": "12345", "username": "testuser"},
+            ]
 
             await service.exchange_and_store("code", -100123)
 
@@ -307,6 +389,7 @@ class TestExchangeAndStore:
         summary = service.set_result_summary.call_args[0][1]
         assert summary["username"] == "testuser"
         assert summary["expires_in_days"] == 60
+        assert summary["account_count"] == 1
 
 
 class TestNotifyTelegram:

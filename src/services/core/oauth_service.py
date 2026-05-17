@@ -143,80 +143,92 @@ class OAuthService(BaseService):
         Flow:
         1. Exchange auth code -> short-lived token
         2. Exchange short-lived -> long-lived token (60 days)
-        3. Fetch Instagram Business Account ID and username
-        4. Create or update the InstagramAccount + ApiToken records
-        5. Set as active account for the originating chat
+        3. Fetch all Instagram Business Accounts linked to the user's FB Pages
+        4. Create or update each InstagramAccount + ApiToken record (one row per IG)
+        5. The first detected account becomes the active account for this chat;
+           additional accounts are stored as inactive and can be switched to
+           from Settings → Accounts.
 
         Args:
             auth_code: Authorization code from Meta callback
-            telegram_chat_id: Chat to associate the account with
+            telegram_chat_id: Chat to associate the active account with
 
         Returns:
-            dict with username, account_id, expires_in_days
+            dict with active_username, active_account_id, expires_in_days,
+            account_count (how many accounts were ingested).
 
         Raises:
-            ValueError: If exchange fails
+            ValueError: If exchange fails or no Instagram Business Account is
+                linked to any of the user's Facebook Pages.
         """
         with self.track_execution(
             method_name="exchange_and_store",
             triggered_by="user",
             input_params={"chat_id": telegram_chat_id},
         ) as run_id:
-            # Step 1: Exchange code for short-lived token
             short_token = await self._exchange_code_for_token(auth_code)
-
-            # Step 2: Exchange for long-lived token
             long_token, expires_in = await self._exchange_for_long_lived_token(
                 short_token
             )
 
-            # Step 3: Fetch Instagram account info
-            account_info = await self._get_instagram_account_info(long_token)
-
-            if not account_info:
+            accounts_info = await self._get_instagram_accounts_info(long_token)
+            if not accounts_info:
                 raise ValueError(
                     "Could not find an Instagram Business Account "
-                    "linked to your Facebook Page. "
+                    "linked to any of your Facebook Pages. "
                     "Make sure your Instagram account is a Business "
                     "or Creator account linked to a Facebook Page."
                 )
 
-            # Step 4: Create or update account
-            ig_account_id = account_info["id"]
-            ig_username = account_info["username"]
             expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+            active_account = accounts_info[0]
 
-            existing = self.account_service.get_account_by_instagram_id(ig_account_id)
+            for idx, info in enumerate(accounts_info):
+                ig_account_id = info["id"]
+                ig_username = info["username"]
+                # First detected account becomes active to preserve the
+                # single-account behavior; the rest land as inactive.
+                set_active = idx == 0
+                existing = self.account_service.get_account_by_instagram_id(
+                    ig_account_id
+                )
 
-            if existing:
-                self.account_service.update_account_token(
-                    instagram_account_id=ig_account_id,
-                    access_token=long_token,
-                    instagram_username=ig_username,
-                    token_expires_at=expires_at,
-                    set_as_active=True,
-                    telegram_chat_id=telegram_chat_id,
-                    auth_method=AUTH_METHOD_OAUTH,
-                )
-                logger.info(f"OAuth: Updated token for existing account @{ig_username}")
-            else:
-                display_name = f"@{ig_username}" if ig_username else ig_account_id
-                self.account_service.add_account(
-                    display_name=display_name,
-                    instagram_account_id=ig_account_id,
-                    instagram_username=ig_username,
-                    access_token=long_token,
-                    token_expires_at=expires_at,
-                    set_as_active=True,
-                    telegram_chat_id=telegram_chat_id,
-                    auth_method=AUTH_METHOD_OAUTH,
-                )
-                logger.info(f"OAuth: Created new account @{ig_username}")
+                if existing:
+                    self.account_service.update_account_token(
+                        instagram_account_id=ig_account_id,
+                        access_token=long_token,
+                        instagram_username=ig_username,
+                        token_expires_at=expires_at,
+                        set_as_active=set_active,
+                        telegram_chat_id=telegram_chat_id if set_active else None,
+                        auth_method=AUTH_METHOD_OAUTH,
+                    )
+                    logger.info(
+                        f"OAuth: Updated token for existing account @{ig_username} "
+                        f"(active={set_active})"
+                    )
+                else:
+                    display_name = f"@{ig_username}" if ig_username else ig_account_id
+                    self.account_service.add_account(
+                        display_name=display_name,
+                        instagram_account_id=ig_account_id,
+                        instagram_username=ig_username,
+                        access_token=long_token,
+                        token_expires_at=expires_at,
+                        set_as_active=set_active,
+                        telegram_chat_id=telegram_chat_id if set_active else None,
+                        auth_method=AUTH_METHOD_OAUTH,
+                    )
+                    logger.info(
+                        f"OAuth: Created new account @{ig_username} "
+                        f"(active={set_active})"
+                    )
 
             result = {
-                "username": ig_username or "unknown",
-                "account_id": ig_account_id,
+                "username": active_account["username"] or "unknown",
+                "account_id": active_account["id"],
                 "expires_in_days": expires_in // 86400,
+                "account_count": len(accounts_info),
             }
 
             self.set_result_summary(run_id, result)
@@ -283,17 +295,18 @@ class OAuthService(BaseService):
                 data.get("expires_in", 5184000),  # Default 60 days
             )
 
-    async def _get_instagram_account_info(self, token: str) -> Optional[dict]:
+    async def _get_instagram_accounts_info(self, token: str) -> list[dict]:
         """
-        Fetch the Instagram Business Account ID and username.
+        Fetch all Instagram Business Accounts linked to the user's FB Pages.
 
-        Traverses: token -> Facebook Pages -> Instagram Business Account.
+        Traverses: token -> Facebook Pages -> Instagram Business Account (per page).
+        Pages without a linked IG account are skipped.
 
         Returns:
-            dict with 'id' and 'username', or None if not found
+            list of dicts with 'id' and 'username' — possibly empty if the user
+            has no Pages or no Pages with linked Instagram Business Accounts.
         """
         async with httpx.AsyncClient() as client:
-            # Get Facebook Pages
             pages_resp = await client.get(
                 f"{settings.meta_graph_base}/me/accounts",
                 params={"access_token": token},
@@ -302,48 +315,58 @@ class OAuthService(BaseService):
 
             if pages_resp.status_code != 200:
                 logger.error(f"Failed to fetch Facebook Pages: {pages_resp.text}")
-                return None
+                return []
 
             pages = pages_resp.json().get("data", [])
             if not pages:
                 logger.warning("No Facebook Pages found for this token")
-                return None
+                return []
 
-            # Get Instagram account linked to the first page
-            page_id = pages[0]["id"]
-            ig_resp = await client.get(
-                f"{settings.meta_graph_base}/{page_id}",
-                params={
-                    "fields": "instagram_business_account",
-                    "access_token": token,
-                },
-                timeout=30.0,
-            )
+            accounts: list[dict] = []
+            seen_ig_ids: set[str] = set()
 
-            if ig_resp.status_code != 200:
-                return None
+            for page in pages:
+                page_id = page.get("id")
+                if not page_id:
+                    continue
 
-            ig_account = ig_resp.json().get("instagram_business_account")
-            if not ig_account:
-                return None
+                ig_resp = await client.get(
+                    f"{settings.meta_graph_base}/{page_id}",
+                    params={
+                        "fields": "instagram_business_account",
+                        "access_token": token,
+                    },
+                    timeout=30.0,
+                )
+                if ig_resp.status_code != 200:
+                    continue
 
-            ig_account_id = ig_account["id"]
+                ig_account = ig_resp.json().get("instagram_business_account")
+                if not ig_account:
+                    continue
 
-            # Get username
-            username_resp = await client.get(
-                f"{settings.meta_graph_base}/{ig_account_id}",
-                params={
-                    "fields": "username",
-                    "access_token": token,
-                },
-                timeout=30.0,
-            )
+                ig_account_id = ig_account["id"]
+                # Multiple Pages can link to the same IG Business Account; dedupe.
+                if ig_account_id in seen_ig_ids:
+                    continue
+                seen_ig_ids.add(ig_account_id)
 
-            username = "unknown"
-            if username_resp.status_code == 200:
-                username = username_resp.json().get("username", "unknown")
+                username_resp = await client.get(
+                    f"{settings.meta_graph_base}/{ig_account_id}",
+                    params={
+                        "fields": "username",
+                        "access_token": token,
+                    },
+                    timeout=30.0,
+                )
 
-            return {"id": ig_account_id, "username": username}
+                username = "unknown"
+                if username_resp.status_code == 200:
+                    username = username_resp.json().get("username", "unknown")
+
+                accounts.append({"id": ig_account_id, "username": username})
+
+            return accounts
 
     async def notify_telegram(
         self, chat_id: int, message: str, success: bool = True
