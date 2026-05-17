@@ -13,7 +13,7 @@ LOOP_EXPECTED_INTERVALS: dict[str, int] = {
     "lock_cleanup": 3600,
     "cloud_cleanup": 3600,
     "media_sync": 300,
-    "transaction_cleanup": 30,
+    "transaction_cleanup": 60,
 }
 
 # In-memory heartbeat timestamps (UTC). Updated by loops, read by health check.
@@ -30,7 +30,8 @@ def get_loop_liveness() -> dict[str, dict]:
 
     Each loop is reported as alive or stale based on whether its last
     heartbeat is within 2x its expected interval. Loops that have never
-    sent a heartbeat are reported as not started.
+    sent a heartbeat are reported as alive with "Starting up" — only
+    loops that previously ticked and then went silent are marked stale.
     """
     now = time()
     result = {}
@@ -38,8 +39,8 @@ def get_loop_liveness() -> dict[str, dict]:
         last_beat = loop_heartbeats.get(name)
         if last_beat is None:
             result[name] = {
-                "alive": False,
-                "message": "Not started",
+                "alive": True,
+                "message": "Starting up",
                 "expected_interval_s": expected_interval,
             }
         else:

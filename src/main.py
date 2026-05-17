@@ -21,12 +21,27 @@ from src.services.core.loops.transaction_cleanup_loop import transaction_cleanup
 from src.services.core.loops.media_sync_loop import media_sync_loop
 from src.utils.logger import logger
 
+STARTUP_GRACE_SECONDS = 120
+
 
 def _build_health_response() -> bytes:
     """Build an HTTP response based on loop liveness.
 
-    Returns 200 if all loops are alive, 503 with stale loop details otherwise.
+    Returns 200 during the startup grace period (loops haven't ticked yet),
+    200 if all loops are alive, 503 with stale loop details otherwise.
     """
+    # During startup, loops haven't ticked yet — always report healthy.
+    start = session_state.start_time
+    if start and (time() - start) < STARTUP_GRACE_SECONDS:
+        body = json.dumps({"status": "healthy", "grace_period": True})
+        body_bytes = body.encode()
+        return (
+            f"HTTP/1.1 200 OK\r\n"
+            f"Content-Type: application/json\r\n"
+            f"Content-Length: {len(body_bytes)}\r\n"
+            f"\r\n"
+        ).encode() + body_bytes
+
     liveness = get_loop_liveness()
     stale = {name: info for name, info in liveness.items() if not info["alive"]}
 
