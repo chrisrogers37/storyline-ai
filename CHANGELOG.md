@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Railway health check killing deployments** — Added `/health` endpoint to the web process (`GET /health` → 200, no auth). Configured `railway.toml` with `healthcheckPath = "/health"` and `healthcheckTimeout = 30` so Railway's health checker hits a real endpoint instead of timing out and tearing down the service. The worker process (Telegram bot + scheduler) runs as a separate Railway service with no HTTP binding — it does not need an HTTP health check. Closes #347, #350.
+- **Scheduler catch-up after restart** — When the worker restarts after missing posting slots, the scheduler now gradually catches up instead of skipping missed posts. Detects when `last_post_sent_at` is behind by >= 2 intervals and advances it by one interval per tick (instead of jumping to now), so each 60s tick fires one catch-up post until the schedule is current. Logs catch-up events with slot count and timestamps for Railway observability. (#349)
 
 ### Added
 

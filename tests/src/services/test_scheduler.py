@@ -866,3 +866,205 @@ class TestAutoApproval:
         scheduler_service.media_repo.increment_times_posted.assert_called_once()
         MockLock.return_value.create_lock.assert_called_once()
         scheduler_service.queue_repo.delete.assert_called_once()
+
+
+# ------------------------------------------------------------------
+# Catch-up after restart (#349)
+# ------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestCatchupAfterRestart:
+    """Tests for scheduler catch-up logic when behind after restart."""
+
+    def test_no_catchup_when_on_schedule(self, scheduler_service_mocked):
+        """Returns None when last post is within one interval."""
+        service = scheduler_service_mocked
+        # Window 9-21 = 12h, 3 PPD => interval = 4h = 14400s
+        last_sent = datetime(2026, 3, 21, 10, 0, tzinfo=timezone.utc)
+        cs = _make_chat_settings(
+            posting_hours_start=9,
+            posting_hours_end=21,
+            posts_per_day=3,
+            last_post_sent_at=last_sent,
+        )
+
+        with patch("src.services.core.scheduler.datetime") as mock_dt:
+            # 3h since last post, interval is 4h — not behind
+            mock_dt.now.return_value = datetime(2026, 3, 21, 13, 0, tzinfo=timezone.utc)
+            result = service._compute_catchup_sent_at(cs)
+
+        assert result is None
+
+    def test_no_catchup_when_exactly_one_interval(self, scheduler_service_mocked):
+        """Returns None when exactly one interval has passed (normal fire)."""
+        service = scheduler_service_mocked
+        # interval = 4h
+        last_sent = datetime(2026, 3, 21, 9, 0, tzinfo=timezone.utc)
+        cs = _make_chat_settings(
+            posting_hours_start=9,
+            posting_hours_end=21,
+            posts_per_day=3,
+            last_post_sent_at=last_sent,
+        )
+
+        with patch("src.services.core.scheduler.datetime") as mock_dt:
+            # Exactly 4h since last — one interval, not two
+            mock_dt.now.return_value = datetime(2026, 3, 21, 13, 0, tzinfo=timezone.utc)
+            result = service._compute_catchup_sent_at(cs)
+
+        assert result is None
+
+    def test_catchup_when_behind_two_intervals(self, scheduler_service_mocked):
+        """Returns last_sent + interval when behind by >= 2 intervals."""
+        service = scheduler_service_mocked
+        from datetime import timedelta
+
+        # interval = 4h
+        last_sent = datetime(2026, 3, 21, 9, 0, tzinfo=timezone.utc)
+        cs = _make_chat_settings(
+            posting_hours_start=9,
+            posting_hours_end=21,
+            posts_per_day=3,
+            last_post_sent_at=last_sent,
+        )
+
+        with patch("src.services.core.scheduler.datetime") as mock_dt:
+            # 9h since last post = behind by 2+ intervals (9h / 4h = 2.25)
+            mock_dt.now.return_value = datetime(2026, 3, 21, 18, 0, tzinfo=timezone.utc)
+            result = service._compute_catchup_sent_at(cs)
+
+        assert result == last_sent + timedelta(hours=4)
+
+    def test_catchup_advances_by_one_interval_only(self, scheduler_service_mocked):
+        """Even when behind by many slots, advances by exactly one interval."""
+        service = scheduler_service_mocked
+        from datetime import timedelta
+
+        # 13h window, 15 PPD => interval = 3120s = 52 min
+        last_sent = datetime(2026, 3, 21, 9, 0, tzinfo=timezone.utc)
+        cs = _make_chat_settings(
+            posting_hours_start=9,
+            posting_hours_end=22,
+            posts_per_day=15,
+            last_post_sent_at=last_sent,
+        )
+
+        with patch("src.services.core.scheduler.datetime") as mock_dt:
+            # 3h later = behind by ~3.46 intervals
+            mock_dt.now.return_value = datetime(2026, 3, 21, 12, 0, tzinfo=timezone.utc)
+            result = service._compute_catchup_sent_at(cs)
+
+        expected = last_sent + timedelta(seconds=3120)
+        assert result == expected
+
+    def test_no_catchup_when_last_sent_is_none(self, scheduler_service_mocked):
+        """Returns None when last_post_sent_at is None (first post ever)."""
+        service = scheduler_service_mocked
+        cs = _make_chat_settings(last_post_sent_at=None)
+
+        result = service._compute_catchup_sent_at(cs)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_process_slot_passes_catchup_override(self, scheduler_service_mocked):
+        """process_slot passes sent_at_override to _select_and_send during catchup."""
+        service = scheduler_service_mocked
+        from datetime import timedelta
+
+        last_sent = datetime(2026, 3, 21, 9, 0, tzinfo=timezone.utc)
+        cs = _make_chat_settings(
+            is_paused=False,
+            posting_hours_start=9,
+            posting_hours_end=21,
+            posts_per_day=3,
+            last_post_sent_at=last_sent,
+        )
+        service.settings_service.get_settings.return_value = cs
+        service._select_and_send = AsyncMock(return_value={"posted": True})
+
+        with patch("src.services.core.scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = datetime(2026, 3, 21, 18, 0, tzinfo=timezone.utc)
+            service.category_mix_repo.get_current_mix_as_dict.return_value = {}
+            await service.process_slot(telegram_chat_id=-100123)
+
+        call_kwargs = service._select_and_send.call_args.kwargs
+        assert call_kwargs["sent_at_override"] == last_sent + timedelta(hours=4)
+
+    @pytest.mark.asyncio
+    async def test_process_slot_no_override_when_on_schedule(
+        self, scheduler_service_mocked
+    ):
+        """process_slot passes sent_at_override=None when not catching up."""
+        service = scheduler_service_mocked
+        last_sent = datetime(2026, 3, 21, 9, 0, tzinfo=timezone.utc)
+        cs = _make_chat_settings(
+            is_paused=False,
+            posting_hours_start=9,
+            posting_hours_end=21,
+            posts_per_day=3,
+            last_post_sent_at=last_sent,
+        )
+        service.settings_service.get_settings.return_value = cs
+        service._select_and_send = AsyncMock(return_value={"posted": True})
+
+        with patch("src.services.core.scheduler.datetime") as mock_dt:
+            # 5h since last, interval is 4h — one interval overdue, not two
+            mock_dt.now.return_value = datetime(2026, 3, 21, 14, 0, tzinfo=timezone.utc)
+            service.category_mix_repo.get_current_mix_as_dict.return_value = {}
+            await service.process_slot(telegram_chat_id=-100123)
+
+        call_kwargs = service._select_and_send.call_args.kwargs
+        assert call_kwargs["sent_at_override"] is None
+
+    @pytest.mark.asyncio
+    async def test_catchup_uses_override_for_last_post_sent_at(
+        self, scheduler_service_mocked
+    ):
+        """When catching up, last_post_sent_at is set to override, not now."""
+        service = scheduler_service_mocked
+
+        override_time = datetime(2026, 3, 21, 13, 0, tzinfo=timezone.utc)
+
+        media = Mock(
+            id=uuid4(), file_name="catch.jpg", category="memes", times_posted=0
+        )
+        service.media_repo.get_next_eligible_for_posting.return_value = media
+        queue_item = Mock(id=uuid4())
+        service.queue_repo.create.return_value = queue_item
+        service.telegram_service.send_notification = AsyncMock(return_value=True)
+
+        cs = _make_chat_settings()
+
+        await service._select_and_send(
+            cs,
+            category=None,
+            triggered_by="scheduler",
+            sent_at_override=override_time,
+        )
+
+        service.settings_service.update_last_post_sent_at.assert_called_once_with(
+            cs.telegram_chat_id, override_time
+        )
+
+    @pytest.mark.asyncio
+    async def test_auto_approve_uses_catchup_override(self, scheduler_service_mocked):
+        """Auto-approved posts during catchup use the override timestamp."""
+        service = scheduler_service_mocked
+        service.history_repo = Mock()
+        override_time = datetime(2026, 3, 21, 13, 0, tzinfo=timezone.utc)
+
+        media = Mock(
+            id=uuid4(), file_name="repost.jpg", category="memes", times_posted=3
+        )
+        queue_item = Mock(id=uuid4())
+        service.queue_repo.create.return_value = queue_item
+        cs = _make_chat_settings()
+
+        with patch("src.services.core.media_lock.MediaLockService"):
+            service._auto_approve(media, cs, sent_at_override=override_time)
+
+        service.settings_service.update_last_post_sent_at.assert_called_once_with(
+            cs.telegram_chat_id, override_time
+        )

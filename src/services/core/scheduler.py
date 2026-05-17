@@ -1,6 +1,6 @@
 """Scheduler service - JIT posting schedule with per-slot media selection."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Union
 import random
 
@@ -70,6 +70,39 @@ class SchedulerService(BaseService):
         # Pick category for this slot
         return self._pick_category_for_slot()
 
+    def _compute_catchup_sent_at(self, chat_settings) -> Optional[datetime]:
+        """If behind by >= 2 intervals, return the timestamp to advance to.
+
+        Instead of jumping last_post_sent_at to now (which skips missed
+        slots), advance by one interval so the next tick re-evaluates and
+        catches up gradually — one post per tick.
+
+        Returns:
+            datetime to use as last_post_sent_at, or None for normal behavior.
+        """
+        last_sent = ensure_utc(chat_settings.last_post_sent_at)
+        if not last_sent:
+            return None
+
+        now = datetime.now(timezone.utc)
+        window_hours = self._posting_window_hours(chat_settings)
+        interval_seconds = (window_hours * 3600) / chat_settings.posts_per_day
+        elapsed = (now - last_sent).total_seconds()
+
+        if elapsed >= 2 * interval_seconds:
+            catchup_to = last_sent + timedelta(seconds=interval_seconds)
+            missed_slots = int(elapsed / interval_seconds) - 1
+            logger.info(
+                f"[catchup] Behind by {missed_slots} slot(s) "
+                f"(last_sent={last_sent.isoformat()}, "
+                f"interval={interval_seconds:.0f}s, "
+                f"elapsed={elapsed:.0f}s). "
+                f"Advancing last_post_sent_at to {catchup_to.isoformat()}"
+            )
+            return catchup_to
+
+        return None
+
     async def process_slot(self, telegram_chat_id: int) -> dict:
         """Process a single scheduler tick for a tenant.
 
@@ -95,11 +128,16 @@ class SchedulerService(BaseService):
         if slot_result is False:
             return {"posted": False, "reason": "not_due"}
 
+        # Catch-up: if behind by >= 2 intervals, advance by one interval
+        # instead of jumping to now. Next tick re-evaluates.
+        sent_at_override = self._compute_catchup_sent_at(chat_settings)
+
         category = slot_result if isinstance(slot_result, str) else None
         return await self._select_and_send(
             chat_settings,
             category=category,
             triggered_by="scheduler",
+            sent_at_override=sent_at_override,
         )
 
     async def force_send_next(
@@ -205,10 +243,16 @@ class SchedulerService(BaseService):
         triggered_by: str,
         user_id: Optional[str] = None,
         force_sent_indicator: bool = False,
+        sent_at_override: Optional[datetime] = None,
     ) -> dict:
         """Core JIT flow: select media → create queue item → send.
 
         Only creates a service_run when there is actual work to do.
+
+        Args:
+            sent_at_override: If set, use this instead of now for
+                last_post_sent_at (used during catch-up to advance
+                by one interval rather than jumping to now).
         """
         with self.track_execution(
             method_name="select_and_send",
@@ -247,7 +291,9 @@ class SchedulerService(BaseService):
 
             # Auto-approve previously-approved media (skip Telegram)
             if media_item.times_posted > 0 and triggered_by == "scheduler":
-                result = self._auto_approve(media_item, chat_settings)
+                result = self._auto_approve(
+                    media_item, chat_settings, sent_at_override=sent_at_override
+                )
                 self.set_result_summary(
                     run_id,
                     {
@@ -273,7 +319,8 @@ class SchedulerService(BaseService):
 
             if success:
                 self.settings_service.update_last_post_sent_at(
-                    chat_settings.telegram_chat_id, datetime.now(timezone.utc)
+                    chat_settings.telegram_chat_id,
+                    sent_at_override or datetime.now(timezone.utc),
                 )
 
             result = {
@@ -338,7 +385,12 @@ class SchedulerService(BaseService):
                 pass
             return False
 
-    def _auto_approve(self, media_item, chat_settings) -> dict:
+    def _auto_approve(
+        self,
+        media_item,
+        chat_settings,
+        sent_at_override: Optional[datetime] = None,
+    ) -> dict:
         """Auto-approve a previously-approved media item without Telegram interaction.
 
         Creates a transient queue item, records history, applies a repost lock,
@@ -385,7 +437,7 @@ class SchedulerService(BaseService):
         self.queue_repo.delete(queue_id)
 
         self.settings_service.update_last_post_sent_at(
-            chat_settings.telegram_chat_id, now
+            chat_settings.telegram_chat_id, sent_at_override or now
         )
 
         logger.info(
