@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Railway health check killing deployments** — Added `/health` endpoint to the web process (`GET /health` → 200, no auth). Configured `railway.toml` with `healthcheckPath = "/health"` and `healthcheckTimeout = 30` so Railway's health checker hits a real endpoint instead of timing out and tearing down the service. The worker process (Telegram bot + scheduler) runs as a separate Railway service with no HTTP binding — it does not need an HTTP health check. Closes #347, #350.
+
 ### Added
 
 - **`ensure_utc(dt)` datetime helper** (`src/utils/datetime_utils.py`) — single source of truth for "naive datetime → UTC-aware" coercion. Returns `None` unchanged; passes already-aware datetimes through without re-allocating. Replaces 5 copies of the same inline idiom in `setup_state_service.py`, `telegram_commands.py`, `scheduler.py`, `dashboard_history_queries.py`, and `telegram_utils.py`. Also used in `ApiToken.is_expired` and `ApiToken.hours_until_expiry`, which previously compared `expires_at` to a naive `datetime.utcnow()` — that latent bug never surfaced because both sides happened to be naive, but it would have broken the moment either side became aware (e.g., a future column migration to `DateTime(timezone=True)`). Closes #335.
